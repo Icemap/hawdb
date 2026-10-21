@@ -11,6 +11,7 @@ pub use hawdb_storage::store::{ProjectionFullSourceItem, ProjectionFullSourceLim
 /// Completion is input enumeration, not a verified baseline or stage receipt.
 /// Owns source/history pins; source changes conservatively invalidate its reads.
 #[derive(Debug)]
+#[doc(hidden)]
 pub struct PreparedProjectionFullSource {
     prepared: PreparedRead,
     cursor: ProjectionFullSourceCursor,
@@ -41,6 +42,7 @@ impl PreparedProjectionFeed {
     }
 }
 impl Database {
+    #[doc(hidden)]
     pub fn begin_prepared_full_projection_source(
         &self,
         reads: PreparedReadLimits,

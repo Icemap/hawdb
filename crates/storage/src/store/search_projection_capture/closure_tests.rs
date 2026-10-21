@@ -289,7 +289,7 @@ fn existing_schema_noop_does_not_advance_a_floor_or_epoch() {
 }
 
 #[test]
-fn nested_schema_and_metadata_exhaustion_stage_a_gap_without_mutating_the_source() {
+fn nested_schema_and_depth_exhaustion_stage_a_gap_without_mutating_the_source() {
     let path = super::tests::directory();
     let (store, catalog, id) = seed(&path, StorageResidencyMode::Materialized);
     let epoch = store.commit_epoch();
@@ -319,13 +319,10 @@ fn nested_schema_and_metadata_exhaustion_stage_a_gap_without_mutating_the_source
         store.node_owned(id).unwrap().unwrap().properties["id"],
         Value::String("a".into())
     );
-    // Even empty groups consume metadata work, and deep batches cannot evade
-    // classification merely because their eventual leaf is a narrow operation.
-    let empties = vec![WalOp::Batch(vec![]); MAX_WORK];
+    // Operation count alone does not invalidate a complete capture. Depth still
+    // protects recursive WAL traversal, including otherwise narrow leaves.
+    let empties = vec![WalOp::Batch(vec![]); 65_537];
     assert!(!projection_wal_requires_rebuild(&empties));
-    let mut over = empties;
-    over.push(WalOp::Batch(vec![]));
-    assert!(projection_wal_requires_rebuild(&over));
     let mut deep = WalOp::DeleteNode { id };
     assert!(!projection_wal_requires_rebuild(std::slice::from_ref(
         &deep
@@ -355,4 +352,173 @@ fn memory_only_and_direct_single_schema_commits_obey_the_same_gap_boundary() {
     store.apply_wal_op(&mut catalog, op).unwrap();
     store.finish_non_relational_commit();
     assert_gap(&store, before, store.commit_epoch());
+}
+
+#[test]
+fn cold_capture_descriptor_exhaustion_preserves_the_writer_and_allows_retry() {
+    for kind in ["node", "adjacency", "relationship"] {
+        let path = super::tests::directory();
+        let (mut store, mut catalog, id) = seed(&path, StorageResidencyMode::Materialized);
+        let label = store
+            .create_node(
+                &mut catalog,
+                "Label",
+                BTreeMap::from([("name".into(), Value::String("tag".into()))]),
+            )
+            .unwrap();
+        let relationship = store
+            .create_relationship(&mut catalog, id, label, "HAS_LABEL", BTreeMap::new())
+            .unwrap();
+        store.checkpoint(&catalog).unwrap();
+        drop(store);
+        (store, catalog) = reopen(&path, StorageResidencyMode::OutOfCore);
+        let op = match kind {
+            "node" => WalOp::SetNodeProperty {
+                id,
+                property: "id".into(),
+                value: Value::String("new".into()),
+            },
+            "adjacency" => {
+                // Keep the label lookup hot so the refusal occurs in adjacency.
+                let node = store.node_owned(label).unwrap().unwrap();
+                store.nodes.insert(label, node);
+                WalOp::SetNodeProperty {
+                    id: label,
+                    property: "name".into(),
+                    value: Value::String("new".into()),
+                }
+            }
+            "relationship" => WalOp::DeleteRelationship { id: relationship },
+            _ => unreachable!(),
+        };
+        let snapshot = store.snapshot();
+        let project = store
+            .durable
+            .as_ref()
+            .unwrap()
+            .project_file_descriptors()
+            .clone();
+        let metrics = project.metrics();
+        // Reserving cached capacity evicts idle handles as well as exhausting
+        // fresh-open capacity, so warm caches cannot bypass this negative control.
+        let held = project
+            .reserve(metrics.limit - metrics.open - metrics.reserved + metrics.cached_handles)
+            .unwrap();
+        let lsn = store.durable.as_ref().unwrap().next_lsn;
+        let epoch = store.commit_epoch();
+        let floor = store.search_projection_change_log_start_epoch();
+        let changes = store.search_projection_changes_after(0);
+        let error = store
+            .append_graph_wal_and_capture(&catalog, std::slice::from_ref(&op), false)
+            .unwrap_err();
+        assert!(
+            matches!(
+                error,
+                HawDBError::FileDescriptors(
+                    hawdb_core::error::FileDescriptorError::BudgetExceeded { .. }
+                )
+            ),
+            "{kind}: {error}"
+        );
+        assert_eq!(store.durable.as_ref().unwrap().next_lsn, lsn);
+        assert_eq!(store.commit_epoch(), epoch);
+        assert_eq!(store.search_projection_change_log_start_epoch(), floor);
+        assert_eq!(store.search_projection_changes_after(0), changes);
+        store.ensure_usable().unwrap();
+        snapshot.ensure_usable().unwrap();
+        drop(held);
+        store
+            .append_graph_wal_and_capture(&catalog, std::slice::from_ref(&op), false)
+            .unwrap();
+        store.apply_wal_op(&mut catalog, op).unwrap();
+        store.finish_non_relational_commit();
+        assert_eq!(store.commit_epoch(), epoch + 1);
+        assert_eq!(store.search_projection_change_log_start_epoch(), floor);
+        let expected = store.search_projection_changes_after(epoch);
+        assert_eq!(expected.len(), 1);
+        drop(snapshot);
+        drop(store);
+        drop(project);
+        let (recovered, _) = reopen(&path, StorageResidencyMode::OutOfCore);
+        assert_eq!(recovered.commit_epoch(), epoch + 1);
+        assert_eq!(recovered.search_projection_changes_after(epoch), expected);
+        drop(recovered);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+}
+
+#[test]
+fn bulk_create_capture_has_no_operation_count_cap_and_survives_replay() {
+    let path = super::tests::directory();
+    let (mut store, mut catalog, _) = seed(&path, StorageResidencyMode::Materialized);
+    let epoch = store.commit_epoch();
+    let floor = store.search_projection_change_log_start_epoch();
+    let count = 65_537;
+    store
+        .commit_mutations(
+            &mut catalog,
+            (0..count)
+                .map(|i| GraphMutation::CreateNode {
+                    label: "Memory".into(),
+                    properties: BTreeMap::from([("id".into(), Value::String(format!("bulk-{i}")))]),
+                })
+                .collect(),
+        )
+        .unwrap();
+    assert_eq!(store.commit_epoch(), epoch + 1);
+    assert_eq!(store.search_projection_change_log_start_epoch(), floor);
+    let changes = store.search_projection_changes_after(epoch);
+    assert_eq!(changes.len(), 1);
+    assert_eq!(changes[0].upsert_node_ids.len(), count);
+    assert_eq!(changes[0].upsert_node_ids.first(), Some(&1));
+    assert_eq!(changes[0].upsert_node_ids.last(), Some(&(count as u64)));
+    drop(store);
+    let (recovered, _) = reopen(&path, StorageResidencyMode::OutOfCore);
+    assert_eq!(recovered.commit_epoch(), epoch + 1);
+    assert_eq!(recovered.search_projection_change_log_start_epoch(), floor);
+    assert_eq!(recovered.search_projection_changes_after(epoch), changes);
+    drop(recovered);
+    std::fs::remove_dir_all(path).unwrap();
+}
+
+#[test]
+fn oversized_id_preimage_commits_an_explicit_gap_instead_of_partial_capture() {
+    let path = super::tests::directory();
+    let (mut store, mut catalog, _) = seed(&path, StorageResidencyMode::Materialized);
+    store
+        .set_node_property(
+            &mut catalog,
+            "Memory",
+            None,
+            "id",
+            Value::String("a".repeat(MAX_PREIMAGE_BYTES)),
+        )
+        .unwrap();
+    let before = store.commit_epoch();
+    store
+        .set_node_property(
+            &mut catalog,
+            "Memory",
+            None,
+            "id",
+            Value::String("small".into()),
+        )
+        .unwrap();
+    let floor = store.commit_epoch();
+    assert_gap(&store, before, floor);
+    assert!(store.search_projection_changes_after(0).is_empty());
+    for checkpoint in [false, true] {
+        if checkpoint {
+            store.checkpoint(&catalog).unwrap();
+        }
+        drop(store);
+        (store, catalog) = reopen(&path, StorageResidencyMode::OutOfCore);
+        assert_gap(&store, before, floor);
+        assert_eq!(
+            store.node_owned(NodeId(0)).unwrap().unwrap().properties["id"],
+            Value::String("small".into())
+        );
+    }
+    drop(store);
+    std::fs::remove_dir_all(path).unwrap();
 }

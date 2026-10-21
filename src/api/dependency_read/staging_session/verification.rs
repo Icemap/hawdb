@@ -7,6 +7,7 @@ use crate::search::{SearchMutationInspectionInput, SearchMutationInspectionStep}
 /// Fixed per-final-mutation verification, including explicit End. Business
 /// ownership and expected-document derivation are trusted host contracts.
 /// Success records traversal only; it does not authorize visible publication.
+#[doc(hidden)]
 pub type ProjectionOutputVerificationFunction = fn(
     &mut ProjectionOutputVerificationContext<'_, '_>,
     &mut SearchMutationInspectionInput<'_>,
@@ -14,6 +15,7 @@ pub type ProjectionOutputVerificationFunction = fn(
 
 /// Only tracked reads from the still-pinned E source; no output, feed or stage
 /// escape. Reservations share the original session's cumulative mapping budget.
+#[doc(hidden)]
 pub struct ProjectionOutputVerificationContext<'a, 'source> {
     read: &'a ProjectionFeedRead<'source>,
     limits: ProjectionMappingLimits,
@@ -75,6 +77,7 @@ impl ProjectionOutputVerificationContext<'_, '_> {
     }
 }
 
+#[doc(hidden)]
 pub struct ProjectionOutputVerificationSession<'reader> {
     session: ProjectionStagingSession<'reader>,
     verifier: ProjectionOutputVerificationFunction,
@@ -86,6 +89,7 @@ impl<'reader> ProjectionStagingSession<'reader> {
     /// Consume closed, ordered intake into a fixed read-only output checker.
     /// Checks run before closing the pinned query context. No caller ordinal,
     /// count or mutable output list can substitute for the native traversal.
+    #[doc(hidden)]
     pub fn verify_outputs(
         self,
         verifier: ProjectionOutputVerificationFunction,

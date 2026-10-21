@@ -29,6 +29,7 @@ impl ProjectionBaselineMappingLimits {
     }
 }
 #[derive(Debug, Clone)]
+#[doc(hidden)]
 pub struct ProjectionBaselineComparisonConfig {
     pub reads: PreparedReadLimits,
     pub feed: ProjectionFeedLimits,
@@ -72,6 +73,7 @@ impl ProjectionBaselineMappingContext<'_, '_> {
     }
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[doc(hidden)]
 pub enum ProjectionBaselineComparisonStep {
     Input,
     Ordering,
@@ -82,6 +84,7 @@ pub enum ProjectionBaselineComparisonStep {
 /// Owns complete canonical enumeration, unique private expected output and exact
 /// comparison to a held Search C head. The live source may advance during work.
 /// Historical C comparison is not current-E activation authority.
+#[doc(hidden)]
 pub struct ProjectionBaselineComparisonSession<'reader> {
     source: PreparedProjectionFullSource,
     stage: Option<SearchOutOfCoreUnorderedMutationWriter<'reader>>,
@@ -107,6 +110,7 @@ pub struct ProjectionBaselineComparisonSession<'reader> {
 ///     db.publish_prepared_search(reads, matched);
 /// }
 /// ```
+#[doc(hidden)]
 pub struct ProjectionMatchedBaseline<'reader> {
     source: PreparedReadDependencies,
     base: SearchMatchedBaseline<'reader>,
@@ -128,6 +132,7 @@ impl ProjectionMatchedBaseline<'_> {
     }
 }
 impl Database {
+    #[doc(hidden)]
     pub fn begin_projection_baseline_comparison<'reader>(
         &self,
         reader: &'reader SearchOutOfCoreReader,

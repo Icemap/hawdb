@@ -193,7 +193,13 @@ fn checkpoint_units_wal_replay_search_capture_skips_unrelated_indexed_relationsh
 
 #[test]
 fn checkpoint_units_wal_replay_search_capture_cancels_every_unit_and_retries_both_directions() {
-    let (source, catalog) = source(32, 4);
+    for memories in [32, 1025] {
+        assert_capture_cancellation_and_retry(memories);
+    }
+}
+
+fn assert_capture_cancellation_and_retry(memories: u64) {
+    let (source, catalog) = source(memories, 4);
     let base_epoch = source.commit_epoch();
     let original = encode_binary_wal_record(
         &WalEntry {
@@ -227,12 +233,12 @@ fn checkpoint_units_wal_replay_search_capture_cancels_every_unit_and_retries_bot
         &replay_catalog,
         &expected,
         &expected_catalog,
-        32,
-        36,
+        memories,
+        memories + 4,
         base_epoch,
     );
     let units = probe.completed.load(Ordering::SeqCst);
-    assert!(units >= 36);
+    assert!(units > 0);
     probe.assert_released(&scheduler);
     drop(store);
     drop(work);
@@ -267,8 +273,8 @@ fn checkpoint_units_wal_replay_search_capture_cancels_every_unit_and_retries_bot
             &retry_catalog,
             &expected,
             &expected_catalog,
-            32,
-            36,
+            memories,
+            memories + 4,
             base_epoch,
         );
         assert_eq!(governor.snapshot().admissions, 1);
@@ -294,4 +300,45 @@ fn checkpoint_units_wal_replay_search_capture_cancels_every_unit_and_retries_bot
     );
     drop(permit);
     assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+}
+
+/// Manual measurement; excluded from ordinary CI test execution.
+#[test]
+#[ignore = "manual replay benchmark"]
+fn checkpoint_replay_capture_benchmark() {
+    use std::sync::atomic::AtomicU64;
+    use std::time::Instant;
+
+    for (memories, unrelated) in [(32, 0), (4096, 0), (32, 16_384)] {
+        let (source, catalog) = source(memories, unrelated);
+        let governor = governor();
+        let permit = governor
+            .try_admit(RuntimeWorkRequest::background_maintenance(4 * 1024 * 1024))
+            .unwrap();
+        let progress = Arc::new(AtomicU64::new(0));
+        let work =
+            CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()))
+                .with_scheduler(scheduler())
+                .with_progress_counter(progress.clone());
+        let mut elapsed = Vec::new();
+        for trial in 0..111 {
+            let mut store = source.snapshot();
+            let mut replay_catalog = catalog.clone();
+            let op = operation(unrelated);
+            progress.store(0, Ordering::Relaxed);
+            let start = Instant::now();
+            store
+                .apply_replayed_checkpoint_wal_transaction(&mut replay_catalog, op, &work)
+                .unwrap();
+            let duration = start.elapsed();
+            if trial >= 10 {
+                elapsed.push(duration.as_micros());
+            }
+            assert_eq!(store.commit_epoch(), source.commit_epoch() + 1);
+            std::hint::black_box(&store);
+        }
+        elapsed.sort_unstable();
+        println!("capture_replay_benchmark memories={memories} unrelated={unrelated} trials={} median_us={} p95_us={} units={}",
+            elapsed.len(), elapsed[50], elapsed[95], progress.load(Ordering::Relaxed));
+    }
 }

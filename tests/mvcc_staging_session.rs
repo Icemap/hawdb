@@ -117,6 +117,8 @@ fn setup(cold: bool) -> (Root, Database, SearchOutOfCoreReader, u64) {
         .unwrap();
     db.query_sql("INSERT INTO records (id,body) VALUES ('a','old')")
         .unwrap();
+    db.query_sql("CREATE TABLE unrelated (id TEXT PRIMARY KEY)")
+        .unwrap();
     let c = db.commit_epoch().unwrap();
     let mut base = SearchOutOfCoreGenerationWriter::create(
         &search,

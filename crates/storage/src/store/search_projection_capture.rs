@@ -17,7 +17,9 @@
 use super::*;
 use crate::projection::projection_document_id_for_label_and_properties;
 
-const MAX_WORK: usize = 65_536;
+// Cancellation and local admission are checked between bounded groups, not
+// for every metadata lookup in the replay hot loop. This is not a commit cap.
+const CHECKPOINT_WORK_ITEMS: usize = 1024;
 const MAX_BYTES: usize = 64 * 1024 * 1024;
 const MAX_PREIMAGE_BYTES: usize = 64 * 1024;
 const MAX_DEPTH: usize = 64;
@@ -25,13 +27,12 @@ const MAX_DEPTH: usize = 64;
 /// These effects cannot be reconstructed from the point graph/relational feed.
 /// Keep the match exhaustive: a new WAL family must choose its capture contract.
 /// The same decision is used before append, after successful direct append, and
-/// during replay. Over-budget classification conservatively requires rebuild.
+/// during replay. Excessively nested batches conservatively require rebuild.
 pub(super) fn projection_wal_requires_rebuild(ops: &[WalOp]) -> bool {
-    fn requires(op: &WalOp, depth: usize, remaining: &mut usize) -> bool {
-        if depth > MAX_DEPTH || *remaining == 0 {
+    fn requires(op: &WalOp, depth: usize) -> bool {
+        if depth > MAX_DEPTH {
             return true;
         }
-        *remaining -= 1;
         match op {
             WalOp::CreateNodeLabel { .. }
             | WalOp::CreateRelationshipType { .. }
@@ -50,9 +51,10 @@ pub(super) fn projection_wal_requires_rebuild(ops: &[WalOp]) -> bool {
             | WalOp::CreateNodePropertyExistsConstraint { .. }
             | WalOp::CreateRelationshipUniqueConstraint { .. }
             | WalOp::CreateRelationshipPropertyExistsConstraint { .. }
-            | WalOp::ProjectGraph { .. }
-            | WalOp::MarkInitialImportSource { .. }
-            | WalOp::Append { .. } => true,
+            | WalOp::MarkInitialImportSource { .. } => true,
+            // Tracked projection reads cannot access append tables or named
+            // projections. These writes leave the enumerated source unchanged.
+            WalOp::Append { .. } | WalOp::ProjectGraph { .. } => false,
             // Relational records carry their existing typed key capture or a
             // RequiresRebuild event, including snapshot replacement. Graph
             // point effects use the collector below. Relationship properties
@@ -66,11 +68,10 @@ pub(super) fn projection_wal_requires_rebuild(ops: &[WalOp]) -> bool {
             | WalOp::CreateRelationship { .. }
             | WalOp::SetRelationshipProperty { .. }
             | WalOp::DeleteRelationship { .. } => false,
-            WalOp::Batch(ops) => ops.iter().any(|op| requires(op, depth + 1, remaining)),
+            WalOp::Batch(ops) => ops.iter().any(|op| requires(op, depth + 1)),
         }
     }
-    let mut remaining = MAX_WORK;
-    ops.iter().any(|op| requires(op, 0, &mut remaining))
+    ops.iter().any(|op| requires(op, 0))
 }
 
 pub(super) enum PreparedSearchProjectionChange {
@@ -91,16 +92,20 @@ impl From<HawDBError> for CaptureError {
 
 struct Budget {
     checkpoint: Option<crate::background::CheckpointWorkContext>,
-    work: usize,
+    until_checkpoint: usize,
     bytes: usize,
 }
 impl Budget {
     fn work(&mut self) -> CaptureResult<()> {
         if let Some(work) = &self.checkpoint {
-            let unit = work.start_unit().map_err(HawDBError::from_storage_error)?;
-            unit.finish();
+            if self.until_checkpoint == 0 {
+                let unit = work.start_unit().map_err(HawDBError::from_storage_error)?;
+                // Release local admission before a cold reader admits its I/O.
+                unit.finish();
+                self.until_checkpoint = CHECKPOINT_WORK_ITEMS;
+            }
+            self.until_checkpoint -= 1;
         }
-        self.work = self.work.checked_sub(1).ok_or(CaptureError::Limit)?;
         Ok(())
     }
     fn bytes(&mut self, bytes: usize) -> CaptureResult<()> {
@@ -299,7 +304,7 @@ impl<'a> Collector<'a> {
                             }
                         }
                     })
-                    .map_err(|error| HawDBError::StorageIntegrity(error.to_string()));
+                    .map_err(HawDBError::from_storage_error);
                 result?;
                 if let Some(error) = callback_error {
                     return Err(error);
@@ -324,7 +329,7 @@ impl<'a> Collector<'a> {
         } else if let Some(reader) = &self.store.canonical_base {
             reader
                 .relationship_identity(id)
-                .map_err(|error| HawDBError::StorageIntegrity(error.to_string()))?
+                .map_err(HawDBError::from_storage_error)?
         } else {
             None
         };
@@ -414,7 +419,7 @@ impl GraphStore {
             catalog,
             budget: Budget {
                 checkpoint: work.cloned(),
-                work: MAX_WORK,
+                until_checkpoint: 0,
                 bytes: MAX_BYTES,
             },
             created_nodes: BTreeMap::new(),
@@ -424,7 +429,14 @@ impl GraphStore {
         };
         let result = collector
             .created(ops, 0)
-            .and_then(|()| collector.collect(ops, 0));
+            .and_then(|()| collector.collect(ops, 0))
+            .and_then(|()| {
+                // Observe cancellation during the last, possibly partial group.
+                if let Some(work) = work {
+                    work.checkpoint().map_err(HawDBError::from_storage_error)?;
+                }
+                Ok(())
+            });
         match result {
             Err(CaptureError::Limit) => {
                 return Ok(PreparedSearchProjectionChange::Gap(commit_epoch))

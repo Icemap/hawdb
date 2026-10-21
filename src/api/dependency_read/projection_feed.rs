@@ -16,6 +16,7 @@ use std::cell::{Cell, RefCell};
 /// Owns source/history pins and cumulative feed admission. It does not own or
 /// certify staged output, host mapping, external bindings or a Search base.
 #[derive(Debug)]
+#[doc(hidden)]
 pub struct PreparedProjectionFeed {
     prepared: PreparedRead,
     cursor: ProjectionFeedCursor,
@@ -24,6 +25,7 @@ pub struct PreparedProjectionFeed {
 
 /// Tracked reads for a feed callback. No mutable PreparedRead or raw transaction
 /// escape permits substituting another source or finishing an incomplete feed.
+#[doc(hidden)]
 pub struct ProjectionFeedRead<'a> {
     read: RefCell<&'a mut PreparedRead>,
     source_epoch: u64,
@@ -80,6 +82,7 @@ pub(super) fn with_projection_read(
 impl Database {
     /// Captures source and feed under one immutable owner borrow. Both graph and
     /// relational keys are split without eagerly cloning the retained log.
+    #[doc(hidden)]
     pub fn begin_prepared_projection_feed(
         &self,
         start_epoch: u64,

@@ -2,6 +2,8 @@
 // Licensed under the Apache License, Version 2.0.
 
 use super::*;
+use hawdb::store::GraphReadDependencyError;
+use hawdb_storage::version::VersionKey;
 use std::num::NonZeroU64;
 
 fn caps() -> ProjectionCoverageConfig {
@@ -63,7 +65,7 @@ fn full_e(
         }
         ProjectionFullSourceItem::RelationalKey { table, .. }
         | ProjectionFullSourceItem::RelationalTable { table }
-            if !matches!(table, "records" | "hawdb_schema_migrations") =>
+            if !matches!(table, "records" | "unrelated" | "hawdb_schema_migrations") =>
         {
             Err(HawDBError::Execution(format!("unclassified table {table}")))
         }
@@ -246,26 +248,32 @@ fn stale_source_and_wrong_instance_cannot_activate_a_covered_candidate() {
         let e = session.source_epoch();
         if !wrong_instance {
             // Full-source verification must retain E even if it starts later.
-            db.query_sql("UPDATE records SET body='after-E' WHERE id='a'")
+            db.query_sql("INSERT INTO unrelated (id) VALUES ('after-E')")
                 .unwrap();
         }
         let candidate = covered(session);
         assert_eq!(candidate.source_epoch(), e);
         if wrong_instance {
             let mut other = Database::new();
-            assert!(other
-                .publish_projection_covered_update(
+            assert!(matches!(
+                other.publish_projection_covered_update(
                     candidate,
                     ProjectionSourceDurability::RequireKnownDurable
-                )
-                .is_err());
+                ),
+                Err(ProjectionPublicationError::SourceChanged)
+            ));
         } else {
-            assert!(db
+            let error = db
                 .publish_projection_covered_update(
                     candidate,
-                    ProjectionSourceDurability::RequireKnownDurable
+                    ProjectionSourceDurability::RequireKnownDurable,
                 )
-                .is_err());
+                .unwrap_err();
+            assert!(matches!(error,
+                ProjectionPublicationError::Dependency(GraphReadDependencyError::Conflict(conflict))
+                if conflict.key == VersionKey::Database
+                    && conflict.committed_epoch == db.commit_epoch().unwrap()
+            ));
         }
         unchanged(&root, &reader);
     }
@@ -290,14 +298,12 @@ fn missing_delete_is_rejected_by_complete_set_comparison() {
         .unwrap();
     complete(&mut s);
     let mut verify = s.verify_complete_source(caps(), full_e).unwrap();
-    let mut failed = false;
-    for _ in 0..10000 {
-        if verify.advance(one(), sort()).is_err() {
-            failed = true;
-            break;
-        }
-    }
-    assert!(failed);
+    assert_refusal(
+        &mut verify,
+        ProjectionFeedError::Source(HawDBError::Execution(
+            "complete delta retains unexpected base documents".into(),
+        )),
+    );
     assert!(matches!(verify.finish(), Err(ProjectionFeedError::Failed)));
     unchanged(&root, &reader);
 }
@@ -348,14 +354,77 @@ fn wrong_body(
     }
     delta_e(ctx, input, state)
 }
+fn phantom_upsert(
+    ctx: &mut ProjectionMappingContext<'_, '_, '_>,
+    input: ProjectionMappingInput<'_>,
+    state: &[u8],
+) -> Result<ProjectionMappingStatus> {
+    if matches!(input, ProjectionMappingInput::GraphNode { .. }) {
+        // Sort before the first expected ID to exercise Ordering::Less.
+        ctx.upsert(doc("absent", "phantom"))?;
+        return Ok(ProjectionMappingStatus::Done);
+    }
+    delta_e(ctx, input, state)
+}
+fn delete_surviving_document(
+    ctx: &mut ProjectionMappingContext<'_, '_, '_>,
+    input: ProjectionMappingInput<'_>,
+    state: &[u8],
+) -> Result<ProjectionMappingStatus> {
+    if matches!(input, ProjectionMappingInput::GraphNode { .. }) {
+        ctx.delete("memory:a")?;
+        return Ok(ProjectionMappingStatus::Done);
+    }
+    delta_e(ctx, input, state)
+}
+fn assert_refusal(verify: &mut ProjectionCoverageSession<'_>, expected: ProjectionFeedError) {
+    for _ in 0..10000 {
+        match verify.advance(one(), sort()) {
+            Err(actual) => {
+                match (actual, expected) {
+                    (
+                        ProjectionFeedError::Source(actual),
+                        ProjectionFeedError::Source(expected),
+                    )
+                    | (
+                        ProjectionFeedError::Callback(actual),
+                        ProjectionFeedError::Callback(expected),
+                    ) => assert_eq!(actual, expected),
+                    (
+                        ProjectionFeedError::BudgetExceeded(actual),
+                        ProjectionFeedError::BudgetExceeded(expected),
+                    ) => assert_eq!(actual, expected),
+                    (actual, expected) => panic!("expected {expected:?}, got {actual:?}"),
+                }
+                return;
+            }
+            Ok(ProjectionCoverageStep::Complete) => panic!("invalid coverage completed"),
+            Ok(_) => {}
+        }
+    }
+    panic!("coverage did not refuse invalid input");
+}
 #[test]
-fn wrong_body_duplicate_source_and_budget_exhaustion_cannot_mint_coverage() {
-    for case in ["body", "duplicate", "lookups", "calls", "source_bytes"] {
+fn invalid_documents_and_budget_exhaustion_cannot_mint_coverage() {
+    for case in [
+        "body",
+        "phantom",
+        "delete_survivor",
+        "duplicate",
+        "lookups",
+        "calls",
+        "source_bytes",
+    ] {
         let (root, mut db, reader, c) = setup(false);
         if case == "duplicate" {
             db.query("CREATE (:Memory {id:'a',value:2})").unwrap();
         }
-        let mapper = if case == "body" { wrong_body } else { delta_e };
+        let mapper = match case {
+            "body" => wrong_body,
+            "phantom" => phantom_upsert,
+            "delete_survivor" => delete_surviving_document,
+            _ => delta_e,
+        };
         let mut s = db
             .begin_projection_staging_session(&reader, config(c), mapper, admission())
             .unwrap();
@@ -367,16 +436,34 @@ fn wrong_body_duplicate_source_and_budget_exhaustion_cannot_mint_coverage() {
             "source_bytes" => cfg.feed.bytes = nz(1),
             _ => {}
         }
+        let expected = match case {
+            "body" => ProjectionFeedError::Source(HawDBError::Execution(
+                "delta document differs from the complete source".into(),
+            )),
+            "phantom" => ProjectionFeedError::Source(HawDBError::Execution(
+                "delta upsert is absent from the complete source".into(),
+            )),
+            "delete_survivor" => ProjectionFeedError::Source(HawDBError::Execution(
+                "delta deletes a complete-source document".into(),
+            )),
+            "duplicate" => ProjectionFeedError::Source(HawDBError::Storage(
+                "unordered mutation duplicate full-source document ID".into(),
+            )),
+            "lookups" => ProjectionFeedError::Source(HawDBError::Execution(
+                "baseline lookup admission exhausted".into(),
+            )),
+            "calls" => ProjectionFeedError::Callback(HawDBError::Execution(
+                "projection staging session: cumulative mapping admission exhausted".into(),
+            )),
+            "source_bytes" => ProjectionFeedError::BudgetExceeded(ProjectionFeedResource::Bytes),
+            _ => unreachable!(),
+        };
         let mut verify = s.verify_complete_source(cfg, full_e).unwrap();
-        let mut failed = false;
-        for _ in 0..10000 {
-            if verify.advance(one(), sort()).is_err() {
-                failed = true;
-                break;
-            }
-        }
-        assert!(failed, "{case}");
-        assert!(verify.finish().is_err(), "{case}");
+        assert_refusal(&mut verify, expected);
+        assert!(
+            matches!(verify.finish(), Err(ProjectionFeedError::Failed)),
+            "{case}"
+        );
         unchanged(&root, &reader);
     }
 }
@@ -391,9 +478,13 @@ fn covered_candidate_retains_the_original_selector_fence() {
     let selected = SearchOutOfCoreReader::open(root.0.join("search"))
         .unwrap()
         .generation();
-    assert!(db
-        .publish_projection_covered_update(second, ProjectionSourceDurability::RequireKnownDurable)
-        .is_err());
+    assert!(matches!(db
+        .publish_projection_covered_update(second, ProjectionSourceDurability::RequireKnownDurable),
+        Err(ProjectionPublicationError::Storage(HawDBError::TransactionConflict {
+            read_epoch, committed_epoch, key,
+        })) if read_epoch == reader.generation() && committed_epoch == selected
+            && key == "search projection base changed"
+    ));
     assert_eq!(
         SearchOutOfCoreReader::open(root.0.join("search"))
             .unwrap()
@@ -427,8 +518,11 @@ fn cancellation_at_each_coverage_phase_preserves_base_and_allows_reopen_retry() 
         }
         assert!(reached, "coverage did not reach {phase:?}");
         cancel.cancel();
-        assert!(verify.advance(one(), sort()).is_err());
-        assert!(verify.finish().is_err());
+        assert!(matches!(verify.advance(one(), sort()),
+            Err(ProjectionFeedError::Source(HawDBError::Execution(message)))
+                if message == "projection staging session: cancelled"
+        ));
+        assert!(matches!(verify.finish(), Err(ProjectionFeedError::Failed)));
         unchanged(&root, &reader);
         drop(db);
         let mut db = Database::open(root.0.join("graph")).unwrap();
@@ -436,5 +530,66 @@ fn cancellation_at_each_coverage_phase_preserves_base_and_allows_reopen_retry() 
         // Replayed WAL does not establish an observed durability barrier.
         db.publish_projection_covered_update(candidate, ProjectionSourceDurability::Synchronize)
             .unwrap();
+    }
+}
+
+#[test]
+fn append_and_named_projection_writes_preserve_canonical_catch_up_after_reopen() {
+    let state = |db: &mut Database| {
+        db.query_sql(
+        "SELECT resume_floor_commit_epoch, retained_mutation_count FROM system.search_projection_changefeed"
+    ).unwrap().rows
+    };
+    for checkpoint in [false, true] {
+        let (root, mut db, reader, c) = setup(false);
+        let before = state(&mut db);
+        db.query_sql("CREATE TABLE events (stream_id TEXT NOT NULL, sequence BIGINT NOT NULL, payload TEXT NOT NULL) WITH (storage_mode = 'strict_append', partition_key = 'stream_id', order_key = 'sequence')").unwrap();
+        for sequence in 1..=3 {
+            db.query_sql_with_params(
+                "INSERT INTO events (stream_id, sequence, payload) VALUES ($1, $2, $3)",
+                &[
+                    Value::String("s".into()),
+                    Value::Int(sequence),
+                    Value::String("append".into()),
+                ],
+            )
+            .unwrap();
+        }
+        db.query("CALL project_graph('memory', ['Memory'], [])")
+            .unwrap();
+        assert_eq!(state(&mut db), before);
+        let mut read = db.begin_prepared_read(config(c).reads).unwrap();
+        assert_eq!(read.query_sql_with_params("SELECT payload FROM events WHERE stream_id=$1", &[Value::String("s".into())]).unwrap_err(),
+            HawDBError::Execution("prepared SQL dependency collector does not qualify noncanonical or unknown relational table".into()));
+        assert_eq!(
+            read.finish().unwrap_err(),
+            HawDBError::Execution("prepared source read contains a failed statement".into())
+        );
+        let mut read = db.begin_prepared_read(config(c).reads).unwrap();
+        assert_eq!(read.query_with_params("CALL page_rank('memory') RETURN node, pagerank_score", &BTreeMap::new()).unwrap_err(),
+            HawDBError::Execution("prepared source read has an unqualified operator; its dependency collector is not available".into()));
+        assert_eq!(
+            read.finish().unwrap_err(),
+            HawDBError::Execution("prepared source read contains a failed statement".into())
+        );
+        drop(covered(stage(&db, &reader, c)));
+        if checkpoint {
+            db.checkpoint().unwrap();
+        }
+        drop(db);
+        let mut db = Database::open(root.0.join("graph")).unwrap();
+        assert_eq!(state(&mut db), before);
+        let candidate = covered(stage(&db, &reader, c));
+        let e = candidate.source_epoch();
+        db.publish_projection_covered_update(candidate, ProjectionSourceDurability::Synchronize)
+            .unwrap();
+        let actual = SearchOutOfCoreReader::open(root.0.join("search")).unwrap();
+        let expected = oracle(&mut db, &root, e);
+        assert_eq!(actual.document_count(), expected.document_count());
+        let ids = ["memory:a".into(), "record:a".into()];
+        assert_eq!(
+            actual.hydrate_documents(&ids).unwrap().documents,
+            expected.hydrate_documents(&ids).unwrap().documents
+        );
     }
 }

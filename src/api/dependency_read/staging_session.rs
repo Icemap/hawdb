@@ -356,6 +356,7 @@ pub struct ProjectionStagingSession<'reader> {
 ///     db.publish_prepared_search(reads, staged);
 /// }
 /// ```
+#[doc(hidden)]
 pub struct ProjectionStagedInputs {
     dependencies: PreparedReadDependencies,
     candidate: SearchOutOfCorePreparedUpdate,
@@ -551,6 +552,7 @@ impl ProjectionStagingSession<'_> {
     }
     /// Artifact construction is currently blocking after bounded intake/ordering.
     /// Returns opaque custody, not a baseline or complete-through receipt.
+    #[doc(hidden)]
     pub fn finish_staging(
         self,
     ) -> std::result::Result<ProjectionStagedInputs, ProjectionFeedError> {

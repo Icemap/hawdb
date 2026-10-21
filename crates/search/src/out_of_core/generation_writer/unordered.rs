@@ -34,6 +34,8 @@ pub struct SearchUnorderedMutationLimits {
     pub max_buffer_records: NonZeroUsize,
     pub max_buffer_payload_bytes: NonZeroUsize,
     pub max_input_operations: NonZeroUsize,
+    /// Cumulative bytes written across all merge passes, not peak live disk.
+    /// Deleted runs do not refund this limit or the stage's disk reservation.
     pub max_spill_bytes: NonZeroU64,
     pub max_read_bytes: NonZeroU64,
     pub max_merge_visits: NonZeroUsize,

@@ -18,7 +18,12 @@ The mapper is a fixed trusted host function. It must propagate incomplete work,
 use the supplied source reads, and represent all relevant graph and relational
 effects. Schema/opaque capture gaps require rebuilding rather than skipping
 input. Native cold preimage capture runs before WAL append and checkpoint replay
-uses that same collector with its cooperative work context.
+uses that same collector with its cooperative work context. Append tables and
+named graph projections are outside this source domain: tracked SQL refuses
+append tables and tracked Cypher refuses named-projection algorithms before
+execution. `Append` and `ProjectGraph` WAL records therefore leave the canonical
+changefeed and its resume floor unchanged. Extending supported tracked reads to
+these domains requires a matching capture and full-enumeration contract first.
 
 Mapping and external ordering retain one admitted stage, bounded continuation,
 memory ledger and cumulative read/spill/sort counters. Repeated identical E
@@ -59,6 +64,53 @@ Search selector under publication exclusion. Rejection preserves the old head.
 A configured synchronous policy or recovered WAL is not itself an observed
 durability barrier. Explicit synchronization does not weaken future commits.
 
+## Compatibility and API scope
+
+After reopening a persistent database with an uncheckpointed WAL tail,
+`publish_prepared_projection` and the default prepared Search publication fence
+can return `SourceNotDurable`, including with `SyncOnEveryWrite`. Recovery proves
+which transactions are present, not that this process observed a completed
+synchronization barrier. Hosts must checkpoint successfully or use the explicit
+`ProjectionSourceDurability::Synchronize` publication variant after reopen.
+
+The generic `publish_prepared_search` fence validates identity, dependencies,
+durability and the expected selector; it proves nothing about document content.
+Only `ProjectionCoveredUpdate` binds the complete-E comparison to the candidate
+that is published. Intermediate staging/output inspection/baseline comparison
+and raw cursor APIs are hidden from the public documentation until there is a
+production consumer. Their visibility for qualification tests is not a stable
+production integration contract.
+
+## Capture and spill budgets
+
+The canonical source commit path has no fixed operation-count capture cap.
+Large admitted transactions do not lose their changefeed solely because they
+contain more than 32K creates or traverse more than 65K adjacency entries.
+Checkpoint replay checks cooperative capture work in groups of at most 1,024
+internal metadata/adjacency work items and again before returning; cold readers
+retain their own I/O admission. This grouping bounds logical work between checks,
+not elapsed time, and does not cap transaction size.
+
+Capture still has a 64 MiB cumulative metadata/preimage allocation budget,
+a 64 KiB allocation ceiling per node preimage, and a nested-batch depth ceiling
+of 64. Large IDs, high fanout or other bulk imports can exceed those byte/depth
+limits. A successful source commit then installs an explicit gap at its epoch,
+clears earlier retained changes, and makes older consumers return `BehindFloor`.
+It never emits a truncated delta. Hosts should split bulk imports when suitable,
+or finish importing and perform one complete rebuild at the final source epoch.
+A resource/I/O refusal before WAL append instead returns an error; typed FD and
+resource-budget failures preserve the handle for retry after capacity returns.
+
+External sorting charges spill writes and disk reservations cumulatively across
+all merge passes. Deleting an input run does not refund either reservation. With
+R initial runs, non-coalescing inputs can require about input bytes times
+`(1 + ceil(log2(R)))`, plus framing and the independent full-source verification
+stream. One million inputs with a 1,024-record buffer produce roughly 977 runs
+and about 11 passes' worth of write accounting. The default 4 GiB spill limit is
+not permission to ingest 4 GiB of raw input. Hosts must budget the merge
+amplification, verification and final artifact build, or select larger admitted
+buffers to reduce the number of runs. Exhaustion refuses the private stage.
+
 ## Costs and remaining gates
 
 This conservative implementation performs O(full source) extra verification and
@@ -95,10 +147,14 @@ prerequisite for this Search path.
 The default/minimal `hawdb_mvcc_staging_session` targets include
 `tests/support/projection_coverage.rs`: one-item update/delete and ABA,
 hot/cold and relational equality with full rebuild, repeated keys/rename,
-empty intervals, wrong content, omitted deletes, duplicate IDs, budget refusal,
-same-E verification after a write, source/base mismatch and cancellation/reopen.
+empty intervals, wrong content, phantom upserts, deletion of surviving documents,
+omitted deletes, duplicate IDs and exact budget refusals, disjoint post-E writes,
+source/base mismatch and cancellation/reopen. Append and named-projection writes
+preserve capture and full-rebuild equality through WAL/checkpoint reopen.
 `hawdb_mvcc_full_source` and `hawdb_mvcc_baseline_comparison` qualify enumeration,
 comparison and the independent full-rebuild reference. All belong to root CI.
-Storage/Search component tests cover capture gaps, durability barriers and
-private preparation. See [the test index](../TEST_INDEX.md) for execution lanes.
+Storage/Search component tests cover 65,537-node bulk capture, oversized-preimage
+gaps, cold-read FD exhaustion/retry, durability barriers and private preparation.
+The ignored `checkpoint_replay_capture_benchmark` is a manual replay measurement;
+it is not added to CI or the correctness suite. See [the test index](../TEST_INDEX.md) for execution lanes.
 Reopen tests are not fault-image or power-loss qualification.

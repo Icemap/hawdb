@@ -1098,7 +1098,10 @@ pub use hawdb_storage::{
 pub use hawdb_storage::graph_overlay::{GraphNodeIterator, GraphRelationshipIterator};
 
 fn canonical_segment_error(error: CanonicalSegmentError) -> HawDBError {
-    HawDBError::StorageIntegrity(error.to_string())
+    match HawDBError::from_storage_error(error) {
+        HawDBError::Storage(message) => HawDBError::StorageIntegrity(message),
+        error => error,
+    }
 }
 
 /// Result of reading Source scan sidecar candidates. The rows have passed

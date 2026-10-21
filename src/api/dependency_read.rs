@@ -516,6 +516,8 @@ impl Database {
     /// Host bindings/cursors need their additional owner fence before calling.
     /// Requires an observed source durability barrier. Use the explicit policy
     /// variant to synchronize an uncovered relaxed/recovered source prefix.
+    /// After reopen, even `SyncOnEveryWrite` WAL replay does not establish an
+    /// observed barrier: checkpoint or explicitly select `Synchronize` first.
     pub fn publish_prepared_projection(
         &mut self,
         dependencies: &PreparedReadDependencies,
@@ -553,6 +555,9 @@ impl Database {
     /// Activates one closed Search candidate under the source database's
     /// exclusive borrow. The host must also retain its target/binding authority
     /// through this call. No arbitrary mutation callback can enter this fence.
+    /// This fence validates source/dependency/durability/selector identity only;
+    /// it proves nothing about candidate content or complete source coverage.
+    /// Use `publish_projection_covered_update` for a complete-E content proof.
     pub fn publish_prepared_search<P: crate::search::PreparedSearchPublication>(
         &mut self,
         dependencies: &PreparedReadDependencies,
