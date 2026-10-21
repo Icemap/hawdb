@@ -329,7 +329,16 @@ impl Binder<'_> {
                 for (index, column) in source.columns.iter().enumerate() {
                     properties.insert(
                         column.name.clone(),
-                        BoundExpression::column(index, scalar_type(column.data_type)),
+                        BoundExpression::column(
+                            index,
+                            scalar_type(column.data_type).ok_or_else(|| {
+                                self.error(
+                                    Code::UnsupportedExpression,
+                                    span,
+                                    "VECTOR graph properties are not supported",
+                                )
+                            })?,
+                        ),
                     );
                 }
             }
@@ -372,15 +381,16 @@ impl Binder<'_> {
     }
 }
 
-fn scalar_type(data_type: SqlDataType) -> PgqDataType {
-    match data_type {
+fn scalar_type(data_type: SqlDataType) -> Option<PgqDataType> {
+    Some(match data_type {
         SqlDataType::Boolean => PgqDataType::Boolean,
         SqlDataType::BigInt => PgqDataType::Int64,
         SqlDataType::DoublePrecision => PgqDataType::Float64,
         SqlDataType::Text => PgqDataType::String,
         SqlDataType::Bytea => PgqDataType::Binary,
         SqlDataType::Uuid => PgqDataType::Uuid,
-    }
+        SqlDataType::Vector(_) => return None,
+    })
 }
 
 #[cfg(test)]

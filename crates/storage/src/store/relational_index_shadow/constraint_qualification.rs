@@ -276,7 +276,7 @@ fn schedule_unique_target_probes(
     }
 
     if definition_has_nullable_column(schema, definition) {
-        let mut key = synthetic_key(schema, &definition.columns, 0);
+        let mut key = synthetic_key(schema, &definition.columns, 0)?;
         let nullable_position = definition
             .columns
             .iter()
@@ -446,7 +446,7 @@ fn find_absent_key(
     definition: &RelationalIndexDefinition,
 ) -> crate::Result<Option<RelationalKey>> {
     for salt in 0..64 {
-        let key = synthetic_key(schema, &definition.columns, salt);
+        let key = synthetic_key(schema, &definition.columns, salt)?;
         if relational_constraint_oracle_rows(state, &schema.name, &definition.name, &key, 1)?
             .is_empty()
         {
@@ -456,8 +456,12 @@ fn find_absent_key(
     Ok(None)
 }
 
-fn synthetic_key(schema: &RelationalTableSchema, columns: &[String], salt: usize) -> RelationalKey {
-    RelationalKey(
+fn synthetic_key(
+    schema: &RelationalTableSchema,
+    columns: &[String],
+    salt: usize,
+) -> crate::Result<RelationalKey> {
+    Ok(RelationalKey(
         columns
             .iter()
             .enumerate()
@@ -467,12 +471,16 @@ fn synthetic_key(schema: &RelationalTableSchema, columns: &[String], salt: usize
                     .expect("validated synthetic-key column");
                 synthetic_value(schema.columns[position].scalar_type, ordinal, salt)
             })
-            .collect(),
-    )
+            .collect::<crate::Result<_>>()?,
+    ))
 }
 
-fn synthetic_value(kind: RelationalScalarType, ordinal: usize, salt: usize) -> RelationalValue {
-    match kind {
+fn synthetic_value(
+    kind: RelationalScalarType,
+    ordinal: usize,
+    salt: usize,
+) -> crate::Result<RelationalValue> {
+    Ok(match kind {
         RelationalScalarType::Boolean => RelationalValue::Boolean(
             salt.checked_shr(u32::try_from(ordinal).unwrap_or(u32::MAX))
                 .unwrap_or(0)
@@ -498,7 +506,12 @@ fn synthetic_value(kind: RelationalScalarType, ordinal: usize, salt: usize) -> R
         RelationalScalarType::Uuid => RelationalValue::Uuid(hawdb_core::Uuid::from_u128(
             ((salt as u128) << 64) | ordinal as u128,
         )),
-    }
+        RelationalScalarType::Vector(_) => {
+            return Err(hawdb_core::HawDBError::Semantic(
+                "VECTOR columns cannot be constraint keys".into(),
+            ))
+        }
+    })
 }
 
 fn key_from_row(

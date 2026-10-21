@@ -230,6 +230,7 @@ fn compile_data_type(data_type: SqlDataType) -> RelationalScalarType {
         SqlDataType::Text => RelationalScalarType::Text,
         SqlDataType::Bytea => RelationalScalarType::Bytea,
         SqlDataType::Uuid => RelationalScalarType::Uuid,
+        SqlDataType::Vector(dimension) => RelationalScalarType::Vector(dimension),
     }
 }
 

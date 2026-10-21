@@ -64,6 +64,7 @@ pub fn parse_postgres_sql(input: &str) -> Result<SqlStatement> {
             "expected exactly one PostgreSQL SQL statement".to_string(),
         ));
     };
+    schema::validate_vector_type_syntax(input, statement)?;
     lower_statement(statement)
 }
 

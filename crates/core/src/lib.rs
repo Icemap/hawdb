@@ -52,7 +52,7 @@ pub use graph_rag::{
     DEFAULT_GRAPH_RAG_MAX_PROPERTIES_PER_SUBJECT, DEFAULT_GRAPH_RAG_MAX_RELATIONSHIP_TYPES,
     DEFAULT_GRAPH_RAG_MAX_ROUTES, GRAPH_RAG_SCHEMA_CONTEXT_PROTOCOL, MAX_GRAPH_RAG_QUERY_LIMIT,
 };
-pub use logical_type::LogicalType;
+pub use logical_type::{LogicalType, VectorDimension};
 pub use regex::ValidatedRegex;
 pub use schema::{
     AdvancedStatisticsFreshness, BasicGraphStatistics, Catalog, CompositeIndexDescriptor,

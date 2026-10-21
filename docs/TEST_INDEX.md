@@ -47,6 +47,7 @@ Bazel. A family description does not imply every leaf belongs to every lane.
 | Component / `:presubmit_tests` family | Problems covered |
 | --- | --- |
 | Core, expression, SQL/SQL-syntax, Cypher and DDL | Typed values, expression semantics, parsing/binding and schema constraints. |
+| VECTOR column schemas | Core/SQL crate targets cover dimensions and syntax; storage covers schema codecs and index digests; root `hawdb_unit_general_tests` covers SQL session rollback and WAL/checkpoint/read-only reopen. All use the existing CI lanes. Focused local replay: `--test_arg=vector_schema`. See [schema scope](specs/VECTOR_COLUMN_SCHEMA_SPEC.md); non-NULL vector values remain unsupported. |
 | Optimizer, optimizer-{graph,relational,predicate,vector}, plan-{core,cache,cypher}, explain | Rewrite legality, plan construction, cache/publication concurrency and observable plans. |
 | Executor and query/query-policy | Operator execution, result delivery, cancellation and budget/refusal behavior. Allocation probes use the repository profile; compare measurements only within the same profile. |
 | Storage, integrity, cascades and artifact/bootstrap | WAL/checkpoint, encoded artifacts, indexes, corruption/refusal and startup ownership. Projection capture covers 65,537-node commits, oversized-preimage gaps, cold node/adjacency/relationship/spill FD exhaustion and retry, nested resource/cancellation refusals versus physical corruption across canonical readers, and cancellation across grouped replay work. |

@@ -279,6 +279,7 @@ pub enum SqlDataType {
     Text,
     Bytea,
     Uuid,
+    Vector(hawdb_core::VectorDimension),
 }
 
 impl SqlDataType {
@@ -290,6 +291,7 @@ impl SqlDataType {
             Self::Text => LogicalType::Text,
             Self::Bytea => LogicalType::Binary,
             Self::Uuid => LogicalType::Uuid,
+            Self::Vector(dimension) => LogicalType::Vector(dimension),
         }
     }
 }

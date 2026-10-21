@@ -250,6 +250,7 @@ pub enum RelationalScalarType {
     Text,
     Bytea,
     Uuid,
+    Vector(hawdb_core::VectorDimension),
 }
 
 impl RelationalScalarType {
@@ -261,6 +262,7 @@ impl RelationalScalarType {
             Self::Text => LogicalType::Text,
             Self::Bytea => LogicalType::Binary,
             Self::Uuid => LogicalType::Uuid,
+            Self::Vector(dimension) => LogicalType::Vector(dimension),
         }
     }
 }
@@ -8610,6 +8612,20 @@ fn validate_column_list(
                 "{kind} references unknown or duplicate column {column}"
             )));
         }
+        validate_key_column(
+            &schema.columns[schema.column_position(column).expect("validated column")],
+            kind,
+        )?;
+    }
+    Ok(())
+}
+
+fn validate_key_column(column: &RelationalColumnSchema, kind: &str) -> Result<(), RelationalError> {
+    if matches!(column.scalar_type, RelationalScalarType::Vector(_)) {
+        return Err(RelationalError::Schema(format!(
+            "{kind} does not support VECTOR column {}",
+            column.name
+        )));
     }
     Ok(())
 }
@@ -8642,6 +8658,12 @@ fn validate_value_type(
         }
         return Err(RelationalError::Constraint(format!(
             "column {} is NOT NULL",
+            column.name
+        )));
+    }
+    if matches!(column.scalar_type, RelationalScalarType::Vector(_)) {
+        return Err(RelationalError::Schema(format!(
+            "non-NULL VECTOR values are not supported yet for column {}",
             column.name
         )));
     }

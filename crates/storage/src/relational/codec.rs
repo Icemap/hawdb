@@ -40,6 +40,9 @@ use std::sync::Arc;
 
 pub(crate) mod schema_encoding;
 
+#[cfg(test)]
+mod vector_schema_tests;
+
 mod checkpoint;
 pub(crate) use checkpoint::{
     clone_string_with_work_context, decode_relational_checkpoint_file_with_work_context,
@@ -1169,7 +1172,11 @@ impl Encoder {
             RelationalScalarType::Text => 4,
             RelationalScalarType::Bytea => 5,
             RelationalScalarType::Uuid => 6,
+            RelationalScalarType::Vector(_) => 7,
         });
+        if let RelationalScalarType::Vector(dimension) = scalar_type {
+            self.u32(dimension.get());
+        }
     }
 
     fn value(&mut self, value: &RelationalValue) -> Result<(), RelationalError> {
@@ -1820,6 +1827,9 @@ impl<I: DecodeInput> Decoder<I> {
             4 => Ok(RelationalScalarType::Text),
             5 => Ok(RelationalScalarType::Bytea),
             6 => Ok(RelationalScalarType::Uuid),
+            7 => hawdb_core::VectorDimension::new(self.u32()?)
+                .map(RelationalScalarType::Vector)
+                .ok_or_else(|| RelationalError::Corruption("zero VECTOR dimension".into())),
             tag => Err(RelationalError::Corruption(format!(
                 "invalid relational scalar type tag {tag}"
             ))),

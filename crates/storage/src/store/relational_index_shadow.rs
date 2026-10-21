@@ -207,6 +207,7 @@ const fn relational_scalar_type_tag(scalar_type: RelationalScalarType) -> u8 {
         RelationalScalarType::Text => 3,
         RelationalScalarType::Bytea => 4,
         RelationalScalarType::Uuid => 5,
+        RelationalScalarType::Vector(_) => 6,
     }
 }
 

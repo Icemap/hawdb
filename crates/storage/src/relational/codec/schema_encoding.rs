@@ -93,6 +93,7 @@ pub(crate) fn scalar_tag(kind: RelationalScalarType) -> u8 {
         RelationalScalarType::Text => 4,
         RelationalScalarType::Bytea => 5,
         RelationalScalarType::Uuid => 6,
+        RelationalScalarType::Vector(_) => 7,
     }
 }
 
@@ -143,7 +144,11 @@ pub(crate) fn schema(sink: &mut impl Sink, schema: Schema<'_>) -> Result<(), Rel
     count(sink, schema.columns.len(), "table columns")?;
     for column in schema.columns {
         bytes(sink, column.name.as_bytes())?;
-        sink.raw(&[scalar_tag(column.scalar_type), u8::from(column.nullable)])?;
+        sink.raw(&[scalar_tag(column.scalar_type)])?;
+        if let RelationalScalarType::Vector(dimension) = column.scalar_type {
+            sink.raw(&dimension.get().to_le_bytes())?;
+        }
+        sink.raw(&[u8::from(column.nullable)])?;
         match &column.default {
             None => sink.raw(&[0])?,
             Some(RelationalColumnDefault::UuidV7) => sink.raw(&[2])?,

@@ -597,6 +597,7 @@ fn scalar_type_tag(scalar_type: RelationalScalarType) -> u8 {
         RelationalScalarType::Text => 4,
         RelationalScalarType::Bytea => 5,
         RelationalScalarType::Uuid => 6,
+        RelationalScalarType::Vector(_) => 7,
     }
 }
 

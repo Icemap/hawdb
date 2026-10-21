@@ -45,6 +45,7 @@ fn scalar_type(value: RelationalScalarType) -> SqlDataType {
         RelationalScalarType::Text => SqlDataType::Text,
         RelationalScalarType::Bytea => SqlDataType::Bytea,
         RelationalScalarType::Uuid => SqlDataType::Uuid,
+        RelationalScalarType::Vector(dimension) => SqlDataType::Vector(dimension),
     }
 }
 

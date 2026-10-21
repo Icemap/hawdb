@@ -19,6 +19,7 @@
 use super::*;
 
 fn validate_columns(
+    schema: &RelationalTableSchema,
     positions: &BTreeMap<&str, usize>,
     columns: &[String],
     kind: &str,
@@ -39,6 +40,7 @@ fn validate_columns(
                 "{kind} references unknown or duplicate column {column}"
             )));
         }
+        crate::relational::validate_key_column(&schema.columns[positions[column.as_str()]], kind)?;
         unit.finish();
     }
     work.checkpoint().map_err(work_error)
@@ -87,7 +89,7 @@ pub(crate) fn validate_table_schema_with_work_context<'a>(
         }
         unit.finish();
     }
-    validate_columns(&positions, &schema.primary_key, "primary key", work)?;
+    validate_columns(schema, &positions, &schema.primary_key, "primary key", work)?;
     for column in &schema.primary_key {
         let unit = work.start_unit().map_err(work_error)?;
         let position = positions.get(column.as_str()).expect("validated column");
@@ -99,10 +101,10 @@ pub(crate) fn validate_table_schema_with_work_context<'a>(
         unit.finish();
     }
     for unique in &schema.unique_constraints {
-        validate_columns(&positions, unique, "unique constraint", work)?;
+        validate_columns(schema, &positions, unique, "unique constraint", work)?;
     }
     for foreign in &schema.foreign_keys {
-        validate_columns(&positions, &foreign.columns, "foreign key", work)?;
+        validate_columns(schema, &positions, &foreign.columns, "foreign key", work)?;
         let unit = work.start_unit().map_err(work_error)?;
         if foreign.columns.len() != foreign.referenced_columns.len() || foreign.columns.is_empty() {
             return Err(RelationalError::Schema(
@@ -124,7 +126,7 @@ pub(crate) fn validate_table_schema_with_work_context<'a>(
             )));
         }
         unit.finish();
-        validate_columns(&positions, &index.columns, "index", work)?;
+        validate_columns(schema, &positions, &index.columns, "index", work)?;
     }
     work.checkpoint().map_err(work_error)?;
     Ok(positions)
