@@ -112,8 +112,8 @@ fn checkpoint_units_wal_replay_search_capture_admits_all_1057_label_neighbors() 
     drop(permit);
     assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
     assert!(
-        units >= 1057,
-        "a real search capture visited1057 label relationships with only {units} admitted units"
+        (2..1057).contains(&units),
+        "capture must admit multiple bounded groups, not one unit per relationship: {units}"
     );
 }
 

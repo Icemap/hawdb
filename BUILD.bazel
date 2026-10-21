@@ -799,7 +799,7 @@ rust_test(
         crate_root = "tests/mvcc_staging_session.rs",
         srcs = ["tests/mvcc_staging_session.rs", "tests/support/projection_coverage.rs"],
         edition = "2024",
-        deps = [library],
+        deps = [library, "//crates/storage:hawdb_storage"],
     )
     for suffix, library in [
         ("", ":hawdb"),

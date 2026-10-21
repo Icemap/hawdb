@@ -359,10 +359,12 @@ fn phantom_upsert(
     input: ProjectionMappingInput<'_>,
     state: &[u8],
 ) -> Result<ProjectionMappingStatus> {
-    if matches!(input, ProjectionMappingInput::GraphNode { .. }) {
-        // Sort before the first expected ID to exercise Ordering::Less.
+    if matches!(input, ProjectionMappingInput::GraphNode { .. }) && state.is_empty() {
+        // Add a phantom before the first expected ID, then emit the correct
+        // source document on the next quantum. Every other delta is valid.
         ctx.upsert(doc("absent", "phantom"))?;
-        return Ok(ProjectionMappingStatus::Done);
+        ctx.set_continuation(&[1])?;
+        return Ok(ProjectionMappingStatus::More);
     }
     delta_e(ctx, input, state)
 }

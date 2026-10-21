@@ -401,16 +401,25 @@ fn cold_capture_descriptor_exhaustion_preserves_the_writer_and_allows_retry() {
         let metrics = project.metrics();
         // Reserving cached capacity evicts idle handles as well as exhausting
         // fresh-open capacity, so warm caches cannot bypass this negative control.
-        let held = project
-            .reserve(metrics.limit - metrics.open - metrics.reserved + metrics.cached_handles)
-            .unwrap();
+        let available = metrics.limit - metrics.open - metrics.reserved + metrics.cached_handles;
+        let competitor = project.clone();
+        let (ready_tx, ready_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let held = std::thread::spawn(move || {
+            // Reservations belong to their thread. A same-thread reservation
+            // would lend its capacity to the read instead of competing with it.
+            let _reservation = competitor.reserve(available).unwrap();
+            ready_tx.send(()).unwrap();
+            let _ = release_rx.recv();
+        });
+        ready_rx.recv().unwrap();
         let lsn = store.durable.as_ref().unwrap().next_lsn;
         let epoch = store.commit_epoch();
         let floor = store.search_projection_change_log_start_epoch();
         let changes = store.search_projection_changes_after(0);
         let error = store
             .append_graph_wal_and_capture(&catalog, std::slice::from_ref(&op), false)
-            .unwrap_err();
+            .expect_err(kind);
         assert!(
             matches!(
                 error,
@@ -426,7 +435,8 @@ fn cold_capture_descriptor_exhaustion_preserves_the_writer_and_allows_retry() {
         assert_eq!(store.search_projection_changes_after(0), changes);
         store.ensure_usable().unwrap();
         snapshot.ensure_usable().unwrap();
-        drop(held);
+        release_tx.send(()).unwrap();
+        held.join().unwrap();
         store
             .append_graph_wal_and_capture(&catalog, std::slice::from_ref(&op), false)
             .unwrap();

@@ -602,7 +602,7 @@ mod tests {
             .any(|item| item["work_class"] == "projection"
                 && item["priority"] == "background"
                 && item["admission"] == "admit"));
-        // Fixture projection DDL leaves a conservative rebuild floor. The
+        // Fixture schema DDL leaves a conservative rebuild floor. The
         // summary must expose lag, never advertise a point delta across it.
         let lag_delta = bundle["background_maintenance"]["ranked"]
             .as_array()
