@@ -32,11 +32,13 @@ mod control;
 pub mod generation_metadata;
 mod operation;
 mod read_view;
+mod reopen;
 mod selection;
 pub(crate) use control::require_unregistered_directory;
 pub use operation::ConsumerPreparationLease;
 pub(crate) use operation::{Authority as MutationOwner, MutationPermit};
 pub use read_view::{ConsumerReadPin, ConsumerReadSlot};
+pub use reopen::ConsumerReopenLimits;
 pub use selection::{ConsumerSelectionAttempt, PendingConsumerPublication};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -546,9 +548,9 @@ impl<'birth> ConsumerStationaryTargetLease<'birth> {
             })?;
             drop(io);
         }
-        let view = crate::out_of_core::open_born_candidate(
-            crate::out_of_core::BornCandidateOpenContext {
-                born: self._birth,
+        let view = crate::out_of_core::open_stationary_candidate(
+            crate::out_of_core::StationaryCandidateOpenContext {
+                stationary: crate::out_of_core::StationaryRoot::Born(self._birth),
                 publication: &mut self.lease,
                 memory: &self.memory,
                 task: &self.task,
@@ -803,70 +805,15 @@ impl ConsumerCandidateOutput<'_, '_> {
         let metadata = self.target.lease.with_captured_directory(|target| {
             let context = target.operation_context();
             let mut buffer = [0u8; SPOOL_BUFFER_BYTES];
-            let manifest_len =
-                usize::try_from(input.search_manifest.byte_length).map_err(|_| {
-                    HawDBError::StorageIntegrity("consumer Search manifest length overflows".into())
-                })?;
-            if input.search_manifest.byte_length
-                > crate::out_of_core::MAX_OUT_OF_CORE_MANIFEST_BYTES
-            {
-                return Err(HawDBError::StorageIntegrity(
-                    "consumer Search manifest exceeds its read limit".into(),
-                ));
-            }
-            let _manifest_memory = self.memory.spool.reserve(manifest_len)?;
-            let mut manifest = Vec::new();
-            manifest.try_reserve_exact(manifest_len).map_err(|error| {
-                HawDBError::Execution(format!(
-                    "consumer Search manifest allocation failed: {error}"
-                ))
-            })?;
-            if manifest.capacity() > manifest_len {
-                return Err(HawDBError::Execution(
-                    "consumer Search manifest allocation exceeds admission".into(),
-                ));
-            }
-            verify_candidate_child(
+            reopen::verify_generation_contents(
                 target,
-                &context,
-                crate::out_of_core::OUT_OF_CORE_MANIFEST_FILE,
                 input.search_manifest,
-                &self.task,
-                &mut buffer,
-                Some(&mut manifest),
-            )?;
-            let _decode_memory = self.memory.spool.reserve(
-                crate::out_of_core::consumer_manifest_decode_capacity(&manifest, &self.task)?,
-            )?;
-            let resident_snapshot_absent = crate::out_of_core::validate_consumer_manifest_artifacts(
-                &manifest,
                 input.source_epoch,
                 input.artifacts,
+                &self.memory,
                 &self.task,
+                &mut buffer,
             )?;
-            if resident_snapshot_absent {
-                match target.open_child(&context, crate::SEARCH_SNAPSHOT_FILE) {
-                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                    Err(error) => return Err(error.into()),
-                    Ok(_) => {
-                        return Err(HawDBError::StorageIntegrity(
-                            "consumer candidate resident snapshot is present despite manifest absence proof"
-                                .into(),
-                        ));
-                    }
-                }
-            }
-            for artifact in input.artifacts {
-                verify_candidate_child(
-                    target,
-                    &context,
-                    artifact.name,
-                    artifact.reference,
-                    &self.task,
-                    &mut buffer,
-                    None,
-                )?;
-            }
             // Charge before the first metadata effect. Any uncertain write
             // retains both this cost and the original born-generation debt.
             self.remaining_bytes -= length_u64;

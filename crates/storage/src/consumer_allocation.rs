@@ -30,6 +30,9 @@ pub use selection::{
     ConsumerSelectionReceipt, ConsumerSelectionResolution, PendingConsumerSelection,
     PreparedConsumerSelection, CONSUMER_SELECTION_MEMORY_BOUND,
 };
+mod reopen;
+pub(crate) use reopen::prepare as prepare_reopen;
+pub use reopen::{ConsumerReopenRequest, ReopenedConsumerGeneration, CONSUMER_REOPEN_MEMORY_BOUND};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -262,19 +265,34 @@ impl ConsumerAllocationSource {
     }
 }
 
-pub(crate) fn source(
+/// Captures existing custody only; it performs no I/O or ledger admission.
+/// Consumers must verify the captured source before exposing any authority.
+pub(crate) fn captured_source(
     project: &CapturedProject,
     owner: Arc<DatabaseDirectoryLease>,
     branch: BranchId,
-) -> Result<ConsumerAllocationSource> {
-    project.with_locked_catalog(|root, context, catalog| {
-        check_source(project, &owner, branch, root, context, &catalog).map(|_| ())
-    })?;
-    Ok(ConsumerAllocationSource {
+) -> ConsumerAllocationSource {
+    ConsumerAllocationSource {
         project: project.clone(),
         owner,
         branch,
-    })
+    }
+}
+
+impl ConsumerAllocationSource {
+    pub(crate) fn verify(&self) -> Result<()> {
+        self.project.with_locked_catalog(|root, context, catalog| {
+            check_source(
+                &self.project,
+                &self.owner,
+                self.branch,
+                root,
+                context,
+                &catalog,
+            )
+            .map(|_| ())
+        })
+    }
 }
 
 fn check_source(
@@ -285,6 +303,20 @@ fn check_source(
     context: &FileOpenContext,
     catalog: &crate::branch_catalog::Catalog,
 ) -> Result<Ledger> {
+    check_source_custody(project, owner, branch, catalog)?;
+    let ledger = read(root, context)?;
+    if selector(&ledger)? != project.allocation_identity() {
+        return Err(invalid("project binding differs"));
+    }
+    Ok(ledger)
+}
+
+fn check_source_custody(
+    project: &CapturedProject,
+    owner: &DatabaseDirectoryLease,
+    branch: BranchId,
+    catalog: &crate::branch_catalog::Catalog,
+) -> Result<()> {
     let record = catalog
         .branches
         .iter()
@@ -294,13 +326,10 @@ fn check_source(
     if !actual.same_directory(owner.captured_directory()) {
         return Err(invalid("source owner differs from original project"));
     }
-    let ledger = read(root, context)?;
-    if selector(&ledger)? != project.allocation_identity()
-        || catalog.project_id != project.allocation_identity().project_id()
-    {
+    if catalog.project_id != project.allocation_identity().project_id() {
         return Err(invalid("project binding differs"));
     }
-    Ok(ledger)
+    Ok(())
 }
 
 /// Kernel-created reservation, never a native birth/adoption/deletion token.
@@ -375,7 +404,11 @@ fn read(root: &SourceDirectory, context: &FileOpenContext) -> Result<Ledger> {
     decode(file)
 }
 
-fn decode(file: File) -> Result<Ledger> {
+fn decode(mut file: File) -> Result<Ledger> {
+    decode_held(&mut file)
+}
+
+fn decode_held(file: &mut File) -> Result<Ledger> {
     if file.metadata()?.len() > MAX_BYTES as u64 {
         return Err(invalid("byte limit exceeded"));
     }

@@ -20,7 +20,6 @@ use crate::build_memory::{
     read::{ReadAdmission, ReadBytes, ReaderMemory},
     SET_ENTRY_BYTES,
 };
-use hawdb_storage::consumer_allocation::PendingConsumerGeneration;
 use hawdb_storage::file_descriptors::ProjectFileDescriptors;
 use hawdb_storage::immutable_object::{ObjectKind, ObjectReference};
 use std::mem::size_of;
@@ -41,10 +40,10 @@ pub(super) struct OpenContext<'a, 'execution> {
     // Exclusive construction-time borrow; the returned view never retains the
     // publication lease. Exact artifact/GC authority remains required separately.
     pub(super) publication: Option<&'a mut SearchProjectionPublishLease>,
-    /// Native birth is the authority for an original stationary target whose
-    /// diagnostic path may no longer name the captured directory.
-    pub(super) born: Option<&'a PendingConsumerGeneration>,
-    pub(super) expected_born_manifest: Option<ObjectReference>,
+    /// Fresh birth or completed native reopen establishes a held stationary
+    /// target independently of its diagnostic pathname.
+    pub(super) stationary: Option<StationaryRoot<'a>>,
+    pub(super) expected_stationary_manifest: Option<ObjectReference>,
 }
 
 // Deliberately no Deref or public serving/refresh conversion for admitted roots.
@@ -52,7 +51,7 @@ pub(super) struct OpenContext<'a, 'execution> {
 // construction evidence must not become an ungoverned public reader capability.
 pub(super) struct OpenedRoot {
     reader: SearchOutOfCoreReader,
-    born_immutable: bool,
+    stationary_immutable: bool,
     _native_custody: Option<super::root_registry::RootRef>,
     _root_memory: Option<ReaderMemory>,
     _manifest_memory: Option<ReaderMemory>,
@@ -178,7 +177,7 @@ impl OpenedRoot {
                     ),
                 },
                 query: Some(context),
-                immutable_freshness: self.born_immutable,
+                immutable_freshness: self.stationary_immutable,
                 scratch: scratch.as_deref(),
                 output: Some(&output),
             },
@@ -219,11 +218,11 @@ pub(super) fn open(context: OpenContext<'_, '_>) -> Result<OpenedRoot> {
         project,
         max_artifact_read_bytes,
         publication,
-        born,
-        expected_born_manifest,
+        stationary,
+        expected_stationary_manifest,
     } = context;
-    if born.is_some() != expected_born_manifest.is_some()
-        || born.is_some() && (admission.is_none() || publication.is_none())
+    if stationary.is_some() != expected_stationary_manifest.is_some()
+        || stationary.is_some() && (admission.is_none() || publication.is_none())
     {
         return Err(HawDBError::Execution(
             "born target requires captured publication and reader admission".into(),
@@ -250,8 +249,8 @@ pub(super) fn open(context: OpenContext<'_, '_>) -> Result<OpenedRoot> {
             let project = project.ok_or_else(|| {
                 HawDBError::Execution("admitted root requires an existing project authority".into())
             })?;
-            if let Some(born) = born {
-                let original = born.born_directory()?;
+            if let Some(stationary) = stationary {
+                let original = stationary.directory(admission.task)?;
                 let publication = publication
                     .as_deref()
                     .expect("born target retains publication");
@@ -308,7 +307,7 @@ pub(super) fn open(context: OpenContext<'_, '_>) -> Result<OpenedRoot> {
                 let _io = admission
                     .io()
                     .map_err(|e| HawDBError::Execution(e.to_string()))?;
-                if born.is_none() {
+                if stationary.is_none() {
                     publication.require_source_root(&root, &project_files.io_context())?;
                 }
             }
@@ -321,7 +320,7 @@ pub(super) fn open(context: OpenContext<'_, '_>) -> Result<OpenedRoot> {
         _ => unreachable!("admitted construction owns publication capture"),
     };
     let native_custody = capture.as_ref().map(|capture| capture.root().clone());
-    if born.is_some() {
+    if stationary.is_some() {
         let admission = admission.expect("born reader admission");
         let native = native_custody.as_ref().expect("born native custody");
         for marker in [FULL_REINDEX_MARKER, METADATA_REPAIR_MARKER] {
@@ -349,7 +348,7 @@ pub(super) fn open(context: OpenContext<'_, '_>) -> Result<OpenedRoot> {
             MAX_OUT_OF_CORE_MANIFEST_BYTES,
         )?),
     };
-    if let Some(expected) = expected_born_manifest
+    if let Some(expected) = expected_stationary_manifest
         && ObjectReference::for_bytes(ObjectKind::CheckpointArtifact, 1, &bytes) != expected
     {
         return Err(HawDBError::StorageIntegrity(
@@ -388,7 +387,7 @@ pub(super) fn open(context: OpenContext<'_, '_>) -> Result<OpenedRoot> {
     )?;
     drop(capture);
     Ok(OpenedRoot {
-        born_immutable: born.is_some(),
+        stationary_immutable: stationary.is_some(),
         _native_custody: native_custody,
         reader: SearchOutOfCoreReader {
             root,

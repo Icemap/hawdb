@@ -17,6 +17,8 @@ use crate::SearchRebuildOptions;
 use std::any::TypeId;
 use std::num::NonZeroU64;
 
+mod native_reopen;
+
 struct Fixture(PathBuf);
 impl Fixture {
     fn new() -> Self {

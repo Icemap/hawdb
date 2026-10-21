@@ -78,18 +78,7 @@ impl ReservedConsumerAllocation {
             if row.native_birth != NativeBirth::Reserved {
                 return Err(invalid("reservation already has a native attempt"));
             }
-            let mut bytes = BoundedBytes(Vec::new());
-            bytes.write_all(BIRTH_HEADER)?;
-            let mut marker_row = row.clone();
-            marker_row.native_birth = NativeBirth::Pending {
-                generation_name: name.clone(),
-                parent_locator: parent_locator.clone(),
-            };
-            serde_json::to_writer(&mut bytes, &(self.domain.as_uuid().to_string(), marker_row))
-                .map_err(|_| invalid("birth marker exceeds byte limit"))?;
-            let checksum = hawdb_integrity::crc32c(&bytes.0);
-            bytes.0.extend_from_slice(&checksum.get().to_le_bytes());
-            Ok(bytes.0)
+            marker_bytes(self.domain, row, &name, &parent_locator)
         })?;
         self.transition_birth(
             NativeBirth::Reserved,
@@ -255,6 +244,33 @@ impl ReservedConsumerAllocation {
             Ok(())
         })
     }
+}
+
+pub(super) fn marker_bytes(
+    domain: BranchId,
+    row: &Reservation,
+    name: &str,
+    parent_locator: &str,
+) -> Result<Vec<u8>> {
+    let mut bytes = BoundedBytes(Vec::new());
+    bytes.write_all(BIRTH_HEADER)?;
+    let mut marker_row = row.clone();
+    marker_row.native_birth = NativeBirth::Pending {
+        generation_name: name.to_owned(),
+        parent_locator: parent_locator.to_owned(),
+    };
+    // The immutable birth marker predates sealing and publication intent.
+    marker_row.candidate_seal = None;
+    marker_row.publication_intent = None;
+    serde_json::to_writer(&mut bytes, &(domain.as_uuid().to_string(), marker_row))
+        .map_err(|_| invalid("birth marker exceeds byte limit"))?;
+    let checksum = hawdb_integrity::crc32c(&bytes.0);
+    bytes.0.extend_from_slice(&checksum.get().to_le_bytes());
+    Ok(bytes.0)
+}
+
+pub(super) fn marker_file_name() -> &'static str {
+    BIRTH_FILE
 }
 
 impl PendingConsumerGeneration {

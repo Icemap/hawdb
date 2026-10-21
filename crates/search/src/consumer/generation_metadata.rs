@@ -302,6 +302,14 @@ impl<'a> MetadataView<'a> {
         self.artifact_count
     }
 
+    /// Borrow the complete validated artifact map without copying names.
+    pub fn artifacts(&self) -> impl ExactSizeIterator<Item = ArtifactReference<'a>> + '_ {
+        (0..self.artifact_count).map(|index| {
+            self.entry(index, self.limits)
+                .expect("validated immutable artifact index")
+        })
+    }
+
     /// Exact lookup in the validated borrowed index; no path or mutable global
     /// alias map participates. An absent entry stays absent.
     pub fn artifact(&self, name: &str) -> Option<ObjectReference> {

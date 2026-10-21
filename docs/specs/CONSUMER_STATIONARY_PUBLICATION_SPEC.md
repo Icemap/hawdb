@@ -5,12 +5,14 @@ runtime allocation/bootstrap ledger, native birth, proven no-effect settlement,
 private-unused retirement, target publication lease, bounded native artifact
 copy, private metadata sealing, a pinned out-of-core candidate reader, durable
 candidate seal debt, a preselection publication intent and a captured ledger
-selector with pending barriers and live-operation resolution now cover separate
+selector with pending barriers, live-operation resolution and completed-selection
+native reopening now cover separate
 prerequisites. Sealing
 checks the Search manifest's source epoch and exact top-level artifact set
 against producer references through the born target, and refuses a declared
 resident snapshot absence if that child is present. Complete C/E construction,
-registered serving-view exchange, restart adoption, exposed-debt recovery and reclamation below remain
+registered serving-view exchange, unresolved-operation restart adoption,
+exposed-debt recovery and reclamation below remain
 **not implemented**. This document preserves the complete acceptance scope in
 [MVCC_VERSIONED_PUBLICATION_SPEC.md](MVCC_VERSIONED_PUBLICATION_SPEC.md).
 
@@ -134,6 +136,58 @@ remain open under #1092. This stage does not authorize Mem stable/GA activation.
 See [the bootstrap/reservation refinement and its limits](../tla/CONSUMER_ALLOCATION_BOOTSTRAP_PROOF.md).
 
 ## Authorities and identity domains
+
+### Reopening a completed selected generation
+
+`GraphStore::prepare_search_consumer_reopen` captures the admitted source,
+branch/database identity, source epoch and a bounded inline Consumer identifier.
+It performs no ledger decode, target open or saved-locator lookup under
+SourceOwner. With fresh admission outside that fence,
+`ConsumerReadSlot::reopen` consumes an explicitly supplied original native parent
+from the same project descriptor domain. The persisted `parent_locator` remains
+diagnostic; it is never reopened. A new process supplies its initial admitted
+parent authority explicitly rather than deriving physical identity from a UUID
+or saved label.
+
+The Storage path validates the canonical bounded ledger through the original
+project and UUID source owner. Any unresolved publication intent returns typed
+Busy, including a selected image without a completed receipt. A complete
+selected root must retain the exact recorded birth, seal and completed intent,
+and cannot be ahead of the captured source. Before granting custody it repeats
+file and original-directory barriers on the same held ledger image and checks
+that the head still names that file. Native directory and birth-marker handles
+are then retained, and the complete immutable marker is compared with the
+original canonical birth frame, including its project and reservation binding.
+No generation, reservation, selector, writer or deletion authority is minted.
+
+Search admits a conservative 16 MiB control-construction envelope from the
+original working account before Storage decoding, plus its normal incremental
+metadata, artifact-index and reader reservations. The control phase reserves
+twelve descriptor slots; retained readers and every later open still consume
+the existing project cap. The immutable metadata's full producer reference,
+binding, source epoch, incarnation, generation and operation must agree with
+the completed selection. New candidates and reopens use the same manifest and
+artifact verification: the complete declared closure, full object references,
+native file identities and resident-snapshot absence proof are checked before
+the reader escapes. The explicit complete-generation byte bound counts the
+encoded closure once; it is not a physical-I/O or RSS measurement.
+
+The born and reopened paths share the admitted stationary-reader constructor,
+including operational-marker refusal and captured native custody. Verification
+releases its I/O wave before reader construction borrows another, so a one-slot
+caller never waits for its own slot. A final same-completed-selector check
+refuses an intervening selection. The returned kernel read slot retains its
+immutable reader and funding, while temporary source write custody and execution
+close. It can pin the recovered version and participate as the previous version
+of a later native selection; old pins preserve their original data.
+
+This is complete-receipt kernel recovery, not registered Consumer activation or
+a replacement production endpoint. The final registered registry/read-version
+fence, original-operation resolution after an incomplete receipt, exposed debt,
+read-only reopen/scratch policy and composed power-loss qualification remain
+open. A process-restart query is distinct from lost/torn/reordered-write proof.
+Positive legacy Windows creation/catch-up/reopen tests and their capability
+guard remain until the actual registered stationary path succeeds.
 
 The kernel now also has a separate native birth path, described in
 [the birth/debt refinement](../tla/CONSUMER_NATIVE_BIRTH_PROOF.md). It captures the

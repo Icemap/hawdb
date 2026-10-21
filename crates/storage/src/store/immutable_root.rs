@@ -480,6 +480,34 @@ impl GraphStore {
         self.consumer_allocation_source_inner().map(|_| ())
     }
 
+    /// Capture existing source custody without ledger reads or target opens.
+    /// Execute the request outside SourceOwner using an explicitly held parent
+    /// and the original project's fresh working/I/O/descriptor admission.
+    #[doc(hidden)]
+    pub fn prepare_search_consumer_reopen(
+        &self,
+        consumer: &str,
+    ) -> Result<crate::consumer_allocation::ConsumerReopenRequest> {
+        if self
+            .durable
+            .as_ref()
+            .is_some_and(|durable| durable.read_only)
+        {
+            return Err(HawDBError::Storage(
+                "Consumer reopen requires writable control barriers".into(),
+            ));
+        }
+        let database = self.search_projection_database_identity().ok_or_else(|| {
+            HawDBError::StorageIntegrity("Consumer reopen requires source database identity".into())
+        })?;
+        crate::consumer_allocation::prepare_reopen(
+            self.consumer_allocation_source_custody()?,
+            database,
+            consumer,
+            self.commit_epoch(),
+        )
+    }
+
     /// Verify that a recorded candidate still belongs to this admitted source.
     /// The candidate itself verifies its original marker and ledger row before
     /// supplying this binding; this check does not select or settle it.
@@ -504,6 +532,14 @@ impl GraphStore {
     fn consumer_allocation_source_inner(
         &self,
     ) -> Result<crate::consumer_allocation::ConsumerAllocationSource> {
+        let source = self.consumer_allocation_source_custody()?;
+        source.verify()?;
+        Ok(source)
+    }
+
+    fn consumer_allocation_source_custody(
+        &self,
+    ) -> Result<crate::consumer_allocation::ConsumerAllocationSource> {
         self.ensure_usable()?;
         let durable = self
             .durable
@@ -520,12 +556,12 @@ impl GraphStore {
         let owner = self.branch_lease.as_ref().ok_or_else(|| {
             HawDBError::StorageIntegrity("allocation requires original UUID owner".into())
         })?;
-        crate::consumer_allocation::source(
+        Ok(crate::consumer_allocation::captured_source(
             project,
             Arc::clone(owner),
             branch_catalog::BranchId::new(hawdb_core::Uuid::from_bytes(branch.head.branch_id))
                 .map_err(HawDBError::from_storage_error)?,
-        )
+        ))
     }
 
     /// Publishes the project selector last, while the legacy directory lease

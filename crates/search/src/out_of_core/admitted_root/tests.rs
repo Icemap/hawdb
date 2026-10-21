@@ -95,8 +95,8 @@ impl Fixture {
             project: Some(&self.reader._project_files),
             max_artifact_read_bytes: 32 << 20,
             publication: None,
-            born: None,
-            expected_born_manifest: None,
+            stationary: None,
+            expected_stationary_manifest: None,
         }
     }
 }

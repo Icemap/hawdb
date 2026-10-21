@@ -14,7 +14,7 @@ pub const CONSUMER_SELECTION_MEMORY_BOUND: u64 = 8 * MAX_BYTES as u64;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConsumerSelectionReceipt {
-    selected: SelectedRoot,
+    pub(super) selected: SelectedRoot,
 }
 
 impl ConsumerSelectionReceipt {

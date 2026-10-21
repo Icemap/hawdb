@@ -101,16 +101,45 @@ impl ConsumerReadSlot {
         reservation: ConsumerCandidateReservation,
         permit: &RuntimePermit,
     ) -> Result<Self> {
+        Self::with_view(reservation, View::Ready(None), permit)
+    }
+
+    pub(super) fn restored(
+        reader: crate::out_of_core::CandidateView,
+        receipt: &ConsumerSelectionReceipt,
+        permit: &RuntimePermit,
+    ) -> Result<Self> {
+        if !reader.shares_governor_with(permit) {
+            return Err(invalid(
+                "Consumer reopened reader belongs to another governor",
+            ));
+        }
+        let reservation = ConsumerCandidateReservation::capture(receipt.binding());
+        let version = Version {
+            reservation,
+            report: ConsumerCandidateViewReport {
+                source_epoch: receipt.source_epoch(),
+                generation: reader.generation(),
+                document_count: reader.document_count(),
+                metadata_reference: receipt.metadata_reference(),
+            },
+            reader,
+        };
+        Self::with_view(reservation, View::Ready(Some(version)), permit)
+    }
+
+    fn with_view(
+        reservation: ConsumerCandidateReservation,
+        view: View,
+        permit: &RuntimePermit,
+    ) -> Result<Self> {
         let bytes = std::mem::size_of::<SharedSlot>() + 2 * std::mem::size_of::<usize>();
         let memory = permit
             .reserve_retained_memory(bytes as u64)
             .map_err(|error| HawDBError::Execution(error.to_string()))?;
         Ok(Self(Arc::new(SharedSlot {
             identity: reservation.into(),
-            state: Mutex::new(State {
-                revision: 0,
-                view: View::Ready(None),
-            }),
+            state: Mutex::new(State { revision: 0, view }),
             memory,
         })))
     }

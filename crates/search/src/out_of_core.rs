@@ -117,8 +117,32 @@ impl CandidateView {
     }
 }
 
-pub(crate) struct BornCandidateOpenContext<'a> {
-    pub(crate) born: &'a hawdb_storage::consumer_allocation::PendingConsumerGeneration,
+#[derive(Clone, Copy)]
+pub(crate) enum StationaryRoot<'a> {
+    Born(&'a hawdb_storage::consumer_allocation::PendingConsumerGeneration),
+    Reopened(&'a hawdb_storage::consumer_allocation::ReopenedConsumerGeneration),
+}
+
+impl<'a> StationaryRoot<'a> {
+    fn generation_name(self) -> &'a str {
+        match self {
+            Self::Born(root) => root.generation_name(),
+            Self::Reopened(root) => root.generation_name(),
+        }
+    }
+    fn directory(
+        self,
+        task: &hawdb_core::RuntimeTaskContext,
+    ) -> Result<&'a hawdb_storage::file_io::SourceDirectory> {
+        match self {
+            Self::Born(root) => root.born_directory(),
+            Self::Reopened(root) => root.directory(task),
+        }
+    }
+}
+
+pub(crate) struct StationaryCandidateOpenContext<'a> {
+    pub(crate) stationary: StationaryRoot<'a>,
     pub(crate) publication: &'a mut SearchProjectionPublishLease,
     pub(crate) memory: &'a crate::build_memory::BuildMemory,
     pub(crate) task: &'a hawdb_core::RuntimeTaskContext,
@@ -128,9 +152,11 @@ pub(crate) struct BornCandidateOpenContext<'a> {
     pub(crate) max_artifact_read_bytes: NonZeroU64,
 }
 
-pub(crate) fn open_born_candidate(context: BornCandidateOpenContext<'_>) -> Result<CandidateView> {
-    let BornCandidateOpenContext {
-        born,
+pub(crate) fn open_stationary_candidate(
+    context: StationaryCandidateOpenContext<'_>,
+) -> Result<CandidateView> {
+    let StationaryCandidateOpenContext {
+        stationary,
         publication,
         memory,
         task,
@@ -149,12 +175,12 @@ pub(crate) fn open_born_candidate(context: BornCandidateOpenContext<'_>) -> Resu
         task,
         permit: crate::build_memory::read::ReadPermit::Governed(permit),
     };
-    let root = Path::new(born.generation_name());
+    let root = Path::new(stationary.generation_name());
     let opened = admitted_root::open(admitted_root::OpenContext {
         root,
         publication: Some(publication),
-        born: Some(born),
-        expected_born_manifest: Some(expected_manifest),
+        stationary: Some(stationary),
+        expected_stationary_manifest: Some(expected_manifest),
         config,
         analyzer_lexicon: SearchAnalyzerLexicon::default(),
         lexical_term_policy: SearchLexicalTermPolicy::default(),
@@ -1779,8 +1805,8 @@ impl SearchOutOfCoreReader {
         admitted_root::open(admitted_root::OpenContext {
             root: path.as_ref(),
             publication: None,
-            born: None,
-            expected_born_manifest: None,
+            stationary: None,
+            expected_stationary_manifest: None,
             config,
             analyzer_lexicon,
             lexical_term_policy,
@@ -5757,8 +5783,8 @@ mod tests {
                 project: Some(&reader._project_files),
                 max_artifact_read_bytes: 32 << 20,
                 publication: None,
-                born: None,
-                expected_born_manifest: None,
+                stationary: None,
+                expected_stationary_manifest: None,
             })
             .unwrap()
         };
