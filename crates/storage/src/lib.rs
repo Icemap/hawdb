@@ -98,6 +98,7 @@ pub mod power_loss;
 pub mod predicate;
 pub mod pressure;
 pub mod projection;
+mod reader_failure;
 #[doc(hidden)]
 pub mod sealed_root;
 #[doc(hidden)]

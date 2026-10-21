@@ -1098,8 +1098,9 @@ pub use hawdb_storage::{
 pub use hawdb_storage::graph_overlay::{GraphNodeIterator, GraphRelationshipIterator};
 
 fn canonical_segment_error(error: CanonicalSegmentError) -> HawDBError {
+    let refused = crate::reader_failure::is_admission_or_cancellation(&error);
     match HawDBError::from_storage_error(error) {
-        HawDBError::Storage(message) => HawDBError::StorageIntegrity(message),
+        HawDBError::Storage(message) if !refused => HawDBError::StorageIntegrity(message),
         error => error,
     }
 }

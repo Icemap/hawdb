@@ -49,7 +49,7 @@ Bazel. A family description does not imply every leaf belongs to every lane.
 | Core, expression, SQL/SQL-syntax, Cypher and DDL | Typed values, expression semantics, parsing/binding and schema constraints. |
 | Optimizer, optimizer-{graph,relational,predicate,vector}, plan-{core,cache,cypher}, explain | Rewrite legality, plan construction, cache/publication concurrency and observable plans. |
 | Executor and query/query-policy | Operator execution, result delivery, cancellation and budget/refusal behavior. Allocation probes use the repository profile; compare measurements only within the same profile. |
-| Storage, integrity, cascades and artifact/bootstrap | WAL/checkpoint, encoded artifacts, indexes, corruption/refusal and startup ownership. Projection capture covers 65,537-node commits, oversized-preimage gaps, cold FD exhaustion/retry, and cancellation across grouped replay work. |
+| Storage, integrity, cascades and artifact/bootstrap | WAL/checkpoint, encoded artifacts, indexes, corruption/refusal and startup ownership. Projection capture covers 65,537-node commits, oversized-preimage gaps, cold node/adjacency/relationship/spill FD exhaustion and retry, nested resource/cancellation refusals versus physical corruption across canonical readers, and cancellation across grouped replay work. |
 | Search | Unit behavior plus nine explicit feature profiles; public streamed-document and source-policy lifecycle fixtures have independent owners below. |
 | Analytics and vector-projection | Streaming algorithms, projected artifact IO and vector representation behavior. |
 | QoS, cgroup, telemetry, resource-profile and runtime-tokio | Resource detection/admission, metrics and synchronous/async runtime boundaries. |

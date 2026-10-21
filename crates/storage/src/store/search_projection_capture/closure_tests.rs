@@ -355,10 +355,84 @@ fn memory_only_and_direct_single_schema_commits_obey_the_same_gap_boundary() {
 }
 
 #[test]
+fn checkpoint_capture_observes_cancellation_within_one_work_group() {
+    use crate::background::CheckpointWorkProbe;
+    use hawdb_qos::{LocalQosPolicy, LocalQosScheduler};
+    use std::sync::atomic::Ordering;
+
+    for cancel_after in [1, 513, 1024] {
+        let scheduler = LocalQosScheduler::new(LocalQosPolicy {
+            max_background_operations: Some(1),
+            max_total_background_operations: Some(1),
+            ..Default::default()
+        });
+        let probe = Arc::new(CheckpointWorkProbe::default());
+        let mut budget = Budget {
+            checkpoint: Some(probe.context(scheduler.clone())),
+            until_checkpoint: 0,
+            bytes: MAX_BYTES,
+        };
+        for _ in 0..cancel_after {
+            assert!(budget.work().is_ok());
+        }
+        probe.cancellation.cancel();
+        for _ in cancel_after..1024 {
+            assert!(budget.work().is_ok());
+        }
+        assert!(matches!(
+            budget.work(),
+            Err(CaptureError::Storage(HawDBError::Storage(message)))
+                if message == "checkpoint build stopped: cancelled"
+        ));
+        assert_eq!(probe.completed.load(Ordering::SeqCst), 1);
+        probe.assert_released(&scheduler);
+    }
+}
+
+#[test]
+fn canonical_preimage_refusals_do_not_poison_the_store() {
+    let store = GraphStore::in_memory();
+    let snapshot = store.snapshot();
+    for error in crate::reader_failure::tests::refusals() {
+        let error = canonical_segment_error(CanonicalSegmentError::Io(error));
+        assert!(matches!(
+            error,
+            HawDBError::Storage(_)
+                | HawDBError::FileDescriptors(_)
+                | HawDBError::ResourceBudgetExceeded(_)
+        ));
+        store.poison_on_storage_error::<()>(&Err(error));
+        store.ensure_usable().unwrap();
+        snapshot.ensure_usable().unwrap();
+    }
+    assert!(matches!(
+        canonical_segment_error(CanonicalSegmentError::Corrupt("damaged preimage".into())),
+        HawDBError::StorageIntegrity(_)
+    ));
+}
+
+#[test]
 fn cold_capture_descriptor_exhaustion_preserves_the_writer_and_allows_retry() {
-    for kind in ["node", "adjacency", "relationship"] {
+    for kind in [
+        "node",
+        "adjacency",
+        "adjacency_payload",
+        "relationship",
+        "property_spill",
+    ] {
         let path = super::tests::directory();
         let (mut store, mut catalog, id) = seed(&path, StorageResidencyMode::Materialized);
+        if kind == "property_spill" {
+            store
+                .set_node_property(
+                    &mut catalog,
+                    "Memory",
+                    None,
+                    "id",
+                    Value::String("a".repeat(2 * MAX_PREIMAGE_BYTES)),
+                )
+                .unwrap();
+        }
         let label = store
             .create_node(
                 &mut catalog,
@@ -373,15 +447,40 @@ fn cold_capture_descriptor_exhaustion_preserves_the_writer_and_allows_retry() {
         drop(store);
         (store, catalog) = reopen(&path, StorageResidencyMode::OutOfCore);
         let op = match kind {
-            "node" => WalOp::SetNodeProperty {
-                id,
-                property: "id".into(),
-                value: Value::String("new".into()),
-            },
-            "adjacency" => {
+            "node" | "property_spill" => {
+                if kind == "property_spill" {
+                    // Warm only the encoded node and its descriptor path. The
+                    // selected ID's spill remains cold for allocation preflight.
+                    assert_eq!(
+                        store
+                            .canonical_base
+                            .as_ref()
+                            .unwrap()
+                            .with_node_input(id, |_| Ok(()))
+                            .unwrap(),
+                        Some(())
+                    );
+                }
+                WalOp::SetNodeProperty {
+                    id,
+                    property: "id".into(),
+                    value: Value::String("new".into()),
+                }
+            }
+            "adjacency" | "adjacency_payload" => {
                 // Keep the label lookup hot so the refusal occurs in adjacency.
                 let node = store.node_owned(label).unwrap().unwrap();
                 store.nodes.insert(label, node);
+                if kind == "adjacency_payload" {
+                    // Separate descriptor-page refusal from payload refusal.
+                    let reader = store.canonical_adjacency.as_ref().unwrap();
+                    let kind = catalog.rel_type_id("HAS_LABEL").unwrap();
+                    for direction in [AdjacencyDirection::Outgoing, AdjacencyDirection::Incoming] {
+                        reader
+                            .estimate_endpoint_entries(label, direction, Some(kind))
+                            .unwrap();
+                    }
+                }
                 WalOp::SetNodeProperty {
                     id: label,
                     property: "name".into(),
@@ -435,6 +534,14 @@ fn cold_capture_descriptor_exhaustion_preserves_the_writer_and_allows_retry() {
         assert_eq!(store.search_projection_changes_after(0), changes);
         store.ensure_usable().unwrap();
         snapshot.ensure_usable().unwrap();
+        assert!(
+            !store.canonical_base.as_ref().unwrap().is_poisoned(),
+            "{kind}"
+        );
+        assert!(
+            !store.canonical_adjacency.as_ref().unwrap().is_poisoned(),
+            "{kind}"
+        );
         release_tx.send(()).unwrap();
         held.join().unwrap();
         store
@@ -443,15 +550,25 @@ fn cold_capture_descriptor_exhaustion_preserves_the_writer_and_allows_retry() {
         store.apply_wal_op(&mut catalog, op).unwrap();
         store.finish_non_relational_commit();
         assert_eq!(store.commit_epoch(), epoch + 1);
-        assert_eq!(store.search_projection_change_log_start_epoch(), floor);
         let expected = store.search_projection_changes_after(epoch);
-        assert_eq!(expected.len(), 1);
+        if kind == "property_spill" {
+            // Once I/O can proceed, the oversized preimage independently
+            // requires a complete rebuild; the source commit must still retry.
+            assert_gap(&store, epoch, epoch + 1);
+            assert!(expected.is_empty());
+        } else {
+            assert_eq!(store.search_projection_change_log_start_epoch(), floor);
+            assert_eq!(expected.len(), 1);
+        }
         drop(snapshot);
         drop(store);
         drop(project);
         let (recovered, _) = reopen(&path, StorageResidencyMode::OutOfCore);
         assert_eq!(recovered.commit_epoch(), epoch + 1);
         assert_eq!(recovered.search_projection_changes_after(epoch), expected);
+        if kind == "property_spill" {
+            assert_gap(&recovered, epoch, epoch + 1);
+        }
         drop(recovered);
         std::fs::remove_dir_all(path).unwrap();
     }

@@ -537,6 +537,8 @@ fn cancellation_at_each_coverage_phase_preserves_base_and_allows_reopen_retry() 
 
 #[test]
 fn append_and_named_projection_writes_preserve_canonical_catch_up_after_reopen() {
+    let analytics =
+        hawdb::compiled_runtime_capabilities().is_enabled(hawdb::RuntimeCapability::GraphAnalytics);
     let state = |db: &mut Database| {
         db.query_sql(
         "SELECT resume_floor_commit_epoch, retained_mutation_count FROM system.search_projection_changefeed"
@@ -557,8 +559,17 @@ fn append_and_named_projection_writes_preserve_canonical_catch_up_after_reopen()
             )
             .unwrap();
         }
-        db.query("CALL project_graph('memory', ['Memory'], [])")
-            .unwrap();
+        let projection = db.query("CALL project_graph('memory', ['Memory'], [])");
+        if analytics {
+            projection.unwrap();
+        } else {
+            assert_eq!(
+                projection.unwrap_err(),
+                HawDBError::CapabilityUnavailable {
+                    capability: hawdb::RuntimeCapability::GraphAnalytics,
+                }
+            );
+        }
         assert_eq!(state(&mut db), before);
         let mut read = db.begin_prepared_read(config(c).reads).unwrap();
         assert_eq!(read.query_sql_with_params("SELECT payload FROM events WHERE stream_id=$1", &[Value::String("s".into())]).unwrap_err(),
@@ -568,8 +579,21 @@ fn append_and_named_projection_writes_preserve_canonical_catch_up_after_reopen()
             HawDBError::Execution("prepared source read contains a failed statement".into())
         );
         let mut read = db.begin_prepared_read(config(c).reads).unwrap();
-        assert_eq!(read.query_with_params("CALL page_rank('memory') RETURN node, pagerank_score", &BTreeMap::new()).unwrap_err(),
-            HawDBError::Execution("prepared source read has an unqualified operator; its dependency collector is not available".into()));
+        let expected = if analytics {
+            HawDBError::Execution("prepared source read has an unqualified operator; its dependency collector is not available".into())
+        } else {
+            HawDBError::CapabilityUnavailable {
+                capability: hawdb::RuntimeCapability::GraphAnalytics,
+            }
+        };
+        assert_eq!(
+            read.query_with_params(
+                "CALL page_rank('memory') RETURN node, pagerank_score",
+                &BTreeMap::new()
+            )
+            .unwrap_err(),
+            expected
+        );
         assert_eq!(
             read.finish().unwrap_err(),
             HawDBError::Execution("prepared source read contains a failed statement".into())
