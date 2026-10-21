@@ -82,6 +82,7 @@ struct Base {
     _pin: SearchProjectionConsumerReadPin,
     _memory: hawdb_executor::QueryMemoryLease,
     task: RuntimeTaskContext,
+    permit: Arc<hawdb_qos::RuntimePermit>,
 }
 
 /// Bounded invisible C..E work over this registration's exact selected base.
@@ -204,7 +205,7 @@ impl Database {
         let pin = consumer.pin(&permit)?;
         let task = config.task.clone();
         let stage = consumer.projection().prepare_source_coherent_update(
-            permit,
+            Arc::clone(&permit),
             std::mem::take(&mut config.build),
             config.sorting,
             task.clone(),
@@ -223,6 +224,7 @@ impl Database {
                 _pin: pin,
                 _memory: memory,
                 task,
+                permit,
             },
         })
     }
@@ -262,7 +264,10 @@ impl Database {
         if epoch == current.source_epoch {
             return self.covered_consumer_report(consumer, epoch, epoch, 0, 0);
         }
-        let permit = self.consumer_publication_permit()?;
+        // Preparation and publication are one admitted background operation.
+        // The compared run still owns this permit, so a second admission would
+        // refuse publication on hosts with only one background task slot.
+        let permit = Arc::clone(&covered.base.permit);
         let allocation = self
             .runtime
             .get()?

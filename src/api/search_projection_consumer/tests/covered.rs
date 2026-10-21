@@ -135,6 +135,69 @@ fn prepare(
 }
 
 #[test]
+fn registered_stationary_covered_catch_up_reuses_one_background_admission() {
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    let governor = hawdb_qos::RuntimeGovernor::new(
+        hawdb_qos::RuntimeGovernorConfig {
+            background_task_limit: Some(nz(1)),
+            memory_budget_bytes: Some(256 << 20),
+            ..hawdb_qos::RuntimeGovernorConfig::shared_host()
+        },
+        hawdb_qos::RuntimeResourceSnapshot::from_parts(
+            hawdb_qos::RuntimeResourceBudget::from_limits(nz(4), None, None),
+            hawdb_qos::RuntimeMemorySnapshot::from_limits(
+                Some(1 << 30),
+                Some(1 << 30),
+                None,
+                None,
+                None,
+            ),
+        ),
+        hawdb_qos::IoConcurrencyBudget::new(2, 1),
+    );
+    governor.pin_resources();
+    db.set_runtime_governor(governor.clone());
+    append(&mut db, 1);
+    let mut consumer = db
+        .create_search_projection_consumer(
+            id("covered-single-admission-v1"),
+            fixture.0.join("projection"),
+            options(1000),
+            |_, index| index.upsert(document("document 1")),
+        )
+        .unwrap();
+    db.query("MATCH (m:Memory) SET m.content='covered value'")
+        .unwrap();
+    let epoch = db.commit_epoch().unwrap();
+    let covered = prepare(&mut db, &consumer);
+    assert_eq!(governor.snapshot().active_background_tasks, 1);
+    assert!(governor
+        .try_admit(hawdb_qos::RuntimeWorkRequest::background_maintenance(1))
+        .is_err());
+    let report = db
+        .publish_search_projection_consumer_covered_update(
+            &mut consumer,
+            covered,
+            ProjectionSourceDurability::RequireKnownDurable,
+        )
+        .unwrap();
+    assert!(report.catch_up.complete);
+    assert_eq!(consumer.projection().receipt().source_epoch, epoch);
+    assert_eq!(
+        consumer
+            .search_index()
+            .unwrap()
+            .document("memory:m1")
+            .unwrap()
+            .content,
+        "covered value"
+    );
+    assert_eq!(governor.snapshot().active_background_tasks, 0);
+    assert_eq!(governor.snapshot().active_background_io_slots, 0);
+}
+
+#[test]
 fn registered_stationary_covered_publication_faults_resolve_original_operation_after_source_writes()
 {
     for stage in [
@@ -172,14 +235,18 @@ fn registered_stationary_covered_publication_faults_resolve_original_operation_a
             let e = db.commit_epoch().unwrap();
             let covered = prepare(&mut db, &consumer);
             PUBLICATION_FAILURE.set(Some((stage, false)));
-            assert!(
-                db.publish_search_projection_consumer_covered_update(
+            let failure = db
+                .publish_search_projection_consumer_covered_update(
                     &mut consumer,
                     covered,
                     ProjectionSourceDurability::RequireKnownDurable,
                 )
-                .is_err(),
-                "{stage:?}"
+                .expect_err("injected publication failure");
+            assert!(
+                matches!(&failure, ProjectionConsumerCatchUpError::Consumer(
+                    SearchProjectionConsumerError::Database(HawDBError::Storage(message))
+                ) if message == &format!("injected consumer publication failure at {stage:?}")),
+                "{stage:?}, reopen={reopen}: {failure:?}"
             );
             let selected = !matches!(
                 stage,

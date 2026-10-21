@@ -34,6 +34,12 @@ The finished token owns its original native read pin and captured temporary
 files, and releases the Consumer borrow before activation. It exposes no mutable
 records, candidate substitution, arbitrary activation callback or partial ACK.
 
+Staging, coverage and publication retain one original background admission.
+Publication reuses that permit and its memory budget instead of requiring a
+second task slot while the compared run is still alive. This allows the complete
+flow on hosts configured with a single background task slot. Each I/O wave still
+requires fresh admission; retained native views keep their accounted memory.
+
 ## Content and publication handoff
 
 The existing complete-E comparison verifies the reduced delta against an
