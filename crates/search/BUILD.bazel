@@ -1,6 +1,5 @@
 load("@crate_index//:defs.bzl", "aliases", "all_crate_deps")
 load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
-load("//:ci_test_rules.bzl", "checked_rust_test")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -141,7 +140,7 @@ rust_library(
     ],
 )
 
-checked_rust_test(
+rust_test(
     name = "hawdb_search_tests",
     # Streamed document lifecycle coverage includes 128 MiB fixtures.
     timeout = "long",
@@ -173,12 +172,11 @@ checked_rust_test(
     if settings[1].startswith(":hawdb_search_lifecycle_")
 ]
 
-# The checked transition optimizes the complete dependency closure. Share the
-# exact profile library with source-policy tests instead of compiling another
-# Search-only optimized copy whose Storage dependencies remain unoptimized.
+# Lifecycle and source-policy fixtures share the exact feature-profile library.
+# Optimization belongs to the repository build profile, not individual targets.
 # Preserve each original target name, complete lifecycle and 900s deadline.
 [
-    checked_rust_test(
+    rust_test(
         name = "hawdb_search_streamed_lifecycle_tests" if profile == "default" else "hawdb_search_%s_streamed_lifecycle_tests" % profile,
         timeout = "long",
         crate_features = settings[0],
@@ -204,7 +202,7 @@ checked_rust_test(
 # non-FTS profiles retain their finite deadline.
 # Evidence: https://github.com/nowledge-co/hawdb/issues/1034.
 [
-    checked_rust_test(
+    rust_test(
         name = "hawdb_search_source_policy_tests" if profile == "default" else "hawdb_search_%s_source_policy_tests" % profile,
         timeout = "eternal" if "full-text-search" in settings[0] else "long",
         crate_features = settings[0],
@@ -575,7 +573,7 @@ rust_test(
 # only those two unit targets the next standard deadline.
 # Evidence: https://github.com/nowledge-co/hawdb/issues/1034.
 [
-    checked_rust_test(
+    rust_test(
         name = "hawdb_search_%s_tests" % profile,
         timeout = "eternal" if profile in ["text_only", "text_background"] else "long",
         crate_name = "hawdb_search",

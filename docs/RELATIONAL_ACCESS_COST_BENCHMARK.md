@@ -157,7 +157,7 @@ Run it with the default Bazel command configuration for full-scale timing;
 the ordinary binary remains the debug-scale smoke/contract check:
 
 ```sh
-bazel run //:hawdb_bench_relational_index_access_release
+bazel run --config=release //:hawdb_bench_relational_index_access_release
 bazel run //:hawdb_bench_relational_index_access
 bazel test //:hawdb_linux_ci_benchmark_relational_index_access_smoke_test
 bazel test //crates/fuzz:hawdb_fuzz_tests //crates/fuzz:hawdb_fuzz_cli_tests //:hawdb_linux_ci_fuzz_smoke_test

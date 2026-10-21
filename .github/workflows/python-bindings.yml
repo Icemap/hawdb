@@ -9,6 +9,7 @@ on:
       - "MODULE.bazel"
       - "BUILD.bazel"
       - ".bazelrc"
+      - ".cargo/**"
       - ".bazelversion"
       - ".github/workflows/python-bindings.yml"
   push:
@@ -19,6 +20,7 @@ on:
       - "MODULE.bazel"
       - "BUILD.bazel"
       - ".bazelrc"
+      - ".cargo/**"
       - ".bazelversion"
       - ".github/workflows/python-bindings.yml"
 

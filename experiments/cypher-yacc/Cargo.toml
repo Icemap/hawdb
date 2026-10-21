@@ -17,8 +17,3 @@ hawdb-cypher = { path = "../../crates/cypher" }
 cfgrammar = "0.15"
 lrlex = "0.15"
 lrpar = "0.15"
-
-[profile.release]
-opt-level = 3
-codegen-units = 1
-lto = "thin"

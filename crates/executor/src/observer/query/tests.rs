@@ -324,7 +324,7 @@ fn query_observer_event_differential_campaign() {
 }
 
 #[test]
-#[ignore = "run by the dedicated assertions-disabled Bazel target"]
+#[ignore = "run by the repository release-profile regression target"]
 #[allow(
     clippy::assertions_on_constants,
     reason = "The dedicated target intentionally checks its compile-time test mode."

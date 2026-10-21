@@ -88,10 +88,17 @@
 - Diagnose slow CI with complete, source-bound BEP. Separate queue/analysis,
   compilation, actual test execution, cached result durations and exclusive
   serialization. Never describe a timeout ceiling as a fuzz run duration.
-- Expensive fixtures may use `ci_test_rules.bzl` checked optimization for their
-  full dependency closure. Preserve debug assertions, overflow checks, public
-  labels, complete feature matrices, fixtures and exclusive measurement gates.
-  Do not change production build settings or reduce coverage to obtain speed.
+- Keep compilation parameters uniform by repository profile, never by target,
+  crate or test family. Cargo profiles live in `.cargo/config.toml`, including
+  independent workspaces. Bazel uses `.bazelrc`'s low-optimization checked test
+  profile by default; explicit release verification uses `--config=release`.
+  Do not add target-specific `rustc_flags` optimization/check overrides, custom
+  optimization transitions or private differently optimized copies of libraries.
+  Platform ABI/linker requirements remain separate from profile settings.
+- Preserve complete feature matrices, fixtures, assertions, timeout ceilings
+  and exclusive measurement gates. Release-only regressions must run under the
+  global release profile, not a target-local assertion override. Keep them owned
+  by an explicit required CI step when excluded from ordinary checked suites.
 - Report first-build cost as well as execution time. Local improvements do not
   establish remote CI speedup; record final-head CI evidence before that claim.
 

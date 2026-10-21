@@ -39,13 +39,13 @@ replacement, repeated replacement, deletion, pinned-body transfer, and restore.
 Each target retains its `long` (900-second) deadline, feature set, fixture,
 admission budgets, and assertions.
 
-These executables and their private, test-only search libraries use
-`-Copt-level=2`, `-Cdebug-assertions=yes`, and `-Coverflow-checks=yes`. Optimizing
-the repeated UTF-8/token analysis and fixture generation reduces debug loop
-overhead while preserving debug checks. The feature matrix supplies both the
-test crate and its library, so optional capabilities cannot be unified away.
-Five separate search-library compilations add cold-build work; other dependencies
-remain shared. Production and unit-test owners retain their existing builds.
+Compilation follows the repository-wide test profile: opt-level=1, debug
+assertions and overflow checks enabled, with no cross-crate LTO. The same policy
+covers each fixture's complete dependency closure. There are no target-specific
+optimization flags or separate optimized Search libraries. Each feature profile
+still supplies both the fixture and its dependency library; optional capabilities
+cannot be unified away. See [TEST_INDEX.md](TEST_INDEX.md) for build profiles and
+known runtime costs.
 
 ```console
 bazel test \

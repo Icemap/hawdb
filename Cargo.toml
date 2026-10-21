@@ -134,48 +134,6 @@ description = "An embedded Rust graph database for local data-plane workloads"
 repository = "https://github.com/nowledge-co/hawdb"
 homepage = "https://hawdb.ai"
 
-[profile.dev]
-opt-level = 0
-debug = 0
-codegen-units = 256
-lto = false
-incremental = true
-panic = "unwind"
-debug-assertions = true
-overflow-checks = true
-rpath = false
-
-[profile.release]
-opt-level = 3
-debug = false
-codegen-units = 1
-lto = "thin"
-incremental = false
-panic = "unwind"
-debug-assertions = false
-overflow-checks = false
-rpath = false
-
-[profile.test]
-opt-level = 0
-debug = 0
-codegen-units = 16
-lto = false
-incremental = true
-debug-assertions = true
-overflow-checks = true
-rpath = false
-
-[profile.bench]
-opt-level = 3
-debug = false
-codegen-units = 1
-lto = "thin"
-incremental = false
-debug-assertions = false
-overflow-checks = false
-rpath = false
-
 [[bench]]
 name = "optimizer_smoke"
 harness = false

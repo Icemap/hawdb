@@ -3,6 +3,16 @@ startup --unlimit_coredumps
 
 build --announce_rc
 
+# One checked test profile for every Rust target and dependency. Bazel is used
+# for tests; keep LLVM work modest and preserve debug/overflow checks.
+build --@rules_rust//rust/settings:extra_rustc_flags=-Copt-level=1,-Cdebuginfo=0,-Ccodegen-units=16,-Cdebug-assertions=yes,-Coverflow-checks=yes,-Cstrip=none
+build --@rules_rust//rust/settings:lto=off
+
+# Explicit release verification uses one repository profile, never target flags.
+build:release --compilation_mode=opt
+build:release --@rules_rust//rust/settings:extra_rustc_flags=-Copt-level=3,-Cdebuginfo=0,-Ccodegen-units=1,-Cdebug-assertions=no,-Coverflow-checks=no,-Cstrip=none
+build:release --@rules_rust//rust/settings:lto=thin
+
 # Rust test binaries also run cases in parallel; bound concurrent local binaries.
 test --local_test_jobs=HOST_CPUS*0.5
 

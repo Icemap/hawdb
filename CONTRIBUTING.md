@@ -132,6 +132,12 @@ Start with the [test ownership and slow-path index](docs/TEST_INDEX.md) to find
 which target covers a problem and where it runs. Update that index whenever a
 test family's scope, execution lane, build profile or known cost changes.
 
+Compilation policy is repository-wide: Cargo reads `.cargo/config.toml`, and
+Bazel's default `.bazelrc` profile uses low optimization with checks retained.
+Use `--config=release` only for explicit release-mode regression verification;
+do not add per-target optimization or assertion overrides. Independent tool
+workspaces share the same Cargo configuration when invoked within the repo.
+
 Install [prek](https://prek.j178.dev/installation/) and enable the repository's
 pre-commit hooks once in your clone:
 

@@ -49,9 +49,3 @@ path = "src/append_main.rs"
 [[bin]]
 name = "shiro-parser"
 path = "src/parser_main.rs"
-
-[profile.dev]
-debug = 0
-
-[profile.test]
-debug = 0

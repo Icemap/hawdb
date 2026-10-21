@@ -1,8 +1,7 @@
 load("@crate_index//:defs.bzl", "aliases", "all_crate_deps")
 load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_test")
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
-load("//:benchmarks.bzl", "HAWDB_BENCHMARKS", "HAWDB_CI_BENCHMARK_TARGETS", "hawdb_benchmark_binaries")
-load("//:ci_test_rules.bzl", "checked_ci_binary", "checked_rust_test")
+load("//:benchmarks.bzl", "HAWDB_BENCHMARKS", "HAWDB_BENCHMARK_TARGETS", "hawdb_benchmark_binaries")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -349,13 +348,6 @@ rust_test(
     proc_macro_deps = all_crate_deps(proc_macro_dev = True),
 )
 
-checked_ci_binary(
-    name = "hawdb_unit_test_binary_ci",
-    binary = ":hawdb_unit_test_binary",
-    testonly = True,
-    tags = ["manual"],
-)
-
 [
     sh_test(
         name = "hawdb_unit_%s_tests" % partition,
@@ -370,12 +362,12 @@ checked_ci_binary(
         tags = ["exclusive"] if partition == "analytics_rss" else [],
         srcs = ["scripts/run-root-unit-partition.sh"],
         args = [
-            "$(rootpath :hawdb_unit_test_binary_ci)" if partition == "analytics_rss" else "$(rootpath :hawdb_unit_test_binary)",
+            "$(rootpath :hawdb_unit_test_binary)",
             partition,
             "--skip",
             _HAWDB_STORAGE_CRASH_MATRIX_TEST,
         ],
-        data = [":hawdb_unit_test_binary_ci" if partition == "analytics_rss" else ":hawdb_unit_test_binary"],
+        data = [":hawdb_unit_test_binary"],
     )
     for partition in ["general", "concurrent", "analytics_core_general", "analytics_rss", "recovery"]
 ]
@@ -450,7 +442,7 @@ rust_test(
 # Both independent residency scenarios retain the complete physical-layout
 # oracle. Separate targets let Bazel schedule them without serializing modes.
 [
-    checked_rust_test(
+    rust_test(
         name = "hawdb_unit_row_page_compaction_%s_tests" % mode,
         size = "large",
         # Retain issue #889's finite headroom for each complete scenario.
@@ -591,18 +583,9 @@ test_suite(
     tests = ["//crates/storage:hawdb_storage_text_fuzz_tests"],
 )
 
-checked_rust_test(
-    name = "ci_checked_profile_test",
-    size = "small",
-    crate_root = "tests/ci_checked_profile.rs",
-    srcs = ["tests/ci_checked_profile.rs"],
-    edition = "2024",
-)
-
 test_suite(
     name = "hawdb_unit_tests",
     tests = [
-        ":ci_checked_profile_test",
         ":query_limit_inventory_test",
         ":query_limit_inventory_script_test",
         ":hawdb_in_memory_portable_tests",
@@ -1011,13 +994,13 @@ _HAWDB_LINUX_CI_SMOKE_ARGS = [
     "$(location :hawdb_cli)",
     "$(location :hawdb_cli)",
     "$(location :hawdb_cli)",
-] + ["$(location %s)" % target for target in HAWDB_CI_BENCHMARK_TARGETS]
+] + ["$(location %s)" % target for target in HAWDB_BENCHMARK_TARGETS]
 
 _HAWDB_LINUX_CI_SMOKE_DATA = [
     ":nowledge_previous_wrapper_shadow_adapter",
     ":hawdb_cli",
     ":hawdb_shadow_self",
-] + HAWDB_CI_BENCHMARK_TARGETS
+] + HAWDB_BENCHMARK_TARGETS
 
 _HAWDB_LOCAL_FUZZ_TOOLS = [
     "//tools/shiro:shiro_append",
