@@ -796,11 +796,14 @@ fn failed_registration_retry_preserves_other_durable_consumers() {
 
 #[test]
 fn consumer_registry_capacity_is_reclaimed_only_by_unregister() {
+    // Exercise real creation and reclamation with a small capacity. The
+    // registry codec separately checks the production 64-record boundary.
+    const CAPACITY: usize = 2;
     let fixture = Fixture::new();
     let mut db = fixture.database();
-    for index in 0..MAX_CONSUMERS {
+    for index in 0..CAPACITY {
         let name = format!("consumer-{index:02}");
-        db.create_search_projection_consumer(
+        db.create_search_projection_consumer_with_capacity::<CAPACITY, _>(
             id(&name),
             fixture.0.join(&name),
             options(1),
@@ -815,7 +818,7 @@ fn consumer_registry_capacity_is_reclaimed_only_by_unregister() {
             .state,
         State::RebuildRequired(Reason::Expired { .. })
     ));
-    let result = db.create_search_projection_consumer(
+    let result = db.create_search_projection_consumer_with_capacity::<CAPACITY, _>(
         id("overflow"),
         fixture.0.join("overflow"),
         options(1000),
@@ -824,7 +827,7 @@ fn consumer_registry_capacity_is_reclaimed_only_by_unregister() {
     assert!(matches!(result, Err(Error::RegistryFull)));
     db.unregister_search_projection_consumer(&id("consumer-00"))
         .unwrap();
-    db.create_search_projection_consumer(
+    db.create_search_projection_consumer_with_capacity::<CAPACITY, _>(
         id("replacement"),
         fixture.0.join("replacement"),
         options(1000),
@@ -833,7 +836,7 @@ fn consumer_registry_capacity_is_reclaimed_only_by_unregister() {
     .unwrap();
     assert_eq!(
         db.runtime.get().unwrap().projection_consumers.records.len(),
-        MAX_CONSUMERS
+        CAPACITY
     );
     assert!(
         std::fs::metadata(fixture.registry_path("database"))

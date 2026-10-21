@@ -59,6 +59,25 @@ impl Database {
     where
         F: FnOnce(&mut DatabaseReadTransaction, &mut SearchIndex) -> Result<()>,
     {
+        self.create_search_projection_consumer_with_capacity::<MAX_CONSUMERS, _>(
+            id,
+            projection_directory,
+            options,
+            initialize,
+        )
+    }
+
+    fn create_search_projection_consumer_with_capacity<const CAPACITY: usize, F>(
+        &mut self,
+        id: SearchProjectionConsumerId,
+        projection_directory: impl AsRef<Path>,
+        options: SearchProjectionConsumerOptions,
+        initialize: F,
+    ) -> SearchProjectionConsumerResult<SearchProjectionConsumer>
+    where
+        F: FnOnce(&mut DatabaseReadTransaction, &mut SearchIndex) -> Result<()>,
+    {
+        const { assert!(CAPACITY > 0 && CAPACITY <= MAX_CONSUMERS) };
         let root = self.consumer_writable_root()?;
         // The legacy move cannot publish under a held child lock on Windows.
         // Refuse before allocation, identity changes or the host initializer.
@@ -112,7 +131,7 @@ impl Database {
             {
                 return Err(Error::AlreadyRegistered);
             }
-            if self.runtime.get_mut()?.projection_consumers.records.len() >= MAX_CONSUMERS {
+            if self.runtime.get_mut()?.projection_consumers.records.len() >= CAPACITY {
                 return Err(Error::RegistryFull);
             }
         }
