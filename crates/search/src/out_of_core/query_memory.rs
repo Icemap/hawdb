@@ -8,6 +8,10 @@ use super::*;
 use crate::build_memory::{checked_add, MAP_ENTRY_BYTES, SET_ENTRY_BYTES};
 use crate::lexical_projection::{AccountedCorpusStatistics, QueryContext, ScoringInputs};
 use hawdb_executor::QueryMemoryLease;
+use hawdb_optimizer_predicate::{SearchPredicateConstructionError, SearchPredicateSet};
+
+#[cfg(test)]
+mod tests;
 
 #[derive(Clone, Copy)]
 pub(super) struct Execution<'a> {
@@ -27,6 +31,50 @@ impl<'a> From<SearchOutOfCoreExecutionContext<'a>> for Execution<'a> {
             scratch: None,
             output: None,
         }
+    }
+}
+
+pub(super) struct Predicates {
+    pub(super) predicates: SearchPredicateSet,
+    pub(super) report: SearchPredicatePushdownReport,
+    // Both AST and diagnostic payload close before their construction envelope.
+    _memory: Option<QueryMemoryLease>,
+}
+
+impl Predicates {
+    pub(super) fn new(
+        filters: &BTreeMap<String, String>,
+        query: Option<QueryContext<'_>>,
+    ) -> Result<Self> {
+        let mut memory = query.map(|query| query.memory.reserve(0)).transpose()?;
+        let parsed = SearchPredicateSet::from_metadata_filters_with_admission(filters, |bytes| {
+            if let Some(query) = query {
+                query.checkpoint()?;
+            }
+            memory.as_mut().map_or(Ok(()), |memory| memory.grow(bytes))
+        });
+        let (predicates, parse_error) = match parsed {
+            Ok(predicates) => (predicates, None),
+            Err(SearchPredicateConstructionError::Parse(error)) => {
+                (SearchPredicateSet::unsatisfiable(), Some(error.to_string()))
+            }
+            Err(SearchPredicateConstructionError::Admission(error)) => return Err(error),
+            Err(SearchPredicateConstructionError::SizeOverflow) => {
+                return Err(HawDBError::Execution(
+                    "metadata predicate construction size overflow".into(),
+                ));
+            }
+        };
+        let pushdown = crate::metadata_predicate_pushdown(filters.len(), predicates, parse_error);
+        let output = Self {
+            predicates: pushdown.predicates,
+            report: pushdown.report,
+            _memory: memory,
+        };
+        if let Some(query) = query {
+            query.checkpoint()?;
+        }
+        Ok(output)
     }
 }
 

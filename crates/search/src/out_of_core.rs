@@ -21,15 +21,15 @@ use super::{
     decode_search_snapshot_text_bounded, decode_string, encode_embedding, encode_metadata,
     encode_search_snapshot_text, encode_string, lexical_analyzer_digest, lexical_documents_digest,
     matched_query_spans_bounded, matched_query_terms, ranked_scores, rrf_child_score,
-    search_empty_reasons, search_metadata_predicate_pushdown, top_ranked_candidates,
-    top_ranked_ids, weighted_rrf_score, window_ranks, CompressedVectorSearchMode,
-    SearchAccessControlContext, SearchAnalyzerLexicon, SearchCandidateSetReport, SearchDocument,
-    SearchEmbeddingManifest, SearchFallbackReasonCode, SearchFieldPruningAccumulator, SearchHit,
-    SearchIndex, SearchMode, SearchPageWindow, SearchPredicatePushdownReport,
-    SearchProjectionFreshness, SearchQueryOptions, SearchResultSet, SearchRetrieverReport,
-    SearchScoredCandidate, SearchSegmentDescriptor, SearchSegmentDescriptorEntry,
-    SearchTruncationReasonCode, VectorSearchExecutionOptions, FULL_REINDEX_MARKER,
-    METADATA_REPAIR_MARKER, SEARCH_SEGMENT_DESCRIPTOR_FILE, SEARCH_SEGMENT_PAYLOAD_FILE,
+    search_empty_reasons, top_ranked_candidates, top_ranked_ids, weighted_rrf_score, window_ranks,
+    CompressedVectorSearchMode, SearchAccessControlContext, SearchAnalyzerLexicon,
+    SearchCandidateSetReport, SearchDocument, SearchEmbeddingManifest, SearchFallbackReasonCode,
+    SearchFieldPruningAccumulator, SearchHit, SearchIndex, SearchMode, SearchPageWindow,
+    SearchPredicatePushdownReport, SearchProjectionFreshness, SearchQueryOptions, SearchResultSet,
+    SearchRetrieverReport, SearchScoredCandidate, SearchSegmentDescriptor,
+    SearchSegmentDescriptorEntry, SearchTruncationReasonCode, VectorSearchExecutionOptions,
+    FULL_REINDEX_MARKER, METADATA_REPAIR_MARKER, SEARCH_SEGMENT_DESCRIPTOR_FILE,
+    SEARCH_SEGMENT_PAYLOAD_FILE,
 };
 use crate::bounded_file::{read_bound_file, read_bounded_file};
 use crate::error::{HawDBError, Result};
@@ -2474,7 +2474,7 @@ impl SearchOutOfCoreReader {
             .or(options.policy_epoch);
         let normalized_terms = self.query_terms(query_text, query)?;
         let query_terms = &normalized_terms.values;
-        let mut predicate_pushdown = search_metadata_predicate_pushdown(&metadata_filters);
+        let mut predicate_pushdown = query_memory::Predicates::new(&metadata_filters, query)?;
         predicate_pushdown.report.parse_error =
             output_memory.optional(predicate_pushdown.report.parse_error.as_deref())?;
         let mut metrics = SearchOutOfCoreMetrics::default();

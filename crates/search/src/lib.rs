@@ -30,9 +30,8 @@ pub use hawdb_evidence::{
 };
 use hawdb_integrity::checksum_u64;
 use hawdb_optimizer_predicate::{
-    normalize_search_enum_value, push_search_predicates, search_field_is_enum_like,
-    SearchPredicate, SearchPredicateOp, SearchPredicateSet, SearchScalarValue,
-    SearchScanPredicateSupport,
+    normalize_search_enum_value, search_field_is_enum_like, SearchPredicate, SearchPredicateOp,
+    SearchPredicateSet, SearchScalarValue,
 };
 use hawdb_optimizer_vector::{
     select_adaptive_vector_backend, AdaptiveVectorBackend, AdaptiveVectorBackendDecision,
@@ -5381,17 +5380,22 @@ pub fn search_metadata_predicate_pushdown(
         Ok(predicates) => (predicates, None),
         Err(error) => (SearchPredicateSet::unsatisfiable(), Some(error.to_string())),
     };
-    let input_predicate_count = filters.len();
-    let pushdown = push_search_predicates(&predicates, SearchScanPredicateSupport::default());
-    debug_assert!(
-        pushdown.residual().is_empty(),
-        "default search scan support should push every metadata predicate"
-    );
+    metadata_predicate_pushdown(filters.len(), predicates, parse_error)
+}
+
+fn metadata_predicate_pushdown(
+    input_predicate_count: usize,
+    predicates: SearchPredicateSet,
+    parse_error: Option<String>,
+) -> SearchMetadataPredicatePushdown {
+    // The metadata scan implements every SearchPredicateOp. Move its complete
+    // set rather than cloning it twice through an all-supported optimizer
+    // partition whose RuleEvents are immediately discarded.
     let report = SearchPredicatePushdownReport {
         input_predicate_count,
-        pushed_predicate_count: pushdown.pushed().predicates().len(),
-        residual_predicate_count: pushdown.residual().predicates().len(),
-        unsatisfiable: pushdown.pushed().is_unsatisfiable(),
+        pushed_predicate_count: predicates.predicates().len(),
+        residual_predicate_count: 0,
+        unsatisfiable: predicates.is_unsatisfiable(),
         parse_error,
         segment_count: 0,
         pruned_segment_count: 0,
@@ -5404,10 +5408,7 @@ pub fn search_metadata_predicate_pushdown(
         physical_bytes_read: 0,
         field_summaries: Vec::new(),
     };
-    SearchMetadataPredicatePushdown {
-        predicates: pushdown.pushed().clone(),
-        report,
-    }
+    SearchMetadataPredicatePushdown { predicates, report }
 }
 
 fn search_document_matches_predicates(

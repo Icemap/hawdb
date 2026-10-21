@@ -207,9 +207,16 @@ partial output refusal/cancellation returns no result and refunds its owner.
 Matching streams admitted analyzer tokens through the original query account,
 uses its shared CJK workspace and preserves legacy term/span semantics. Report
 ranking sorts borrowed IDs in query-funded scratch; pruning summaries borrow
-predicate names and admit their output strings/vectors. These result contracts
-do not complete working metadata predicate parsing/normalization and pushdown
-construction, compressed query/rerank,
+predicate names and admit their output strings/vectors. Metadata predicate
+construction reserves vector slots, owned fields/scalars, JSON string decoding
+and sequence replacement overlap, set nodes and diagnostics before allocation
+from the original query account. Its construction envelope remains live until
+the AST and temporary diagnostics are destroyed. The bound follows the pinned
+Rust and Serde allocation behavior and is not an RSS measurement. Enum
+normalization reuses owned storage, and the complete supported metadata set is
+moved directly to the scan without duplicate optimizer partitions. Text-seed
+queries use the same admission path. These contracts do not complete compressed
+query/rerank,
 shared-filesystem/restart scratch or registered Consumer serving qualification.
 Filtered native probes create a private stage through the original root and
 descriptor domain before acquiring the query I/O wave. File create/write/read
@@ -224,7 +231,7 @@ Born immutable readers check the captured native directory for operational
 repair/reindex markers before opening a view and refuse any such entry. Their
 query freshness comes from the complete immutable generation, without reopening
 a saved pathname. Shared filesystem spill admission, compressed-vector search
-and rerank admission, remaining working metadata predicate construction accounting,
+and rerank admission,
 restart scratch adoption and registered serving semantics remain
 unfinished.
 This lower-level path does not install the registered Consumer read view or

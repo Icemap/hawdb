@@ -218,25 +218,20 @@ impl SearchOutOfCoreReader {
         task: &crate::RuntimeTaskContext,
         mut observe_candidate: impl FnMut(&str) -> Result<()>,
     ) -> Result<SearchTextSeedOutput> {
-        let filter_bytes = metadata_filters
-            .iter()
-            .try_fold(0usize, |total, (key, value)| {
-                total
-                    .checked_add(key.len())
-                    .and_then(|total| total.checked_add(value.len()))
-                    .ok_or_else(|| HawDBError::Execution("text filter size overflow".into()))
-            })?;
-        let filter_reservation = filter_bytes
-            .checked_mul(16)
-            .and_then(|bytes| bytes.checked_add(metadata_filters.len().saturating_mul(4096)))
-            .ok_or_else(|| HawDBError::Execution("text filter admission overflow".into()))?;
-        let _filter_memory = memory.reserve(filter_reservation)?;
-        let predicates = search_metadata_predicate_pushdown(metadata_filters).predicates;
+        let predicates = super::query_memory::Predicates::new(
+            metadata_filters,
+            Some(QueryContext {
+                memory,
+                task,
+                execution: None,
+                io_scope: None,
+            }),
+        )?;
         let mut metadata = AdmittedMetadataLookup::new(self, memory, task);
         let mut output =
             self.text_seed_scores_with_context(query_text, max_candidates, memory, task, |id| {
                 observe_candidate(id)?;
-                metadata.matches(id, &predicates)
+                metadata.matches(id, &predicates.predicates)
             })?;
         let mut external_ids_memory = memory.reserve(0)?;
         for id in output.scores.keys() {
