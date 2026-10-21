@@ -362,6 +362,39 @@ fn serializable_pessimistic_and_conflict_noop_rebase_cannot_bypass_reads() {
             .rows
             .is_empty());
     }
+
+    // A SELECT would disqualify optimistic conflict-noop rebase. Keep this
+    // transaction mutation-only so the actual rebase eligibility path runs.
+    for isolation in [
+        TransactionIsolation::SnapshotIsolation,
+        TransactionIsolation::Serializable,
+    ] {
+        let db = ConcurrentDatabase::new(fixture());
+        let mut tx = db
+            .begin_transaction(ConcurrentTransactionOptions::optimistic().with_isolation(isolation))
+            .unwrap();
+        tx.query_sql("INSERT INTO outputs (id, value) VALUES (1, 99) ON CONFLICT (id) DO NOTHING")
+            .unwrap();
+        update_input(&db, "INSERT INTO outputs (id, value) VALUES (2, 88)", &[]);
+        match isolation {
+            TransactionIsolation::SnapshotIsolation => {
+                tx.commit().unwrap();
+                assert_eq!(
+                    db.query_sql("SELECT id FROM outputs").unwrap().rows.len(),
+                    2
+                );
+            }
+            TransactionIsolation::Serializable => {
+                let error = tx.commit().unwrap_err();
+                assert!(error.is_retryable_transaction_conflict());
+                assert!(error.to_string().contains("read dependency"));
+                assert_eq!(
+                    db.query_sql("SELECT id FROM outputs").unwrap().rows[0]["id"],
+                    Value::Int(2)
+                );
+            }
+        }
+    }
 }
 
 #[test]

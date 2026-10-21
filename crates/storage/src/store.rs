@@ -3441,6 +3441,10 @@ impl hawdb_storage::graph_engine::GraphReadEngine for GraphStore {
     }
 }
 
+#[cfg(all(test, not(target_arch = "wasm32")))]
+#[path = "store/snapshot_retention_tests.rs"]
+mod snapshot_retention_tests;
+
 #[cfg(test)]
 mod tests {
     mod id_eq_mutation;

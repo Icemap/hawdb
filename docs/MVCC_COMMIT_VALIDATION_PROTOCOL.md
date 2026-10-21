@@ -96,6 +96,10 @@ and allocator overhead, spare capacity and the incoming key allocation. It is
 not a global bound across transactions, canonical/history COW pages or snapshot
 lifetimes. The read epoch belongs to the transaction, not this map.
 
+The [snapshot retention qualification](MVCC_SNAPSHOT_RETENTION_QUALIFICATION.md)
+maps combined facade/storage ownership to executable tests, exact physical root
+sets, low-budget retries, and separate allocation/payload/RSS observations.
+
 ## Read-consumer metadata
 
 Embedded read transactions, descendants of published read snapshots and runtime

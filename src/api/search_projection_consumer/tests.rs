@@ -17,6 +17,9 @@ use crate::SearchRebuildOptions;
 use std::any::TypeId;
 use std::num::NonZeroU64;
 
+#[cfg(not(windows))]
+mod lifecycle;
+
 struct Fixture(PathBuf);
 impl Fixture {
     fn new() -> Self {
@@ -318,6 +321,17 @@ fn hard_retention_floor_invalidates_only_the_lagging_consumer() {
             Reason::RetentionLimitExceeded { .. }
         ))
     ));
+    assert!(matches!(
+        db.open_or_create_search_projection_consumer(
+            id("lagging"),
+            fixture.0.join("lagging"),
+            options(100),
+            |_, _| panic!("lost replay window must not initialize"),
+        ),
+        Err(Error::RebuildRequired(
+            Reason::RetentionLimitExceeded { .. }
+        ))
+    ));
     catch_up(&mut db, &mut current).unwrap();
     assert_eq!(
         db.runtime
@@ -357,6 +371,14 @@ fn expiry_is_inclusive_renewal_is_explicit_and_stale_handles_stay_revoked() {
         Err(Error::RebuildRequired(Reason::Expired {
             expires_at_commit_epoch
         })) if expires_at_commit_epoch == deadline
+    ));
+    assert!(matches!(
+        db.open_or_create_search_projection_consumer(
+            id("reusable"), fixture.0.join("old"), options(100),
+            |_, _| panic!("expired registration must not initialize or renew"),
+        ),
+        Err(Error::RebuildRequired(Reason::Expired { expires_at_commit_epoch }))
+            if expires_at_commit_epoch == deadline
     ));
     db.unregister_search_projection_consumer(&id("reusable"))
         .unwrap();
@@ -485,6 +507,15 @@ fn registry_publication_error_never_adopts_the_unacknowledged_checkpoint() {
         db.open_search_projection_consumer(&id("main"), fixture.0.join("projection")),
         Err(Error::RebuildRequired(Reason::CheckpointMismatch))
     ));
+    assert!(matches!(
+        db.open_or_create_search_projection_consumer(
+            id("main"),
+            fixture.0.join("projection"),
+            options(100),
+            |_, _| panic!("mismatched receipt must not initialize"),
+        ),
+        Err(Error::RebuildRequired(Reason::CheckpointMismatch))
+    ));
 }
 
 #[test]
@@ -513,6 +544,18 @@ fn missing_and_corrupt_registry_leave_ordinary_database_writes_available() {
             db.open_search_projection_consumer(&id("main"), fixture.0.join("projection")),
             Err(Error::RebuildRequired(Reason::RegistryUnavailable))
         ));
+        for name in ["main", "absent"] {
+            assert!(matches!(
+                db.open_or_create_search_projection_consumer(
+                    id(name),
+                    fixture.0.join("unexpected"),
+                    options(100),
+                    |_, _| panic!("unavailable registry must not initialize"),
+                ),
+                Err(Error::RebuildRequired(Reason::RegistryUnavailable))
+            ));
+        }
+        assert!(!fixture.0.join("unexpected").exists());
         append(&mut db, 1);
         let replacement = db
             .create_search_projection_consumer(
@@ -663,7 +706,12 @@ fn missing_mandatory_projection_artifact_requires_rebuild_without_repair() {
     std::fs::remove_file(&descriptor).unwrap();
     let mut db = fixture.database();
     assert!(matches!(
-        db.open_search_projection_consumer(&id("main"), fixture.0.join("projection")),
+        db.open_or_create_search_projection_consumer(
+            id("main"),
+            fixture.0.join("projection"),
+            options(100),
+            |_, _| panic!("missing artifact must not initialize"),
+        ),
         Err(Error::RebuildRequired(Reason::CheckpointMismatch))
     ));
     assert!(!descriptor.exists());
@@ -721,13 +769,14 @@ fn failed_registration_retry_preserves_other_durable_consumers() {
 
 #[test]
 fn consumer_registry_capacity_is_reclaimed_only_by_unregister() {
+    const CAPACITY: usize = 2;
     let fixture = Fixture::new();
     let mut db = fixture.database();
-    for index in 0..MAX_CONSUMERS {
+    for index in 0..CAPACITY {
         let name = format!("consumer-{index:02}");
-        db.create_search_projection_consumer(
+        db.open_or_create_consumer_with_capacity::<CAPACITY, _>(
             id(&name),
-            fixture.0.join(&name),
+            &fixture.0.join(&name),
             options(1),
             initialize,
         )
@@ -740,25 +789,31 @@ fn consumer_registry_capacity_is_reclaimed_only_by_unregister() {
             .state,
         State::RebuildRequired(Reason::Expired { .. })
     ));
-    let result = db.create_search_projection_consumer(
+    let before = std::fs::read(fixture.registry_path("database")).unwrap();
+    let result = db.open_or_create_consumer_with_capacity::<CAPACITY, _>(
         id("overflow"),
-        fixture.0.join("overflow"),
+        &fixture.0.join("overflow"),
         options(1000),
         |_, _| panic!("full registry must reject before initialization"),
     );
     assert!(matches!(result, Err(Error::RegistryFull)));
+    assert!(!fixture.0.join("overflow").exists());
+    assert_eq!(
+        std::fs::read(fixture.registry_path("database")).unwrap(),
+        before
+    );
     db.unregister_search_projection_consumer(&id("consumer-00"))
         .unwrap();
-    db.create_search_projection_consumer(
+    db.open_or_create_consumer_with_capacity::<CAPACITY, _>(
         id("replacement"),
-        fixture.0.join("replacement"),
+        &fixture.0.join("replacement"),
         options(1000),
         initialize,
     )
     .unwrap();
     assert_eq!(
         db.runtime.get().unwrap().projection_consumers.records.len(),
-        MAX_CONSUMERS
+        CAPACITY
     );
     assert!(
         std::fs::metadata(fixture.registry_path("database"))
@@ -895,7 +950,12 @@ fn backup_restores_identity_and_rejects_a_cursor_ahead_of_the_restored_source() 
     .unwrap();
     let mut restored = Database::open(fixture.0.join("restored")).unwrap();
     assert!(matches!(
-        restored.open_search_projection_consumer(&id("main"), fixture.0.join("projection")),
+        restored.open_or_create_search_projection_consumer(
+            id("main"),
+            fixture.0.join("projection"),
+            options(100),
+            |_, _| panic!("rewound source must not initialize"),
+        ),
         Err(Error::RebuildRequired(Reason::SourceRewound))
     ));
 }
@@ -927,6 +987,18 @@ fn foreign_registry_reinitializes_only_after_the_new_projection_is_complete() {
     std::fs::write(&registry, &foreign_bytes).unwrap();
     let mut replacement = Database::open(fixture.0.join("replacement-database")).unwrap();
     let epoch = replacement.commit_epoch();
+    for name in ["main", "absent"] {
+        assert!(matches!(
+            replacement.open_or_create_search_projection_consumer(
+                id(name),
+                fixture.0.join("unexpected"),
+                options(100),
+                |_, _| panic!("foreign registry must not initialize"),
+            ),
+            Err(Error::RebuildRequired(Reason::DatabaseIdentityMismatch))
+        ));
+        assert_eq!(std::fs::read(&registry).unwrap(), foreign_bytes);
+    }
     assert!(matches!(
         replacement
             .search_projection_consumer_status(&id("main"))
@@ -1169,6 +1241,17 @@ fn assert_consumer_publication_refusal(fixture: &Fixture, mut db: Database) {
         }
         let before = names();
         for _ in 0..2 {
+            assert!(matches!(
+                db.open_or_create_search_projection_consumer(
+                    id("publication-refusal"),
+                    &destination,
+                    options(100),
+                    |_, _| panic!("unsupported publication must refuse before initialization"),
+                ),
+                Err(Error::Database(HawDBError::CapabilityUnavailable {
+                    capability: hawdb_core::RuntimeCapability::SearchProjectionPublication
+                }))
+            ));
             assert!(matches!(
                 db.create_search_projection_consumer(
                     id("publication-refusal"),
