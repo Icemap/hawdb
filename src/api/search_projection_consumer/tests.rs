@@ -529,9 +529,31 @@ fn registry_publication_error_never_adopts_the_unacknowledged_checkpoint() {
             .durable_source_graph_commit_epoch,
         Some(db.runtime.get().unwrap().store.commit_epoch())
     );
-    drop(consumer);
+    assert!(matches!(
+        db.search_projection_consumer_readiness(&consumer, None),
+        Err(Error::RebuildRequired(Reason::RegistryUnavailable))
+    ));
     drop(db);
     let mut db = fixture.database();
+    let readiness = db
+        .search_projection_consumer_readiness(&consumer, None)
+        .unwrap();
+    assert!(!readiness.is_ready());
+    assert!(matches!(
+        readiness.consumer.state,
+        State::RebuildRequired(Reason::CheckpointMismatch)
+    ));
+    assert_eq!(
+        readiness.changefeed.projection_source_graph_commit_epoch,
+        None
+    );
+    assert_eq!(
+        readiness
+            .changefeed
+            .durable_projection_source_graph_commit_epoch,
+        None
+    );
+    drop(consumer);
     assert!(matches!(
         db.open_search_projection_consumer(&id("main"), fixture.0.join("projection")),
         Err(Error::RebuildRequired(Reason::CheckpointMismatch))
@@ -1192,6 +1214,10 @@ fn reserved_target_defers_catch_up_before_hydration_and_allows_source_writes() {
     let preparation = db
         .reserve_search_projection_consumer(&mut consumer)
         .unwrap();
+    assert!(matches!(
+        db.search_projection_consumer_readiness(&consumer, None),
+        Err(Error::Database(HawDBError::ProjectionBusy))
+    ));
     append(&mut db, 2);
     let hydrated = std::cell::Cell::new(false);
     let result = db.catch_up_search_projection_consumer(&mut consumer, 32, 32, 8, |_, _| {

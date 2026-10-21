@@ -295,7 +295,7 @@ impl Database {
     {
         consumer.projection().require_operation_available()?;
         let root = self.consumer_writable_root()?;
-        self.validate_consumer_receipt(consumer)?;
+        let start = self.validate_consumer_receipt(consumer)?.source_epoch;
         self.runtime
             .get_mut()?
             .projection_consumers
@@ -310,13 +310,13 @@ impl Database {
             )
             .into());
         }
-        let start = consumer.search_index().projection_freshness();
+        let mut cursor = start;
         let graph_commit_epoch = self.runtime.get()?.store.commit_epoch();
         let mut applied_batch_count = 0usize;
         let mut applied_operation_count = 0usize;
         while applied_batch_count < max_batches {
-            let Some(mut batch) = self.build_search_projection_change_batch_from_freshness(
-                consumer.search_index(),
+            let Some(mut batch) = self.build_search_projection_change_batch_after(
+                cursor,
                 Some(max_change_operations_per_batch),
             )?
             else {
@@ -349,6 +349,7 @@ impl Database {
             publication_failpoint(PublicationStage::AfterCheckpoint)?;
             self.acknowledge_consumer_checkpoint(consumer.id(), &receipt)?;
             self.publish_consumer_registry(&root)?;
+            cursor = receipt.source_epoch;
             self.runtime
                 .get_mut()?
                 .projection_consumers
@@ -357,17 +358,16 @@ impl Database {
             applied_batch_count = applied_batch_count.saturating_add(1);
             applied_operation_count = applied_operation_count.saturating_add(operation_count);
         }
-        let end = consumer.search_index().projection_freshness();
         Ok(SearchProjectionConsumerCatchUpReport {
             catch_up: SearchProjectionCatchUpReport {
                 graph_commit_epoch,
-                start_applied_epoch: start.source_graph_commit_epoch,
-                start_durable_epoch: start.durable_source_graph_commit_epoch,
-                end_applied_epoch: end.source_graph_commit_epoch,
-                end_durable_epoch: end.durable_source_graph_commit_epoch,
+                start_applied_epoch: Some(start),
+                start_durable_epoch: Some(start),
+                end_applied_epoch: Some(cursor),
+                end_durable_epoch: Some(cursor),
                 applied_batch_count,
                 applied_operation_count,
-                complete: end.durable_source_graph_commit_epoch == Some(graph_commit_epoch),
+                complete: cursor == graph_commit_epoch,
             },
             consumer: self.search_projection_consumer_status(consumer.id())?,
         })
@@ -494,24 +494,26 @@ impl Database {
         })
     }
 
+    /// Only a clean completed checkpoint matching the registered receipt may
+    /// supply a resume cursor. Unavailable registry state refuses the report;
+    /// other rebuild states report no cursor, and active work returns Busy.
     pub fn search_projection_consumer_readiness(
         &self,
         consumer: &SearchProjectionConsumer,
         max_operations: Option<usize>,
     ) -> SearchProjectionConsumerResult<SearchProjectionConsumerReadiness> {
         let mut status = self.search_projection_consumer_status(consumer.id())?;
-        match self.validate_consumer_receipt(consumer) {
-            Ok(()) => {}
-            Err(Error::RebuildRequired(reason)) => status.state = State::RebuildRequired(reason),
+        let cursor = match self.validate_consumer_receipt(consumer) {
+            Ok(receipt) => Some(receipt.source_epoch),
+            Err(Error::RebuildRequired(reason)) => {
+                status.state = State::RebuildRequired(reason);
+                None
+            }
             Err(error) => return Err(error),
-        }
-        let freshness = consumer.search_index().projection_freshness();
-        let changefeed = status.changefeed.readiness_after(
-            freshness.source_graph_commit_epoch,
-            freshness.durable_source_graph_commit_epoch,
-            true,
-            max_operations,
-        );
+        };
+        let changefeed = status
+            .changefeed
+            .readiness_after(cursor, cursor, true, max_operations);
         Ok(SearchProjectionConsumerReadiness {
             consumer: status,
             changefeed,
@@ -534,7 +536,7 @@ impl Database {
     fn validate_consumer_receipt(
         &self,
         consumer: &SearchProjectionConsumer,
-    ) -> SearchProjectionConsumerResult<()> {
+    ) -> SearchProjectionConsumerResult<CheckpointReceipt> {
         self.validate_consumer_checkpoint(consumer, ReceiptPurpose::CatchUp)
     }
 
@@ -542,7 +544,7 @@ impl Database {
         &self,
         consumer: &SearchProjectionConsumer,
         purpose: ReceiptPurpose,
-    ) -> SearchProjectionConsumerResult<()> {
+    ) -> SearchProjectionConsumerResult<CheckpointReceipt> {
         let status = self.search_projection_consumer_status(consumer.id())?;
         let runtime = self.runtime.get()?;
         let record = runtime
@@ -550,11 +552,11 @@ impl Database {
             .records
             .get(consumer.id().as_str())
             .ok_or(Error::InvalidHandle)?;
-        if !consumer.projection().binding_is_valid() || consumer.projection().has_pending_mutation()
-        {
-            return Err(Error::RebuildRequired(Reason::UntrackedProjectionMutation));
-        }
-        let binding = consumer.projection().binding();
+        let receipt = consumer
+            .projection()
+            .completed_checkpoint_receipt()?
+            .ok_or(Error::RebuildRequired(Reason::UntrackedProjectionMutation))?;
+        let binding = &receipt.binding;
         if Some(binding.database_uuid)
             != self
                 .runtime
@@ -582,7 +584,6 @@ impl Database {
                 return Err(Error::RebuildRequired(reason));
             }
         }
-        let receipt = consumer.projection().receipt();
         if receipt.binding.checkpoint_uuid.to_string() != record.checkpoint_uuid
             || receipt.encoded_len != record.snapshot_encoded_len
             || receipt.sha256 != record.snapshot_sha256
@@ -590,13 +591,7 @@ impl Database {
         {
             return Err(Error::RebuildRequired(Reason::CheckpointMismatch));
         }
-        let freshness = consumer.search_index().projection_freshness();
-        if freshness.source_graph_commit_epoch != Some(receipt.source_epoch)
-            || freshness.has_uncheckpointed_changes
-        {
-            return Err(Error::RebuildRequired(Reason::UntrackedProjectionMutation));
-        }
-        Ok(())
+        Ok(receipt)
     }
 
     fn acknowledge_consumer_checkpoint(

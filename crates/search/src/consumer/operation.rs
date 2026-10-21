@@ -175,17 +175,43 @@ impl Drop for MutationPermit {
 }
 
 impl ConsumerProjection {
+    /// Reads a completed cursor under the same exclusion as preparation.
+    /// Dirty, replaced or mismatched checkpoints supply no resume authority.
+    /// This does not inspect operational markers through a diagnostic pathname.
+    #[doc(hidden)]
+    pub fn completed_checkpoint_receipt(&self) -> Result<Option<CheckpointReceipt>> {
+        let _operation = self.authority.acquire()?;
+        let receipt = self
+            .index
+            .consumer_receipt
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        Ok(receipt
+            .as_ref()
+            .filter(|receipt| self.matches_completed_checkpoint(receipt))
+            .cloned())
+    }
+
+    fn matches_completed_checkpoint(&self, receipt: &CheckpointReceipt) -> bool {
+        let durable_epoch = *self
+            .index
+            .durable_source_graph_commit_epoch
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        self.binding_is_valid()
+            && self.index.path.is_some()
+            && !self.pending_mutation
+            && self.index.consumer_binding.as_ref() == Some(&receipt.binding)
+            && self.index.source_graph_commit_epoch == Some(receipt.source_epoch)
+            && durable_epoch == Some(receipt.source_epoch)
+    }
+
     /// Kernel entry for the facade's registered-consumer preparation admission.
     /// A completed receipt must match the current clean resident checkpoint.
     #[doc(hidden)]
     pub fn reserve_preparation(&mut self) -> Result<ConsumerPreparationLease> {
         let operation = self.authority.acquire()?;
         self.authority.require_index(&self.index)?;
-        let binding = self
-            .index
-            .consumer_binding
-            .as_ref()
-            .ok_or_else(|| invalid("preparation requires a bound consumer checkpoint"))?;
         let receipt = self
             .index
             .consumer_receipt
@@ -194,18 +220,7 @@ impl ConsumerProjection {
         let receipt = receipt
             .as_ref()
             .ok_or_else(|| invalid("preparation requires a completed consumer checkpoint"))?;
-        let durable_epoch = *self
-            .index
-            .durable_source_graph_commit_epoch
-            .lock()
-            .unwrap_or_else(|error| error.into_inner());
-        if !self.index.consumer_binding_valid
-            || self.index.path.is_none()
-            || &receipt.binding != binding
-            || self.pending_mutation
-            || self.index.source_graph_commit_epoch != durable_epoch
-            || self.index.source_graph_commit_epoch != Some(receipt.source_epoch)
-        {
+        if !self.matches_completed_checkpoint(receipt) {
             return Err(invalid(
                 "preparation requires the matching clean completed checkpoint",
             ));
@@ -246,6 +261,102 @@ mod tests {
         };
         let owner = ConsumerProjection::initialize(&root, binding, 0, |_| Ok(())).unwrap();
         (root, owner)
+    }
+
+    #[test]
+    fn completed_checkpoint_cursor_excludes_active_work_and_dirty_same_epoch() {
+        let (root, mut owner) = fixture();
+        let original = owner.completed_checkpoint_receipt().unwrap().unwrap();
+        assert_eq!(original.source_epoch, 0);
+        let preparation = owner.reserve_preparation().unwrap();
+        assert!(matches!(
+            owner.completed_checkpoint_receipt(),
+            Err(HawDBError::ProjectionBusy)
+        ));
+        drop(preparation);
+        assert_eq!(
+            owner.completed_checkpoint_receipt().unwrap(),
+            Some(original.clone())
+        );
+        assert!(owner
+            .apply::<()>(|_| Err(invalid("failed same-epoch mutation")))
+            .is_err());
+        assert_eq!(owner.receipt(), original);
+        assert_eq!(owner.index.source_graph_commit_epoch, Some(0));
+        assert!(owner.completed_checkpoint_receipt().unwrap().is_none());
+        assert!(owner.reserve_preparation().is_err());
+        let checkpoint = owner.checkpoint().unwrap();
+        assert_eq!(checkpoint.source_epoch, 0);
+        assert_ne!(
+            checkpoint.binding.checkpoint_uuid,
+            original.binding.checkpoint_uuid
+        );
+        assert_eq!(
+            owner.completed_checkpoint_receipt().unwrap(),
+            Some(checkpoint)
+        );
+        drop(owner);
+        let reopened = ConsumerProjection::open(&root).unwrap();
+        assert_eq!(
+            reopened.completed_checkpoint_receipt().unwrap(),
+            Some(reopened.receipt())
+        );
+        drop(reopened);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn completed_checkpoint_cursor_and_preparation_share_every_consistency_check() {
+        let (root, mut owner) = fixture();
+        let original = owner.receipt();
+        for mismatch in 0..6 {
+            match mismatch {
+                0 => owner.index.consumer_binding_valid = false,
+                1 => {
+                    *owner
+                        .index
+                        .durable_source_graph_commit_epoch
+                        .lock()
+                        .unwrap() = Some(1)
+                }
+                2 => owner.index.source_graph_commit_epoch = Some(1),
+                3 => {
+                    owner
+                        .index
+                        .consumer_binding
+                        .as_mut()
+                        .unwrap()
+                        .checkpoint_uuid = hawdb_core::generate_uuidv7().unwrap()
+                }
+                4 => *owner.index.consumer_receipt.lock().unwrap() = None,
+                _ => owner.index.path = None,
+            }
+            assert!(
+                owner.completed_checkpoint_receipt().unwrap().is_none(),
+                "mismatch {mismatch}"
+            );
+            assert!(owner.reserve_preparation().is_err(), "mismatch {mismatch}");
+            owner.index.consumer_binding_valid = true;
+            *owner
+                .index
+                .durable_source_graph_commit_epoch
+                .lock()
+                .unwrap() = Some(0);
+            owner.index.source_graph_commit_epoch = Some(0);
+            owner.index.consumer_binding = Some(original.binding.clone());
+            *owner.index.consumer_receipt.lock().unwrap() = Some(original.clone());
+            owner.index.path = Some(root.clone());
+            assert_eq!(
+                owner.completed_checkpoint_receipt().unwrap(),
+                Some(original.clone())
+            );
+            drop(owner.reserve_preparation().unwrap());
+        }
+        owner.index = SearchIndex::default();
+        assert!(owner.completed_checkpoint_receipt().unwrap().is_none());
+        assert!(owner.reserve_preparation().is_err());
+        drop(owner);
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

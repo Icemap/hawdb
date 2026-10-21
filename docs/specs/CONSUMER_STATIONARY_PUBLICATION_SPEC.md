@@ -29,6 +29,17 @@ publishes only completed consumer records. Neither pending creation custody nor
 a non-reused allocation high-water mark exists there. Registry records, their
 count and a maximum selected generation must not mint an allocation sequence.
 
+Registered catch-up, readiness and checkpoint validation now obtain their source
+cursor from a completed receipt checked under the Consumer operation exclusion.
+That check and preparation share one clean-checkpoint predicate: current native
+owner, binding, receipt, applied/durable epoch and no pending mutation must agree.
+Busy refuses before exposing a cursor; dirty or mismatched receipts provide no
+resume authority. Readiness does not report an unacknowledged cursor. Batch
+selection uses the validated epoch directly, without a borrowed SearchIndex or
+operational-marker reads through its diagnostic pathname. This removes the
+facade's resident-index cursor coupling; creation, mutation, the public borrowed
+index API and reopen still need migration to stationary immutable serving.
+
 `ConsumerProjection::reserve_preparation` already excludes competing internal
 mutations and rejects dirty/failed checkpoints. The development-only generation
 metadata V2 codec records nonzero incarnation, generation and operation identities;
