@@ -35,6 +35,132 @@ const MAX_EXPRESSION_DEPTH: usize = 64;
 const MAX_KEY_COLUMNS: usize = 32;
 const MAX_KEY_BYTES: usize = 4096;
 
+pub(in crate::api) fn admit_transaction_input(text: &str, parameters: &[Value]) -> Result<()> {
+    admit_input(text, parameters)?;
+    crate::sql::admit_postgres_sql_syntax(text, MAX_INPUT_BYTES, MAX_TOKENS, MAX_RECURSIVE_TOKENS)
+}
+
+/// Capture from the transaction's current private relational view, without
+/// re-executing the statement or replacing its ordinary query semantics.
+pub(in crate::api) fn collect_transaction(
+    text: &str,
+    statement: &SqlStatement,
+    parameters: &[Value],
+    state: &hawdb_storage::relational::RelationalState,
+    dependencies: &mut GraphReadDependencies,
+) -> Result<()> {
+    admit_input(text, parameters)?;
+    let record = |dependencies: &mut GraphReadDependencies, key| {
+        dependencies
+            .record(key)
+            .map_err(|error| HawDBError::Execution(error.to_string()))
+    };
+    match statement {
+        SqlStatement::Select(select) => {
+            qualify_expressions(select)?;
+            let table = select
+                .from
+                .as_ref()
+                .ok_or_else(|| refusal("FROM-less transaction SELECT"))?;
+            transaction_schema(state, table)?;
+            if system_sql::is_virtual_catalog_select(select) || select.joins.len() > MAX_KEY_COLUMNS
+            {
+                return Err(refusal("virtual or unbounded joined transaction SELECT"));
+            }
+            if !select.joins.is_empty() {
+                // Private writes may change join keys. Complete table domains
+                // cover both parent/child membership without querying a second
+                // snapshot or guessing from the returned rows.
+                for table in
+                    std::iter::once(table).chain(select.joins.iter().map(|join| &join.table))
+                {
+                    record(
+                        dependencies,
+                        VersionKey::ReadRelationalTableDomain(
+                            transaction_schema(state, table)?.name.clone(),
+                        ),
+                    )?;
+                }
+                return Ok(());
+            }
+            let schema = transaction_schema(state, table)?;
+            let key = primary_key(select, schema, parameters)?;
+            let key = if matches!(key, VersionKey::Database) {
+                indexed::prefix_key(select, schema, parameters)?
+                    .unwrap_or_else(|| VersionKey::ReadRelationalTableDomain(schema.name.clone()))
+            } else {
+                key
+            };
+            record(dependencies, key)
+        }
+        SqlStatement::Insert(statement) => {
+            let key = VersionKey::ReadRelationalTableDomain(
+                transaction_schema(state, &statement.table)?.name.clone(),
+            );
+            let schema = transaction_schema(state, &statement.table)?;
+            if schema.columns.iter().enumerate().any(|(index, column)| {
+                matches!(
+                    column.default,
+                    Some(hawdb_storage::relational::RelationalColumnDefault::UuidV7)
+                ) && if statement.columns.is_empty() {
+                    statement.rows.iter().any(|row| row.len() <= index)
+                } else {
+                    !statement.columns.contains(&column.name)
+                }
+            }) {
+                return Err(refusal("unversioned generated UUID default"));
+            }
+            record(dependencies, key)
+        }
+        SqlStatement::Update(statement) => {
+            if let Some(predicate) = &statement.selection {
+                qualify_expression(predicate, &mut 0, 0)?;
+            }
+            record(
+                dependencies,
+                VersionKey::ReadRelationalTableDomain(
+                    transaction_schema(state, &statement.table)?.name.clone(),
+                ),
+            )
+        }
+        SqlStatement::Delete(statement) => {
+            if let Some(predicate) = &statement.selection {
+                qualify_expression(predicate, &mut 0, 0)?;
+            }
+            record(
+                dependencies,
+                VersionKey::ReadRelationalTableDomain(
+                    transaction_schema(state, &statement.table)?.name.clone(),
+                ),
+            )
+        }
+        SqlStatement::CreateTable(_)
+        | SqlStatement::CreateIndex(_)
+        | SqlStatement::AlterTableAddColumn(_) => record(dependencies, VersionKey::Database),
+        SqlStatement::Explain(_) | SqlStatement::Branch(_) => {
+            Err(refusal("noncanonical transaction statement"))
+        }
+    }
+}
+
+fn transaction_schema<'a>(
+    state: &'a hawdb_storage::relational::RelationalState,
+    table: &crate::sql::SqlTableName,
+) -> Result<&'a RelationalTableSchema> {
+    if table.name.len() > MAX_KEY_BYTES
+        || table
+            .schema
+            .as_deref()
+            .is_some_and(|schema| schema != "public")
+    {
+        return Err(refusal("noncanonical or unbounded transaction table"));
+    }
+    state
+        .table_schema(&table.name)
+        .filter(|schema| schema.columns.len() <= MAX_EXPRESSION_NODES)
+        .ok_or_else(|| refusal("unknown or unbounded transaction schema"))
+}
+
 impl PreparedRead {
     /// Executes a bounded canonical SELECT. Necessary complete
     /// primary-key equalities under AND use existing row stamps, including

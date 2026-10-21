@@ -243,7 +243,14 @@ fn stale_source_and_wrong_instance_cannot_activate_a_covered_candidate() {
     for wrong_instance in [false, true] {
         let (root, mut db, reader, c) = setup(false);
         let session = stage(&db, &reader, c);
+        let e = session.source_epoch();
+        if !wrong_instance {
+            // Full-source verification must retain E even if it starts later.
+            db.query_sql("UPDATE records SET body='after-E' WHERE id='a'")
+                .unwrap();
+        }
         let candidate = covered(session);
+        assert_eq!(candidate.source_epoch(), e);
         if wrong_instance {
             let mut other = Database::new();
             assert!(other
@@ -253,8 +260,6 @@ fn stale_source_and_wrong_instance_cannot_activate_a_covered_candidate() {
                 )
                 .is_err());
         } else {
-            db.query_sql("UPDATE records SET body='after-E' WHERE id='a'")
-                .unwrap();
             assert!(db
                 .publish_projection_covered_update(
                     candidate,
@@ -413,11 +418,14 @@ fn cancellation_at_each_coverage_phase_preserves_base_and_allows_reopen_retry() 
             .unwrap();
         complete(&mut s);
         let mut verify = s.verify_complete_source(caps(), full_e).unwrap();
+        let mut reached = false;
         for _ in 0..10000 {
             if verify.advance(one(), sort()).unwrap() == phase {
+                reached = true;
                 break;
             }
         }
+        assert!(reached, "coverage did not reach {phase:?}");
         cancel.cancel();
         assert!(verify.advance(one(), sort()).is_err());
         assert!(verify.finish().is_err());

@@ -61,7 +61,7 @@ pub use projection_feed::{
     ProjectionFeedRead, ProjectionFeedResource, ProjectionFeedStep, ProjectionFeedUsage,
 };
 #[path = "dependency_read/relational.rs"]
-mod relational;
+pub(super) mod relational;
 #[path = "dependency_read/search_projection.rs"]
 mod search_projection;
 #[cfg(test)]
@@ -204,7 +204,7 @@ impl PreparedRead {
     }
 }
 
-fn collect_node_dependencies(
+pub(super) fn collect_node_dependencies(
     plan: &PhysicalPlan,
     catalog: &Catalog,
     store: &GraphStore,

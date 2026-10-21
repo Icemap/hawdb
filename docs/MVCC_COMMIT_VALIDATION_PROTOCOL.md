@@ -32,10 +32,12 @@ path below now has separate per-key validation evidence.
 | Version reclamation | Every `GraphStore::snapshot` registers an epoch in a shared storage registry. Successful durable checkpoint publication, in-memory checkpoint and version-budget pressure call `reclaim_version_history`, retaining stamps at or after the oldest snapshot epoch. |
 | Recovery baseline helper | `VersionIndex::from_live_keys_at_epoch` exists but is not wired into open or replay. The current index starts empty on a new store handle. |
 
-No general serializable isolation, time travel, multi-process writer, or
-persisted row-version API follows from these mechanisms. Relational predicate
-capture and pessimistic locks have their own contracts; their existence does
-not make graph optimistic validation a serializable read-set validator.
+Default transactions retain SI. Explicit `TransactionIsolation::Serializable`
+adds transaction-owned complete read capture and sequencer-time validation for
+[the qualified subset](specs/TRANSACTION_READ_DEPENDENCIES.md). Unsupported or
+incomplete captures refuse; pessimistic/conflict-noop rebase cannot bypass read
+validation. This does not imply arbitrary-query serializability, automatic
+upgrading of SI peers, time travel, multi-process writers or persisted transactions.
 
 ## Identities actually emitted
 
@@ -93,6 +95,10 @@ This is an estimated retained key/write payload budget, excluding B-tree node
 and allocator overhead, spare capacity and the incoming key allocation. It is
 not a global bound across transactions, canonical/history COW pages or snapshot
 lifetimes. The read epoch belongs to the transaction, not this map.
+
+The [snapshot retention qualification](MVCC_SNAPSHOT_RETENTION_QUALIFICATION.md)
+maps combined facade/storage ownership to executable tests, exact physical root
+sets, low-budget retries, and separate allocation/payload/RSS observations.
 
 ## Read-consumer metadata
 

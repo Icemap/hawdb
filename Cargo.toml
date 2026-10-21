@@ -8,7 +8,7 @@ description = "An embedded Rust graph database for local data-plane workloads"
 repository = "https://github.com/nowledge-co/hawdb"
 homepage = "https://hawdb.ai"
 readme = "README.md"
-exclude = ["/tools/mvcc-fuzz/**"]
+exclude = ["/tools/mvcc-fuzz/**", "/tools/shiro/**", "/crates/fuzz/**"]
 
 [dependencies]
 chrono = { version = "0.4", default-features = false, features = ["std"] }
@@ -95,7 +95,6 @@ members = [
   "crates/executor",
   "crates/expression",
   "crates/fuzz-contracts",
-  "crates/fuzz",
   "crates/cgroup",
   "crates/cascades",
   "crates/integrity",
@@ -134,48 +133,6 @@ license = "Apache-2.0"
 description = "An embedded Rust graph database for local data-plane workloads"
 repository = "https://github.com/nowledge-co/hawdb"
 homepage = "https://hawdb.ai"
-
-[profile.dev]
-opt-level = 0
-debug = 0
-codegen-units = 256
-lto = false
-incremental = true
-panic = "unwind"
-debug-assertions = true
-overflow-checks = true
-rpath = false
-
-[profile.release]
-opt-level = 3
-debug = false
-codegen-units = 1
-lto = "thin"
-incremental = false
-panic = "unwind"
-debug-assertions = false
-overflow-checks = false
-rpath = false
-
-[profile.test]
-opt-level = 0
-debug = 0
-codegen-units = 16
-lto = false
-incremental = true
-debug-assertions = true
-overflow-checks = true
-rpath = false
-
-[profile.bench]
-opt-level = 3
-debug = false
-codegen-units = 1
-lto = "thin"
-incremental = false
-debug-assertions = false
-overflow-checks = false
-rpath = false
 
 [[bench]]
 name = "optimizer_smoke"

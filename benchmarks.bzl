@@ -44,44 +44,6 @@ HAWDB_MANUAL_BENCHMARKS = [
     "retained_source_capacity",
 ]
 
-def _release_benchmark_transition_impl(_settings, _attr):
-    return {"//command_line_option:compilation_mode": "opt"}
-
-_release_benchmark_transition = transition(
-    implementation = _release_benchmark_transition_impl,
-    inputs = [],
-    outputs = ["//command_line_option:compilation_mode"],
-)
-
-def _release_benchmark_impl(ctx):
-    binary = ctx.attr.binary[0][DefaultInfo]
-    executable = ctx.actions.declare_file(ctx.label.name)
-    ctx.actions.symlink(
-        output = executable,
-        target_file = binary.files_to_run.executable,
-        is_executable = True,
-    )
-    return [DefaultInfo(
-        executable = executable,
-        runfiles = binary.default_runfiles,
-    )]
-
-# Configure the existing binary and its dependencies together. Optimizing only
-# the benchmark crate would leave the measured database in the smoke profile.
-_release_benchmark = rule(
-    implementation = _release_benchmark_impl,
-    executable = True,
-    attrs = {
-        "binary": attr.label(
-            executable = True,
-            cfg = _release_benchmark_transition,
-        ),
-        "_allowlist_function_transition": attr.label(
-            default = "@bazel_tools//tools/allowlists/function_transition_allowlist",
-        ),
-    },
-)
-
 def hawdb_benchmark_binaries(crate_features):
     benchmark_deps = all_crate_deps(normal = True, normal_dev = True) + [
         ":hawdb",
@@ -120,8 +82,8 @@ def hawdb_benchmark_binaries(crate_features):
                 proc_macro_dev = True,
             ),
         )
-    _release_benchmark(
+    native.alias(
         name = "hawdb_bench_relational_index_access_release",
-        binary = ":hawdb_bench_relational_index_access",
+        actual = ":hawdb_bench_relational_index_access",
         tags = ["manual"],
     )

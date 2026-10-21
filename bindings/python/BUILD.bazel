@@ -16,7 +16,6 @@ rust_shared_library(
     # Python supplies its symbols when importing an extension on macOS.
     rustc_flags = select({
         "@platforms//os:macos": [
-            "-Cstrip=none",
             "-C",
             "link-arg=-undefined",
             "-C",
@@ -118,8 +117,6 @@ rust_shared_library(
     # Python supplies its symbols when importing an extension on macOS.
     rustc_flags = select({
         "@platforms//os:macos": [
-            # Rust 1.97.1 stripping misaligns Mach-O's LINKEDIT string pool.
-            "-Cstrip=none",
             "-C",
             "link-arg=-undefined",
             "-C",

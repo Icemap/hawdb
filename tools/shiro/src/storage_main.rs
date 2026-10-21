@@ -17,12 +17,12 @@ use hawdb::{
     RelationalKey, RelationalRow, RelationalScalarType, RelationalValue, SearchDocument,
     SearchIndex, SearchMode, Value, ValueRef,
 };
-use hawdb_fuzz::{
+use serde_json::{json, Value as JsonValue};
+use shiro_core::{
     compiled_capabilities_json, emit_fuzz_report, run_row_page_compaction_case,
     run_wal_tail_recovery_case, DEFAULT_FUZZ_LOG_DIRECTORY, ROW_PAGE_COMPACTION_PROTOCOL,
     WAL_TAIL_RECOVERY_PROTOCOL,
 };
-use serde_json::{json, Value as JsonValue};
 use std::collections::BTreeMap;
 use std::fs;
 use std::io;
@@ -44,7 +44,7 @@ fn main() -> ExitCode {
         Ok(success) if success => ExitCode::SUCCESS,
         Ok(_) => ExitCode::FAILURE,
         Err(error) => {
-            eprintln!("hawdb-storage-fuzz: {error}");
+            eprintln!("shiro-storage: {error}");
             ExitCode::from(2)
         }
     }
@@ -95,7 +95,8 @@ fn run() -> Result<bool, String> {
                 "--row-page-compaction"
             };
             report["reproduction_command"] = json!(format!(
-                "bazel run //crates/fuzz:hawdb_storage_fuzz -- {oracle} --seed {} --case-index {index}", options.seed
+                "bazel run //tools/shiro:shiro_storage -- {oracle} --seed {} --case-index {index}",
+                options.seed
             ));
             report
         } else {
@@ -119,7 +120,7 @@ fn run() -> Result<bool, String> {
     let failed_case_count = report["failed_case_count"].as_u64().unwrap_or_default();
     let paths = emit_fuzz_report(
         &options.log_directory,
-        "hawdb-storage-fuzz",
+        "shiro-storage",
         &run_id(&options),
         &report,
         success,
@@ -128,7 +129,7 @@ fn run() -> Result<bool, String> {
     )?;
     if let Some(path) = paths.failure {
         eprintln!(
-            "hawdb-storage-fuzz: {failed_case_count} failing case(s); reproduction report: {}",
+            "shiro-storage: {failed_case_count} failing case(s); reproduction report: {}",
             path.display()
         );
     }
@@ -199,7 +200,7 @@ fn run_case(
         "validation": validation,
         "success": case_success,
         "reproduction_command": format!(
-            "bazel run //crates/fuzz:hawdb_storage_fuzz -- --seed {campaign_seed} --case-index {index}"
+            "bazel run //tools/shiro:shiro_storage -- --seed {campaign_seed} --case-index {index}"
         ),
     }))
 }
@@ -534,7 +535,7 @@ fn reserve_workspace(parent: &Path, timestamp: u128, sequence: &AtomicU64) -> io
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
             .map_err(|_| io::Error::other("storage fuzz workspace sequence exhausted"))?;
         let path = parent.join(format!(
-            "hawdb-storage-fuzz-{}-{timestamp}-{id}",
+            "shiro-storage-{}-{timestamp}-{id}",
             std::process::id()
         ));
         // Only atomic creation establishes ownership; never reuse a stale path.
@@ -650,7 +651,7 @@ fn next_value(args: &mut impl Iterator<Item = String>, option: &str) -> Result<S
 }
 
 fn usage() -> &'static str {
-    "usage: hawdb-storage-fuzz [--wal-tail | --row-page-compaction] [--seed <u64>] [--cases <usize>] [--case-index <usize>] [--log-directory <path>] [--print-report]"
+    "usage: shiro-storage [--wal-tail | --row-page-compaction] [--seed <u64>] [--cases <usize>] [--case-index <usize>] [--log-directory <path>] [--print-report]"
 }
 
 fn run_id(options: &Options) -> String {
@@ -862,7 +863,7 @@ mod tests {
         let parent = unique_workspace().unwrap();
         let existing = reserve_workspace(&parent, 7, &AtomicU64::new(0)).unwrap();
         fs::write(existing.join("retained"), b"previous owner").unwrap();
-        let existing_file = parent.join(format!("hawdb-storage-fuzz-{}-7-1", std::process::id()));
+        let existing_file = parent.join(format!("shiro-storage-{}-7-1", std::process::id()));
         fs::write(&existing_file, b"existing file").unwrap();
         let sequence = AtomicU64::new(0);
 

@@ -505,6 +505,9 @@ fn json_error_from_hawdb(error: HawDBError) -> serde_json::Value {
             response
         }
         error @ HawDBError::TransactionConflict { .. } => json_error("execution", error),
+        error @ HawDBError::TransactionReadDependencyRefused { .. } => {
+            json_error("execution", error)
+        }
         error @ HawDBError::AppendSequenceExhausted { .. } => json_error("storage", error),
         error @ (HawDBError::ProjectionBusy
         | HawDBError::BranchBusy { .. }

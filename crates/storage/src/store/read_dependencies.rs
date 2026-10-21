@@ -72,6 +72,10 @@ pub struct GraphReadDependencies {
 }
 
 impl GraphReadDependencies {
+    pub fn entry_count(&self) -> usize {
+        self.keys.len()
+    }
+
     pub fn source_epoch(&self) -> u64 {
         self.source_epoch
     }

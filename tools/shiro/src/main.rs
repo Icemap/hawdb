@@ -12,18 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use hawdb_fuzz::{
-    campaign_progress_json, emit_fuzz_report, fuzz_current_report_path, merge_campaign_report_json,
-    read_fuzz_current_report, run_campaign_with_case_observer, write_fuzz_current_report,
-    CampaignExecutionOptions, CampaignOptions, FuzzError, CAMPAIGN_PROTOCOL,
-    DEFAULT_FUZZ_LOG_DIRECTORY, DEFAULT_FUZZ_PROGRESS_INTERVAL,
-};
 use serde_json::Value as JsonValue;
+use shiro_core::{
+    campaign_progress_json, emit_fuzz_report, fuzz_current_report_path, merge_campaign_report_json,
+    read_fuzz_current_report, run_campaign_until, run_campaign_with_case_observer,
+    write_fuzz_current_report, CampaignExecutionOptions, CampaignOptions, FuzzError,
+    CAMPAIGN_PROTOCOL, DEFAULT_FUZZ_LOG_DIRECTORY, DEFAULT_FUZZ_PROGRESS_INTERVAL,
+};
+use std::cell::Cell;
 use std::io;
 use std::path::PathBuf;
 use std::process::ExitCode;
+use std::time::{Duration, Instant};
 
 fn main() -> ExitCode {
+    if std::env::args().skip(1).collect::<Vec<_>>().as_slice() == ["--help"] {
+        println!("{}", usage());
+        return ExitCode::SUCCESS;
+    }
     match run() {
         Ok(success) => {
             if success {
@@ -33,7 +39,7 @@ fn main() -> ExitCode {
             }
         }
         Err(error) => {
-            eprintln!("hawdb-fuzz: {error}");
+            eprintln!("shiro: {error}");
             ExitCode::from(2)
         }
     }
@@ -42,9 +48,11 @@ fn main() -> ExitCode {
 fn run() -> Result<bool, FuzzError> {
     let mut options = parse_options(std::env::args().skip(1))?;
     options.execution.validate(options.campaign)?;
+    if !options.finite {
+        return run_continuously(&options);
+    }
     let run_id = run_id(options.campaign, options.execution);
-    let current_path =
-        fuzz_current_report_path(&options.log_directory, "hawdb-optimizer-fuzz", &run_id);
+    let current_path = fuzz_current_report_path(&options.log_directory, "shiro-query", &run_id);
     let mut cases = if options.resume {
         load_resume_cases(&current_path, options.campaign, options.execution)?
     } else {
@@ -75,7 +83,7 @@ fn run() -> Result<bool, FuzzError> {
     let success = report_json["success"].as_bool() == Some(true);
     let paths = emit_fuzz_report(
         &options.log_directory,
-        "hawdb-optimizer-fuzz",
+        "shiro-query",
         &run_id,
         &report_json,
         success,
@@ -85,7 +93,7 @@ fn run() -> Result<bool, FuzzError> {
     .map_err(FuzzError::new)?;
     if let Some(path) = paths.failure {
         eprintln!(
-            "hawdb-fuzz: {} failing case(s); reproduction report: {}",
+            "shiro: {} failing case(s); reproduction report: {}",
             report_json["failed_case_count"]
                 .as_u64()
                 .unwrap_or_default(),
@@ -93,6 +101,105 @@ fn run() -> Result<bool, FuzzError> {
         );
     }
     Ok(success)
+}
+
+fn run_continuously(options: &Options) -> Result<bool, FuzzError> {
+    let started = Instant::now();
+    let deadline = options.timeout_seconds.map(Duration::from_secs);
+    let mut progress_at = started;
+    let mut total_cases = 0usize;
+    let mut batch = 0u64;
+    let run_id = format!("seed-{}-continuous", options.campaign.seed);
+    let current_path = fuzz_current_report_path(&options.log_directory, "shiro-query", &run_id);
+    eprintln!(
+        "shiro: continuous fuzzing; seed={}; stop with Ctrl+C{}",
+        options.campaign.seed,
+        options
+            .timeout_seconds
+            .map_or_else(String::new, |seconds| format!("; timeout={seconds}s"))
+    );
+    loop {
+        let campaign = CampaignOptions {
+            seed: options.campaign.seed.wrapping_add(batch),
+            case_count: 128,
+            case_index: None,
+        };
+        let failed = Cell::new(false);
+        let completed = Cell::new(0usize);
+        let mut cases = Vec::new();
+        let report = run_campaign_until(
+            campaign,
+            options.execution,
+            |case| {
+                total_cases += 1;
+                completed.set(completed.get() + 1);
+                failed.set(!case.success);
+                cases.push(case.json());
+                if cases.len() == 1
+                    || cases.len().is_multiple_of(options.progress_interval)
+                    || failed.get()
+                    || progress_at.elapsed() >= Duration::from_secs(5)
+                {
+                    let mut progress = campaign_progress_json(campaign, options.execution, &cases);
+                    progress["session"] = serde_json::json!({
+                        "seed": options.campaign.seed, "batch": batch,
+                        "completed_cases": total_cases, "elapsed_seconds": started.elapsed().as_secs_f64(),
+                        "status": "running"
+                    });
+                    write_fuzz_current_report(&current_path, &progress).map_err(FuzzError::new)?;
+                }
+                if progress_at.elapsed() >= Duration::from_secs(5) {
+                    print_progress(total_cases, started);
+                    progress_at = Instant::now();
+                }
+                Ok(())
+            },
+            || {
+                failed.get()
+                    || (completed.get() > 0
+                        && deadline.is_some_and(|limit| started.elapsed() >= limit))
+            },
+        )?;
+        let timed_out = deadline.is_some_and(|limit| started.elapsed() >= limit);
+        let success = !failed.get();
+        if !success || timed_out {
+            let mut json = report.json();
+            json["session"] = serde_json::json!({
+                "seed": options.campaign.seed, "batch": batch,
+                "completed_cases": total_cases, "elapsed_seconds": started.elapsed().as_secs_f64(),
+                "stop_reason": if success { "timeout" } else { "oracle_failure" },
+                "retained_cases": "last_batch_only"
+            });
+            let paths = emit_fuzz_report(
+                &options.log_directory,
+                "shiro-query",
+                &run_id,
+                &json,
+                success,
+                options.print_report,
+                &mut io::stdout().lock(),
+            )
+            .map_err(FuzzError::new)?;
+            print_progress(total_cases, started);
+            eprintln!(
+                "shiro: stopped ({}); report: {}",
+                if success { "timeout" } else { "oracle failure" },
+                paths.current.display()
+            );
+            return Ok(success);
+        }
+        batch = batch
+            .checked_add(1)
+            .ok_or_else(|| FuzzError::new("batch counter exhausted"))?;
+    }
+}
+
+fn print_progress(completed: usize, started: Instant) {
+    let elapsed = started.elapsed().as_secs_f64();
+    eprintln!(
+        "shiro: {completed} cases; {elapsed:.1}s; {:.1} cases/s",
+        completed as f64 / elapsed.max(0.001)
+    );
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -103,6 +210,8 @@ struct Options {
     progress_interval: usize,
     resume: bool,
     print_report: bool,
+    finite: bool,
+    timeout_seconds: Option<u64>,
 }
 
 fn parse_options(args: impl IntoIterator<Item = String>) -> Result<Options, FuzzError> {
@@ -112,6 +221,8 @@ fn parse_options(args: impl IntoIterator<Item = String>) -> Result<Options, Fuzz
     let mut progress_interval = DEFAULT_FUZZ_PROGRESS_INTERVAL;
     let mut resume = false;
     let mut print_report = false;
+    let mut finite = false;
+    let mut timeout_seconds = None;
     let mut args = args.into_iter();
     while let Some(argument) = args.next() {
         match argument.as_str() {
@@ -122,12 +233,14 @@ fn parse_options(args: impl IntoIterator<Item = String>) -> Result<Options, Fuzz
                     .map_err(|_| FuzzError::new("--seed must be an unsigned 64-bit integer"))?;
             }
             "--cases" => {
+                finite = true;
                 let value = args.next().ok_or_else(|| FuzzError::new(usage()))?;
                 campaign.case_count = value
                     .parse()
                     .map_err(|_| FuzzError::new("--cases must be a non-negative integer"))?;
             }
             "--case-index" => {
+                finite = true;
                 let value = args.next().ok_or_else(|| FuzzError::new(usage()))?;
                 campaign.case_index =
                     Some(value.parse().map_err(|_| {
@@ -142,6 +255,17 @@ fn parse_options(args: impl IntoIterator<Item = String>) -> Result<Options, Fuzz
             }
             "--progress-interval" => {
                 progress_interval = next_usize(&mut args, "--progress-interval")?;
+            }
+            "--timeout-seconds" => {
+                let seconds = args
+                    .next()
+                    .ok_or_else(|| FuzzError::new(usage()))?
+                    .parse::<u64>()
+                    .map_err(|_| FuzzError::new("--timeout-seconds must be a positive integer"))?;
+                if seconds == 0 {
+                    return Err(FuzzError::new("--timeout-seconds must be positive"));
+                }
+                timeout_seconds = Some(seconds);
             }
             "--resume" => resume = true,
             "--log-directory" => {
@@ -162,6 +286,16 @@ fn parse_options(args: impl IntoIterator<Item = String>) -> Result<Options, Fuzz
             "--progress-interval must be greater than zero",
         ));
     }
+    if finite && timeout_seconds.is_some() {
+        return Err(FuzzError::new(
+            "--timeout-seconds cannot be combined with --cases or --case-index",
+        ));
+    }
+    if resume && !finite {
+        return Err(FuzzError::new(
+            "--resume requires an explicit finite --cases campaign",
+        ));
+    }
     Ok(Options {
         campaign,
         execution,
@@ -169,6 +303,8 @@ fn parse_options(args: impl IntoIterator<Item = String>) -> Result<Options, Fuzz
         progress_interval,
         resume,
         print_report,
+        finite,
+        timeout_seconds,
     })
 }
 
@@ -180,7 +316,7 @@ fn next_usize(args: &mut impl Iterator<Item = String>, option: &str) -> Result<u
 }
 
 fn usage() -> &'static str {
-    "usage: hawdb-fuzz [--seed <u64>] [--cases <usize>] [--case-index <usize>] [--shard-index <usize>] [--shard-count <usize>] [--progress-interval <usize>] [--resume] [--log-directory <path>] [--print-report]"
+    "usage: shiro [--timeout-seconds <u64>] [--seed <u64>] [--cases <usize>] [--case-index <usize>] [--shard-index <usize>] [--shard-count <usize>] [--progress-interval <usize>] [--resume] [--log-directory <path>] [--print-report]"
 }
 
 fn run_id(options: CampaignOptions, execution: CampaignExecutionOptions) -> String {
@@ -251,6 +387,44 @@ mod tests {
     use super::parse_options;
 
     #[test]
+    fn defaults_to_continuous_and_accepts_timeout() {
+        assert!(!parse_options([]).unwrap().finite);
+        let timed = parse_options(["--timeout-seconds".into(), "30".into()]).unwrap();
+        assert_eq!(timed.timeout_seconds, Some(30));
+        assert!(!timed.finite);
+        assert!(parse_options(["--timeout-seconds".into(), "0".into()]).is_err());
+        assert!(parse_options([
+            "--timeout-seconds".into(),
+            "1".into(),
+            "--cases".into(),
+            "2".into()
+        ])
+        .is_err());
+        assert!(parse_options(["--resume".into()]).is_err());
+    }
+
+    #[test]
+    fn controlled_campaign_stops_between_checked_cases() {
+        let completed = std::cell::Cell::new(0);
+        let report = shiro_core::run_campaign_until(
+            shiro_core::CampaignOptions {
+                seed: 7,
+                case_count: 2,
+                case_index: None,
+            },
+            shiro_core::CampaignExecutionOptions::default(),
+            |_| {
+                completed.set(completed.get() + 1);
+                Ok(())
+            },
+            || completed.get() == 1,
+        )
+        .unwrap();
+        assert_eq!(report.executed_case_count, 1);
+        assert!(report.success());
+    }
+
+    #[test]
     fn parses_seed_and_case_count() {
         let options = parse_options([
             "--seed".to_string(),
@@ -265,7 +439,7 @@ mod tests {
         assert_eq!(options.campaign.case_index, None);
         assert_eq!(
             options.log_directory,
-            std::path::Path::new(hawdb_fuzz::DEFAULT_FUZZ_LOG_DIRECTORY)
+            std::path::Path::new(shiro_core::DEFAULT_FUZZ_LOG_DIRECTORY)
         );
         assert!(!options.print_report);
     }
@@ -310,6 +484,8 @@ mod tests {
             "--progress-interval".to_string(),
             "7".to_string(),
             "--resume".to_string(),
+            "--cases".to_string(),
+            "32".to_string(),
         ])
         .unwrap();
 

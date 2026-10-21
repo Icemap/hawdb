@@ -19,7 +19,7 @@ use crate::{
     RuntimeWorkPriority, RuntimeWorkRequest,
 };
 
-fn governor() -> RuntimeGovernor {
+pub(super) fn governor() -> RuntimeGovernor {
     RuntimeGovernor::new(
         RuntimeGovernorConfig {
             cpu_slot_limit: NonZeroUsize::new(2),
@@ -42,7 +42,7 @@ fn governor() -> RuntimeGovernor {
     )
 }
 
-fn request() -> RuntimeWorkRequest {
+pub(super) fn request() -> RuntimeWorkRequest {
     RuntimeWorkRequest::mutation(RuntimeWorkPriority::Foreground, 16 * 1024 * 1024)
         .with_result_bytes(1024 * 1024)
 }

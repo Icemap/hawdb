@@ -246,12 +246,13 @@ The experimental in-memory browser build is documented in [`docs/WASM.md`](docs/
 ### Fuzzing
 
 ```console
-make fuzz
+make mvcc-fuzz
+make shiro-fuzz
 make fuzz-help
 make fuzz-test
 ```
 
-`make fuzz` runs the native campaigns and writes JSON reports under `target/fuzz-logs/`. `make fuzz-test` runs the deterministic regression and CLI contracts through Bazel. Campaign details are in [`crates/fuzz/README.md`](crates/fuzz/README.md).
+`make mvcc-fuzz` runs the standalone MVCC CLI locally for about 30 seconds; `make shiro-fuzz` continuously runs SQL/Cypher multi-oracle checks until Ctrl+C. Override `MVCC_SECONDS`, `MVCC_SEED`, `SHIRO_SECONDS` and `SHIRO_SEED` as needed. `make fuzz` runs all native campaigns and writes JSON reports under `target/fuzz-logs/`. `make fuzz-test` runs the deterministic regression and CLI contracts through Bazel. Campaign details are in [`tools/shiro/README.md`](tools/shiro/README.md).
 
 ## Python
 

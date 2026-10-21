@@ -31,6 +31,7 @@ mod append_mvcc;
 mod crash_recovery;
 mod read_observation;
 mod relational_mvcc;
+mod serializable;
 
 fn release_autocommit_reads(release: &Arc<(Mutex<bool>, Condvar)>) {
     let (released, available) = &**release;

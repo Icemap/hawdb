@@ -41,6 +41,77 @@ enum ReceiptPurpose {
 }
 
 impl Database {
+    /// Acquires one application-owned projection using a stable logical ID.
+    ///
+    /// Existing registrations are reopened and verified against this source and
+    /// their exact projection/registration/checkpoint identity. Only an absent
+    /// registration in a healthy registry permits initialization. An unavailable
+    /// registry, invalid receipt, expiry, or lost replay window is never rebuilt
+    /// implicitly. After an uncertain publication, reload the durable registry
+    /// before deciding whether creation is necessary.
+    ///
+    /// The ID identifies the application's projection definition (for example,
+    /// `knowledge-v1`); callers must change it when changing the mapping. There is
+    /// no pathname alias or adoption of an existing unregistered projection.
+    /// `options` and `initialize` apply only to first creation. Reopening does not
+    /// renew the registration. Share the returned owner's immutable search index
+    /// between query users; dropping it releases only its runtime lease.
+    pub fn open_or_create_search_projection_consumer<F>(
+        &mut self,
+        id: SearchProjectionConsumerId,
+        projection_directory: impl AsRef<Path>,
+        options: SearchProjectionConsumerOptions,
+        initialize: F,
+    ) -> SearchProjectionConsumerResult<SearchProjectionConsumer>
+    where
+        F: FnOnce(&mut DatabaseReadTransaction, &mut SearchIndex) -> Result<()>,
+    {
+        self.open_or_create_consumer_with_capacity::<MAX_CONSUMERS, F>(
+            id,
+            projection_directory.as_ref(),
+            options,
+            initialize,
+        )
+    }
+
+    fn open_or_create_consumer_with_capacity<const CAPACITY: usize, F>(
+        &mut self,
+        id: SearchProjectionConsumerId,
+        projection_directory: &Path,
+        options: SearchProjectionConsumerOptions,
+        initialize: F,
+    ) -> SearchProjectionConsumerResult<SearchProjectionConsumer>
+    where
+        F: FnOnce(&mut DatabaseReadTransaction, &mut SearchIndex) -> Result<()>,
+    {
+        self.consumer_writable_root()?;
+        self.reload_consumer_registry_if_unavailable()?;
+        {
+            let runtime = self.runtime.get()?;
+            let registry = &runtime.projection_consumers;
+            if registry.unavailable {
+                return Err(Error::RebuildRequired(Reason::RegistryUnavailable));
+            }
+            // A foreign registry must not become an empty local registry merely
+            // because it has no record under the requested logical ID.
+            if registry.database_uuid.is_some()
+                && registry.database_uuid != runtime.store.search_projection_database_identity()
+            {
+                return Err(Error::RebuildRequired(Reason::DatabaseIdentityMismatch));
+            }
+        }
+        match self.search_projection_consumer_status(&id) {
+            Ok(_) => self.open_search_projection_consumer(&id, projection_directory),
+            Err(Error::InvalidHandle) => self.create_consumer_with_capacity::<CAPACITY, F>(
+                id,
+                projection_directory,
+                options,
+                initialize,
+            ),
+            Err(error) => Err(error),
+        }
+    }
+
     /// Initializes a complete application projection from one pinned source
     /// snapshot. The initializer must propagate incomplete hydration and budget
     /// errors; it owns the mapping of graph and relational rows into documents.
@@ -59,18 +130,18 @@ impl Database {
     where
         F: FnOnce(&mut DatabaseReadTransaction, &mut SearchIndex) -> Result<()>,
     {
-        self.create_search_projection_consumer_with_capacity::<MAX_CONSUMERS, _>(
+        self.create_consumer_with_capacity::<MAX_CONSUMERS, F>(
             id,
-            projection_directory,
+            projection_directory.as_ref(),
             options,
             initialize,
         )
     }
 
-    fn create_search_projection_consumer_with_capacity<const CAPACITY: usize, F>(
+    fn create_consumer_with_capacity<const CAPACITY: usize, F>(
         &mut self,
         id: SearchProjectionConsumerId,
-        projection_directory: impl AsRef<Path>,
+        destination: &Path,
         options: SearchProjectionConsumerOptions,
         initialize: F,
     ) -> SearchProjectionConsumerResult<SearchProjectionConsumer>
@@ -86,16 +157,7 @@ impl Database {
             .get()?
             .store
             .verify_search_consumer_allocation_evidence()?;
-        if self.runtime.get_mut()?.projection_consumers.unavailable {
-            let identity = self
-                .runtime
-                .get()?
-                .store
-                .search_projection_database_identity();
-            self.runtime.get_mut()?.projection_consumers =
-                ConsumerRegistry::load(Some(&root), identity);
-        }
-        let destination = projection_directory.as_ref();
+        self.reload_consumer_registry_if_unavailable()?;
         if destination.try_exists().map_err(HawDBError::from)? {
             return Err(HawDBError::Storage(
                 "consumer projection destination already exists".into(),
@@ -243,6 +305,7 @@ impl Database {
         projection_directory: impl AsRef<Path>,
     ) -> SearchProjectionConsumerResult<SearchProjectionConsumer> {
         self.ensure_writable()?;
+        self.reload_consumer_registry_if_unavailable()?;
         let status = self.search_projection_consumer_status(id)?;
         if let State::RebuildRequired(reason) = status.state {
             return Err(Error::RebuildRequired(reason));
@@ -425,6 +488,7 @@ impl Database {
         id: &SearchProjectionConsumerId,
     ) -> SearchProjectionConsumerResult<()> {
         self.ensure_writable()?;
+        self.reload_consumer_registry_if_unavailable()?;
         let root = self
             .runtime
             .get()?
@@ -537,6 +601,22 @@ impl Database {
             consumer: status,
             changefeed,
         })
+    }
+
+    fn reload_consumer_registry_if_unavailable(&mut self) -> SearchProjectionConsumerResult<()> {
+        if self.runtime.get()?.projection_consumers.unavailable {
+            let mut runtime = self.runtime.get_mut()?;
+            let root = runtime
+                .store
+                .search_projection_registry_root()
+                .ok_or(Error::SourceNotDurable)?;
+            let registry = ConsumerRegistry::load(
+                Some(root),
+                runtime.store.search_projection_database_identity(),
+            );
+            runtime.projection_consumers = registry;
+        }
+        Ok(())
     }
 
     fn consumer_writable_root(&self) -> SearchProjectionConsumerResult<PathBuf> {

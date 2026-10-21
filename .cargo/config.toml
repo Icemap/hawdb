@@ -1,0 +1,50 @@
+# Repository-wide profiles, including independent developer tools and bindings.
+# Run Cargo from within this repository so its hierarchical config is loaded.
+# Keep every profile unstripped: Rust 1.97.1 stripping can corrupt Mach-O
+# LINKEDIT string pools, rejected by macOS 27 (rust-lang/rust#157750).
+
+[profile.dev]
+opt-level = 1
+debug = 0
+strip = "none"
+codegen-units = 256
+lto = "off"
+incremental = true
+panic = "unwind"
+debug-assertions = true
+overflow-checks = true
+rpath = false
+
+[profile.release]
+opt-level = 3
+debug = false
+strip = "none"
+codegen-units = 1
+lto = "thin"
+incremental = false
+panic = "unwind"
+debug-assertions = false
+overflow-checks = false
+rpath = false
+
+[profile.test]
+opt-level = 1
+debug = 0
+strip = "none"
+codegen-units = 16
+lto = "off"
+incremental = true
+debug-assertions = true
+overflow-checks = true
+rpath = false
+
+[profile.bench]
+opt-level = 3
+debug = false
+strip = "none"
+codegen-units = 1
+lto = "thin"
+incremental = false
+debug-assertions = false
+overflow-checks = false
+rpath = false

@@ -14,7 +14,7 @@
 
 use std::thread;
 
-pub const PARSER_FUZZ_PROTOCOL: &str = "hawdb-parser-fuzz-v1";
+pub const PARSER_FUZZ_PROTOCOL: &str = "shiro-parser-v1";
 const MAX_INPUT_BYTES: usize = 16 * 1024;
 const PARSER_WORKER_STACK_BYTES: usize = 2 * 1024 * 1024;
 
@@ -168,7 +168,7 @@ pub fn generate_parser_fuzz_case(campaign_seed: u64, index: usize) -> ParserFuzz
 pub fn run_parser_fuzz_case(case: &ParserFuzzCase) -> Result<ParserFuzzObservation, String> {
     let input = case.input.clone();
     let worker = thread::Builder::new()
-        .name(format!("hawdb-parser-fuzz-{}", case.index))
+        .name(format!("shiro-parser-{}", case.index))
         .stack_size(PARSER_WORKER_STACK_BYTES)
         .spawn(move || {
             let used_lossy_utf8 = std::str::from_utf8(&input).is_err();

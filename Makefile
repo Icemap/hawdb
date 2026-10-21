@@ -16,6 +16,15 @@
 
 BAZEL ?= bazel
 
+MVCC_SECONDS ?= 30
+MVCC_SEED ?= 7
+MVCC_LOG_DIRECTORY ?= target/mvcc-fuzz
+MVCC_FUZZ_ARGS ?=
+SHIRO_SECONDS ?=
+SHIRO_SEED ?= 7
+SHIRO_LOG_DIRECTORY ?= target/fuzz-logs
+SHIRO_FUZZ_ARGS ?=
+
 FUZZ_SEED ?= 7
 FUZZ_CASES ?=
 FUZZ_CASE_INDEX ?=
@@ -50,6 +59,9 @@ FUZZ_CAMPAIGN_EXECUTION_ARGS = $(strip \
 
 .PHONY: \
 	fuzz \
+	shiro \
+	shiro-fuzz \
+	mvcc-fuzz \
 	fuzz-append \
 	fuzz-append-resume \
 	fuzz-help \
@@ -62,20 +74,28 @@ FUZZ_CAMPAIGN_EXECUTION_ARGS = $(strip \
 
 fuzz: fuzz-optimizer fuzz-storage fuzz-append fuzz-parser
 
+shiro: shiro-fuzz
+
+mvcc-fuzz:
+	$(BAZEL) run //tools/mvcc-fuzz:hawdb_mvcc_fuzz -- run --seconds $(MVCC_SECONDS) --seed $(MVCC_SEED) --log-directory "$(MVCC_LOG_DIRECTORY)" --explain $(MVCC_FUZZ_ARGS)
+
+shiro-fuzz:
+	$(BAZEL) run //tools/shiro:shiro -- $(if $(SHIRO_SECONDS),--timeout-seconds $(SHIRO_SECONDS),) --seed $(SHIRO_SEED) --log-directory "$(SHIRO_LOG_DIRECTORY)" $(SHIRO_FUZZ_ARGS)
+
 fuzz-optimizer:
-	$(BAZEL) run //crates/fuzz:hawdb_optimizer_fuzz -- $(FUZZ_COMMON_ARGS) $(FUZZ_CAMPAIGN_EXECUTION_ARGS) $(FUZZ_OPTIMIZER_ARGS)
+	$(BAZEL) run //tools/shiro:shiro -- $(if $(or $(FUZZ_CASES),$(FUZZ_CASE_INDEX)),,--cases 128) $(FUZZ_COMMON_ARGS) $(FUZZ_CAMPAIGN_EXECUTION_ARGS) $(FUZZ_OPTIMIZER_ARGS)
 
 fuzz-optimizer-resume: FUZZ_RESUME := 1
 fuzz-optimizer-resume: fuzz-optimizer
 
 fuzz-storage:
-	$(BAZEL) run //crates/fuzz:hawdb_storage_fuzz -- $(FUZZ_COMMON_ARGS) $(FUZZ_STORAGE_ARGS)
+	$(BAZEL) run //tools/shiro:shiro_storage -- $(FUZZ_COMMON_ARGS) $(FUZZ_STORAGE_ARGS)
 
 fuzz-parser:
-	$(BAZEL) run //crates/fuzz:hawdb_parser_fuzz -- $(FUZZ_COMMON_ARGS) $(FUZZ_PARSER_ARGS)
+	$(BAZEL) run //tools/shiro:shiro_parser -- $(FUZZ_COMMON_ARGS) $(FUZZ_PARSER_ARGS)
 
 fuzz-append:
-	$(BAZEL) run //crates/fuzz:hawdb_append_fuzz -- $(FUZZ_COMMON_ARGS) $(FUZZ_STEPS_ARG) $(FUZZ_CAMPAIGN_EXECUTION_ARGS) $(FUZZ_APPEND_ARGS)
+	$(BAZEL) run //tools/shiro:shiro_append -- $(FUZZ_COMMON_ARGS) $(FUZZ_STEPS_ARG) $(FUZZ_CAMPAIGN_EXECUTION_ARGS) $(FUZZ_APPEND_ARGS)
 
 fuzz-append-resume: FUZZ_RESUME := 1
 fuzz-append-resume: fuzz-append
@@ -85,13 +105,15 @@ fuzz-smoke:
 
 fuzz-test:
 	$(BAZEL) test \
-		//crates/fuzz:hawdb_fuzz_tests \
-		//crates/fuzz:hawdb_fuzz_cli_tests \
+		//tools/shiro:shiro_tests \
+		//tools/shiro:shiro_cli_tests \
 		//:hawdb_linux_ci_fuzz_smoke_test
 
 fuzz-help:
 	@printf '%s\n' \
 		'Fuzz targets:' \
+		'  make mvcc-fuzz               Run the local MVCC CLI for about 30 seconds.' \
+		'  make shiro-fuzz              Continuously fuzz SQL/Cypher oracles (Ctrl+C to stop).' \
 		'  make fuzz                    Run all native fuzz campaigns.' \
 		'  make fuzz-optimizer          Run the optimizer/query campaign.' \
 		'  make fuzz-optimizer-resume   Resume the matching optimizer campaign.' \
@@ -103,6 +125,8 @@ fuzz-help:
 		'  make fuzz-test               Run the Bazel fuzz regression suite.' \
 		'' \
 		'Common variables:' \
+		'  MVCC_SECONDS=30 MVCC_SEED=7 MVCC_LOG_DIRECTORY=target/mvcc-fuzz' \
+		'  SHIRO_SECONDS=30 SHIRO_SEED=7 SHIRO_LOG_DIRECTORY=target/fuzz-logs' \
 		'  FUZZ_SEED=7 FUZZ_CASES=128 FUZZ_CASE_INDEX=19 FUZZ_STEPS=256' \
 		'  FUZZ_LOG_DIRECTORY=target/fuzz-logs FUZZ_PRINT_REPORT=1' \
 		'  FUZZ_SHARD_INDEX=0 FUZZ_SHARD_COUNT=4 FUZZ_PROGRESS_INTERVAL=16' \

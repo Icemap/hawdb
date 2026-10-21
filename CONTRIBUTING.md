@@ -128,6 +128,16 @@ maintained `rules_tla` module, require coordinated manual updates.
 
 ## Validation and evidence
 
+Start with the [test ownership and slow-path index](docs/TEST_INDEX.md) to find
+which target covers a problem and where it runs. Update that index whenever a
+test family's scope, execution lane, build profile or known cost changes.
+
+Compilation policy is repository-wide: Cargo reads `.cargo/config.toml`, and
+Bazel's default `.bazelrc` profile uses low optimization with checks retained.
+Use `--config=release` only for explicit release-mode regression verification;
+do not add per-target optimization or assertion overrides. Independent tool
+workspaces share the same Cargo configuration when invoked within the repo.
+
 Install [prek](https://prek.j178.dev/installation/) and enable the repository's
 pre-commit hooks once in your clone:
 
@@ -194,11 +204,11 @@ Routine local code verification includes the repository's fuzz regression
 command, also available as `make fuzz-test`:
 
 ```console
-bazel test //crates/fuzz:hawdb_fuzz_tests //crates/fuzz:hawdb_fuzz_cli_tests //:hawdb_linux_ci_fuzz_smoke_test
+bazel test //tools/shiro:shiro_tests //tools/shiro:shiro_cli_tests //:hawdb_linux_ci_fuzz_smoke_test
 ```
 
 Fuzz remains local-only; do not add default, dedicated, or scheduled CI fuzz
-jobs. Use [the fuzz guide](crates/fuzz/README.md) for targeted campaigns and
+jobs. Use [the fuzz guide](tools/shiro/README.md) for targeted campaigns and
 reproduction artifacts. If a required check cannot run, record it as not run,
 with the blocker and remaining risk, for the maintainer to assess. For a
 documentation-only change, record documentation validation instead of claiming

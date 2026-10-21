@@ -135,6 +135,7 @@ pub fn format_hawdb_error(error: &HawDBError) -> PyErr {
         }),
         HawDBError::Execution(_)
         | HawDBError::ProjectionSourceEpochMismatch { .. }
+        | HawDBError::TransactionReadDependencyRefused { .. }
         | HawDBError::BranchEvidenceBudgetExceeded { .. }
         | HawDBError::ReadBudgetExceeded(_)
         | HawDBError::GraphExpansionCandidateLimitExceeded { .. }

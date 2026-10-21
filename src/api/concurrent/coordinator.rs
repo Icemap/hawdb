@@ -55,6 +55,8 @@ pub(super) struct CommitSequencer {
     read_publication_failed: AtomicBool,
     checkpoint_control: Arc<super::super::automatic_checkpoint::Control>,
     group_commit: GroupCommitCoordinator,
+    #[cfg(test)]
+    cancel_after_group_flush: Mutex<Option<hawdb_core::RuntimeCancellationToken>>,
 }
 
 impl CommitSequencer {
@@ -69,6 +71,8 @@ impl CommitSequencer {
             read_publication_failed: AtomicBool::new(false),
             checkpoint_control,
             group_commit: GroupCommitCoordinator::new(group_commit),
+            #[cfg(test)]
+            cancel_after_group_flush: Mutex::new(None),
         }
     }
 
@@ -82,6 +86,18 @@ impl CommitSequencer {
             read_publication_failed: &self.read_publication_failed,
             mutated: false,
         })
+    }
+
+    #[cfg(test)]
+    pub(super) fn cancel_after_next_group_flush(
+        &self,
+        token: hawdb_core::RuntimeCancellationToken,
+    ) -> Result<()> {
+        *self
+            .cancel_after_group_flush
+            .lock()
+            .map_err(|_| group_commit_coordinator_poisoned_error())? = Some(token);
+        Ok(())
     }
 
     pub(super) fn read_view(&self) -> Result<Arc<PublishedConcurrentRead>> {
@@ -475,6 +491,15 @@ impl CommitSequencer {
         let flush = database.finish_wal_sync_group();
         Ok(match flush {
             Ok(flush) => {
+                #[cfg(test)]
+                if let Some(token) = self
+                    .cancel_after_group_flush
+                    .lock()
+                    .unwrap_or_else(|error| error.into_inner())
+                    .take()
+                {
+                    token.cancel();
+                }
                 if let Err(error) =
                     database.complete_required_relational_row_checkpoint("group commit durability")
                 {

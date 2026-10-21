@@ -1,299 +1,82 @@
-load("@crate_index//:defs.bzl", "aliases", "all_crate_deps")
-load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_test")
-
+# Compatibility labels for historical local verification commands.
+# Implementation and Cargo workspace live exclusively in tools/shiro.
 package(default_visibility = ["//visibility:public"])
 
-_HAWDB_FUZZ_DEFAULT_FEATURES = [
-    "background-maintenance",
-    "full-text-search",
-    "graph-analytics",
-    "vector-search",
-]
-
-rust_library(
-    name = "hawdb_fuzz",
-    crate_name = "hawdb_fuzz",
-    crate_root = "src/lib.rs",
-    srcs = glob(
-        ["src/**/*.rs"],
-        exclude = [
-            "src/append_main.rs",
-            "src/main.rs",
-            "src/parser_main.rs",
-            "src/storage_main.rs",
-        ],
-    ),
-    edition = "2024",
-    aliases = aliases(),
-    crate_features = _HAWDB_FUZZ_DEFAULT_FEATURES,
-    deps = all_crate_deps(normal = True) + [
-        "//:hawdb",
-        "//crates/fuzz-contracts:hawdb_fuzz_contracts",
-    ],
-    proc_macro_deps = all_crate_deps(proc_macro = True),
+alias(
+    name = "hawdb_append_fuzz",
+    actual = "//tools/shiro:shiro_append",
+    tags = ["manual"],
 )
 
-_APPEND_STATE_MACHINE_SEED_7_TEST = "append_oracle::tests::append_state_machine_matches_reference_model_across_reopen"
-_APPEND_STATE_MACHINE_REPLAY_TEST = "append_oracle::tests::append_state_machine_is_replayable_for_another_seed"
-_RELATIONAL_JOIN_REWRITE_DIFFERENTIAL_TEST = "sql_oracle::tests::relational_join_rewrite_differential_campaign_covers_every_shape"
+test_suite(
+    name = "hawdb_append_fuzz_cli_tests",
+    tests = ["//tools/shiro:shiro_append_cli_tests"],
+    tags = ["manual"],
+)
 
-rust_test(
+
+test_suite(
+    name = "hawdb_fuzz_append_replay_tests",
+    tests = ["//tools/shiro:shiro_append_replay_tests"],
+    tags = ["manual"],
+)
+
+test_suite(
+    name = "hawdb_fuzz_append_seed_7_tests",
+    tests = ["//tools/shiro:shiro_append_seed_7_tests"],
+    tags = ["manual"],
+)
+
+test_suite(
+    name = "hawdb_fuzz_cli_tests",
+    tests = ["//tools/shiro:shiro_cli_tests"],
+    tags = ["manual"],
+)
+
+test_suite(
     name = "hawdb_fuzz_fast_tests",
-    # Includes durable WAL recovery and row-page compaction campaigns whose
-    # synchronized I/O can exceed the default 300-second deadline.
-    timeout = "long",
-    args = [
-        "--skip",
-        _APPEND_STATE_MACHINE_SEED_7_TEST,
-        "--skip",
-        _APPEND_STATE_MACHINE_REPLAY_TEST,
-        "--skip",
-        _RELATIONAL_JOIN_REWRITE_DIFFERENTIAL_TEST,
-    ],
-    crate = ":hawdb_fuzz",
-    edition = "2024",
-    aliases = aliases(normal_dev = True, proc_macro_dev = True),
-    crate_features = _HAWDB_FUZZ_DEFAULT_FEATURES,
-    deps = all_crate_deps(normal_dev = True),
-    proc_macro_deps = all_crate_deps(proc_macro_dev = True),
+    tests = ["//tools/shiro:shiro_fast_tests"],
+    tags = ["manual"],
 )
 
-[
-    rust_test(
-        name = name,
-        # Retain the small resource class and complete state-machine oracles.
-        # Both append cases exhausted 60s; their postmortems track qualification.
-        size = "small",
-        timeout = "moderate" if name in [
-            "hawdb_fuzz_append_seed_7_tests",
-            "hawdb_fuzz_append_replay_tests",
-        ] else "short",
-        args = [
-            test_filter,
-            "--exact",
-        ],
-        crate = ":hawdb_fuzz",
-        edition = "2024",
-        aliases = aliases(normal_dev = True, proc_macro_dev = True),
-        crate_features = _HAWDB_FUZZ_DEFAULT_FEATURES,
-        deps = all_crate_deps(normal_dev = True),
-        proc_macro_deps = all_crate_deps(proc_macro_dev = True),
-    )
-    for name, test_filter in [
-        ("hawdb_fuzz_append_seed_7_tests", _APPEND_STATE_MACHINE_SEED_7_TEST),
-        ("hawdb_fuzz_append_replay_tests", _APPEND_STATE_MACHINE_REPLAY_TEST),
-        ("hawdb_fuzz_relational_join_rewrite_tests", _RELATIONAL_JOIN_REWRITE_DIFFERENTIAL_TEST),
-    ]
-]
+test_suite(
+    name = "hawdb_fuzz_relational_join_rewrite_tests",
+    tests = ["//tools/shiro:shiro_relational_join_rewrite_tests"],
+    tags = ["manual"],
+)
 
 test_suite(
     name = "hawdb_fuzz_tests",
-    tests = [
-        ":hawdb_fuzz_append_replay_tests",
-        ":hawdb_fuzz_append_seed_7_tests",
-        ":hawdb_fuzz_fast_tests",
-        ":hawdb_fuzz_relational_join_rewrite_tests",
-        ":hawdb_append_fuzz_cli_tests",
-        ":hawdb_parser_fuzz_cli_tests",
-        ":hawdb_storage_fuzz_tests",
-        "//:hawdb_batch_dispatch_fuzz_tests",
-        "//:hawdb_concurrent_key_range_fuzz_tests",
-        "//:hawdb_graph_projection_residency_fuzz_tests",
-        "//:hawdb_recovery_text_fuzz_tests",
-        "//:hawdb_scan_callback_fuzz_tests",
-        "//crates/compat:hawdb_compat_contract_fuzz_tests",
-        "//crates/cypher:hawdb_cypher_backtracking_fuzz_tests",
-        "//crates/evidence:hawdb_inventory_health_fuzz_tests",
-        "//crates/evidence:hawdb_resource_profile_fuzz_tests",
-        "//crates/evidence:hawdb_source_inventory_fuzz_tests",
-        "//crates/executor:hawdb_execution_lifecycle_fuzz_tests",
-        "//crates/executor:hawdb_execution_report_value_fuzz_tests",
-        "//crates/executor:hawdb_graph_algorithm_fuzz_tests",
-        "//crates/executor:hawdb_graph_hash_join_fuzz_tests",
-        "//crates/executor:hawdb_morsel_oracle_fuzz_tests",
-        "//crates/executor:hawdb_mutation_lowering_fuzz_tests",
-        "//crates/executor:hawdb_mutation_preflight_fuzz_tests",
-        "//crates/executor:hawdb_numeric_execution_fuzz_tests",
-        "//crates/executor:hawdb_query_observer_fuzz_tests",
-        "//crates/executor:hawdb_result_delivery_fuzz_tests",
-        "//crates/executor:hawdb_sort_merge_account_fuzz_tests",
-        "//crates/executor:hawdb_spill_compaction_fuzz_tests",
-        "//crates/executor:hawdb_transform_fuzz_tests",
-        "//crates/executor:hawdb_vector_seed_fuzz_tests",
-        "//crates/optimizer:hawdb_optimizer_access_cost_fuzz_tests",
-        "//crates/optimizer:hawdb_optimizer_candidate_fingerprint_fuzz_tests",
-        "//crates/optimizer:hawdb_optimizer_cardinality_defaults_fuzz_tests",
-        "//crates/optimizer:hawdb_optimizer_cardinality_metadata_fuzz_tests",
-        "//crates/optimizer:hawdb_optimizer_ddl_command_fuzz_tests",
-        "//crates/optimizer:hawdb_optimizer_full_text_cost_fuzz_tests",
-        "//crates/optimizer:hawdb_optimizer_trace_cost_fuzz_tests",
-        "//crates/plan-cypher:hawdb_plan_cypher_explain_fuzz_tests",
-        "//crates/readiness:hawdb_graph_route_readiness_fuzz_tests",
-        "//crates/readiness:hawdb_integration_bundle_fuzz_tests",
-        "//crates/readiness:hawdb_replacement_summary_fuzz_tests",
-        "//crates/readiness:hawdb_source_mutation_readiness_fuzz_tests",
-        "//crates/relational:hawdb_relational_columnar_aggregate_fuzz_tests",
-        "//crates/relational:hawdb_relational_explain_report_fuzz_tests",
-        "//crates/relational:hawdb_relational_row_runtime_fuzz_tests",
-        "//crates/relational:hawdb_relational_field_plan_fuzz_tests",
-        "//crates/relational:hawdb_relational_physical_plan_fuzz_tests",
-        "//crates/relational:hawdb_relational_index_runtime_fuzz_tests",
-        "//crates/relational:hawdb_relational_statement_fuzz_tests",
-        "//crates/relational:hawdb_relational_qualification_fuzz_tests",
-        "//crates/relational:hawdb_relational_aggregate_state_fuzz_tests",
-        "//crates/route-ownership:hawdb_graph_route_ownership_fuzz_tests",
-        "//crates/search:hawdb_search_block_encoding_fuzz_tests",
-        "//crates/search:hawdb_search_candidate_evidence_fuzz_tests",
-        "//crates/search:hawdb_search_bounded_file_fuzz_tests",
-        "//crates/search:hawdb_search_compression_fuzz_tests",
-        "//crates/search:hawdb_search_concurrent_read_fuzz_tests",
-        "//crates/search:hawdb_search_document_analysis_fuzz_tests",
-        "//crates/search:hawdb_search_mini_delta_snapshot_fuzz_tests",
-        "//crates/search:hawdb_search_document_frequency_fuzz_tests",
-        "//crates/search:hawdb_search_hex_decoding_fuzz_tests",
-        "//crates/search:hawdb_search_hydration_fuzz_tests",
-        "//crates/search:hawdb_search_lexical_spill_fuzz_tests",
-        "//crates/search:hawdb_search_manifest_budget_fuzz_tests",
-        "//crates/search:hawdb_search_manifest_encoding_fuzz_tests",
-        "//crates/search:hawdb_search_projection_evidence_fuzz_tests",
-        "//crates/search:hawdb_search_spool_encoding_fuzz_tests",
-        "//crates/search:hawdb_search_spool_decoding_fuzz_tests",
-        "//crates/search:hawdb_search_term_policy_fuzz_tests",
-        "//crates/sql:hawdb_sql_clause_diagnostics_fuzz_tests",
-        "//crates/sql:hawdb_sql_frontend_corpus_fuzz_tests",
-        "//crates/sql:hawdb_sql_create_binding_fuzz_tests",
-        "//crates/sql-syntax:hawdb_sql_alias_boundary_fuzz_tests",
-        "//crates/storage:hawdb_storage_artifact_binding_fuzz_tests",
-        "//crates/storage:hawdb_storage_append_reader_fuzz_tests",
-        "//crates/storage:hawdb_storage_backup_hex_fuzz_tests",
-        "//crates/storage:hawdb_storage_checkpoint_wal_verbatim_fuzz_tests",
-        "//crates/storage:hawdb_storage_durable_envelope_fuzz_tests",
-        "//crates/storage:hawdb_storage_durable_manifest_fuzz_tests",
-        "//crates/storage:hawdb_storage_file_lock_fuzz_tests",
-        "//crates/storage:hawdb_storage_graph_constraints_fuzz_tests",
-        "//crates/storage:hawdb_storage_graph_overlay_fuzz_tests",
-        "//crates/storage:hawdb_storage_positioned_read_fuzz_tests",
-        "//crates/storage:hawdb_storage_projected_artifact_fuzz_tests",
-        "//crates/storage:hawdb_storage_property_projection_hex_fuzz_tests",
-        "//crates/storage:hawdb_storage_relational_index_view_fuzz_tests",
-        "//crates/storage:hawdb_storage_relational_row_workspace_fuzz_tests",
-        "//crates/storage:hawdb_storage_sharded_cache_fuzz_tests",
-        "//crates/storage:hawdb_storage_source_scan_fuzz_tests",
-        "//crates/storage:hawdb_storage_set_value_fuzz_tests",
-        "//crates/storage:hawdb_storage_statistics_refresh_fuzz_tests",
-        "//crates/storage:hawdb_storage_transaction_compaction_fuzz_tests",
-        "//crates/storage:hawdb_storage_transaction_locks_fuzz_tests",
-        "//crates/storage:hawdb_storage_shadow_metadata_fuzz_tests",
-    ],
+    tests = ["//tools/shiro:shiro_tests"],
+    tags = ["manual"],
 )
 
-rust_binary(
-    name = "hawdb_storage_fuzz",
-    crate_root = "src/storage_main.rs",
-    srcs = ["src/storage_main.rs"],
-    edition = "2024",
-    aliases = aliases(),
-    deps = all_crate_deps(normal = True) + [
-        ":hawdb_fuzz",
-        "//:hawdb",
-    ],
-    proc_macro_deps = all_crate_deps(proc_macro = True),
-)
-
-rust_test(
-    name = "hawdb_storage_fuzz_tests",
-    crate_root = "src/storage_main.rs",
-    srcs = ["src/storage_main.rs"],
-    edition = "2024",
-    aliases = aliases(
-        normal = True,
-        normal_dev = True,
-        proc_macro = True,
-        proc_macro_dev = True,
-    ),
-    deps = all_crate_deps(normal = True, normal_dev = True) + [
-        ":hawdb_fuzz",
-        "//:hawdb",
-    ],
-    proc_macro_deps = all_crate_deps(proc_macro = True, proc_macro_dev = True),
-)
-
-rust_binary(
-    name = "hawdb_append_fuzz",
-    crate_root = "src/append_main.rs",
-    srcs = ["src/append_main.rs"],
-    edition = "2024",
-    aliases = aliases(),
-    deps = all_crate_deps(normal = True) + [":hawdb_fuzz"],
-    proc_macro_deps = all_crate_deps(proc_macro = True),
-)
-
-rust_test(
-    name = "hawdb_append_fuzz_cli_tests",
-    size = "small",
-    # The containing local campaign exceeded the inherited 60-second deadline.
-    timeout = "moderate",
-    crate_root = "src/append_main.rs",
-    srcs = ["src/append_main.rs"],
-    edition = "2024",
-    aliases = aliases(
-        normal = True,
-        normal_dev = True,
-        proc_macro = True,
-        proc_macro_dev = True,
-    ),
-    deps = all_crate_deps(normal = True, normal_dev = True) + [":hawdb_fuzz"],
-    proc_macro_deps = all_crate_deps(proc_macro = True, proc_macro_dev = True),
-)
-
-rust_binary(
-    name = "hawdb_parser_fuzz",
-    crate_root = "src/parser_main.rs",
-    srcs = ["src/parser_main.rs"],
-    edition = "2024",
-    aliases = aliases(),
-    deps = all_crate_deps(normal = True) + [":hawdb_fuzz"],
-    proc_macro_deps = all_crate_deps(proc_macro = True),
-)
-
-rust_test(
-    name = "hawdb_parser_fuzz_cli_tests",
-    size = "small",
-    crate_root = "src/parser_main.rs",
-    srcs = ["src/parser_main.rs"],
-    edition = "2024",
-    aliases = aliases(
-        normal = True,
-        normal_dev = True,
-        proc_macro = True,
-        proc_macro_dev = True,
-    ),
-    deps = all_crate_deps(normal = True, normal_dev = True) + [":hawdb_fuzz"],
-    proc_macro_deps = all_crate_deps(proc_macro = True, proc_macro_dev = True),
-)
-
-rust_binary(
+alias(
     name = "hawdb_optimizer_fuzz",
-    crate_root = "src/main.rs",
-    srcs = ["src/main.rs"],
-    edition = "2024",
-    aliases = aliases(),
-    deps = all_crate_deps(normal = True) + [":hawdb_fuzz"],
-    proc_macro_deps = all_crate_deps(proc_macro = True),
+    actual = "//tools/shiro:shiro",
+    tags = ["manual"],
 )
 
-rust_test(
-    name = "hawdb_fuzz_cli_tests",
-    crate_root = "src/main.rs",
-    srcs = ["src/main.rs"],
-    data = [":hawdb_optimizer_fuzz"],
-    edition = "2024",
-    aliases = aliases(
-        normal = True,
-        normal_dev = True,
-        proc_macro = True,
-        proc_macro_dev = True,
-    ),
-    deps = all_crate_deps(normal = True, normal_dev = True) + [":hawdb_fuzz"],
-    proc_macro_deps = all_crate_deps(proc_macro = True, proc_macro_dev = True),
+alias(
+    name = "hawdb_parser_fuzz",
+    actual = "//tools/shiro:shiro_parser",
+    tags = ["manual"],
+)
+
+test_suite(
+    name = "hawdb_parser_fuzz_cli_tests",
+    tests = ["//tools/shiro:shiro_parser_cli_tests"],
+    tags = ["manual"],
+)
+
+alias(
+    name = "hawdb_storage_fuzz",
+    actual = "//tools/shiro:shiro_storage",
+    tags = ["manual"],
+)
+
+test_suite(
+    name = "hawdb_storage_fuzz_tests",
+    tests = ["//tools/shiro:shiro_storage_tests"],
+    tags = ["manual"],
 )

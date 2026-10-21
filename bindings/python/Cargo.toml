@@ -51,8 +51,3 @@ name = "_hawdb"
 # the crate's own `default` feature re-enables the full engine.
 hawdb = { path = "../..", default-features = false }
 pyo3 = "0.30"
-
-[profile.release]
-codegen-units = 1
-lto = "fat"
-strip = true

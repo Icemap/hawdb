@@ -1,0 +1,735 @@
+# Materialized Views for Mem Workloads
+
+## Status and decision boundary
+
+**Status: exploratory proposal; no implemented materialized-view surface.**
+Tracking issue: https://github.com/nowledge-co/hawdb/issues/1142.
+
+This document proposes engine capabilities and prospective acceptance criteria.
+It does not change existing API contracts, Mem business semantics, canonical
+schemas, release policy, or activation authority. Implementation and Mem
+adoption require separately scoped reviews and qualification. All interfaces
+and view names introduced here are proposed, unless explicitly called existing.
+
+The source review uses HawDB main at
+`97217f9a4d53bb2bca5995644fb74328a72f3879` and Mem main at
+`1e21098981051f060e8fa334709be179d0d24260`. Mem links below pin that revision;
+they establish workload requirements, not performance measurements.
+
+## 1. Outcome and first delivery
+
+HawDB should maintain selected deterministic query results as reconstructable,
+durable, indexed derived relations. Mem should read these relations through the
+embedded query runtime instead of repeatedly deriving the same graph counts or
+maintaining another set of application counters.
+
+The first useful delivery MUST support actual graph workloads:
+
+1. **Entity association counts:** replace repeated `MENTIONS` aggregation in
+   entity candidate ranking while preserving scoped, zero-count entities and
+   the current query's multiplicity semantics.
+2. **Memory and Space inventories:** maintain the distinct Active, Stored,
+   Archived, and Crystals axes used across lists, statistics, MCP, and Space
+   usage; optionally maintain separately defined physical graph counters.
+
+A SQL-only `CREATE MATERIALIZED VIEW ... COUNT(*)` demonstration over an
+unrelated table does not satisfy this milestone. It must exercise graph node
+updates, relationship insertion/deletion, scope changes, and lifecycle changes.
+
+Community retrieval follows once the first delivery is correct and useful.
+Source/Thread rollups and deterministic search-document inputs are later
+consumers with additional contracts, not reasons to build a general streaming
+platform in the first change.
+
+### Business coverage
+
+| Priority | Mem business | Proposed relation | Required maintenance | Read contract |
+| --- | --- | --- | --- | --- |
+| P0 | Entity search and community seed ranking | `entity_usage`, grouped by entity identity and both endpoint scope keys | Graph expansion, endpoint changes, bag counts, indexed grouping | Exact snapshot shared with candidate filtering and ranking |
+| P0 | Memory headlines, archive inventory, Space usage | `memory_inventory`, keyed by scope and predicate version | Deterministic visibility projection, grouped counts, old/new classification | Exact snapshot; read-your-write floor for refresh after mutations |
+| P0 extension | Graph statistics and density inputs | `graph_inventory`, with explicit node/edge kinds and scope policy | Node/edge counts, deletion and endpoint handling | One coherent snapshot; preserve each existing response's definitions |
+| P1 | Community detail, representative memories, GraphRAG candidates | `community_memory` and membership support | Graph/derived-relation join, distinct reference counts, generation fencing | One community generation and one canonical snapshot; scope before Top-K |
+| P1 | Source library counts and Thread activity | `source_memory_usage`, `thread_message_activity` | Edge counts, relational grouping, retractable extrema | Exact list/detail snapshot; preserve source provenance separately |
+| P2 | Search catch-up and rebuild inputs | `search_document_input` | Deterministic graph/relational projection, deletion tombstones | Complete source coverage handed to the existing search pipeline |
+| P2 | Context health and activity summaries | `memory_health_inputs`, optional time buckets | Count/sum/non-null count; explicitly scheduled time transitions | Explicit source epoch and, where needed, evaluation time |
+
+These priorities are proposed delivery order, not issue severity labels.
+
+## 2. Mem requirements and acceptance scenarios
+
+### 2.1 Entity association counts
+
+[`search_entity_candidates_in_spaces`](https://github.com/nowledge-co/mem/blob/1e21098981051f060e8fa334709be179d0d24260/nmem-rs/crates/nmem-graph/src/search_projection.rs#L577)
+filters Entity names/aliases, optionally expands incoming `MENTIONS`, and uses
+`COUNT(m)` before ranking and limiting candidates. Community seed lookup in
+the same module repeats association counting. This is an opportunity to remove
+repeated derivation, not evidence that every existing execution is a full scan.
+
+Proposed logical key and value:
+
+```text
+entity_usage(
+    entity_scope_key,
+    entity_id,
+    memory_scope_key,
+    mention_rows
+)
+PRIMARY KEY (entity_scope_key, entity_id, memory_scope_key)
+```
+
+The entity itself remains a canonical query input. A left join supplies zero
+for an entity with no qualifying usage rows. An optional scoped sum combines
+only memory scopes admitted by this request. Entity admission also remains a
+query predicate; admitting the Memory endpoint does not admit the Entity.
+
+Requirements:
+
+- Preserve `COUNT(m)` multiplicity. It is not interchangeable with
+  `COUNT(DISTINCT m)` or an Active-only count. A distinct consumer needs its own
+  definition or exact reference-count support.
+- Keep endpoint scope dimensions independently. Do not assume every existing
+  `MENTIONS` edge is same-Space, or sum a global count and filter afterward.
+- Adding/removing an edge changes its contribution exactly once. Updating an
+  endpoint's relevant properties retracts the old contribution and adds the
+  new one, even when the edge itself is unchanged.
+- Entity name, aliases, confidence, and PageRank remain inputs to the existing
+  ranking expression. This view does not calculate PageRank or replace the
+  query-dependent match score.
+- Do not add lifecycle filtering merely because another inventory view uses
+  it. Adopting a different search-visibility policy is a separate Mem change.
+
+Acceptance fixture: an entity with no mentions; repeated mentions from one
+Memory; memories in two Spaces; an Entity outside the admitted Space set; an
+endpoint scope move; edge deletion; Memory deletion; and an exact-name match
+whose ordering depends on its count. View-backed results MUST match the
+unmodified scoped reference query, including zeroes and duplicates.
+
+### 2.2 Memory, archive, crystal, and Space inventories
+
+The
+[`Memory Count Contract`](https://github.com/nowledge-co/mem/blob/1e21098981051f060e8fa334709be179d0d24260/docs/design/MEMORY_COUNT_CONTRACT.md)
+defines several deliberately different totals:
+
+- **Active:** non-crystal, latest, active lifecycle.
+- **Stored:** non-crystal and not removed, including archived/history rows.
+- **Archived:** Stored minus Active.
+- **Crystals:** retained crystal rows on their separate axis.
+- **Removed:** deleted/forgotten rows, excluded from those inventories.
+
+The proposed relation has one row per admitted scope key and predicate version,
+with `active_count`, `stored_count`, and `crystal_count`. Archived is derived as
+`stored_count - active_count`; do not maintain an independent drifting value.
+Empty scopes return zero inventory through query semantics, not missing-as-error.
+
+[`memory_visibility.rs`](https://github.com/nowledge-co/mem/blob/1e21098981051f060e8fa334709be179d0d24260/nmem-rs/crates/nmem-graph/src/memory_visibility.rs)
+owns the predicates. Mem MUST register a versioned query expression derived
+from that contract, rather than let HawDB invent its own lifecycle rules.
+Changes to `is_latest`, `is_crystal`, `lifecycle_state`, relevant legacy metadata,
+or scope MUST reclassify the old and new row. The first-class lifecycle column
+and legacy metadata fallback retain their existing precedence. Legacy NULL
+crystal values retain ordinary-Memory semantics.
+
+Required business checks:
+
+1. Add an Active memory: Active and Stored rise together.
+2. Archive it or supersede its version: Active falls; Stored stays unchanged.
+3. Remove it: Stored falls; restoring it applies its actual new classification.
+4. Reclassify it as a crystal: ordinary and crystal axes change independently.
+5. Move it between Spaces: old and new scoped inventories change atomically.
+6. Compare list totals, headline statistics, MCP inventory, and Space usage
+   against their designated predicates at the same snapshot.
+7. Reopen, replay, and rebuild: all axes and zero-result cases remain identical.
+
+Stored is the App license count basis; hosted Cloud workspace counters use a
+different physical-record rail. A materialized inventory MUST NOT silently
+replace Cloud usage semantics. Quota enforcement and Space deletion MUST
+revalidate under the canonical write/admission transaction; an earlier view
+read, even an exact one, is not mutation authority.
+
+### 2.3 Physical graph statistics
+
+[`graph_statistics_payload`](https://github.com/nowledge-co/mem/blob/1e21098981051f060e8fa334709be179d0d24260/nmem-rs/crates/nmem-server/src/rest_graph/payloads.rs#L528)
+currently issues eleven separate node/relationship count queries. Its raw
+`memory_count` predicate is not the Active headline predicate. Its
+`total_nodes` formula also selects a particular set of node kinds.
+
+Maintain named physical counters separately from lifecycle inventories.
+Density is computed from the selected counters at read time. Preserve existing
+field meanings and formulas during substitution; aligning an inconsistent
+product surface with the Memory Count Contract requires its own reviewed
+behavior change. Do not relabel a raw physical count as Active.
+
+Acceptance compares every response field with its original query/formula,
+including empty graphs, crystals, archived rows, edge deletion, and coherent
+multi-counter reads. No new cross-Space/global visibility is granted.
+
+### 2.4 Community retrieval and GraphRAG
+
+[`community_top_memory_scoped` and related queries](https://github.com/nowledge-co/mem/blob/1e21098981051f060e8fa334709be179d0d24260/nmem-rs/crates/nmem-graph/src/repo.rs#L1818)
+derive community-to-memory candidates from member Entities and `MENTIONS`.
+Some paths count matching edges; others count distinct Entities. The
+[`recent-memory path`](https://github.com/nowledge-co/mem/blob/1e21098981051f060e8fa334709be179d0d24260/nmem-rs/crates/nmem-server/src/rest_graph/communities.rs)
+also applies visibility while obtaining enough candidates.
+
+Proposed relation:
+
+```text
+community_memory(
+    community_generation,
+    community_id,
+    memory_scope_key,
+    memory_id,
+    mention_rows,
+    distinct_entity_count
+)
+PRIMARY KEY (
+    community_generation, community_id, memory_scope_key, memory_id
+)
+```
+
+Maintain `(community, memory, entity)` reference counts to distinguish duplicate
+edges from distinct membership. Full matched Entity IDs, if needed, belong in
+a keyed support relation with bounded retrieval, not an unbounded `COLLECT`
+payload in each row.
+
+The existing
+[`community_generation` integration](https://github.com/nowledge-co/mem/blob/1e21098981051f060e8fa334709be179d0d24260/integrations/hawdb/src/community_generation.rs)
+already publishes complete Community/membership generations. Generation members
+are derived, not canonical relational changefeed rows. An incremental consumer
+therefore needs an explicit generation dependency/replacement event. Until
+that is qualified, a replacement MUST invalidate and rebuild this dependent
+view. Numeric community labels alone are not durable membership identity;
+preserve the stable Community identity and generation binding.
+
+Materialize complete membership/count relations, not one global Top-K.
+Scope and the route's visibility predicate MUST precede ranking and limiting
+inside the query runtime. Importance, PageRank, recency, and request-specific
+selection remain query inputs. Do not automatically change existing route
+filters while adopting the optimization.
+
+Acceptance: duplicate edges; removing the final edge to an Entity; changing an
+Entity's community; replacing a generation while readers retain the old one;
+and a higher-ranked out-of-scope Memory ahead of an in-scope Memory. The latter
+MUST NOT starve the admitted candidate window. A changed generation can never
+combine with counts derived from the previous membership.
+
+### 2.5 Source library and Thread activity
+
+[`source_write.rs`](https://github.com/nowledge-co/mem/blob/1e21098981051f060e8fa334709be179d0d24260/nmem-rs/crates/nmem-graph/src/source_write.rs#L375)
+checks exact endpoint ownership and existing `SOURCED_FROM` edges, creates a
+new edge, and increments `Source.memory_count`. A view can remove this manual
+counter maintenance only after every relevant create/delete/relink path is
+covered and the field's intended count is agreed. Candidate key:
+`(source_scope_key, source_id)`, with a separately versioned visibility policy.
+An optimization MUST NOT relax the existing same-Space write gate.
+
+Thread messages are canonical Content Store records; the graph Thread is an
+anchor with projected activity. The
+[`ThreadActivitySnapshot` publication logic](https://github.com/nowledge-co/mem/blob/1e21098981051f060e8fa334709be179d0d24260/nmem-rs/crates/nmem-graph/src/repo.rs#L2838)
+distinguishes message counts, native first/last timestamps, preserved imported
+ranges, mutation timestamps, and `source_time_complete` metadata.
+
+Proposed `thread_message_activity(scope_key, thread_id)` maintains local
+message count and nullable local first/last occurrence times. Source-provided
+ranges and completeness remain separate canonical inputs to the existing
+resolution policy. Deleting the locally earliest message MUST NOT erase the
+source's original start time. A missing timestamp is not epoch zero; occurrence
+time is not import or last-mutation time.
+
+Retractable `MIN/MAX` requires an ordered value/refcount arrangement or a
+bounded indexed recomputation for an affected Thread. A single cached minimum
+is insufficient after deletion. If that operator is unavailable, reject the
+incremental definition and retain the existing activity publication path.
+
+Acceptance: duplicate imports, appended/edited/deleted messages, incomplete
+imports, no timestamp, removal of an extremum, retained source time ranges,
+cross-Space rejected linking, source version replacement, and full deletion.
+Replace manual denormalization only after these paths compare successfully.
+
+### 2.6 Search-document inputs
+
+[`incremental_search_projection.rs`](https://github.com/nowledge-co/mem/blob/1e21098981051f060e8fa334709be179d0d24260/integrations/hawdb/src/incremental_search_projection.rs)
+already coordinates unified canonical catch-up before applying external vector
+updates. This proposal must integrate with that contract, not invent a second
+independent watermark that bypasses it.
+
+A later `search_document_input` view may centralize deterministic text and
+metadata assembly, keyed by `(kind, external_id)`, with scope, source epoch,
+mapping version, and deletion semantics. Large content must use the existing
+bounded/streaming value contracts rather than fit in one in-memory delta.
+
+Embeddings, lexical/vector indexes, query scoring, and LLM summaries remain
+separate computations. SearchIndex remains an external derived projection.
+Handoff acknowledges complete input coverage and tombstones; the search
+pipeline still owns its durable publication, ranking, and readiness gates.
+Repeated handoff after a lost acknowledgement is idempotent. A view definition
+does not make external vector generation atomic with a canonical commit.
+
+### 2.7 Context health and time-sensitive summaries
+
+[`Q_HEALTH_AGG` and `Q_HEALTH_STALE`](https://github.com/nowledge-co/mem/blob/1e21098981051f060e8fa334709be179d0d24260/nmem-rs/crates/nmem-graph/src/agent_context.rs#L187)
+aggregate persisted `decay_score_cached`. A view over these persisted inputs
+can maintain count, sum, non-null count, and the existing threshold predicate.
+It does not make the cached score represent the current wall clock.
+
+Relative windows and continuously decaying values need explicit scheduled
+evaluation/bucket expiry, with evaluation time in their identity and read
+evidence, or must remain query-time expressions. First delivery rejects
+`now()`, randomness, network calls, LLM calls, and other volatile definitions.
+An empty/non-null-free average preserves the query's NULL semantics.
+
+## 3. Existing engine foundations and missing capabilities
+
+| Existing primitive | Reuse | Additional work required here |
+| --- | --- | --- |
+| [Projection generations](PROJECTION_GENERATION_REPLACEMENT_SPEC.md) | Bounded candidate staging, seal/digest, expected-head publication, pinned readers, reclaim | Incremental operator state, base/delta manifests, generation-native indexes, exact source identity |
+| [Search identity changefeed](SEARCH_PROJECTION_CHANGEFEED_SPEC.md) | Unified canonical commit identity, bounded whole-commit coverage, explicit rebuild barriers | Exact old/new graph and relational source deltas; relationship identities; no current-hydration shortcut |
+| [MVCC/publication design](MVCC_VERSIONED_PUBLICATION_SPEC.md) and prepared-read APIs | Source pins, dependency collection, publication fences, source durability barrier | Qualify the complete operator/dependency set, matched read snapshots, retained delta coverage and recovery |
+| [COW MVCC evolution proposal](MVCC_COW_EVOLUTION_SPEC.md) | Snapshot lifetime, persistent Consumer lifecycle and complete read-dependency work packages | Respect their separate acceptance gates; optional serializability is not a prerequisite for these read-only views |
+| Cypher and relational query runtime | Typed expressions, planning, parameter binding, filters, aggregation, query admission | Materialized relation scans and incremental plans derived from bound operators |
+| [SQL/PGQ design](POSTGRES_SQL_PGQ_SPEC.md) and binding/lowering modules | Future SQL graph definitions through shared IR | End-to-end MV planning/execution qualification; frontend presence alone is not a supported MV path |
+
+At the reviewed revision no general materialized-view DDL/catalog or automatic
+maintenance pipeline was found. Existing generation-bound SQL scans are bounded
+full scans; they do not establish indexed point/range performance. Existing
+prepared publication and MVCC work are useful foundations, not proof that all
+proposed concurrency, retention, or publication cases are already qualified.
+
+The search feed can deduplicate identities and hydrate current values. Its
+complete-through cursor is not generally an exact historical result snapshot.
+It cannot be reinterpreted as a tuple retraction stream. Current catch-up
+source-coherence checks remain binding; none are removed by this proposal.
+
+## 4. Definition, catalog, and query surface
+
+### 4.1 Proposed first interface
+
+Keep `hawdb` as the embedded facade. Introduce a typed **catalog/maintenance**
+contract that registers a named deterministic query, not typed Mem business
+operations. A definition contains:
+
+- name, owner namespace, definition revision, and source query dialect/text;
+- immutable bound constants, output schema, unique result key, and requested
+  indexes; no request-time parameters in a persisted definition;
+- schema/object identities, referenced property set, expression/collation
+  versions, plan fingerprint, and application predicate/mapping version;
+- refresh policy, explicitly supported operator set, and resource limits.
+
+First delivery accepts the qualified Cypher graph subset and relational SQL
+subset, lowering both into shared logical operators. View contents are tabular.
+SQL can explicitly name a view in `FROM`. For Cypher consumers, propose a
+generic `CALL hawdb.materialized_view('view_name') YIELD ...` table source
+that lowers to the same relation-scan operator and composes with graph queries.
+The name is a bound catalog identifier, not executable dynamic query text.
+Implementing and qualifying this source is part of the first delivery; it is
+not an existing procedure. Mem filtering, graph joining, ranking, and limits
+stay inside the runtime rather than a host-side scan/join.
+
+The materialized source needs indexed key/predicate pushdown and zero-fill
+left-join composition with canonical Entities. Emitting every usage row from
+a procedure before filtering is not the required indexed serving path. Query
+composition and actual access-path evidence are part of the milestone, not
+assumed consequences of adding a catalog name.
+
+SQL `CREATE MATERIALIZED VIEW ... AS SELECT ...`, `REFRESH MATERIALIZED VIEW`,
+and `DROP MATERIALIZED VIEW` can later be syntax over this catalog. Graph SQL
+definitions can use SQL/PGQ once its end-to-end runtime path is qualified.
+First delivery does not depend on unverified PGQ execution or invent an
+`AS CYPHER` SQL dialect. Broad automatic query substitution is deferred;
+initial consumers explicitly read the named view.
+
+The compiler returns a typed unsupported-shape/dependency diagnostic before
+installation. It does not silently turn an unsupported incremental definition
+into scheduled full scans. Complete refresh is an explicit alternative mode.
+View rows are read-only to application DML; application counters and engine
+maintenance cannot both own the same result rows.
+
+### 4.2 Catalog persistence and dependencies
+
+Persist definitions and schema dependencies in the engine catalog as control
+metadata through the existing transactional DDL mechanisms. Result rows,
+operator arrangements, indexes, and progress belong in derived artifacts,
+outside the canonical graph/relational mutation WAL.
+
+Bind each view instance to database instance, durable branch/target identity
+and incarnation, definition revision, and source schema identity. An opaque
+projection owner key is not an authorization decision. Do not substitute a
+filesystem path or a Mem Space string for this identity tuple.
+
+DDL affecting a dependency invalidates or transactionally replaces the
+definition before it can serve as current. Drop publishes a durable tombstone
+and prevents an in-flight old worker from resurrecting its head. First delivery
+rejects view-on-view dependencies; Community generation input is an explicitly
+declared later extension, not an implicit canonical table dependency.
+
+Restore, import, branch creation, and target replacement must validate these
+identities. Initially a new branch rebuilds its own derived view. Sharing
+immutable artifacts later requires qualified source-root identity and retained
+GC roots; identical epoch numbers do not authorize cross-branch reuse.
+
+## 5. Source and incremental maintenance semantics
+
+### 5.1 Exact source coverage
+
+For source snapshot `S_E`, definition revision `D`, and its deterministic query
+`Q_D`, a published result MUST satisfy:
+
+```text
+V(D, E) = Q_D(S_E)
+```
+
+`E` is a canonical commit epoch, not wall-clock time or projection publication
+epoch. A publication records its complete-through source epoch separately from
+its derived publication identity. All relevant effects of a canonical
+transaction are included together, including mixed graph/relational effects.
+
+For later definitions that also consume a Community generation `G`, extend
+the equality to `V(D, E, G) = Q_D(S_E, G)` and retain `G` in the manifest and
+read context. A canonical epoch alone does not identify that external input.
+
+Add an engine-owned bounded capture seam over a transaction's actual before
+and after states. Produce normalized old/new rows and relationship identities
+for referenced source columns. Capture inserts, deletes, key changes,
+relationship endpoint changes, node deletion/cascades, and dependency-changing
+DDL; no-op writes do not create false contributions. A node property change
+must reach plans that depend on it even without an edge mutation.
+
+Persist exact capture in a **derived** commit journal when feasible. Coverage
+certifies a contiguous range of complete canonical commits, including commits
+with no relevant changes. Never use the existing identity feed's late current
+hydration to manufacture an earlier row image. A rebuild barrier is an explicit
+coverage outcome, not an empty delta.
+
+The canonical commit path admits bounded capture work; it MUST NOT synchronously
+expand an unbounded high-degree neighborhood. Capture overflow, sidecar I/O
+failure, or lost source pins leave canonical commit semantics intact and make
+the affected view require rebuild. They must never leave it falsely current.
+The durable journal/coverage metadata must let reopen detect any crash gap
+between canonical publication and derived capture, including a lost gap marker.
+Publication waits for the covered source durability barrier; relaxed canonical
+durability cannot cause a durable view to cite lost source commits.
+
+### 5.2 Operator state and retractions
+
+Use signed bag deltas over engine-owned source arrangements. An update is an
+old-row retraction plus a new-row insertion. Persist the arrangements needed to
+apply the qualified operators, including reverse join keys for endpoint
+property changes; keep them demand-paged with bounded memtables and scratch.
+Do not build a second unbounded in-memory graph.
+
+For a join changed on both sides in one commit, evaluate the transition exactly
+once. One valid differential rule is:
+
+```text
+delta(L join R) = (deltaL join R_old) + (L_new join deltaR)
+```
+
+This includes the cross-term once. Comparing a full reference query at the
+same before/after snapshots is the correctness oracle. Evaluate NULL, equality,
+numeric overflow, and collation with the source dialect's existing semantics.
+
+| Operator | Initial contract | Important boundary |
+| --- | --- | --- |
+| Node/relational scan, deterministic filter/project | Required | Referenced-field updates and predicate entry/exit |
+| Directed one-hop graph expansion / inner equijoin | Required for entity counts | Indexed endpoint arrangements; duplicate edges preserved |
+| Grouped `COUNT(*)`, `COUNT(expr)`, exact integer `SUM` | Required | NULL differences, checked arithmetic, group disappearance |
+| Zero-fill / left join to a canonical entity | Required serving capability | No-match entities must remain candidates with zero usage |
+| `COUNT(DISTINCT key)` | Community milestone | Reference counts, including final-reference deletion |
+| `AVG` | Later | Sum and non-null count, numeric semantics, NULL on empty input |
+| Retractable `MIN/MAX` | Thread milestone | Ordered multiset state or explicitly bounded indexed recomputation |
+| Outer/anti joins, arbitrary paths, recursive graph algorithms, global Top-K | Not initially incremental | Explicit rejection or separately selected complete refresh |
+| Volatile functions, external calls, LLM/embedding generation | Excluded | Not deterministic incremental query results |
+
+An ungrouped count over empty input is one zero row. A grouped count removes
+the group when its input bag becomes empty unless a defined dimension/left
+join supplies the zero row. Distinct state and arrangements are charged to
+disk as well as memory budgets; supporting DISTINCT is not free metadata.
+
+Incremental writes can be proportional to affected edges/groups. A high-degree
+node update or community replacement is not constant-time. Exceeding a budget
+leaves the last complete head intact and returns rebuild-required/resource
+status, without acknowledging a partial epoch.
+
+## 6. Bootstrap, persistence, and publication
+
+### 6.1 Online bootstrap and rebuild
+
+1. Install a build lease bound to the definition and source identity, then
+   atomically capture/pin `S_E0` and reserve retained coverage after `E0`.
+2. Execute the full definition against that snapshot in admitted pages. Build
+   result, operator-state, and index artifacts without exposing a candidate.
+3. Consume complete captured commits after `E0`. Rebuild if coverage expires,
+   a barrier occurs, or required before-images/source identity are unavailable.
+4. Seal a complete candidate for `E1`, validate all dependencies and source
+   durability, then publish through the fenced protocol below.
+
+Registration and snapshot/coverage capture must have no lost-write window.
+A failed rebuild leaves the previous generation available only under its old
+declared freshness contract. Starting a rebuild does not label it fresh.
+Long builds and pins have deadlines, retained-byte/epoch limits and cancellation;
+they cannot indefinitely hold canonical WAL or obsolete storage roots.
+
+Build/refresh retention is a persistent maintenance-consumer lifetime; a query
+snapshot is a separate RAII lifetime. A query MUST NOT create a durable Consumer
+registration. Runtime handle closure retains the installed view and its durable
+progress; explicit view removal retires that registration under the drop fence.
+Reuse the qualified consumer lifecycle where its contract fits, or define an
+explicit MV-owned registry extension. Do not silently charge ordinary reads to
+the existing search registry's finite capacity or allocate registrations per
+restart. Capacity refusal occurs before build callbacks and publication effects.
+
+### 6.2 Derived storage and serving indexes
+
+Reuse the projection-generation catalog. Extend its immutable manifest to
+select a complete set of result pages, operator arrangements, serving indexes,
+and progress for one definition/source epoch. For incremental work, use an
+immutable base plus bounded delta runs and a bounded memtable; compaction
+replaces complete manifests under the same publication discipline.
+
+Unchanged pages/runs may be shared, with explicit GC roots. Incremental refresh
+must not copy the entire result on every source commit. Record dependency
+digests, codec/operator versions, counts, checksums and source identity in the
+manifest. Never infer a complete result from an arbitrary directory scan.
+
+Required serving access paths:
+
+- Entity usage: prefix/key lookup by admitted endpoint scopes and Entity ID.
+- Memory inventory: exact scope/predicate-version lookup over a small fixed row.
+- Community candidates: generation/community/scope prefix and Memory key;
+  apply the actual route's visibility and ranking in the runtime.
+- Source/Thread rollups: exact scope and owner-object key.
+
+Indexes must be generation-bound and verified with the selected manifest.
+Reusing a canonical-table index for generation rows without its own completeness
+proof is invalid. The existing bounded generation full scan is a correctness
+fallback under an explicit query budget, not the P0 performance implementation.
+
+### 6.3 Publish and recover
+
+Publish result rows, arrangements, indexes and complete-through cursor as one
+head selection. Candidate data is synchronized before manifest, manifest before
+head, and required parent directories before acknowledgement. Expected-head
+comparison prevents stale same-view writers from overwriting a newer head.
+
+Reuse the prepared-publication authority and retain its fence across final
+definition/instance/target/dependency validation and durable selector commit.
+There is no separate `validate -> bool -> later publish` race. Moving from an
+old epoch to a later one is valid only with complete admitted delta coverage;
+dependency invalidation cannot be ignored because a candidate was already sealed.
+
+Existing prepared-read validation can conservatively reject publication after
+intervening source changes. Initially preserve that rejection, retry within the
+maintenance budget, and retain canonical read fallback. Publishing an exact
+historical result while current canonical state has advanced requires a
+separately qualified MV publication permit: retained source identity plus exact
+delta/manifest coverage, without claiming the result is current. It must not
+weaken the existing prepared-publication validator for other consumers. Measure
+fallback/refresh starvation under writers before accepting this design in Mem.
+
+Crash outcomes MUST be either the old complete head or the new complete head,
+never new counters with old arrangements/indexes or an advanced cursor alone.
+A lost acknowledgement is retried with the same operation/generation identity;
+it is not proof that publication rolled back. Ambiguous durability fails closed
+and retains evidence. Torn unpublished artifacts can be reclaimed/resumed only
+under their validated boundary; selected-artifact corruption is not an empty view.
+
+Ordinary reopen validates the selected manifest, restores derived operator
+state, and resumes from durable contiguous capture. It must not require a full
+graph scan when that coverage is intact. Missing capture after crash, source
+replacement, retention expiry or incompatible codecs require explicit rebuild.
+Search documents and aggregate state remain outside the canonical WAL.
+
+## 7. Read consistency and Mem admission
+
+The first Mem adoption uses **asynchronous maintenance with exact reads and an
+explicit bounded canonical fallback**. Synchronous maintenance in every
+canonical transaction is deferred because graph fan-out can extend writer
+latency. Asynchrony does not permit silent result staleness.
+
+Proposed read modes:
+
+| Mode | Guarantee | Failure behavior |
+| --- | --- | --- |
+| `ExactSnapshot(E)` | View and every canonical join/filter use `S_E` | Wait within deadline for the retained epoch, execute the canonical reference query at `S_E`, or return typed not-ready/budget status |
+| `ReadYourWrites(C)` | Choose a snapshot `E >= C`, then the same exact contract | Never return an older generation as the post-write refresh |
+| `BoundedStale` | Explicitly allowed view-only result with source epoch and bounded lag | Reject if the limit/authorization contract cannot be established |
+
+Epoch selection and source snapshot capture occur once per logical read.
+Do not repeatedly chase a moving current epoch until a timeout. If a background
+view advances past an already chosen snapshot, use a retained matching manifest
+or the pinned canonical reference query; a newer watermark is not equality.
+
+The read context pins both the chosen manifest and the exact source snapshot.
+Do not combine a view at epoch `E` with canonical Entity/Memory filters at
+`E+1`. Existing projection-bound transactions do not by themselves prove this
+epoch equality. If the historical source snapshot is unavailable, an old
+generation cannot participate in an exact canonical join. Multi-view reads
+require a common source epoch and compatible dependency generations; choose a
+canonical fallback if no such set exists.
+
+Fallback executes the named reference query inside HawDB with its normal row,
+payload, CPU/I/O and deadline limits. It is observable and cannot silently
+recompute an unbounded graph. Definition drift/corruption does not bypass
+validation via an undocumented fallback.
+
+Scope and security requirements:
+
+- The caller resolves and authorizes the request's Space set using canonical
+  admission. A view never grants access or replaces permission evaluation.
+- Preserve each query's legacy scope semantics. Some Mem predicates map
+  NULL/empty ownership to `default`; others test stored IDs directly. Retain
+  raw scope distinctions or bind a versioned normalization policy that exactly
+  matches the reference query. Do not globally collapse those values.
+- Apply both endpoint admission where required, lifecycle visibility and other
+  request predicates before ranking/limits. Aggregation keys must retain enough
+  scope information to do that; globally prelimited candidates are insufficient.
+- Recheck write authority, quotas and retained-content deletion guards under
+  the canonical mutation transaction. Bounded-stale mode is not allowed there.
+- Cloud PostgreSQL counters and backend behavior remain separate; local HawDB
+  adoption must compare the applicable clients' existing response semantics.
+
+No Mem route is granted `BoundedStale` by this document. Enabling that mode is
+a separately reviewed product choice, especially for deletion visibility.
+
+## 8. Runtime ownership and resource limits
+
+The embedded host drives typed maintenance steps using its existing scheduler;
+HawDB owns state transitions and reports. No daemon, shell command, environment
+flag, or process-per-view production control plane is introduced.
+
+One observed worker per view/target stages work, with single-flight refresh,
+bounded coalescing and explicit cancellation. The host retains and joins work
+during shutdown; dropping a future does not cancel blocking I/O or release its
+source/target lease. A wakeup can be coalesced; a canonical epoch cannot be
+silently skipped. Global admission prevents many independent views from
+exhausting a shared database's resources.
+
+Limits cover captured rows/bytes per commit, retained delta bytes/age, source
+pins, state/index disk bytes, scratch and memtable memory, fan-out/affected keys,
+job duration, concurrent builds, artifact I/O, and reclaim work. Long-lived
+readers and durable branches remain GC roots. Exhaustion returns the specific
+blocker; neither GC nor retention can delete an active/pinned dependency.
+
+Persistent asynchronous mode is an explicit native capability. Minimal
+in-memory/WASM builds retain their existing feature boundary and must not gain
+filesystem, thread, runtime, or timer dependencies just to compile the facade.
+An in-memory view, if supported, obeys the same query semantics without claiming
+durable reopen or background scheduling.
+
+## 9. Status, errors, and explain evidence
+
+Expose exact-view, bounded diagnostics through typed Rust reports:
+
+- lifecycle: defined, building, catching up, ready at epoch, stale,
+  rebuild-required, paused by caller, failed, or dropped;
+- instance/target/definition identity, active generation, source epoch, source
+  durable epoch, retained resume floor and rebuild reason;
+- processed commits/rows, affected groups, arrangement/index/result bytes,
+  fan-out, pin age, peak scratch, maintenance and fallback time;
+- cancellation, unsupported shape, schema drift, source/coverage gap,
+  expected-head conflict, resource exhaustion and uncertain publication as
+  distinct typed causes.
+
+These are proposed error categories, not invented public error-code literals.
+Map them through the existing engine error conventions when implementing.
+Status enumeration is bounded and owner-scoped; it must not expose another
+owner's names or data.
+
+`EXPLAIN`/profiles distinguish canonical execution, materialized scan/index
+lookup, view generation/epoch, lag contract, rows/pages read and canonical
+fallback reason. Source inspection or a successful full-scan query is not
+evidence that an indexed serving path ran.
+
+## 10. Implementation slices and exit gates
+
+Each slice is reviewed against `main` independently. These are future work,
+not tasks completed by the specification PR.
+
+| Slice | Scope and dependency | Exit gate |
+| --- | --- | --- |
+| A: Semantic and publication foundation | Catalog/definition binding, exact source capture, bounded coverage/gaps, identity and publication model; depends on qualified MVCC pins and publication fences | Executable model and native negative controls cover every invariant below; unsupported operators reject before installation |
+| B: First Mem value | Node scan/filter/project, one-hop joins, grouped counts, complete refresh plus incremental arrangements, indexed reads, Cypher/SQL view sources | Entity and Memory inventory business fixtures pass exact differential comparison, deletion/reclassification, reopen and contention cases; read path uses serving indexes |
+| C: Community retrieval | Distinct reference counts, explicit community-generation dependency/rebuild, pinned candidate queries | Duplicate/delete/replacement and scope-before-Top-K scenarios pass; no mixed membership generation |
+| D: Source and Thread rollups | Audit current write/delete/import paths, retractable extrema, relational messages and provenance resolution | Existing denormalization compares successfully before removal; imported time/completeness contract preserved |
+| E: Search inputs and health | Existing search handoff, deterministic mapping versions, large-value handling; scheduled-time semantics only if separately adopted | No skipped search identities/deletes or weakened readiness; health values state their input epoch/evaluation time |
+
+A and B are the minimum usable capability. Do not claim first delivery after
+only catalog syntax or background refresh of an unrelated SQL table. Broad
+optimizer substitution, arbitrary view DAGs, synchronous transaction maintenance,
+recursive paths, rolling-window engines and distributed execution are deferred.
+
+### Formal and native correctness qualification
+
+Before implementing publication/lifecycle transitions, extend or compose the
+existing projection-generation and MVCC/publication models with view coverage
+and manifest state. Reuse existing invariants rather than starting an unrelated
+durability model. Model-check at least:
+
+1. `SelectedResultEqualsSource`: active contents equal the definition at their
+   declared source epoch; definition revision and source identity agree.
+2. `NoPartialCommitOrCursor`: graph/relational effects, state, indexes, rows and
+   progress become selected as one complete unit.
+3. `DurableSourceBeforeHead`: selected derived state cannot cite source writes
+   lost after power failure, including relaxed durability and reordered I/O.
+4. `NoCoverageGapAdvance`: expired/missing capture or a rebuild barrier cannot
+   advance incremental freshness; online bootstrap has no capture window.
+5. `PinnedReadAndSafeGC`: no mixed epoch/generation and no reclamation of pinned
+   artifacts or source roots, including unleased durable branches.
+6. `DropAndTargetFence`: stale workers cannot publish after drop, definition
+   replacement, branch/instance replacement, or an intervening head.
+
+Native tests then refine those invariants through actual facade calls: mixed
+transactions; both sides of a join changed together; rollback/no-op updates;
+node and final-reference deletion; NULL and empty groups; arbitrary grouping-key
+changes; crash between each sync/head step; lost acknowledgement; capture
+overflow/gap; old readers; DDL races; cancellation; shutdown; and resource caps.
+Inject torn/reordered persistence as well as process kill/reopen. Include
+negative controls that would pass if a cursor advanced alone or a stale source
+were hydrated. Small deterministic graph/relational differential sequences
+compare bag results against full queries after every complete source epoch.
+Any exploratory fuzzing remains local under repository policy.
+
+### Performance and business acceptance
+
+Measure against the same canonical query and dataset, in release builds, with
+explicit durability, residency, cold/warm cache, concurrency and budget settings.
+Use small datasets as well as large/skewed fixtures: high-degree Entities, many
+Spaces, duplicate mentions, large communities, burst imports and delete storms.
+
+Required evidence:
+
+- Matching result bags and scope/visibility semantics before timing changes.
+- Inventory key lookup work independent of the total Memory population;
+  Entity usage lookup avoids recomputing each candidate's mention expansion.
+- No full-result copy per incremental refresh and no whole-graph rebuild on
+  ordinary reopen when durable coverage is intact.
+- Query p50/p95/p99, writer latency, maintenance lag, affected keys, CPU,
+  page reads, peak memory, disk amplification and rebuild duration.
+- Direct-query fallback frequency under the proposed exact-read contract.
+  A fast stale view with frequent expensive fallbacks is not a successful P0.
+- Worst-case fan-out and retention exhaustion produce bounded, observable
+  behavior and preserve canonical writes and the last complete head.
+
+Set numerical latency/overhead acceptance thresholds from a recorded baseline
+before approving an implementation milestone. This source review supplies no
+measured speedup. Mem adoption additionally needs shadow comparison and the
+applicable existing integration/activation gates; merging engine support is
+not proof of a faster or activated Mem data plane.
+
+## 11. Alternatives and recommendation
+
+**Complete refresh only** is the smallest safe prototype and a useful explicit
+mode for infrequent community replacements. It still requires bounded snapshot
+builds and atomic publication, and is not sufficient for hot entity/count reads
+under frequent writes.
+
+**Application-maintained counters** are adequate for a narrow field with a
+single complete mutation boundary. Mem's Source and Thread projections show
+why old/new classification, deletion, imports and provenance make extending
+that pattern costly. Retain them until view equivalence is demonstrated.
+
+**Recommended:** engine-owned asynchronous incremental relations over qualified
+graph/SQL operators, durable derived arrangements and indexed serving, with
+exact snapshot reads and explicit bounded canonical fallback. Start with Entity
+usage and Memory inventories. That delivers reusable engine semantics for
+existing Mem businesses without embedding Mem routes in the database kernel.

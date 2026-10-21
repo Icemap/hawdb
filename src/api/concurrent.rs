@@ -76,11 +76,20 @@ pub enum ConcurrentTransactionMode {
 pub struct ConcurrentTransactionOptions {
     pub mode: ConcurrentTransactionMode,
     pub lock_timeout: Duration,
+    pub isolation: super::TransactionIsolation,
+    pub read_dependency_limits: super::TransactionReadDependencyLimits,
 }
 
 impl ConcurrentTransactionOptions {
+    pub const fn with_isolation(mut self, isolation: super::TransactionIsolation) -> Self {
+        self.isolation = isolation;
+        self
+    }
+
     pub const fn optimistic() -> Self {
         Self {
+            isolation: super::TransactionIsolation::SnapshotIsolation,
+            read_dependency_limits: super::TransactionReadDependencyLimits::DEFAULT,
             mode: ConcurrentTransactionMode::Optimistic,
             lock_timeout: DEFAULT_PESSIMISTIC_LOCK_TIMEOUT,
         }
@@ -88,6 +97,8 @@ impl ConcurrentTransactionOptions {
 
     pub const fn pessimistic(lock_timeout: Duration) -> Self {
         Self {
+            isolation: super::TransactionIsolation::SnapshotIsolation,
+            read_dependency_limits: super::TransactionReadDependencyLimits::DEFAULT,
             mode: ConcurrentTransactionMode::Pessimistic,
             lock_timeout,
         }
@@ -200,6 +211,14 @@ impl ConcurrentDatabase {
 
     pub fn wal_group_commit_snapshot(&self) -> Result<WalGroupCommitSnapshot> {
         self.inner.commits.group_commit_snapshot()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn cancel_after_next_group_flush(
+        &self,
+        token: hawdb_core::RuntimeCancellationToken,
+    ) -> Result<()> {
+        self.inner.commits.cancel_after_next_group_flush(token)
     }
 
     #[cfg(test)]
@@ -356,7 +375,11 @@ impl ConcurrentDatabase {
             base_commit_epoch,
             options,
             runtime: DatabaseTransactionRuntime::from_database(&database)?,
-            state: DatabaseTransactionState::from_database(&database)?,
+            state: DatabaseTransactionState::from_database_with_isolation(
+                &database,
+                options.isolation,
+                options.read_dependency_limits,
+            )?,
             successful_statements: 0,
             abort_reason: None,
             finished: false,
@@ -595,6 +618,10 @@ impl ConcurrentDatabase {
 }
 
 impl ConcurrentDatabaseTransaction {
+    pub fn read_dependency_usage(&self) -> Option<super::TransactionReadDependencyUsage> {
+        self.state.read_dependency_usage()
+    }
+
     pub fn transaction_id(&self) -> u64 {
         self.transaction_id
     }
@@ -612,6 +639,18 @@ impl ConcurrentDatabaseTransaction {
     }
 
     pub fn query_with_params(
+        &mut self,
+        cypher_text: &str,
+        parameters: &BTreeMap<String, Value>,
+    ) -> Result<QueryOutput> {
+        let result = self.query_with_params_inner(cypher_text, parameters);
+        if result.is_err() {
+            self.state.fail_read_dependencies();
+        }
+        result
+    }
+
+    fn query_with_params_inner(
         &mut self,
         cypher_text: &str,
         parameters: &BTreeMap<String, Value>,
@@ -698,7 +737,23 @@ impl ConcurrentDatabaseTransaction {
         sql_text: &str,
         parameters: &[Value],
     ) -> Result<super::SqlStatementResult> {
+        let result = self.query_sql_with_result_and_params_inner(sql_text, parameters);
+        if result.is_err() {
+            self.state.fail_read_dependencies();
+        }
+        result
+    }
+
+    fn query_sql_with_result_and_params_inner(
+        &mut self,
+        sql_text: &str,
+        parameters: &[Value],
+    ) -> Result<super::SqlStatementResult> {
         self.ensure_active()?;
+        if let Some(dependencies) = &mut self.state.read_dependencies {
+            super::query_runtime::query_runtime_checkpoint(self.task_context.as_ref())?;
+            dependencies.admit_sql(sql_text, parameters)?;
+        }
         let prepared = self
             .runtime
             .relational_plan_template_cache
@@ -743,6 +798,9 @@ impl ConcurrentDatabaseTransaction {
     /// Commits and returns outcomes recomputed by the serialized commit sequencer.
     pub fn commit_with_result(mut self) -> Result<TransactionCommitResult> {
         self.ensure_active()?;
+        if let Some(dependencies) = &self.state.read_dependencies {
+            dependencies.ensure_complete()?;
+        }
         let started = Instant::now();
         if self.options.mode == ConcurrentTransactionMode::Optimistic
             && let Err(error) = self.inner.locks.acquire(
@@ -836,7 +894,10 @@ impl ConcurrentDatabaseTransaction {
             }
         };
         let current_epoch = database.commit_epoch()?;
-        if current_epoch != self.base_commit_epoch && !requests_already_covered {
+        if current_epoch != self.base_commit_epoch
+            && !requests_already_covered
+            && self.options.isolation == super::TransactionIsolation::SnapshotIsolation
+        {
             if self.successful_statements == 0 {
                 self.base_commit_epoch = current_epoch;
                 self.runtime = DatabaseTransactionRuntime::from_database(&database)?;

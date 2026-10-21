@@ -127,12 +127,16 @@ def main():
         "matrix_sha256": hashlib.sha256((FIXTURE / "profiles.json").read_bytes()).hexdigest(),
         "host_source_sha256": hashlib.sha256((FIXTURE / "src/main.rs").read_bytes()).hexdigest(),
         "workspace_lock_sha256": hashlib.sha256((ROOT / "Cargo.lock").read_bytes()).hexdigest(),
+        "cargo_config_sha256": hashlib.sha256((ROOT / ".cargo/config.toml").read_bytes()).hexdigest(),
         "profiles": [],
     }
     with tempfile.TemporaryDirectory(prefix="hawdb-external-consumer-") as temporary:
         consumer = Path(temporary)
         shutil.copytree(FIXTURE / "src", consumer / "src")
         shutil.copyfile(ROOT / "rust-toolchain.toml", consumer / "rust-toolchain.toml")
+        # The temporary host lives outside Cargo's repository config hierarchy.
+        (consumer / ".cargo").mkdir()
+        shutil.copyfile(ROOT / ".cargo/config.toml", consumer / ".cargo/config.toml")
         if capture(["rustc", "-vV"], consumer) != rustc:
             raise ValueError("external consumer toolchain differs from the recorded compiler")
         manifest = (FIXTURE / "Cargo.toml").read_text().replace('path = "../.."', "path = " + json.dumps(str(ROOT)))

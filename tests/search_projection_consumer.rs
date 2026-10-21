@@ -122,7 +122,7 @@ fn public_consumer_initializes_mixed_content_catches_up_and_reopens() {
     let epoch = db.commit_epoch().unwrap();
     let id = SearchProjectionConsumerId::new("mixed").unwrap();
     let mut consumer = db
-        .create_search_projection_consumer(
+        .open_or_create_search_projection_consumer(
             id.clone(),
             fixture.0.join("projection"),
             options(100),
@@ -170,7 +170,12 @@ fn public_consumer_initializes_mixed_content_catches_up_and_reopens() {
         SearchProjectionConsumerState::Unverified
     );
     let consumer = db
-        .open_search_projection_consumer(&id, fixture.0.join("projection"))
+        .open_or_create_search_projection_consumer(
+            id.clone(),
+            fixture.0.join("projection"),
+            options(100),
+            |_, _| panic!("existing mixed projection must not initialize"),
+        )
         .unwrap();
     assert!(db
         .search_projection_consumer_readiness(&consumer, Some(1))

@@ -71,7 +71,7 @@ fn stage_writer(
     tx
 }
 
-fn wait_submitted(db: &ConcurrentDatabase, expected: u64) {
+pub(super) fn wait_submitted(db: &ConcurrentDatabase, expected: u64) {
     let deadline = Instant::now() + Duration::from_secs(10);
     while db.wal_group_commit_snapshot().unwrap().submitted_commits < expected {
         assert!(

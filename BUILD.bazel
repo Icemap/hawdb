@@ -21,7 +21,6 @@ _CARGO_WORKSPACE_PACKAGES = [
     "crates/executor",
     "crates/expression",
     "crates/fuzz-contracts",
-    "crates/fuzz",
     "crates/integrity",
     "crates/optimizer",
     "crates/optimizer-graph",
@@ -49,11 +48,8 @@ _CARGO_WORKSPACE_PACKAGES = [
     "crates/vector-projection",
 ]
 
-# Fuzz remains an explicit local-only campaign until the repository policy
-# assigns it an automated execution lane.
-_HAWDB_PRESUBMIT_CRATE_EXCLUSIONS = {
-    "crates/fuzz": ("local-only", "//crates/fuzz:hawdb_fuzz_tests"),
-}
+# Developer tools have independent Cargo workspaces and are not crate presubmits.
+_HAWDB_PRESUBMIT_CRATE_EXCLUSIONS = {}
 
 test_suite(
     name = "hawdb_presubmit_crate_tests",
@@ -1071,26 +1067,32 @@ rust_binary(
     ),
 )
 
+# Non-fuzz smoke groups keep the script's fixed argument positions without
+# depending on local-only developer tools. These three placeholders are unused.
 _HAWDB_LINUX_CI_SMOKE_ARGS = [
     "$(location :hawdb_cli)",
     "$(location :hawdb_shadow_self)",
     "$(location :nowledge_previous_wrapper_shadow_adapter)",
-    "$(location //crates/fuzz:hawdb_append_fuzz)",
-    "$(location //crates/fuzz:hawdb_storage_fuzz)",
-    "$(location //crates/fuzz:hawdb_optimizer_fuzz)",
-] + [
-    "$(location %s)" % target
-    for target in HAWDB_BENCHMARK_TARGETS
-]
+    "$(location :hawdb_cli)",
+    "$(location :hawdb_cli)",
+    "$(location :hawdb_cli)",
+] + ["$(location %s)" % target for target in HAWDB_BENCHMARK_TARGETS]
 
 _HAWDB_LINUX_CI_SMOKE_DATA = [
     ":nowledge_previous_wrapper_shadow_adapter",
     ":hawdb_cli",
     ":hawdb_shadow_self",
-    "//crates/fuzz:hawdb_append_fuzz",
-    "//crates/fuzz:hawdb_optimizer_fuzz",
-    "//crates/fuzz:hawdb_storage_fuzz",
 ] + HAWDB_BENCHMARK_TARGETS
+
+_HAWDB_LOCAL_FUZZ_TOOLS = [
+    "//tools/shiro:shiro_append",
+    "//tools/shiro:shiro_storage",
+    "//tools/shiro:shiro",
+]
+
+_HAWDB_LOCAL_FUZZ_ARGS = _HAWDB_LINUX_CI_SMOKE_ARGS[:3] + [
+    "$(location %s)" % target for target in _HAWDB_LOCAL_FUZZ_TOOLS
+] + _HAWDB_LINUX_CI_SMOKE_ARGS[6:]
 
 # Optimizer benchmarks emit resource-sensitive evidence. Give each group an
 # independent deadline, but preserve the original serial execution semantics.
@@ -1099,8 +1101,8 @@ _HAWDB_LINUX_CI_SMOKE_DATA = [
         name = "hawdb_linux_ci_%s_smoke_test" % smoke,
         size = size,
         srcs = ["scripts/check-linux-ci-smokes.sh"],
-        args = [smoke] + _HAWDB_LINUX_CI_SMOKE_ARGS,
-        data = _HAWDB_LINUX_CI_SMOKE_DATA,
+        args = [smoke] + (_HAWDB_LOCAL_FUZZ_ARGS if smoke == "fuzz" else _HAWDB_LINUX_CI_SMOKE_ARGS),
+        data = _HAWDB_LINUX_CI_SMOKE_DATA + (_HAWDB_LOCAL_FUZZ_TOOLS if smoke == "fuzz" else []),
         tags = ["manual"] + extra_tags,
     )
     for smoke, size, extra_tags in [

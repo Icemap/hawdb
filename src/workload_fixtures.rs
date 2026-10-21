@@ -698,6 +698,7 @@ fn error_class(error: &crate::HawDBError) -> String {
         | crate::HawDBError::GraphExpansionPayloadLimitExceeded { .. }
         | crate::HawDBError::TransactionConflict { .. }
         | crate::HawDBError::ProjectionSourceEpochMismatch { .. }
+        | crate::HawDBError::TransactionReadDependencyRefused { .. }
         | crate::HawDBError::BranchCommandUnsupported { .. } => "execution",
         crate::HawDBError::Storage(_)
         | crate::HawDBError::FileDescriptors(_)
