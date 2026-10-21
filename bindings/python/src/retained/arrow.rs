@@ -41,10 +41,10 @@ impl Descriptor for ArrowArrayStream {
 
 unsafe extern "C" fn destroy<T: Descriptor>(capsule: *mut ffi::PyObject) {
     // Preserve a pending Python exception while running a GC/release callback.
-    let mut exception_type = ptr::null_mut();
-    let mut exception_value = ptr::null_mut();
-    let mut traceback = ptr::null_mut();
-    unsafe { ffi::PyErr_Fetch(&mut exception_type, &mut exception_value, &mut traceback) };
+    // SAFETY: CPython invokes capsule destructors on an attached thread. PyO3
+    // selects the exception-state API appropriate for the active Python ABI.
+    let py = unsafe { Python::assume_attached() };
+    let exception = PyErr::take(py);
     let _ = catch_unwind(AssertUnwindSafe(|| {
         // Consumers may rename a used capsule, but its original descriptor box
         // still belongs to this destructor. A move sets release to null.
@@ -57,7 +57,9 @@ unsafe extern "C" fn destroy<T: Descriptor>(capsule: *mut ffi::PyObject) {
     }));
     unsafe {
         ffi::PyErr_Clear();
-        ffi::PyErr_Restore(exception_type, exception_value, traceback);
+    }
+    if let Some(exception) = exception {
+        exception.restore(py);
     }
 }
 fn capsule<'py, T: Descriptor>(py: Python<'py>, descriptor: T) -> PyResult<Bound<'py, PyAny>> {

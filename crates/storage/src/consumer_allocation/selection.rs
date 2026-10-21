@@ -186,10 +186,16 @@ pub(super) fn prepare(
             validate(&ledger)?;
             let bytes = encode(&ledger)?;
             let name = format!("consumer-selector-{}.tmp", hawdb_core::generate_uuidv7()?);
-            *preparation_attempted = true;
             let mut control = allocation._project.create_owned_control_candidate(&name)?;
-            control.write_all(&bytes)?;
-            control.seal()?;
+            let prepared = (|| {
+                control.write_all(&bytes)?;
+                control.seal()
+            })();
+            if let Err(error) = prepared {
+                let _ = control.discard_unselected(context);
+                return Err(error.into());
+            }
+            *preparation_attempted = true;
             Ok(PreparedConsumerSelection {
                 control,
                 expected,
@@ -259,7 +265,7 @@ impl PreparedConsumerSelection {
         let control = project.with_locked_catalog(|root, context, _catalog| {
             if !root.matches_child_file(context, LEDGER_FILE, expected)? {
                 *phase = Phase::Rejected;
-                return Err(invalid("Consumer selector preparation became stale"));
+                return Err(HawDBError::ProjectionBusy);
             }
             // Revoke before native code, including errors and unwinding.
             *phase = Phase::Attempted;

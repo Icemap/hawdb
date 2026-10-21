@@ -25,12 +25,61 @@ impl std::ops::Deref for DirectoryOwner<'_> {
 #[cfg(any(test, feature = "test-support"))]
 type RenameHook = std::cell::RefCell<Option<Box<dyn FnOnce()>>>;
 #[cfg(any(test, feature = "test-support"))]
+type RenameObserver = std::cell::RefCell<Option<Box<dyn FnMut() -> io::Result<()>>>>;
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     static AFTER_RENAME: RenameHook = const { std::cell::RefCell::new(None) };
+    static AFTER_EACH_RENAME: RenameObserver = const { std::cell::RefCell::new(None) };
 }
 
 #[cfg(any(test, feature = "test-support"))]
 impl SourceDirectory {
+    /// Observe a bounded operation's control selections for failure injection.
+    /// The callback must not recursively publish another control.
+    #[doc(hidden)]
+    pub fn observe_control_renames<T>(
+        mut callback: impl FnMut() + 'static,
+        operation: impl FnOnce() -> T,
+    ) -> io::Result<T> {
+        Self::observe_control_replies(
+            move || {
+                callback();
+                Ok(())
+            },
+            operation,
+        )
+    }
+
+    /// Inject an IO/lost-response failure after native selection without
+    /// pretending that the completed namespace effect rolled back.
+    #[doc(hidden)]
+    pub fn observe_control_replies<T>(
+        callback: impl FnMut() -> io::Result<()> + 'static,
+        operation: impl FnOnce() -> T,
+    ) -> io::Result<T> {
+        AFTER_EACH_RENAME.with(|hook| {
+            let mut slot = hook.borrow_mut();
+            if slot.is_some() {
+                return Err(io::Error::new(
+                    io::ErrorKind::WouldBlock,
+                    "a control observer is already installed",
+                ));
+            }
+            *slot = Some(Box::new(callback));
+            Ok(())
+        })?;
+        struct Reset;
+        impl Drop for Reset {
+            fn drop(&mut self) {
+                AFTER_EACH_RENAME.with(|hook| *hook.borrow_mut() = None);
+            }
+        }
+        let reset = Reset;
+        let result = operation();
+        drop(reset);
+        Ok(result)
+    }
+
     /// Test-only, thread-local observation after one successful native rename
     /// and before its completion barriers. The scope resets on return/unwind.
     #[doc(hidden)]
@@ -68,6 +117,7 @@ enum State {
     Sealed,
     Attempted,
     Complete,
+    Discarded,
 }
 
 /// A new mutable-control candidate in one captured directory. The caller owns
@@ -201,19 +251,20 @@ impl<'directory> CapturedControlCandidate<'directory> {
                 "control candidate must be sealed and have a distinct head name",
             ));
         }
-        self.state = State::Attempted;
+        // Resource refusal and identity checks precede the first namespace
+        // attempt. They leave this same sealed owner retryable.
+        let _preflight = context.acquire(DescriptorKind::Transient)?;
         {
             let scope = native_scope(context)?;
             self.directory.require_scope(&scope)?;
             let FileBacking::Native(candidate) = &self.file.backing else {
                 unreachable!("control candidates exclusively create native files");
             };
-            let native = || {
+            let mut native = || {
                 self.directory.root.with_native(|root| {
                     // NativeDirectoryTrace owns the namespace transaction here.
                     // Reentering the candidate's file trace would relock ModelCore.
                     {
-                        let _permit = context.acquire(DescriptorKind::Transient)?;
                         let entry = platform::open_child(root, source)?;
                         if crate::native_file_identity::of_file(&entry)?
                             != crate::native_file_identity::of_file(&candidate.inner)?
@@ -225,7 +276,6 @@ impl<'directory> CapturedControlCandidate<'directory> {
                         }
                     }
                     {
-                        let _permit = context.acquire(DescriptorKind::Transient)?;
                         match platform::open_child(root, target) {
                             Ok(entry) => {
                                 if !entry.metadata()?.is_file() {
@@ -247,6 +297,7 @@ impl<'directory> CapturedControlCandidate<'directory> {
                             Err(error) => return Err(error),
                         }
                     }
+                    self.state = State::Attempted;
                     platform::replace_control(root, &candidate.inner, source, target)
                 })
             };
@@ -260,6 +311,14 @@ impl<'directory> CapturedControlCandidate<'directory> {
             #[cfg(not(any(test, feature = "test-support")))]
             native()?;
         }
+        drop(_preflight);
+        #[cfg(any(test, feature = "test-support"))]
+        AFTER_EACH_RENAME.with(|hook| {
+            if let Some(callback) = hook.borrow_mut().as_mut() {
+                callback()?;
+            }
+            Ok::<_, io::Error>(())
+        })?;
         #[cfg(any(test, feature = "test-support"))]
         AFTER_RENAME.with(|hook| {
             let callback = hook.borrow_mut().take();
@@ -278,6 +337,38 @@ impl<'directory> CapturedControlCandidate<'directory> {
 
     pub fn is_complete(&self) -> bool {
         self.state == State::Complete
+    }
+
+    pub fn selection_attempted(&self) -> bool {
+        matches!(self.state, State::Attempted | State::Complete)
+    }
+
+    /// Remove only an unselected candidate whose entry still names this held
+    /// file. The caller excludes other writers; unknown rename effects retain
+    /// their original recovery owner instead of authorizing cleanup.
+    pub fn discard_unselected(&mut self, context: &FileOpenContext) -> io::Result<()> {
+        if self.state == State::Discarded {
+            return self.directory.sync(context);
+        }
+        if !matches!(self.state, State::Writable | State::Sealed) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "attempted control cannot be discarded",
+            ));
+        }
+        let name = std::str::from_utf8(&self.name[..self.length]).expect("ASCII name");
+        if !self
+            .directory
+            .matches_child_file(context, name, &self.file)?
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "private control entry changed before cleanup",
+            ));
+        }
+        self.directory.remove_child(context, name)?;
+        self.state = State::Discarded;
+        self.directory.sync(context)
     }
 
     fn require_writable(&self) -> io::Result<()> {

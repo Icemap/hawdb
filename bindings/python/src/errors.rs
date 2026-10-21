@@ -133,8 +133,15 @@ pub fn format_hawdb_error(error: &HawDBError) -> PyErr {
             // Preserve installation failures instead of returning an incomplete resource error.
             attributes.err().unwrap_or(exception)
         }),
+        HawDBError::ProjectionBusy => Python::attach(|py| {
+            let exception = ExecutionError::new_err(message);
+            let attributes = exception
+                .value(py)
+                .setattr("kind", "projection_busy")
+                .and_then(|()| exception.value(py).setattr("retryable", true));
+            attributes.err().unwrap_or(exception)
+        }),
         HawDBError::Execution(_)
-        | HawDBError::ProjectionBusy
         | HawDBError::TransactionReadDependencyRefused { .. }
         | HawDBError::BranchEvidenceBudgetExceeded { .. }
         | HawDBError::ReadBudgetExceeded(_)
@@ -266,6 +273,30 @@ mod tests {
             assert!(exception.is_instance_of::<ExecutionError>(py));
             assert!(!exception.is_instance_of::<ResourceBudgetError>(py));
             assert!(!exception.value(py).hasattr("budget").unwrap());
+        });
+    }
+
+    #[test]
+    fn projection_busy_preserves_its_retryable_kind() {
+        Python::initialize();
+        Python::attach(|py| {
+            let exception = format_hawdb_error(&HawDBError::ProjectionBusy);
+            assert!(exception.is_instance_of::<ExecutionError>(py));
+            assert_eq!(
+                exception
+                    .value(py)
+                    .getattr("kind")
+                    .unwrap()
+                    .extract::<String>()
+                    .unwrap(),
+                "projection_busy"
+            );
+            assert!(exception
+                .value(py)
+                .getattr("retryable")
+                .unwrap()
+                .extract::<bool>()
+                .unwrap());
         });
     }
 }

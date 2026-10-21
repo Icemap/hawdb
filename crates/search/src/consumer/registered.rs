@@ -12,6 +12,10 @@ use std::num::NonZeroU64;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+mod recovery;
+use recovery::{ProducerScratch, UnsealedRegisteredConsumer};
+pub use recovery::{RegisteredConsumerError, RegisteredConsumerRecovery};
+
 #[derive(Debug, Clone, Copy)]
 pub struct RegisteredConsumerLimits {
     pub generation_bytes: NonZeroU64,
@@ -41,6 +45,7 @@ pub struct RegisteredConsumerPreparation<'a> {
     pub permit: Arc<RuntimePermit>,
     pub task: RuntimeTaskContext,
     pub limits: RegisteredConsumerLimits,
+    pub recovery_memory: RuntimeRetainedMemory,
     pub previous: Option<&'a ConsumerProjection>,
 }
 
@@ -49,6 +54,7 @@ pub(super) struct StationaryConsumer {
     pub(super) slot: ConsumerReadSlot,
     pub(super) selected: ConsumerSelectionReceipt,
     pending: Option<Box<PreparedRegisteredConsumer>>,
+    preparation: Option<RegisteredConsumerRecovery>,
     // The first directory continues to exclude a second logical owner after
     // selection advances to a sibling. No reader or publication lock is dropped
     // to make a namespace move possible.
@@ -68,7 +74,10 @@ pub struct PreparedRegisteredConsumer {
     resident_memory: RuntimeRetainedMemory,
     parent: SourceDirectory,
     locator: PathBuf,
-    slot: ConsumerReadSlot,
+    slot: Option<ConsumerReadSlot>,
+    scratch: Option<ProducerScratch>,
+    ready: bool,
+    recovery_memory: Option<RuntimeRetainedMemory>,
     logical_owner: Option<Arc<operation::Authority>>,
 }
 
@@ -98,7 +107,7 @@ impl ConsumerProjection {
             .stationary
             .as_ref()
             .ok_or_else(|| invalid("Consumer is not stationary"))?;
-        if native.pending.is_some() {
+        if native.pending.is_some() || native.preparation.is_some() {
             return Err(HawDBError::ProjectionBusy);
         }
         let report = native.slot.report()?;
@@ -134,7 +143,7 @@ impl ConsumerProjection {
     ) -> Result<PendingConsumerGeneration> {
         self.stationary_receipt()?;
         let native = self.stationary.as_ref().expect("stationary owner");
-        allocation.prepare_stationary_generation_captured(
+        allocation.begin_stationary_generation_captured(
             &native.parent,
             native
                 .locator
@@ -144,10 +153,10 @@ impl ConsumerProjection {
     }
 
     pub fn prepare_registered<F>(
-        mut birth: PendingConsumerGeneration,
+        birth: PendingConsumerGeneration,
         preparation: RegisteredConsumerPreparation<'_>,
         initialize: F,
-    ) -> Result<PreparedRegisteredConsumer>
+    ) -> std::result::Result<PreparedRegisteredConsumer, Box<RegisteredConsumerError>>
     where
         F: FnOnce(&mut SearchIndex) -> Result<()>,
     {
@@ -157,158 +166,188 @@ impl ConsumerProjection {
             permit,
             task,
             limits,
+            recovery_memory,
             previous,
         } = preparation;
-        let reserved_binding = binding(birth.reservation_binding()?);
-        let parent = birth
-            .original_parent()?
-            .duplicate(&birth.original_parent()?.operation_context())?;
-        let target_label = locator
-            .parent()
-            .ok_or_else(|| invalid("Consumer target has no parent"))?
-            .join(birth.generation_name());
-        let born = birth.born_directory()?;
-        let context = born.operation_context();
-        let mut scratch = born.prepare_directory_candidate(".consumer-producer")?;
-        born.create_directory_candidate(&context, &mut scratch)?;
-        let scratch_directory = born.open_created_directory(&context, &scratch)?;
-        let scratch_label = target_label.join(scratch.name());
-        let producer = match initialize_producer(
-            &scratch_label,
-            &scratch_directory,
-            reserved_binding.clone(),
-            epoch,
-            initialize,
-        ) {
-            Ok(producer) => producer,
-            Err(error) => {
-                // Cleanup is confined to the original, known-created scratch.
-                // Resource refusal retains its evidence and the durable birth.
-                if remove_producer(born, scratch_directory, &mut scratch).is_ok() {
-                    let _ = birth.retire_cleaned_unsealed();
-                }
-                return Err(error);
-            }
-        };
-        if !producer
-            .authority
-            .publication()
-            .with_captured_directory(|directory| directory.same_directory(&scratch_directory))
-        {
-            return Err(invalid(
-                "Consumer producer no longer names its original native directory",
-            ));
-        }
-        let crate::out_of_core::ConsumerProducerReferences {
-            manifest,
-            artifacts: references,
-        } = crate::out_of_core::consumer_producer_references(producer.authority.publication())?;
-        let artifacts = references
-            .iter()
-            .map(|(name, reference)| generation_metadata::ArtifactReference {
-                name,
-                reference: *reference,
-            })
-            .collect::<Vec<_>>();
-        let identity = birth.reservation_binding()?;
-        let input = generation_metadata::MetadataInput {
-            binding: &reserved_binding,
-            source_epoch: epoch,
-            target_incarnation: identity.target_incarnation,
-            generation: identity.generation,
-            operation: identity.operation,
-            component_uuid: reserved_binding.projection_uuid,
-            search_manifest: manifest,
-            artifacts: &artifacts,
-        };
-        let total = artifacts
-            .iter()
-            .try_fold(manifest.byte_length, |total, artifact| {
-                total
-                    .checked_add(artifact.reference.byte_length)
-                    .ok_or_else(|| invalid("Consumer generation length overflow"))
-            })?
-            .checked_add(input.encoded_len(limits.metadata, &task)? as u64)
-            .ok_or_else(|| invalid("Consumer metadata length overflow"))?;
-        if total > limits.generation_bytes.get() {
-            return Err(invalid("Consumer generation exceeds configured byte bound"));
-        }
-        let mut target = ConsumerStationaryTargetLease::acquire_governed(
-            &mut birth,
-            Arc::clone(&permit),
-            task.clone(),
-        )?;
-        {
-            let mut output = target.begin_candidate_output(total)?;
-            output.install_artifact(
-                &scratch_directory,
-                crate::out_of_core::OUT_OF_CORE_MANIFEST_FILE,
-                crate::out_of_core::OUT_OF_CORE_MANIFEST_FILE,
-                manifest,
-            )?;
-            for artifact in &artifacts {
-                output.install_artifact(
-                    &scratch_directory,
-                    artifact.name,
-                    artifact.name,
-                    artifact.reference,
-                )?;
-            }
-            output.seal_generation_metadata(&input, limits.metadata)?;
-        }
-        target.prepare_candidate_view(limits.generation_bytes)?;
-        let detached = target.detach_candidate()?;
-        let index_memory = resident_admission(&detached.lease, &permit, limits)?;
-        let index = load_compatibility_snapshot(&detached.lease)?;
-        // Runtime queries use the sealed native view. The compatibility index
-        // comes from the same captured snapshot and cannot be independently mutated.
-        if index.consumer_binding.as_ref() != Some(&reserved_binding)
-            || index.source_graph_commit_epoch != Some(epoch)
-        {
-            return Err(invalid(
-                "Consumer resident compatibility snapshot differs from sealed candidate",
-            ));
-        }
-        let mut candidate = detached
-            .attach_birth(birth)
-            .map_err(|error| error.into_parts().0)?;
-        candidate.record_durable_seal()?;
-        candidate.record_publication_intent()?;
-        candidate.prepare_selection(&permit, task)?;
-        let slot = match previous {
-            Some(previous) => {
-                previous.stationary_receipt()?;
-                previous
-                    .stationary
-                    .as_ref()
-                    .expect("stationary owner")
-                    .slot
-                    .clone()
-            }
-            None => candidate.create_read_slot(&permit)?,
-        };
-        candidate.bind_read_slot(&slot, &permit)?;
-        let logical_owner = previous.and_then(|previous| {
-            previous
-                .stationary
-                .as_ref()
-                .map(|native| Arc::clone(&native.logical_owner))
-        });
-        drop(producer);
-        remove_producer(
-            candidate.birth.born_directory()?,
-            scratch_directory,
-            &mut scratch,
-        )?;
-        Ok(PreparedRegisteredConsumer {
-            candidate,
-            index,
-            resident_memory: index_memory,
-            parent,
+        let mut cleanup = UnsealedRegisteredConsumer {
+            birth: Some(birth),
+            scratch: None,
             locator: locator.to_owned(),
-            slot,
-            logical_owner,
-        })
+            target_children: Vec::new(),
+            cleaned: false,
+            _memory: Some(recovery_memory),
+        };
+        let built = (|| -> Result<PreparedRegisteredConsumer> {
+            if let Some(previous) = previous {
+                previous.stationary_receipt()?;
+            }
+            let birth = cleanup.birth.as_mut().expect("preparing birth");
+            birth.create()?;
+            let reserved_binding = binding(birth.reservation_binding()?);
+            let parent = birth
+                .original_parent()?
+                .duplicate(&birth.original_parent()?.operation_context())?;
+            let target_label = locator
+                .parent()
+                .ok_or_else(|| invalid("Consumer target has no parent"))?
+                .join(birth.generation_name());
+            let born = birth.born_directory()?;
+            let context = born.operation_context();
+            cleanup.scratch = Some(ProducerScratch {
+                candidate: born.prepare_directory_candidate(".consumer-producer")?,
+                directory: None,
+            });
+            let scratch = cleanup.scratch.as_mut().expect("scratch owner");
+            born.create_directory_candidate(&context, &mut scratch.candidate)?;
+            scratch.directory = Some(born.open_created_directory(&context, &scratch.candidate)?);
+            let scratch_label = target_label.join(scratch.candidate.name());
+            let scratch_directory = scratch.directory.as_ref().expect("open scratch");
+            let producer = initialize_producer(
+                &scratch_label,
+                scratch_directory,
+                reserved_binding.clone(),
+                epoch,
+                initialize,
+            )?;
+            if !producer
+                .authority
+                .publication()
+                .with_captured_directory(|directory| directory.same_directory(scratch_directory))
+            {
+                return Err(invalid(
+                    "Consumer producer no longer names its original native directory",
+                ));
+            }
+            let crate::out_of_core::ConsumerProducerReferences {
+                manifest,
+                artifacts: references,
+            } = crate::out_of_core::consumer_producer_references(producer.authority.publication())?;
+            let artifacts = references
+                .iter()
+                .map(|(name, reference)| generation_metadata::ArtifactReference {
+                    name,
+                    reference: *reference,
+                })
+                .collect::<Vec<_>>();
+            let identity = birth.reservation_binding()?;
+            let input = generation_metadata::MetadataInput {
+                binding: &reserved_binding,
+                source_epoch: epoch,
+                target_incarnation: identity.target_incarnation,
+                generation: identity.generation,
+                operation: identity.operation,
+                component_uuid: reserved_binding.projection_uuid,
+                search_manifest: manifest,
+                artifacts: &artifacts,
+            };
+            let total = artifacts
+                .iter()
+                .try_fold(manifest.byte_length, |total, artifact| {
+                    total
+                        .checked_add(artifact.reference.byte_length)
+                        .ok_or_else(|| invalid("Consumer generation length overflow"))
+                })?
+                .checked_add(input.encoded_len(limits.metadata, &task)? as u64)
+                .ok_or_else(|| invalid("Consumer metadata length overflow"))?;
+            if total > limits.generation_bytes.get() {
+                return Err(invalid("Consumer generation exceeds configured byte bound"));
+            }
+            cleanup
+                .target_children
+                .extend(artifacts.iter().map(|artifact| artifact.name.to_owned()));
+            cleanup.target_children.extend([
+                crate::out_of_core::OUT_OF_CORE_MANIFEST_FILE.to_owned(),
+                GENERATION_METADATA_FILE.to_owned(),
+                ".search_projection.publish.lock".to_owned(),
+                ".search-source-process.lock".to_owned(),
+            ]);
+            let mut target = ConsumerStationaryTargetLease::acquire_governed(
+                birth,
+                Arc::clone(&permit),
+                task.clone(),
+            )?;
+            {
+                let mut output = target.begin_candidate_output(total)?;
+                output.install_artifact(
+                    scratch_directory,
+                    crate::out_of_core::OUT_OF_CORE_MANIFEST_FILE,
+                    crate::out_of_core::OUT_OF_CORE_MANIFEST_FILE,
+                    manifest,
+                )?;
+                for artifact in &artifacts {
+                    output.install_artifact(
+                        scratch_directory,
+                        artifact.name,
+                        artifact.name,
+                        artifact.reference,
+                    )?;
+                }
+                output.seal_generation_metadata(&input, limits.metadata)?;
+            }
+            target.prepare_candidate_view(limits.generation_bytes)?;
+            let detached = target.detach_candidate()?;
+            let index_memory = resident_admission(&detached.lease, &permit, limits)?;
+            let index = load_compatibility_snapshot(&detached.lease)?;
+            // Runtime queries use the sealed native view. The compatibility index
+            // comes from the same captured snapshot and cannot be independently mutated.
+            if index.consumer_binding.as_ref() != Some(&reserved_binding)
+                || index.source_graph_commit_epoch != Some(epoch)
+            {
+                return Err(invalid(
+                    "Consumer resident compatibility snapshot differs from sealed candidate",
+                ));
+            }
+            drop(producer);
+            let birth = cleanup.birth.take().expect("attached birth");
+            let candidate = match detached.attach_birth(birth) {
+                Ok(candidate) => candidate,
+                Err(error) => {
+                    let (error, detached, birth) = error.into_parts();
+                    drop(detached);
+                    cleanup.birth = Some(birth);
+                    return Err(error);
+                }
+            };
+            Ok(PreparedRegisteredConsumer {
+                candidate,
+                index,
+                resident_memory: index_memory,
+                parent,
+                locator: locator.to_owned(),
+                slot: previous.and_then(|previous| {
+                    previous
+                        .stationary
+                        .as_ref()
+                        .map(|native| native.slot.clone())
+                }),
+                scratch: cleanup.scratch.take(),
+                ready: false,
+                recovery_memory: cleanup._memory.take(),
+                logical_owner: previous.and_then(|previous| {
+                    previous
+                        .stationary
+                        .as_ref()
+                        .map(|native| Arc::clone(&native.logical_owner))
+                }),
+            })
+        })();
+        let mut prepared = match built {
+            Ok(prepared) => prepared,
+            Err(error) => {
+                let recovery = match cleanup.retire() {
+                    Ok(()) => None,
+                    Err(_) => Some(RegisteredConsumerRecovery::Unsealed(Box::new(cleanup))),
+                };
+                return Err(Box::new(RegisteredConsumerError { error, recovery }));
+            }
+        };
+        if let Err(error) = prepared.finish_preparation(&permit, task) {
+            return Err(Box::new(RegisteredConsumerError {
+                error,
+                recovery: Some(RegisteredConsumerRecovery::Prepared(Box::new(prepared))),
+            }));
+        }
+        Ok(prepared)
     }
 
     pub fn retain_pending_publication(
@@ -326,6 +365,21 @@ impl ConsumerProjection {
         Ok(())
     }
 
+    pub fn retain_failed_preparation(
+        &mut self,
+        recovery: RegisteredConsumerRecovery,
+    ) -> Result<()> {
+        let native = self
+            .stationary
+            .as_mut()
+            .ok_or_else(|| invalid("Consumer is not stationary"))?;
+        if native.preparation.is_some() || native.pending.is_some() {
+            return Err(HawDBError::ProjectionBusy);
+        }
+        native.preparation = Some(recovery);
+        Ok(())
+    }
+
     /// Reconcile the retained operation with fresh admission. Do not validate
     /// its old E against today's graph head: the original selector is authority.
     pub fn resolve_registered_publication(
@@ -337,6 +391,17 @@ impl ConsumerProjection {
             .stationary
             .as_mut()
             .ok_or_else(|| invalid("Consumer is not stationary"))?;
+        if let Some(recovery) = native.preparation.take() {
+            match recovery.retry(&permit, task.clone()) {
+                Ok(Some(prepared)) => native.pending = Some(Box::new(prepared)),
+                Ok(None) => {}
+                Err(error) => {
+                    let (error, recovery) = error.into_parts();
+                    native.preparation = recovery;
+                    return Err(error);
+                }
+            }
+        }
         let Some(mut pending) = native.pending.take() else {
             return self.require_completed_view();
         };
@@ -458,6 +523,7 @@ impl ConsumerProjection {
             slot,
             selected,
             pending: None,
+            preparation: None,
             logical_owner,
             parent: original_parent,
             locator: locator.to_owned(),
@@ -492,6 +558,49 @@ impl ConsumerProjection {
 }
 
 impl PreparedRegisteredConsumer {
+    fn finish_preparation(
+        &mut self,
+        permit: &RuntimePermit,
+        task: RuntimeTaskContext,
+    ) -> Result<()> {
+        if self.ready {
+            return Ok(());
+        }
+        if self.slot.is_none() {
+            self.slot = Some(self.candidate.create_read_slot(permit)?);
+        }
+        self.candidate.record_durable_seal()?;
+        self.candidate.record_publication_intent()?;
+        if self.candidate.selection.is_none() {
+            self.candidate.prepare_selection(permit, task)?;
+        }
+        if self
+            .candidate
+            .selection
+            .as_ref()
+            .is_some_and(|selection| selection.read.is_none())
+        {
+            self.candidate
+                .bind_read_slot(self.slot.as_ref().expect("read slot"), permit)?;
+        }
+        if let Some(scratch) = self.scratch.as_mut() {
+            scratch.remove(self.candidate.birth.born_directory()?)?;
+        }
+        self.scratch = None;
+        self.ready = true;
+        // The prepared selector now funds retained recovery metadata. Never
+        // retain a construction execution permit merely to keep cleanup alive.
+        self.recovery_memory = None;
+        Ok(())
+    }
+
+    pub fn selection_attempted(&self) -> bool {
+        self.candidate
+            .selection
+            .as_ref()
+            .is_some_and(|selection| selection.selection.native_selection_attempted())
+    }
+
     pub fn report(&self) -> ConsumerCandidateViewReport {
         self.candidate.report()
     }
@@ -505,10 +614,22 @@ impl PreparedRegisteredConsumer {
         permit: Arc<RuntimePermit>,
         task: RuntimeTaskContext,
     ) -> Result<ConsumerSelectionAttempt<'_>> {
+        if !self.ready {
+            return Err(HawDBError::ProjectionBusy);
+        }
         self.candidate.admit_selection(permit, task)
     }
     fn validate_completion(&self, receipt: &ConsumerSelectionReceipt) -> Result<()> {
-        if self.slot.report()?.metadata_reference != receipt.metadata_reference()
+        if !self.ready {
+            return Err(HawDBError::ProjectionBusy);
+        }
+        if self
+            .slot
+            .as_ref()
+            .ok_or(HawDBError::ProjectionBusy)?
+            .report()?
+            .metadata_reference
+            != receipt.metadata_reference()
             || self.candidate.report().metadata_reference != receipt.metadata_reference()
         {
             return Err(invalid("registered Consumer completion differs"));
@@ -516,8 +637,16 @@ impl PreparedRegisteredConsumer {
         Ok(())
     }
 
-    pub fn complete(self, receipt: ConsumerSelectionReceipt) -> Result<ConsumerProjection> {
-        self.validate_completion(&receipt)?;
+    pub fn complete(
+        self,
+        receipt: ConsumerSelectionReceipt,
+    ) -> std::result::Result<ConsumerProjection, Box<RegisteredConsumerError>> {
+        if let Err(error) = self.validate_completion(&receipt) {
+            return Err(Box::new(RegisteredConsumerError {
+                error,
+                recovery: Some(RegisteredConsumerRecovery::Prepared(Box::new(self))),
+            }));
+        }
         Ok(self.into_completed(receipt))
     }
 
@@ -532,6 +661,9 @@ impl PreparedRegisteredConsumer {
             locator,
             slot,
             logical_owner,
+            scratch: _,
+            ready: _,
+            recovery_memory: _,
         } = self;
         let ConsumerPreparedCandidate {
             detached,
@@ -543,9 +675,10 @@ impl PreparedRegisteredConsumer {
         index.consumer_owner = Arc::downgrade(&authority);
         let logical_owner = logical_owner.unwrap_or_else(|| Arc::clone(&authority));
         let native = StationaryConsumer {
-            slot,
+            slot: slot.expect("completed read slot"),
             selected: receipt,
             pending: None,
+            preparation: None,
             parent,
             locator,
             logical_owner,
@@ -655,7 +788,13 @@ where
             index: &mut index,
             operation,
         };
-        initialize(scope.index)?;
+        // The initializer owns only a private builder and a read snapshot. Do
+        // not unwind past its native cleanup owner after partial construction.
+        // An interrupted initializer is never a publication acknowledgement.
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| initialize(scope.index)))
+            .map_err(|_| {
+                HawDBError::Execution("Consumer initializer panicked before publication".into())
+            })??;
     }
     if !authority.owns(&index)
         || index.path.is_some()

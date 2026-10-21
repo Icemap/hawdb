@@ -16,6 +16,7 @@ const BIRTH_HEADER: &[u8] = b"HAWDB_CONSUMER_BIRTH_V1\n";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Phase {
+    Intent,
     Prepared,
     Attempted,
     Recorded,
@@ -50,6 +51,24 @@ pub struct PendingConsumerGeneration {
 }
 
 impl ReservedConsumerAllocation {
+    /// Retain the original reservation and parent before attempting the birth
+    /// intent. The registered facade owns this token across every later error.
+    pub fn begin_initial_generation(self, parent: &Path) -> Result<PendingConsumerGeneration> {
+        let name = Path::new(&self.target_locator)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .ok_or_else(|| invalid("initial target requires a child name"))?
+            .to_owned();
+        self.begin_generation(parent, Some(name), None)
+    }
+
+    pub fn begin_stationary_generation_captured(
+        self,
+        parent: &SourceDirectory,
+        label: &Path,
+    ) -> Result<PendingConsumerGeneration> {
+        self.begin_generation(label, None, Some(parent))
+    }
     /// Capture the original target parent once, using the existing source FD
     /// domain, and persist birth intent before any native directory effect.
     /// This is for stationary producers; the legacy relocating stage is not
@@ -90,6 +109,17 @@ impl ReservedConsumerAllocation {
         initial_name: Option<String>,
         captured: Option<&SourceDirectory>,
     ) -> Result<PendingConsumerGeneration> {
+        let mut birth = self.begin_generation(original_parent, initial_name, captured)?;
+        birth.complete_birth_intent()?;
+        Ok(birth)
+    }
+
+    fn begin_generation(
+        self,
+        original_parent: &Path,
+        initial_name: Option<String>,
+        captured: Option<&SourceDirectory>,
+    ) -> Result<PendingConsumerGeneration> {
         let parent_locator = original_parent
             .to_str()
             .filter(|value| !value.is_empty() && value.len() <= 16 * 1024)
@@ -117,13 +147,6 @@ impl ReservedConsumerAllocation {
             }
             marker_bytes(self.domain, row, &name, &parent_locator)
         })?;
-        self.transition_birth(
-            NativeBirth::Reserved,
-            NativeBirth::Pending {
-                generation_name: name,
-                parent_locator: parent_locator.clone(),
-            },
-        )?;
         Ok(PendingConsumerGeneration {
             allocation: Some(self),
             parent: Some(parent),
@@ -132,7 +155,7 @@ impl ReservedConsumerAllocation {
             marker: None,
             marker_bytes,
             parent_locator,
-            phase: Phase::Prepared,
+            phase: Phase::Intent,
             settlement_publication_attempted: false,
             candidate_seal_attempted: false,
             publication_intent_attempted: false,
@@ -178,10 +201,6 @@ impl ReservedConsumerAllocation {
             self.require_row(row)?;
             action(row)
         })
-    }
-
-    fn transition_birth(&self, expected: NativeBirth, next: NativeBirth) -> Result<()> {
-        self.transition_birth_with_retry(expected, next, false)
     }
 
     fn transition_birth_with_retry(
@@ -311,6 +330,62 @@ pub(super) fn marker_file_name() -> &'static str {
 }
 
 impl PendingConsumerGeneration {
+    fn complete_birth_intent(&mut self) -> Result<()> {
+        if self.phase == Phase::Intent {
+            self.allocation
+                .as_ref()
+                .expect("original reservation")
+                .transition_birth_with_retry(
+                    NativeBirth::Reserved,
+                    NativeBirth::Pending {
+                        generation_name: self.generation_name().to_owned(),
+                        parent_locator: self.parent_locator.clone(),
+                    },
+                    true,
+                )?;
+            self.phase = Phase::Prepared;
+        }
+        Ok(())
+    }
+
+    /// Resolve this process's original pre-producer attempt for cleanup. A
+    /// proven no-effect reservation can settle; a completed creation resumes
+    /// only through its retained parent/candidate/marker custody.
+    pub fn resolve_unexposed_birth(&mut self) -> Result<bool> {
+        self.complete_birth_intent()?;
+        if self.phase == Phase::Recorded {
+            return Ok(false);
+        }
+        if matches!(
+            self.phase,
+            Phase::Prepared | Phase::Attempted | Phase::Settling | Phase::Settled
+        ) && !self.candidate.may_own_entry()
+            && self.directory.is_none()
+            && self.marker.is_none()
+        {
+            self.settle_no_effect()?;
+            return Ok(true);
+        }
+        self.create()?;
+        Ok(false)
+    }
+
+    /// Cleanup borrows only the directory this owner created and retained.
+    /// It grants no producer, selection or recovery adoption capability and
+    /// needs no new catalog/file handles before retiring private scratch.
+    pub fn unsealed_cleanup_directory(&self) -> Result<&SourceDirectory> {
+        if self.phase != Phase::Recorded
+            || self.candidate_seal_attempted
+            || self.publication_intent_attempted
+            || self.selection_preparation_attempted
+        {
+            return Err(invalid("Consumer cleanup lacks unsealed native custody"));
+        }
+        self.directory
+            .as_ref()
+            .ok_or_else(|| invalid("Consumer cleanup directory missing"))
+    }
+
     /// Precompute a Consumer ledger selector outside the source validation
     /// fence. The caller retains this original birth and target exclusion.
     pub fn prepare_selection(&mut self) -> Result<PreparedConsumerSelection> {
@@ -419,13 +494,22 @@ impl PendingConsumerGeneration {
                     return Err(invalid("candidate seal birth state differs"));
                 }
                 if *attempted {
-                    if row.candidate_seal.as_ref() != Some(&seal) {
+                    if row
+                        .candidate_seal
+                        .as_ref()
+                        .is_some_and(|actual| actual != &seal)
+                    {
                         return Err(invalid("candidate seal outcome is unresolved"));
                     }
-                    let file = root.open_mutable_child(context, LEDGER_FILE, false)?;
-                    file.sync_all()?;
-                    root.sync(context)?;
-                    return Ok(());
+                    if row.candidate_seal.is_some() {
+                        let file = root.open_mutable_child(context, LEDGER_FILE, false)?;
+                        file.sync_all()?;
+                        root.sync(context)?;
+                        return Ok(());
+                    }
+                    // The original complete ledger proves the previous root
+                    // remained selected. Reissue this same immutable seal.
+                    *attempted = false;
                 }
                 if row.candidate_seal.is_some() {
                     return Err(invalid("candidate seal already belongs to an operation"));
@@ -439,11 +523,7 @@ impl PendingConsumerGeneration {
                 );
                 // A failed or lost native response never starts a fresh seal
                 // attempt for this owner. Resolve the original ledger effect.
-                *attempted = true;
-                let mut candidate = root.create_control_candidate(context, &name)?;
-                candidate.write_all(&bytes)?;
-                candidate.seal()?;
-                candidate.replace_head(context, LEDGER_FILE)?;
+                publish_ledger(root, context, &name, &bytes, attempted)?;
                 Ok(())
             })
     }
@@ -479,13 +559,18 @@ impl PendingConsumerGeneration {
                 allocation.require_row(row)?;
                 SelectedRoot::from_candidate(row)?;
                 if *attempted {
-                    if row.publication_intent.as_ref() != remembered.as_ref() {
+                    if row.publication_intent.is_some()
+                        && row.publication_intent.as_ref() != remembered.as_ref()
+                    {
                         return Err(invalid("publication intent outcome is unresolved"));
                     }
-                    let file = root.open_mutable_child(context, LEDGER_FILE, false)?;
-                    file.sync_all()?;
-                    root.sync(context)?;
-                    return Ok(());
+                    if row.publication_intent.is_some() {
+                        let file = root.open_mutable_child(context, LEDGER_FILE, false)?;
+                        file.sync_all()?;
+                        root.sync(context)?;
+                        return Ok(());
+                    }
+                    *attempted = false;
                 }
                 if row.publication_intent.is_some() {
                     return Err(invalid("publication intent already exists"));
@@ -501,6 +586,12 @@ impl PendingConsumerGeneration {
                     receipt_complete: false,
                     not_selected: false,
                 };
+                if remembered
+                    .as_ref()
+                    .is_some_and(|original| original != &intent)
+                {
+                    return Err(HawDBError::ProjectionBusy);
+                }
                 ledger.pending[index].publication_intent = Some(intent.clone());
                 validate(&ledger)?;
                 let bytes = encode(&ledger)?;
@@ -511,11 +602,7 @@ impl PendingConsumerGeneration {
                 *remembered = Some(intent);
                 // Reentry after an uncertain native effect only resolves this
                 // exact intent; it never selects a replacement root by name.
-                *attempted = true;
-                let mut candidate = root.create_control_candidate(context, &name)?;
-                candidate.write_all(&bytes)?;
-                candidate.seal()?;
-                candidate.replace_head(context, LEDGER_FILE)?;
+                publish_ledger(root, context, &name, &bytes, attempted)?;
                 Ok(())
             })
     }
@@ -525,7 +612,11 @@ impl PendingConsumerGeneration {
     /// No producer receives the directory until both target and ledger barriers
     /// have completed. A birth receipt is not source freshness or activation.
     pub fn create(&mut self) -> Result<()> {
-        if self.phase != Phase::Prepared {
+        self.complete_birth_intent()?;
+        if self.phase == Phase::Recorded {
+            return self.born_directory().map(|_| ());
+        }
+        if !matches!(self.phase, Phase::Prepared | Phase::Attempted) {
             return Err(invalid(
                 "native birth already attempted; resolve original debt",
             ));
@@ -533,11 +624,19 @@ impl PendingConsumerGeneration {
         self.phase = Phase::Attempted;
         let parent = self.parent.as_ref().expect("prepared birth retains parent");
         let context = parent.operation_context();
-        parent.create_directory_candidate(&context, &mut self.candidate)?;
-        self.directory = Some(parent.open_created_directory(&context, &self.candidate)?);
+        if self.candidate.creation_unattempted() {
+            parent.create_directory_candidate(&context, &mut self.candidate)?;
+        }
+        if self.directory.is_none() {
+            self.directory = Some(parent.open_created_directory(&context, &self.candidate)?);
+        }
         let directory = self.directory.as_ref().expect("opened created directory");
-        self.marker = Some(directory.create_child_new(&context, BIRTH_FILE)?);
+        if self.marker.is_none() {
+            self.marker = Some(directory.create_child_new(&context, BIRTH_FILE)?);
+        }
         let marker = self.marker.as_mut().expect("created marker");
+        use std::io::{Seek, SeekFrom};
+        marker.seek(SeekFrom::Start(0))?;
         marker.write_all(&self.marker_bytes)?;
         marker.sync_all()?;
         directory.sync(&context)?;
@@ -546,7 +645,7 @@ impl PendingConsumerGeneration {
         self.allocation
             .as_ref()
             .expect("unsettled allocation")
-            .transition_birth(
+            .transition_birth_with_retry(
                 NativeBirth::Pending {
                     generation_name: generation_name.clone(),
                     parent_locator: self.parent_locator.clone(),
@@ -555,6 +654,7 @@ impl PendingConsumerGeneration {
                     generation_name,
                     parent_locator: self.parent_locator.clone(),
                 },
+                true,
             )?;
         self.phase = Phase::Recorded;
         Ok(())

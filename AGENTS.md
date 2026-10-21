@@ -102,6 +102,14 @@
 - Report first-build cost as well as execution time. Local improvements do not
   establish remote CI speedup; record final-head CI evidence before that claim.
 
+## Consumer Failure Recovery
+
+- Consumer failure recovery must retain original native birth, scratch and
+  prepared-publication custody across resource refusals and registry refreshes.
+  Retry cleanup before reinitializing the same target; never adopt or recursively
+  delete an unpublished directory by its saved pathname. Keep pre-effect
+  refusal, uncertain publication, process recovery and power-loss evidence distinct.
+
 ## Local Fuzz Verification
 
 - Keep fuzz targets available through Bazel, but do not add them to default or dedicated CI jobs.
