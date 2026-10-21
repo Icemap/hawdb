@@ -93,6 +93,14 @@ fn vector_embedding_parameter(
     name: &str,
     vector_plan: &hawdb_plan_cypher::VectorPhysicalPlan,
 ) -> Result<Vec<f32>> {
+    if let Some(Value::Vector(vector)) = parameters.get(name) {
+        if vector.dimension().get() as usize != vector_plan_embedding_dimension(vector_plan) {
+            return Err(HawDBError::Semantic(format!(
+                "vector search parameter '${name}' dimension changed after planning"
+            )));
+        }
+        return Ok(vector.as_ref().coordinates().collect());
+    }
     let Some(Value::List(values)) = parameters.get(name) else {
         return Err(HawDBError::Semantic(format!(
             "vector search parameter '${name}' must be a numeric list"

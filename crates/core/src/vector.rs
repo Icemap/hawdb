@@ -1,0 +1,324 @@
+// Copyright 2026 Nowledge
+// Licensed under the Apache License, Version 2.0.
+
+//! Shared finite Float32 values and exact distance operators for SQL and Cypher.
+//! The canonical payload is a little-endian u32 dimension followed by f32 bits.
+//! Byte-backed storage permits unaligned, allocation-free views of row pages.
+
+use crate::{HawDBError, Result, ValueRef, VectorDimension};
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Vector {
+    encoded: Vec<u8>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct VectorRef<'a> {
+    encoded: &'a [u8],
+    dimension: VectorDimension,
+}
+
+impl Vector {
+    pub fn new(coordinates: &[f32]) -> Result<Self> {
+        let dimension = u32::try_from(coordinates.len())
+            .ok()
+            .and_then(VectorDimension::new)
+            .ok_or_else(|| invalid("dimension must be a positive u32"))?;
+        if coordinates.iter().any(|value| !value.is_finite()) {
+            return Err(invalid("coordinates must be finite"));
+        }
+        let bytes = coordinates
+            .len()
+            .checked_mul(4)
+            .and_then(|n| n.checked_add(4))
+            .ok_or_else(|| invalid("payload length overflow"))?;
+        let mut encoded = Vec::with_capacity(bytes);
+        encoded.extend_from_slice(&dimension.get().to_le_bytes());
+        for value in coordinates {
+            encoded.extend_from_slice(&value.to_le_bytes());
+        }
+        Ok(Self { encoded })
+    }
+
+    /// Takes ownership of an already admitted payload without an additional copy.
+    pub fn from_encoded(encoded: Vec<u8>) -> Result<Self> {
+        Self::from_encoded_with_work(encoded, || Ok(()), |_| Ok(()), std::convert::identity)
+    }
+
+    /// Validates in bounded units before taking ownership, without rescanning.
+    pub fn from_encoded_with_work<T, E>(
+        encoded: Vec<u8>,
+        start: impl FnMut() -> std::result::Result<T, E>,
+        finish: impl FnMut(T) -> std::result::Result<(), E>,
+        invalid: impl Fn(HawDBError) -> E,
+    ) -> std::result::Result<Self, E> {
+        VectorRef::from_encoded_with_work(&encoded, start, finish, invalid)?;
+        Ok(Self { encoded })
+    }
+
+    pub fn dimension(&self) -> VectorDimension {
+        VectorDimension::new(u32::from_le_bytes(
+            self.encoded[..4].try_into().expect("validated dimension"),
+        ))
+        .expect("nonzero dimension")
+    }
+    pub fn retained_capacity(&self) -> usize {
+        self.encoded.capacity()
+    }
+
+    pub fn as_ref(&self) -> VectorRef<'_> {
+        VectorRef {
+            dimension: self.dimension(),
+            encoded: &self.encoded,
+        }
+    }
+
+    pub fn encoded(&self) -> &[u8] {
+        &self.encoded
+    }
+}
+
+impl<'a> VectorRef<'a> {
+    /// Validates length and finite components before any caller-owned allocation.
+    pub fn from_encoded(encoded: &'a [u8]) -> Result<Self> {
+        Self::from_encoded_with_work(encoded, || Ok(()), |_| Ok(()), std::convert::identity)
+    }
+
+    /// Each work unit scans at most 64 KiB; callbacks own admission and cancellation.
+    pub fn from_encoded_with_work<T, E>(
+        encoded: &'a [u8],
+        mut start: impl FnMut() -> std::result::Result<T, E>,
+        mut finish: impl FnMut(T) -> std::result::Result<(), E>,
+        map_invalid: impl Fn(HawDBError) -> E,
+    ) -> std::result::Result<Self, E> {
+        let shape = || -> Result<VectorDimension> {
+            let prefix: [u8; 4] = encoded
+                .get(..4)
+                .and_then(|bytes| bytes.try_into().ok())
+                .ok_or_else(|| invalid("truncated dimension"))?;
+            let dimension = VectorDimension::new(u32::from_le_bytes(prefix))
+                .ok_or_else(|| invalid("dimension must be positive"))?;
+            let expected = usize::try_from(dimension.get())
+                .ok()
+                .and_then(|n| n.checked_mul(4))
+                .and_then(|n| n.checked_add(4))
+                .ok_or_else(|| invalid("payload length overflow"))?;
+            if encoded.len() != expected {
+                return Err(invalid("payload length does not match dimension"));
+            }
+            Ok(dimension)
+        };
+        let dimension = shape().map_err(&map_invalid)?;
+        for block in encoded[4..].chunks(64 * 1024) {
+            let unit = start()?;
+            let finite = block.chunks_exact(4).all(|bytes| {
+                f32::from_le_bytes(bytes.try_into().expect("fixed-width coordinate")).is_finite()
+            });
+            finish(unit)?;
+            if !finite {
+                return Err(map_invalid(invalid("coordinates must be finite")));
+            }
+        }
+        Ok(Self { dimension, encoded })
+    }
+
+    pub const fn dimension(self) -> VectorDimension {
+        self.dimension
+    }
+    pub const fn encoded(self) -> &'a [u8] {
+        self.encoded
+    }
+
+    pub fn coordinates(self) -> impl ExactSizeIterator<Item = f32> + 'a {
+        self.encoded[4..]
+            .chunks_exact(4)
+            .map(|bytes| f32::from_le_bytes(bytes.try_into().expect("fixed-width coordinate")))
+    }
+
+    /// The caller must admit the payload before materializing a borrowed value.
+    pub fn to_owned(self) -> Vector {
+        Vector {
+            encoded: self.encoded.to_vec(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum VectorDistance {
+    Cosine,
+    Euclidean,
+}
+
+impl VectorDistance {
+    pub fn from_function_name(name: &str) -> Option<Self> {
+        if name.eq_ignore_ascii_case("cosine_distance") {
+            Some(Self::Cosine)
+        } else if name.eq_ignore_ascii_case("l2_distance") {
+            Some(Self::Euclidean)
+        } else {
+            None
+        }
+    }
+
+    pub const fn function_name(self) -> &'static str {
+        match self {
+            Self::Cosine => "cosine_distance",
+            Self::Euclidean => "l2_distance",
+        }
+    }
+
+    pub fn distance(self, left: VectorRef<'_>, right: VectorRef<'_>) -> Result<f64> {
+        if left.dimension != right.dimension {
+            return Err(invalid("distance dimensions must match"));
+        }
+        let (mut dot, mut left_norm, mut right_norm, mut squared) =
+            (0.0f64, 0.0f64, 0.0f64, 0.0f64);
+        for (left, right) in left.coordinates().zip(right.coordinates()) {
+            let (left, right) = (f64::from(left), f64::from(right));
+            match self {
+                Self::Euclidean => squared += (left - right).powi(2),
+                Self::Cosine => {
+                    dot += left * right;
+                    left_norm += left * left;
+                    right_norm += right * right;
+                }
+            }
+        }
+        match self {
+            Self::Euclidean => Ok(squared.sqrt()),
+            Self::Cosine if left_norm == 0.0 || right_norm == 0.0 => {
+                Err(invalid("cosine distance requires nonzero vectors"))
+            }
+            Self::Cosine => {
+                Ok(1.0 - (dot / (left_norm.sqrt() * right_norm.sqrt())).clamp(-1.0, 1.0))
+            }
+        }
+    }
+
+    pub fn evaluate(self, left: ValueRef<'_>, right: ValueRef<'_>) -> Result<Option<f64>> {
+        match (left, right) {
+            (ValueRef::Null, _) | (_, ValueRef::Null) => Ok(None),
+            (ValueRef::Vector(left), ValueRef::Vector(right)) => {
+                self.distance(left, right).map(Some)
+            }
+            _ => Err(invalid("distance arguments must be vectors")),
+        }
+    }
+}
+
+fn invalid(reason: &str) -> HawDBError {
+    HawDBError::Semantic(format!("invalid vector: {reason}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn vector_encoding_rejects_malformed_and_nonfinite_payloads() {
+        let value = Vector::new(&[1.0, -2.5]).unwrap();
+        assert_eq!(value.encoded(), &[2, 0, 0, 0, 0, 0, 128, 63, 0, 0, 32, 192]);
+        assert_eq!(
+            Vector::from_encoded(value.encoded().to_vec()).unwrap(),
+            value
+        );
+        let mut unaligned = vec![0];
+        unaligned.extend_from_slice(value.encoded());
+        assert_eq!(
+            VectorRef::from_encoded(&unaligned[1..]).unwrap(),
+            value.as_ref()
+        );
+        for size in 0..value.encoded().len() {
+            assert!(VectorRef::from_encoded(&value.encoded()[..size]).is_err());
+        }
+        assert!(VectorRef::from_encoded(&[0, 0, 0, 0]).is_err());
+        assert!(VectorRef::from_encoded(&u32::MAX.to_le_bytes()).is_err());
+        for component in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            assert!(Vector::new(&[component]).is_err());
+            let mut encoded = 1u32.to_le_bytes().to_vec();
+            encoded.extend_from_slice(&component.to_le_bytes());
+            assert!(VectorRef::from_encoded(&encoded).is_err());
+        }
+        assert!(Vector::new(&[]).is_err());
+    }
+
+    #[test]
+    fn vector_distance_is_mathematical_and_shared() {
+        let left = Vector::new(&[1.0, 0.0]).unwrap();
+        let opposite = Vector::new(&[-1.0, 0.0]).unwrap();
+        let zero = Vector::new(&[0.0, 0.0]).unwrap();
+        assert_eq!(
+            VectorDistance::Cosine
+                .distance(left.as_ref(), opposite.as_ref())
+                .unwrap(),
+            2.0
+        );
+        assert_eq!(
+            VectorDistance::Euclidean
+                .distance(left.as_ref(), zero.as_ref())
+                .unwrap(),
+            1.0
+        );
+        assert!(VectorDistance::Cosine
+            .distance(left.as_ref(), zero.as_ref())
+            .is_err());
+        assert!(VectorDistance::Euclidean
+            .distance(left.as_ref(), Vector::new(&[1.0]).unwrap().as_ref())
+            .is_err());
+        assert_eq!(
+            VectorDistance::Cosine
+                .evaluate(ValueRef::Null, ValueRef::Vector(zero.as_ref()))
+                .unwrap(),
+            None
+        );
+        let large = Vector::new(&[f32::MAX, f32::MAX]).unwrap();
+        assert!(VectorDistance::Euclidean
+            .distance(large.as_ref(), zero.as_ref())
+            .unwrap()
+            .is_finite());
+        assert!(
+            VectorDistance::Cosine
+                .distance(large.as_ref(), large.as_ref())
+                .unwrap()
+                .abs()
+                < 1e-12
+        );
+    }
+}
+
+impl std::hash::Hash for VectorRef<'_> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.encoded.hash(state);
+    }
+}
+
+#[cfg(test)]
+mod work_tests {
+    use super::*;
+
+    #[test]
+    fn shared_vector_validation_stops_between_bounded_coordinate_blocks() {
+        let vector = Vector::new(&vec![1.0; 32769]).unwrap();
+        let calls = std::cell::Cell::new(0);
+        let error = Vector::from_encoded_with_work(
+            vector.encoded().to_vec(),
+            || {
+                calls.set(calls.get() + 1);
+                if calls.get() == 2 {
+                    Err("cancelled".to_owned())
+                } else {
+                    Ok(())
+                }
+            },
+            |_| Ok(()),
+            |error| error.to_string(),
+        )
+        .unwrap_err();
+        assert_eq!(error, "cancelled");
+        assert_eq!(calls.get(), 2);
+        let mut encoded = vector.encoded().to_vec();
+        let last = encoded.len() - 4;
+        encoded[last..].copy_from_slice(&f32::NAN.to_le_bytes());
+        assert!(Vector::from_encoded(encoded).is_err());
+    }
+}

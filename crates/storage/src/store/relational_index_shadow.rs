@@ -186,6 +186,10 @@ fn hash_relational_value(hasher: &mut IntegrityHasher, value: &RelationalValue) 
             hasher.update(&[5]);
             hash_bounded_bytes(hasher, value);
         }
+        RelationalValue::Vector(value) => {
+            hasher.update(&[8]);
+            hash_bounded_bytes(hasher, value.encoded());
+        }
         RelationalValue::Uuid(value) => {
             hasher.update(&[7]);
             hasher.update(value.as_bytes());

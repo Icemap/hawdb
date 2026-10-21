@@ -13,10 +13,11 @@
 // limitations under the License.
 
 use super::{
-    bind_bound, map_payload_bytes, project_bound_row, projection_uses_non_aggregate_coalesce,
-    visit_relational_rows, AccountedRelationalLocatorBatch, BatchControl, Binding, BindingId,
-    BoundRow, BoundStreamingPredicate, BoundStreamingProjection, ColumnarBatch, HawDBError,
-    PlannedJoin, QueryMemoryLedger, QueryRowsBuilder, RelationalBaseAccess, RelationalIndexRuntime,
+    bind_bound, map_payload_bytes, project_bound_row,
+    projection_uses_non_aggregate_scalar_function, visit_relational_rows,
+    AccountedRelationalLocatorBatch, BatchControl, Binding, BindingId, BoundRow,
+    BoundStreamingPredicate, BoundStreamingProjection, ColumnarBatch, HawDBError, PlannedJoin,
+    QueryMemoryLedger, QueryRowsBuilder, RelationalBaseAccess, RelationalIndexRuntime,
     RelationalOperatorId, RelationalPhysicalJoinExecution, RelationalPipelineState,
     RelationalQueryLimits, RelationalRowLocator, RelationalRowRuntime, RelationalState,
     RelationalTableSchema, Result, SelectStatement, StreamingProjectionOutput, Value,
@@ -190,7 +191,7 @@ pub(super) fn execute_streaming_projection<'a>(
     if tree_execution.is_none_or(|execution| execution.tree.root.relation_count() == 1)
         && joins.is_empty()
         && matches!(base_access, RelationalBaseAccess::FullScan)
-        && !projection_uses_non_aggregate_coalesce(&select.projection)
+        && !projection_uses_non_aggregate_scalar_function(&select.projection)
     {
         return execute_borrowed_streaming_full_scan(
             select,

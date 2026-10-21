@@ -293,6 +293,9 @@ impl crate::text::value_decode::Decoder for ControlledValueDecoder<'_> {
     fn binary(&self, input: &str) -> Result<Vec<u8>> {
         hex_bytes(input, true, self.0)
     }
+    fn vector(&self, input: &str) -> Result<hawdb_core::Vector> {
+        crate::background::decode_vector(hex_bytes(input, true, self.0)?, Some(&self.0.work))
+    }
     fn temporary(&self, input: &str) -> Result<TemporaryText> {
         temporary_text(input, self.0)
     }

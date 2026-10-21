@@ -275,6 +275,7 @@ pub enum RelationalValue {
     DoublePrecision(f64),
     Text(String),
     Bytea(Vec<u8>),
+    Vector(hawdb_core::Vector),
     Uuid(Uuid),
     Overflow(RelationalOverflowRef),
 }
@@ -292,6 +293,7 @@ pub enum RelationalValueRef<'a> {
     DoublePrecision(f64),
     Text(&'a str),
     Bytea(&'a [u8]),
+    Vector(hawdb_core::VectorRef<'a>),
     Uuid(Uuid),
     Overflow(RelationalOverflowRef),
 }
@@ -309,6 +311,7 @@ impl RelationalValue {
             Self::DoublePrecision(_) => Some(RelationalScalarType::DoublePrecision),
             Self::Text(_) => Some(RelationalScalarType::Text),
             Self::Bytea(_) => Some(RelationalScalarType::Bytea),
+            Self::Vector(value) => Some(RelationalScalarType::Vector(value.dimension())),
             Self::Uuid(_) => Some(RelationalScalarType::Uuid),
             Self::Overflow(reference) => Some(reference.scalar_type),
         }
@@ -325,6 +328,7 @@ impl RelationalValue {
             Self::BigInt(_) | Self::DoublePrecision(_) => 8,
             Self::Text(value) => value.len(),
             Self::Bytea(value) => value.len(),
+            Self::Vector(value) => value.encoded().len(),
             Self::Uuid(_) => 16,
             Self::Overflow(_) => std::mem::size_of::<RelationalOverflowRef>(),
         }
@@ -338,6 +342,7 @@ impl RelationalValue {
             Self::DoublePrecision(_) => 3,
             Self::Text(_) => 4,
             Self::Bytea(_) => 5,
+            Self::Vector(_) => 8,
             Self::Uuid(_) => 6,
             Self::Overflow(_) => 7,
         }
@@ -353,6 +358,7 @@ impl<'a> RelationalValueRef<'a> {
             Self::DoublePrecision(_) => Some(RelationalScalarType::DoublePrecision),
             Self::Text(_) => Some(RelationalScalarType::Text),
             Self::Bytea(_) => Some(RelationalScalarType::Bytea),
+            Self::Vector(value) => Some(RelationalScalarType::Vector(value.dimension())),
             Self::Uuid(_) => Some(RelationalScalarType::Uuid),
             Self::Overflow(reference) => Some(reference.scalar_type),
         }
@@ -372,6 +378,7 @@ impl<'a> RelationalValueRef<'a> {
             Self::BigInt(_) | Self::DoublePrecision(_) => 8,
             Self::Text(value) => value.len(),
             Self::Bytea(value) => value.len(),
+            Self::Vector(value) => value.encoded().len(),
             Self::Uuid(_) => 16,
             Self::Overflow(_) => std::mem::size_of::<RelationalOverflowRef>(),
         }
@@ -385,6 +392,7 @@ impl<'a> RelationalValueRef<'a> {
             Self::DoublePrecision(value) => RelationalValue::DoublePrecision(value),
             Self::Text(value) => RelationalValue::Text(value.to_owned()),
             Self::Bytea(value) => RelationalValue::Bytea(value.to_vec()),
+            Self::Vector(value) => RelationalValue::Vector(value.to_owned()),
             Self::Uuid(value) => RelationalValue::Uuid(value),
             Self::Overflow(reference) => RelationalValue::Overflow(reference),
         }
@@ -398,7 +406,12 @@ impl<'a> RelationalValueRef<'a> {
             |error: hawdb_core::HawDBError| RelationalError::Admission(error.to_string());
         let value = match self {
             Self::Text(value) => RelationalValue::Text(context.string(value).map_err(admission)?),
-            Self::Bytea(value) => {
+            Self::Bytea(_) | Self::Vector(_) => {
+                let (value, vector) = match self {
+                    Self::Bytea(value) => (value, false),
+                    Self::Vector(value) => (value.encoded(), true),
+                    _ => unreachable!(),
+                };
                 let mut bytes = context.vector_capacity(value.len()).map_err(admission)?;
                 for chunk in value.chunks(64 * 1024) {
                     let unit = context
@@ -407,7 +420,14 @@ impl<'a> RelationalValueRef<'a> {
                     bytes.extend_from_slice(chunk);
                     unit.finish();
                 }
-                RelationalValue::Bytea(bytes)
+                if vector {
+                    RelationalValue::Vector(
+                        crate::background::decode_vector(bytes, Some(&context.work))
+                            .map_err(admission)?,
+                    )
+                } else {
+                    RelationalValue::Bytea(bytes)
+                }
             }
             _ => self.to_owned_value(),
         };
@@ -425,6 +445,7 @@ impl<'a> RelationalValueRef<'a> {
             Self::DoublePrecision(_) => 3,
             Self::Text(_) => 4,
             Self::Bytea(_) => 5,
+            Self::Vector(_) => 8,
             Self::Uuid(_) => 6,
             Self::Overflow(_) => 7,
         }
@@ -440,6 +461,7 @@ impl<'a> From<&'a RelationalValue> for RelationalValueRef<'a> {
             RelationalValue::DoublePrecision(value) => Self::DoublePrecision(*value),
             RelationalValue::Text(value) => Self::Text(value),
             RelationalValue::Bytea(value) => Self::Bytea(value),
+            RelationalValue::Vector(value) => Self::Vector(value.as_ref()),
             RelationalValue::Uuid(value) => Self::Uuid(*value),
             RelationalValue::Overflow(reference) => Self::Overflow(*reference),
         }
@@ -473,6 +495,7 @@ impl Ord for RelationalValueRef<'_> {
                 }
                 (Self::Text(left), Self::Text(right)) => left.cmp(right),
                 (Self::Bytea(left), Self::Bytea(right)) => left.cmp(right),
+                (Self::Vector(left), Self::Vector(right)) => left.cmp(&right),
                 (Self::Uuid(left), Self::Uuid(right)) => left.cmp(&right),
                 (Self::Overflow(left), Self::Overflow(right)) => left.cmp(&right),
                 _ => Ordering::Equal,
@@ -507,6 +530,7 @@ impl Ord for RelationalValue {
                 }
                 (Self::Text(left), Self::Text(right)) => left.cmp(right),
                 (Self::Bytea(left), Self::Bytea(right)) => left.cmp(right),
+                (Self::Vector(left), Self::Vector(right)) => left.cmp(right),
                 (Self::Uuid(left), Self::Uuid(right)) => left.cmp(right),
                 (Self::Overflow(left), Self::Overflow(right)) => left.cmp(right),
                 _ => Ordering::Equal,
@@ -524,6 +548,7 @@ impl Hash for RelationalValue {
             Self::DoublePrecision(value) => value.to_bits().hash(state),
             Self::Text(value) => value.hash(state),
             Self::Bytea(value) => value.hash(state),
+            Self::Vector(value) => value.hash(state),
             Self::Uuid(value) => value.hash(state),
             Self::Overflow(reference) => reference.hash(state),
         }
@@ -8661,11 +8686,15 @@ fn validate_value_type(
             column.name
         )));
     }
-    if matches!(column.scalar_type, RelationalScalarType::Vector(_)) {
-        return Err(RelationalError::Schema(format!(
-            "non-NULL VECTOR values are not supported yet for column {}",
-            column.name
-        )));
+    if let RelationalValue::Overflow(reference) = value
+        && !matches!(
+            reference.scalar_type,
+            RelationalScalarType::Text | RelationalScalarType::Bytea
+        )
+    {
+        return Err(RelationalError::Schema(
+            "overflow values require TEXT or BYTEA".into(),
+        ));
     }
     if value.scalar_type() != Some(column.scalar_type) {
         return Err(RelationalError::Schema(format!(
@@ -9592,7 +9621,7 @@ fn estimated_relational_values_encoding_bytes<'a>(
                 .checked_add(value.iter().filter(|byte| **byte == 0).count())?
                 .checked_add(value.len())?,
             RelationalValue::Uuid(_) => 17,
-            RelationalValue::Overflow(_) => return None,
+            RelationalValue::Overflow(_) | RelationalValue::Vector(_) => return None,
         };
         bytes.checked_add(value_bytes)
     })

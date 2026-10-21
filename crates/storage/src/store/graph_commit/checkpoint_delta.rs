@@ -269,6 +269,7 @@ fn estimate_value(value: &Value, work: &CheckpointWorkContext) -> Result<u64> {
         Value::Int(_) | Value::Float(_) => 8,
         Value::String(value) => value.len() as u64,
         Value::Binary(value) => value.len() as u64,
+        Value::Vector(value) => value.encoded().len() as u64,
         Value::Uuid(_) => 16,
         Value::List(_) => 16,
         Value::Map(_) => 0,

@@ -70,7 +70,9 @@ execute GBrain's Postgres schema unchanged, start a TCP listener, embed PGLite,
 or provide a Node addon.
 
 `VECTOR(n)` is accepted as a relational column schema by `CREATE TABLE` and
-`ALTER TABLE ADD COLUMN`. The first stage supports nullable rows and schema
-inspection/recovery; non-NULL vector values, distance expressions and vector
-indexes are not implemented. See [the vector schema contract](specs/VECTOR_COLUMN_SCHEMA_SPEC.md)
-for the dimension, encoding and unsupported-operation boundaries.
+`ALTER TABLE ADD COLUMN`. Typed vector parameters support non-NULL writes,
+with exact `cosine_distance` and `l2_distance` projections shared with Cypher.
+Filter ordinary columns, project distance with an alias, then `ORDER BY` that
+alias and `LIMIT` to select the nearest eligible rows. Vector ANN indexes are
+not added. See [the vector contract](specs/VECTOR_COLUMN_SCHEMA_SPEC.md) for
+encoding, recovery, NULL behavior and unsupported-operation boundaries.

@@ -186,6 +186,7 @@ fn value_payload_bytes(value: &Value) -> u64 {
         Value::Int(_) | Value::Float(_) => 8,
         Value::String(value) => value.len() as u64,
         Value::Binary(value) => value.len() as u64,
+        Value::Vector(value) => value.encoded().len() as u64,
         Value::Uuid(_) => 16,
         Value::List(values) => values_payload_bytes(values),
         Value::Map(values) => values.iter().fold(0u64, |total, (key, value)| {

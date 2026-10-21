@@ -25,6 +25,7 @@ const (
 	RetainedNodeUUID    RetainedNodeKind = 8
 	RetainedNodeList    RetainedNodeKind = 9
 	RetainedNodeMap     RetainedNodeKind = 10
+	RetainedNodeVector  RetainedNodeKind = 11
 )
 
 type retainedNodeDescriptor struct {
@@ -234,7 +235,7 @@ func (value *RetainedNodeValue) ByteAt(index uint64) (byte, error) {
 		return 0, err
 	}
 	d := value.descriptor
-	if d.kind != uint32(RetainedNodeUTF8) && d.kind != uint32(RetainedNodeBinary) && d.kind != uint32(RetainedNodeUUID) {
+	if d.kind != uint32(RetainedNodeUTF8) && d.kind != uint32(RetainedNodeBinary) && d.kind != uint32(RetainedNodeUUID) && d.kind != uint32(RetainedNodeVector) {
 		return 0, &RetainedError{Code: RetainedUnsupportedType}
 	}
 	if index >= d.length || index > uint64(^uint(0)>>1) || d.data == nil {

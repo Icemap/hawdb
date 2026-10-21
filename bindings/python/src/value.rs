@@ -41,6 +41,11 @@ pub fn value_to_py(py: Python<'_>, value: &Value) -> PyResult<Py<PyAny>> {
         Value::String(item) => item.as_str().into_py_any(py),
         Value::Binary(item) => Ok(PyBytes::new(py, item).unbind().into()),
         Value::Uuid(item) => item.to_string().into_py_any(py),
+        Value::Vector(item) => {
+            let dict = PyDict::new(py);
+            dict.set_item("$vector", item.as_ref().coordinates().collect::<Vec<_>>())?;
+            Ok(dict.unbind().into())
+        }
         Value::List(items) => {
             let list = PyList::empty(py);
             for item in items {
@@ -121,6 +126,14 @@ fn py_to_value(object: &Bound<'_, PyAny>, path: &ParamPath<'_>, depth: usize) ->
             .map(Value::List);
     }
     if let Ok(dict) = object.cast::<PyDict>() {
+        if dict.len() == 1
+            && let Some(coordinates) = dict.get_item("$vector")?
+        {
+            let coordinates = coordinates.extract::<Vec<f32>>()?;
+            return hawdb::Vector::new(&coordinates)
+                .map(Value::Vector)
+                .map_err(|error| PyValueError::new_err(format!("{path}: {error}")));
+        }
         let depth = nest(path, depth)?;
         let mut map = BTreeMap::new();
         for (key, item) in dict.iter() {

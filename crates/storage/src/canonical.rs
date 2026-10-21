@@ -3116,6 +3116,12 @@ fn validate_encoded_value(
             cursor.read_exact(16)?;
             Ok(())
         }
+        10 => {
+            let length = cursor.read_u32()? as usize;
+            hawdb_core::VectorRef::from_encoded(cursor.read_exact(length)?)
+                .map(|_| ())
+                .map_err(|error| CanonicalSegmentError::Corrupt(error.to_string()))
+        }
         tag => Err(CanonicalSegmentError::Corrupt(format!(
             "unknown canonical value tag {tag}"
         ))),
@@ -3871,6 +3877,11 @@ fn encode_value(
             output.extend_from_slice(&u32_len(value.len(), "binary")?.to_le_bytes());
             output.extend_from_slice(value);
         }
+        Value::Vector(value) => {
+            output.push(10);
+            output.extend_from_slice(&u32_len(value.encoded().len(), "vector")?.to_le_bytes());
+            output.extend_from_slice(value.encoded());
+        }
         Value::Uuid(value) => {
             output.push(9);
             output.extend_from_slice(value.as_bytes());
@@ -3958,6 +3969,10 @@ fn encoded_value_len_with_work(
             u32_len(value.len(), "binary")?;
             1 + 4 + value.len() as u64
         }
+        Value::Vector(value) => {
+            u32_len(value.encoded().len(), "vector")?;
+            1 + 4 + value.encoded().len() as u64
+        }
         Value::Uuid(_) => 17,
         Value::List(values) => {
             u32_len(values.len(), "value list")?;
@@ -4043,6 +4058,11 @@ fn write_value_streaming<W: Write + ?Sized>(
             out.write_all(&[8])?;
             out.write_all(&u32_len(value.len(), "binary")?.to_le_bytes())?;
             out.write_all(value)?;
+        }
+        Value::Vector(value) => {
+            out.write_all(&[10])?;
+            out.write_all(&u32_len(value.encoded().len(), "vector")?.to_le_bytes())?;
+            out.write_all(value.encoded())?;
         }
         Value::Uuid(value) => {
             out.write_all(&[9])?;
@@ -4323,6 +4343,12 @@ fn encoded_value_allocation_bytes(
             9 => {
                 cursor.read_exact(16)?;
                 16
+            }
+            10 => {
+                let length = cursor.read_u32()? as usize;
+                hawdb_core::VectorRef::from_encoded(cursor.read_exact(length)?)
+                    .map_err(|error| CanonicalSegmentError::Corrupt(error.to_string()))?;
+                length
             }
             tag => {
                 return Err(CanonicalSegmentError::Corrupt(format!(

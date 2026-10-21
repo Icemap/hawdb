@@ -116,6 +116,10 @@ impl SchemaDigest<'_> {
     }
 
     fn value(&mut self, value: &RelationalValue) -> Result<(), RelationalIndexShadowError> {
+        if let RelationalValue::Vector(value) = value {
+            self.update(&[8])?;
+            return self.bytes(value.encoded());
+        }
         let variable = match value {
             RelationalValue::Text(text) => Some((4, text.as_bytes())),
             RelationalValue::Bytea(bytes) => Some((5, bytes.as_slice())),
@@ -154,6 +158,10 @@ impl SchemaDigest<'_> {
                 | RelationalValue::BigInt(_)
                 | RelationalValue::DoublePrecision(_)
                 | RelationalValue::Uuid(_) => {}
+                RelationalValue::Vector(_) => return Err(
+                    crate::relational::ordered_key::OrderedRelationalKeyError::UnsupportedVector
+                        .into(),
+                ),
                 RelationalValue::Overflow(_) => {
                     return Err(crate::relational::ordered_key::OrderedRelationalKeyError::UnsupportedOverflow.into());
                 }

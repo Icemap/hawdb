@@ -3427,6 +3427,12 @@ fn append_canonical_value(body: &mut String, value: &Value) {
             append_hex(body, value);
         }
         Value::Uuid(value) => body.push_str(&format!("uuid:{value}")),
+        Value::Vector(value) => {
+            body.push_str("vector:");
+            body.push_str(&value.encoded().len().to_string());
+            body.push(':');
+            append_hex(body, value.encoded());
+        }
         Value::List(values) => {
             body.push_str(&format!("list:{}:[", values.len()));
             for value in values {

@@ -360,3 +360,16 @@ fn checkpoint_units_schema_memory_pressure_defers_and_retries_the_same_admitted_
         assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
     }
 }
+
+#[test]
+fn shared_vector_defaults_affect_ordinary_and_checkpoint_schema_digests() {
+    let mut digests = std::collections::BTreeSet::new();
+    for values in [vec![1.0, 0.0], vec![0.0, 1.0], vec![1.0, 0.0, 0.0]] {
+        let value = hawdb_core::Vector::new(&values).unwrap();
+        let mut source = schema(RelationalValue::Vector(value.clone()));
+        source.columns[1].scalar_type = RelationalScalarType::Vector(value.dimension());
+        let digest = relational_schema_digest(&source).unwrap();
+        retry_and_check_source(&source, digest);
+        assert!(digests.insert(digest));
+    }
+}

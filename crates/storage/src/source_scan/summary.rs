@@ -135,9 +135,12 @@ impl<'a> ScalarRef<'a> {
             Value::Float(value) if value.is_finite() => Some(Self::Float(value.to_bits())),
             Value::String(value) => Some(Self::String(value)),
             Value::Uuid(value) => Some(Self::Uuid(*value)),
-            Value::Null | Value::Float(_) | Value::Binary(_) | Value::List(_) | Value::Map(_) => {
-                None
-            }
+            Value::Null
+            | Value::Float(_)
+            | Value::Binary(_)
+            | Value::Vector(_)
+            | Value::List(_)
+            | Value::Map(_) => None,
         }
     }
 

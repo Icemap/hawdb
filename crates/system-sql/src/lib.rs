@@ -1137,6 +1137,9 @@ fn relational_default_value(default: Option<&RelationalColumnDefault>) -> Value 
         Some(RelationalColumnDefault::Literal(RelationalValue::Uuid(value))) => {
             Value::String(format!("'{value}'::uuid"))
         }
+        Some(RelationalColumnDefault::Literal(RelationalValue::Vector(value))) => {
+            Value::String(Value::Vector(value.clone()).to_string())
+        }
         Some(RelationalColumnDefault::UuidV7) => Value::String("uuidv7()".to_string()),
     }
 }
@@ -1949,7 +1952,7 @@ const fn schema_object_state_name(state: SchemaObjectState) -> &'static str {
     }
 }
 
-const fn property_type_name(value_type: PropertyType) -> &'static str {
+fn property_type_name(value_type: PropertyType) -> std::borrow::Cow<'static, str> {
     match value_type {
         PropertyType::Any => "any",
         PropertyType::Bool => "bool",
@@ -1958,7 +1961,9 @@ const fn property_type_name(value_type: PropertyType) -> &'static str {
         PropertyType::String => "string",
         PropertyType::Text => "text",
         PropertyType::List => "list",
+        PropertyType::Vector(dimension) => return format!("vector({})", dimension.get()).into(),
     }
+    .into()
 }
 
 const fn index_kind_name(kind: IndexKind) -> &'static str {

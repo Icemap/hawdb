@@ -68,6 +68,7 @@ fn checkpoint_units_wal_decode_matches_all_ops_values_and_wide_utf8_boundaries()
     }
     for value in [
         Value::Binary(vec![0xff; 3 * 64 * 1024 + 3]),
+        Value::Vector(hawdb_core::Vector::new(&vec![0.25; 49153]).unwrap()),
         Value::String(format!("{}🦀界", "a".repeat(64 * 1024 - 1))),
         Value::String("🦀界é".repeat(40_000)),
         Value::Map(BTreeMap::from([
@@ -181,6 +182,7 @@ fn checkpoint_units_wal_decode_cancels_every_classified_unit_and_fully_retries()
                         "nested".into(),
                         Value::List(vec![
                             Value::Int(3),
+                            Value::Vector(hawdb_core::Vector::new(&vec![1.0; 32769]).unwrap()),
                             Value::Map(BTreeMap::from([("key".into(), Value::Bool(true))])),
                         ]),
                     ),

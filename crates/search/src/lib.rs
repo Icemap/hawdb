@@ -5089,6 +5089,7 @@ fn value_to_projection_string(value: &Value) -> String {
                 .collect::<String>()
         ),
         Value::Uuid(value) => value.to_string(),
+        Value::Vector(_) => value.to_string(),
         Value::List(values) => values
             .iter()
             .map(value_to_projection_string)

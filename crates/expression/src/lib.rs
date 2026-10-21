@@ -157,6 +157,11 @@ pub enum ProjectionExpression {
     },
     Literal(Value),
     Coalesce(Vec<ProjectionExpression>),
+    VectorDistance {
+        metric: hawdb_core::VectorDistance,
+        left: Box<ProjectionExpression>,
+        right: Box<ProjectionExpression>,
+    },
     JsonValue {
         expression: Box<ProjectionExpression>,
         path: String,
@@ -310,7 +315,9 @@ impl ProjectionExpression {
                 )
                 .chain(otherwise.iter().map(Box::as_ref))
                 .all(visit),
-            Self::Binary { left, right, .. } => visit(left) && visit(right),
+            Self::Binary { left, right, .. } | Self::VectorDistance { left, right, .. } => {
+                visit(left) && visit(right)
+            }
             Self::Not(expression)
             | Self::IsNull { expression, .. }
             | Self::Lower(expression)
@@ -347,7 +354,7 @@ impl ProjectionExpression {
                     visit(expression)?;
                 }
             }
-            Self::Binary { left, right, .. } => {
+            Self::Binary { left, right, .. } | Self::VectorDistance { left, right, .. } => {
                 visit(left)?;
                 visit(right)?;
             }

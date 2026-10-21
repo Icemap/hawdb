@@ -570,6 +570,21 @@ fn estimate_value_memory(
         }
         6 => (estimate_value_map_memory(input, depth + 1, true)?.0, 0),
         7 => (skip_binary(input)?, 0),
+        9 => {
+            let len = read_len(input)?;
+            let start = input.position() as usize;
+            let end = start
+                .checked_add(len)
+                .ok_or_else(|| HawDBError::Execution("vector spill length overflow".into()))?;
+            let bytes = input
+                .get_ref()
+                .get(start..end)
+                .ok_or_else(|| HawDBError::Execution("truncated vector spill".into()))?;
+            hawdb_core::VectorRef::from_encoded(bytes)
+                .map_err(|error| HawDBError::Execution(error.to_string()))?;
+            input.set_position(end as u64);
+            (len, 0)
+        }
         8 => {
             let mut bytes = [0_u8; 16];
             input.read_exact(&mut bytes).map_err(|error| {
@@ -668,6 +683,7 @@ fn value_encoded_len(value: &Value, depth: usize) -> Result<usize> {
         Value::Int(_) | Value::Float(_) => Ok(9),
         Value::String(value) => encoded_len_add(1, string_encoded_len(value)?),
         Value::Binary(value) => encoded_len_add(9, value.len()),
+        Value::Vector(value) => encoded_len_add(9, value.encoded().len()),
         Value::Uuid(_) => Ok(17),
         Value::List(values) => values.iter().try_fold(9usize, |bytes, value| {
             encoded_len_add(bytes, value_encoded_len(value, depth + 1)?)
@@ -803,6 +819,11 @@ fn write_value(output: &mut Vec<u8>, value: &Value, depth: usize) -> Result<()> 
             write_len(output, value.len())?;
             output.extend_from_slice(value);
         }
+        Value::Vector(value) => {
+            output.push(9);
+            write_len(output, value.encoded().len())?;
+            output.extend_from_slice(value.encoded());
+        }
         Value::Uuid(value) => {
             output.push(8);
             output.extend_from_slice(value.as_bytes());
@@ -853,6 +874,22 @@ fn read_value(input: &mut Cursor<&[u8]>, depth: usize) -> Result<Value> {
                 HawDBError::Execution(format!("truncated binary in spill record: {error}"))
             })?;
             Value::Binary(bytes)
+        }
+        9 => {
+            let len = read_len(input)?;
+            let start = input.position() as usize;
+            let end = start
+                .checked_add(len)
+                .ok_or_else(|| HawDBError::Execution("vector spill length overflow".into()))?;
+            let bytes = input
+                .get_ref()
+                .get(start..end)
+                .ok_or_else(|| HawDBError::Execution("truncated vector spill".into()))?;
+            let value = hawdb_core::VectorRef::from_encoded(bytes)
+                .map_err(|error| HawDBError::Execution(error.to_string()))?
+                .to_owned();
+            input.set_position(end as u64);
+            Value::Vector(value)
         }
         8 => {
             let mut bytes = [0_u8; 16];
@@ -1271,8 +1308,10 @@ mod tests {
     #[test]
     fn spill_round_trip_preserves_bindings() {
         let uuid = Value::Uuid(hawdb_core::Uuid::from_bytes([0xa5; 16]));
+        let vector = Value::Vector(hawdb_core::Vector::new(&[1.0, -0.0, 0.5]).unwrap());
         let binding = Binding {
             values: BTreeMap::from([
+                ("vector".to_string(), vector.clone()),
                 ("uuid".to_string(), uuid.clone()),
                 ("binary".to_string(), Value::Binary(vec![0, 1, 0xfe, 0xff])),
                 (
@@ -1282,6 +1321,7 @@ mod tests {
                         Value::List(vec![
                             Value::Int(1),
                             uuid.clone(),
+                            vector.clone(),
                             Value::String("two".to_string()),
                         ]),
                     )])),
@@ -1295,6 +1335,7 @@ mod tests {
                     properties: BTreeMap::from([
                         ("score".to_string(), Value::Float(1.5)),
                         ("uuid".to_string(), uuid.clone()),
+                        ("vector".to_string(), vector.clone()),
                     ]),
                 },
             )]),
@@ -1308,6 +1349,7 @@ mod tests {
                     properties: BTreeMap::from([
                         ("active".to_string(), Value::Bool(true)),
                         ("uuid".to_string(), uuid),
+                        ("vector".to_string(), vector),
                     ]),
                 },
             )]),
@@ -1350,6 +1392,31 @@ mod tests {
         drop(run);
         assert_eq!(memory.spill_pool_snapshot().unwrap().active_bytes, 0);
         std::fs::remove_dir(&memory.spill_directory).unwrap();
+    }
+
+    #[test]
+    fn shared_vector_spill_preflight_rejects_corruption_and_preserves_alignment() {
+        let vector = hawdb_core::Vector::new(&[1.0, -0.0]).unwrap();
+        let mut encoded = Vec::new();
+        write_value(&mut encoded, &Value::Vector(vector.clone()), 0).unwrap();
+        for end in 0..encoded.len() {
+            assert!(estimate_value_memory(&mut Cursor::new(&encoded[..end]), 0, false).is_err());
+        }
+        for (offset, replacement) in [(9, 0u32), (9, 3), (13, f32::NAN.to_bits())] {
+            let mut corrupt = encoded.clone();
+            corrupt[offset..offset + 4].copy_from_slice(&replacement.to_le_bytes());
+            assert!(estimate_value_memory(&mut Cursor::new(&corrupt), 0, false).is_err());
+            assert!(read_value(&mut Cursor::new(&corrupt), 0).is_err());
+        }
+        let size = encoded.len();
+        write_value(&mut encoded, &Value::Int(42), 0).unwrap();
+        let mut cursor = Cursor::new(encoded.as_slice());
+        assert_eq!(
+            estimate_value_memory(&mut cursor, 0, false).unwrap(),
+            vector.encoded().len()
+        );
+        assert_eq!(cursor.position() as usize, size);
+        assert_eq!(read_value(&mut cursor, 0).unwrap(), Value::Int(42));
     }
 
     #[test]

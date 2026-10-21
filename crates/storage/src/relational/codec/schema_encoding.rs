@@ -117,11 +117,23 @@ pub(crate) fn value(sink: &mut impl Sink, item: &RelationalValue) -> Result<(), 
             sink.raw(&[5])?;
             bytes(sink, value)
         }
+        RelationalValue::Vector(value) => {
+            sink.raw(&[8])?;
+            bytes(sink, value.encoded())
+        }
         RelationalValue::Uuid(value) => {
             sink.raw(&[7])?;
             sink.raw(value.as_bytes())
         }
         RelationalValue::Overflow(reference) => {
+            if !matches!(
+                reference.scalar_type,
+                RelationalScalarType::Text | RelationalScalarType::Bytea
+            ) {
+                return Err(RelationalError::Schema(
+                    "overflow values require TEXT or BYTEA".into(),
+                ));
+            }
             sink.raw(&[6])?;
             sink.raw(reference.digest.as_bytes())?;
             sink.raw(&[scalar_tag(reference.scalar_type)])?;

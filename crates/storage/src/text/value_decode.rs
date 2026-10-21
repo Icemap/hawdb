@@ -27,6 +27,7 @@ pub(crate) trait Decoder {
     fn unsigned(&self, input: &str) -> Result<u64>;
     fn string(&self, input: &str) -> Result<String>;
     fn binary(&self, input: &str) -> Result<Vec<u8>>;
+    fn vector(&self, input: &str) -> Result<hawdb_core::Vector>;
     fn temporary(&self, input: &str) -> Result<Self::TemporaryText>;
     fn items<'a>(&self, input: &'a str, delimiter: u8) -> Self::Items<'a>;
     fn next<'a>(&self, items: &mut Self::Items<'a>) -> Result<Option<&'a str>>;
@@ -63,6 +64,7 @@ pub(crate) fn decode<D: Decoder>(input: &str, backend: &D) -> Result<Value> {
             .map(Value::Uuid)
             .map_err(|error| HawDBError::Storage(format!("invalid UUID value: {error}"))),
         "x" => backend.binary(rest).map(Value::Binary),
+        "v" => backend.vector(rest).map(Value::Vector),
         "l" => {
             let mut values = Vec::new();
             if !rest.is_empty() {

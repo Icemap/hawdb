@@ -301,6 +301,21 @@ pub fn external_shadow_value_from_json(value: &serde_json::Value) -> Result<Valu
             .map(Value::List),
         serde_json::Value::Object(values) => {
             if values.len() == 1
+                && let Some(encoded) = values.get("$vector")
+            {
+                let coordinates = encoded
+                    .as_array()
+                    .ok_or_else(|| HawDBError::Semantic("$vector must be a numeric array".into()))?
+                    .iter()
+                    .map(|value| {
+                        value.as_f64().map(|value| value as f32).ok_or_else(|| {
+                            HawDBError::Semantic("$vector must contain numbers".into())
+                        })
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                return hawdb_core::Vector::new(&coordinates).map(Value::Vector);
+            }
+            if values.len() == 1
                 && let Some(serde_json::Value::String(encoded)) = values.get("$binary")
             {
                 return decode_binary_hex(encoded).map(Value::Binary);
@@ -334,6 +349,9 @@ pub fn external_shadow_json_from_value(value: Value) -> serde_json::Value {
         Value::String(value) => serde_json::Value::String(value),
         Value::Binary(value) => serde_json::json!({ "$binary": encode_binary_hex(&value) }),
         Value::Uuid(value) => serde_json::json!({ "$uuid": value.to_string() }),
+        Value::Vector(value) => {
+            serde_json::json!({ "$vector": value.as_ref().coordinates().collect::<Vec<_>>() })
+        }
         Value::List(values) => serde_json::Value::Array(
             values
                 .into_iter()
@@ -1310,6 +1328,9 @@ fn json_from_value(value: &Value) -> serde_json::Value {
         Value::String(value) => serde_json::Value::String(value.clone()),
         Value::Binary(value) => serde_json::json!({ "$binary": encode_binary_hex(value) }),
         Value::Uuid(value) => serde_json::json!({ "$uuid": value.to_string() }),
+        Value::Vector(value) => {
+            serde_json::json!({ "$vector": value.as_ref().coordinates().collect::<Vec<_>>() })
+        }
         Value::List(values) => {
             serde_json::Value::Array(values.iter().map(json_from_value).collect())
         }

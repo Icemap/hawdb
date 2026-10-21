@@ -17,6 +17,7 @@ pub const HAWDB_RETAINED_BINARY: u32 = 7;
 pub const HAWDB_RETAINED_UUID: u32 = 8;
 pub const HAWDB_RETAINED_LIST: u32 = 9;
 pub const HAWDB_RETAINED_MAP: u32 = 10;
+pub const HAWDB_RETAINED_VECTOR: u32 = 11;
 
 /// All pointers borrow this independently releasable owner. Scalars are original
 /// native-endian storage, not descriptor copies. Names are UTF-8, not NUL-ended.
@@ -157,6 +158,7 @@ impl NodeValue {
                 Value::String(value) => bytes!(value.as_bytes(), HAWDB_RETAINED_UTF8),
                 Value::Binary(value) => bytes!(value, HAWDB_RETAINED_BINARY),
                 Value::Uuid(value) => bytes!(value.as_bytes(), HAWDB_RETAINED_UUID),
+                Value::Vector(value) => bytes!(value.encoded(), HAWDB_RETAINED_VECTOR),
                 Value::List(value) => {
                     out.kind = HAWDB_RETAINED_LIST;
                     out.child_count = value.len() as u64;

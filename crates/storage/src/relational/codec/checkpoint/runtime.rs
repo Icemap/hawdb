@@ -49,7 +49,12 @@ fn clone_value(
 ) -> Result<RelationalValue, RelationalError> {
     match value {
         RelationalValue::Text(text) => Ok(RelationalValue::Text(clone_string(text, work)?)),
-        RelationalValue::Bytea(bytes) => {
+        RelationalValue::Bytea(_) | RelationalValue::Vector(_) => {
+            let (bytes, vector) = match value {
+                RelationalValue::Bytea(bytes) => (bytes.as_slice(), false),
+                RelationalValue::Vector(value) => (value.encoded(), true),
+                _ => unreachable!(),
+            };
             let mut output = Vec::new();
             for block in bytes.chunks(64 * 1024) {
                 let unit = work.start_unit().map_err(work_error)?;
@@ -57,7 +62,12 @@ fn clone_value(
                 unit.finish();
             }
             work.checkpoint().map_err(work_error)?;
-            Ok(RelationalValue::Bytea(output))
+            if vector {
+                crate::relational::codec::decode_vector(output, Some(work))
+                    .map(RelationalValue::Vector)
+            } else {
+                Ok(RelationalValue::Bytea(output))
+            }
         }
         _ => {
             let unit = work.start_unit().map_err(work_error)?;

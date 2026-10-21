@@ -62,6 +62,7 @@ pub(super) fn relational_key_resident_bytes(key: &RelationalKey) -> usize {
                 .map(|value| match value {
                     RelationalValue::Text(value) => value.capacity(),
                     RelationalValue::Bytea(value) => value.capacity(),
+                    RelationalValue::Vector(value) => value.retained_capacity(),
                     _ => 0,
                 })
                 .sum::<usize>(),

@@ -23,6 +23,7 @@ pub(crate) use checkpoint::{
     checkpoint_decode_allocation, CheckpointBytes, CheckpointDecodeContext, CheckpointVectorPush,
     CheckpointWorkUnit,
 };
+pub(crate) use checkpoint::{decode_vector, validate_vector};
 pub(crate) use checkpoint::{
     CheckpointAllocationLookup, CheckpointAllocationOwner, CheckpointAllocationToken,
 };

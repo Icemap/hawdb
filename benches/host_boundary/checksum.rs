@@ -55,6 +55,11 @@ impl Checksum {
                 self.bytes(&[6]);
                 self.bytes(value.as_bytes());
             }
+            Value::Vector(value) => {
+                self.bytes(&[9]);
+                self.length(value.encoded().len());
+                self.bytes(value.encoded());
+            }
             Value::List(values) => {
                 self.bytes(&[7]);
                 self.length(values.len());

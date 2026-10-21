@@ -248,6 +248,7 @@ pub fn relational_index_prefix_read_key_bytes<'a>(
             | RelationalValue::Uuid(_) => {}
             RelationalValue::Null
             | RelationalValue::DoublePrecision(_)
+            | RelationalValue::Vector(_)
             | RelationalValue::Overflow(_) => return None,
         }
         bytes = bytes

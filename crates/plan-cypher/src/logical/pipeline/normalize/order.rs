@@ -151,6 +151,15 @@ fn promote_native_column_properties(
                 .as_deref()
                 .map(|expression| Box::new(promote_native_column_properties(expression, input))),
         },
+        ProjectionExpression::VectorDistance {
+            metric,
+            left,
+            right,
+        } => ProjectionExpression::VectorDistance {
+            metric: *metric,
+            left: Box::new(promote_native_column_properties(left, input)),
+            right: Box::new(promote_native_column_properties(right, input)),
+        },
         ProjectionExpression::Binary { left, op, right } => ProjectionExpression::Binary {
             left: Box::new(promote_native_column_properties(left, input)),
             op: *op,
@@ -226,7 +235,8 @@ fn has_native_bindings(expression: &ProjectionExpression, input: &LogicalPlan) -
                     .as_deref()
                     .is_none_or(|expression| has_native_bindings(expression, input))
         }
-        ProjectionExpression::Binary { left, right, .. } => {
+        ProjectionExpression::Binary { left, right, .. }
+        | ProjectionExpression::VectorDistance { left, right, .. } => {
             has_native_bindings(left, input) && has_native_bindings(right, input)
         }
         ProjectionExpression::IsNull { expression, .. } => has_native_bindings(expression, input),

@@ -201,3 +201,21 @@ def test_tiny_cost_selected_scan_refuses_without_owned_fallback(db):
     assert failure.value.kind == "unsupported_plan"
     # Rejection precedes lazy retained-governor construction and source capture.
     assert db.retained_snapshot_copy() is None
+
+
+def test_shared_vector_retained_buffer_survives_owner_release(db):
+    seed(db)
+    db.execute("MATCH (n:Item {id: 1}) SET n.embedding = $v", {"v": {"$vector": [1.0, -0.0]}})
+    cursor = db.execute_retained_node(QUERY, {"id": 1})
+    node = cursor.next_node()
+    vector = node.field("embedding")
+    assert vector.kind == "vector"
+    view = memoryview(vector)
+    assert view.readonly
+    node.close()
+    vector.close()
+    cursor.close()
+    assert bytes(view) == struct.pack("<Iff", 2, 1.0, -0.0)
+    view.release()
+    gc.collect()
+    assert_empty(db)

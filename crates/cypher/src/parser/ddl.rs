@@ -163,6 +163,16 @@ impl Parser<'_> {
     }
 
     pub(super) fn parse_schema_property_type(&mut self) -> Result<SchemaPropertyType> {
+        if self.consume_keyword("VECTOR") {
+            self.expect_char('(')?;
+            let dimension = self.parse_usize()?;
+            self.expect_char(')')?;
+            let dimension = u32::try_from(dimension)
+                .ok()
+                .and_then(hawdb_core::VectorDimension::new)
+                .ok_or_else(|| self.error("VECTOR dimension must be a positive u32"))?;
+            return Ok(SchemaPropertyType::Vector(dimension));
+        }
         if self.consume_keyword("CHARACTER") {
             self.expect_keyword("VARYING")?;
             return Ok(SchemaPropertyType::String);

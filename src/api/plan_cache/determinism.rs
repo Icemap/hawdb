@@ -111,6 +111,7 @@ fn scalar_is_deterministic(expression: &cypher::ScalarExpression) -> bool {
         | Scalar::Lower(_)
         | Scalar::DatePart { .. }
         | Scalar::Case { .. }
+        | Scalar::VectorDistance { .. }
         | Scalar::Binary { .. }
         | Scalar::Not(_)
         | Scalar::IsNull { .. } => true,

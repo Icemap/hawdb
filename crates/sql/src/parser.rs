@@ -679,6 +679,26 @@ fn lower_function_expression(
         .as_deref()
         .map(|expr| lower_expression(expr, ExpressionPosition::Predicate).map(Box::new))
         .transpose()?;
+    if hawdb_core::VectorDistance::from_function_name(name).is_some() {
+        if distinct
+            || filter.is_some()
+            || arguments.len() != 2
+            || arguments
+                .iter()
+                .any(|argument| matches!(argument, SqlFunctionArgument::Wildcard))
+        {
+            return Err(HawDBError::Semantic(
+                "vector distance requires exactly two scalar arguments without DISTINCT or FILTER"
+                    .into(),
+            ));
+        }
+        return Ok(ExprKind::Function {
+            name: name.clone(),
+            arguments,
+            distinct,
+            filter,
+        });
+    }
     match name.as_str() {
         "count" | "sum" => Ok(ExprKind::Function {
             name: name.clone(),

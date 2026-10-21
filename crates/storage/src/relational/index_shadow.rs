@@ -2487,7 +2487,12 @@ pub(super) fn relational_schema_digest(
             None => encoded.push(0),
             Some(RelationalColumnDefault::Literal(value)) => {
                 encoded.push(1);
-                encode_ordered_relational_value(&mut encoded, value)?;
+                if let RelationalValue::Vector(value) = value {
+                    encoded.push(8);
+                    encode_bytes(&mut encoded, value.encoded())?;
+                } else {
+                    encode_ordered_relational_value(&mut encoded, value)?;
+                }
             }
             Some(RelationalColumnDefault::UuidV7) => encoded.push(2),
         }
