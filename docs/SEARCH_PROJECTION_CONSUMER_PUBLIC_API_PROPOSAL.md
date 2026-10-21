@@ -152,6 +152,123 @@ Its positive-publication, uncertain-outcome and replacement-root qualification
 remains open in #1092 and Draft #1039; a no-effect refusal is not evidence for
 those paths. Unix creation and publication continue through the existing path.
 
+## Application lifecycle and stable registration reuse
+
+Package B of [the COW MVCC evolution proposal](https://github.com/nowledge-co/hawdb/pull/1141)
+is tracked by [#1138](https://github.com/nowledge-co/hawdb/issues/1138).
+`Database::open_or_create_search_projection_consumer` coordinates first creation
+and verified reacquisition using the same arguments as `create`. It returns the
+existing `SearchProjectionConsumer` owner; no additional owner type, alias file,
+registry format, capacity setting, or background worker is introduced.
+
+Choose a stable logical ID that identifies the complete application projection
+definition, including its mapping version, such as `memory-v1`. Do not derive it
+from a request ID, process ID, random startup UUID, or projection pathname. A
+changed mapping requires a different definition ID and explicit initialization;
+HawDB cannot compare arbitrary initializer closures. The existing source database
+identity, branch-local registry, registration incarnation, projection UUID, and
+complete checkpoint receipt remain the authority for reopening. This method
+does not introduce a pathname alias or a new way to adopt unregistered files.
+
+The acquisition decision is made under the existing exclusive mutable database
+owner. An existing record is opened through exact receipt verification, including
+expiry and replay-window checks. Only an absent record in a healthy, source-bound
+registry permits creation. Missing/corrupt/foreign registries never trigger an
+implicit rebuild, even when the requested ID is absent. The creation options and
+initializer are unused when reopening: startup does not renew an expired owner
+or change a healthy registration's idle policy. Production capacity remains 64,
+including invalid and expired registrations; private lifecycle fixtures use two
+records while the production codec independently checks the 64/65 boundary.
+
+After an uncertain registry publication, acquisition, explicit open, and removal
+reload the durable registry before deciding what to do. A lost successful creation
+response can therefore reopen its original verified registration. A projection
+published without a matching registration remains an unregistered artifact:
+retry refuses to overwrite or adopt it. A checkpoint/registry mismatch remains
+`CheckpointMismatch`. Removal retries reconcile both the before-publication and
+after-publication cases and remain idempotent without discarding other records.
+Transient failure is not evidence of rollback or authorization to remove files.
+
+The following graph-only example uses bounded initialization and catch-up.
+Applications projecting relational content must provide their own complete,
+bounded relational hydrator instead of the explicit refusal below. Call the
+lifecycle entrypoint once per application owner, and share its immutable index
+between query users. Ordinary graph, SQL, and search reads allocate no Consumer
+registrations.
+
+```rust
+use hawdb::{
+    Database, HawDBError, SearchMode, SearchProjectionConsumerId,
+    SearchProjectionConsumerOptions, SearchProjectionConsumerResult,
+    SearchProjectionRelationalDelta, SearchRebuildOptions,
+};
+use std::{num::NonZeroU64, path::Path};
+
+fn projection_lifecycle(root: &Path) -> SearchProjectionConsumerResult<()> {
+    let id = SearchProjectionConsumerId::new("memory-v1")?;
+    let options = SearchProjectionConsumerOptions::new(NonZeroU64::new(1_000).unwrap());
+    let source = root.join("database");
+    let projection = root.join("memory-v1");
+    let mut db = Database::open(&source)?;
+    let mut consumer = db.open_or_create_search_projection_consumer(
+        id.clone(), &projection, options,
+        |snapshot, index| {
+            snapshot.rebuild_search_projection(
+                index, SearchRebuildOptions { max_rows: Some(4_096) },
+            )?;
+            Ok(())
+        },
+    )?;
+    let report = db.catch_up_search_projection_consumer(
+        &mut consumer, 256, 256, 4,
+        |_, batch| {
+            if !batch.relational_primary_key_changes().is_empty() {
+                return Err(HawDBError::Execution("relational hydrator required".into()));
+            }
+            Ok(SearchProjectionRelationalDelta::default())
+        },
+    )?;
+    if !report.catch_up.complete
+        || !db.search_projection_consumer_readiness(&consumer, Some(256))?.is_ready()
+    {
+        return Err(HawDBError::Execution("projection is not ready to serve".into()).into());
+    }
+    for query in ["memory", "document"] {
+        let _hits = consumer.search_index().search(query, None, SearchMode::Text, 8)?;
+    }
+    db.renew_search_projection_consumer(&consumer)?;
+    drop(consumer);
+    drop(db);
+
+    let mut db = Database::open(&source)?;
+    let consumer = db.open_or_create_search_projection_consumer(
+        id.clone(), &projection, options,
+        |_, _| Err(HawDBError::Execution("expected existing registration".into())),
+    )?;
+    db.unregister_search_projection_consumer(&id)?;
+    db.unregister_search_projection_consumer(&id)?;
+    drop(consumer);
+    // Projection files remain. Recreation requires an explicitly chosen fresh
+    // destination and receives a fresh registration incarnation.
+    Ok(())
+}
+```
+
+Readiness still requires a verified completed receipt and the existing changefeed
+readiness checks. This coordinator does not qualify source-coherent catch-up
+[#1043](https://github.com/nowledge-co/hawdb/issues/1043), native publication, or
+power-loss recovery. Windows creation retains its typed capability refusal until
+positive stationary publication is qualified under
+[#1106](https://github.com/nowledge-co/hawdb/issues/1106); refusal coverage is not
+positive Windows creation evidence. The API addition and recovery retries do not
+change the persisted format, `SyncOnEveryWrite` default, or Mem release policy.
+
+The distinction between releasing an owner and reclaiming its data is consistent
+with [Neumann et al., SIGMOD 2015, Section 2.4](https://15721.courses.cs.cmu.edu/spring2016/papers/p677-neumann.pdf).
+That paper concerns transient transaction versions. HawDB's separate persistent
+Consumer contract, rather than the paper's transaction retirement rule, determines
+registration reuse, explicit removal, replay retention, and crash recovery.
+
 ## Initialization and projection ownership
 
 Creation requires a persistent writable database and a destination that does not
