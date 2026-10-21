@@ -115,7 +115,12 @@ jobs:
           repository-cache: true
 
       - name: Build the C ABI libraries and Go package
-        run: bazel build //bindings/ffi:hawdb_ffi //bindings/ffi:hawdb_ffi_static //bindings/go:hawdb
+        run: |
+          bazel build //bindings/ffi:hawdb_ffi //bindings/ffi:hawdb_ffi_static //bindings/go:hawdb
+          # Later profile changes retarget the bazel-bin convenience symlink.
+          library_path="$(bazel info bazel-bin)/bindings/ffi/${{ matrix.library }}"
+          test -f "$library_path"
+          printf 'HAWDB_LIBRARY=%s\n' "$library_path" >> "$GITHUB_ENV"
 
       - name: Test Go against the Bazel-built C ABI
         run: bazel test --test_output=errors --test_arg=-test.v //bindings/go:hawdb_go_tests
@@ -149,7 +154,6 @@ jobs:
       - name: Check retained read and close concurrency with the race detector
         working-directory: bindings/go
         env:
-          HAWDB_LIBRARY: ${{ github.workspace }}/bazel-bin/bindings/ffi/${{ matrix.library }}
           # The race runtime needs cgo; the production package stays purego.
           CGO_ENABLED: "1"
         # The Go test cache does not qualify the newly built dynamic library.
