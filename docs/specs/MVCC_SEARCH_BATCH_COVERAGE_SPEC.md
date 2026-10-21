@@ -2,10 +2,13 @@
 
 Status: pinned bounded feed enumeration, tracked callback context, resumable
 private external ordering/reduction and joint input/mapper/stage custody are
-implemented. The complete verified-baseline/coverage activation session,
-coverage receipts, incremental artifact construction and Mem integration below
-are **not implemented**. Joint custody returns only an opaque, nonpublishable
-artifact; see the [session source argument](../tla/PROJECTION_STAGING_SESSION_PROOF.md).
+implemented. A conservative complete-E comparison now gates publication of the
+same C..E delta. It performs a mandatory full-source verification pass; it is
+not the optimized owner-overlay protocol described below. Versioned host
+binding, durable coverage receipts, incremental artifact construction and Mem
+integration remain **not implemented**. Ordinary staging still returns only an
+opaque, nonpublishable artifact; see the
+[session source argument](../tla/PROJECTION_STAGING_SESSION_PROOF.md).
 See also the
 [primitive argument](../tla/PROJECTION_FEED_CURSOR_PROOF.md).
 This extends, rather than replaces, the full acceptance ledger in
@@ -71,6 +74,62 @@ explicit end-of-interval witness. Retention gaps and relational RequiresRebuild
 records cannot be skipped while advancing that witness.
 
 ## Preparation ownership and native API contract
+
+### Conservative complete-E delta verification
+
+After `ProjectionStagingSession` has acknowledged the native C..E End and
+finished reducing its private mutations, `verify_complete_source` consumes it
+without releasing or recapturing E. The original prepared read supplies an
+exhaustive native full-source cursor and a fixed zero/one-document mapper. The
+expected full E documents are externally sorted with unique IDs; duplicate
+IDs, including identical documents from different inputs, refuse the attempt.
+The full mapper is a trusted, deterministic host contract and must derive its
+output only from the supplied tracked E reads.
+
+`SearchOutOfCoreDeltaComparison` retains the original reduced run and reuses
+its stage, governor permit, memory ledger and cumulative sort/read/spill
+admission for expected-source ordering. It then merge-compares two immutable
+streams with at most one pending entry from each:
+
+- An expected ID with a delta upsert requires identical canonical encoding,
+  including body, metadata and embedding.
+- An expected ID without a mutation requires an exact match in the held base.
+- A delta delete must be absent from the expected full set; an upsert missing
+  from the expected set refuses.
+- The final expected count must equal the base count plus actual new IDs minus
+  actual removed IDs. Together with unique expected IDs and per-ID membership,
+  this detects unchanged extra base documents and omitted deletes.
+
+Both run ends validate their recorded extent/digest. Comparison success restores
+only the original mutation run for sealing; it cannot substitute a replacement
+or an unrelated candidate. `ProjectionCoveredUpdate` privately owns that exact
+candidate and the original source dependencies. Only
+`Database::publish_projection_covered_update` consumes it under the existing
+instance, exact-E, durability and expected-selector fences. No prefix B is
+published, and ordinary `ProjectionStagedInputs` remains nonpublishable.
+
+Full-source enumeration and mapping have explicit additional cumulative limits;
+ordering, read and spill counters are shared with delta intake. Base lookups
+have separate lookup/compressed/expanded reservations. These are logical work
+and I/O controls, not physical routing-I/O, RSS or elapsed-time guarantees.
+Artifact construction and sealing after comparison remain blocking.
+
+This path deliberately records a Database dependency: any source commit after E
+refuses activation, including disjoint writes. Its extra O(full source) work is
+the cost of verifying an otherwise uncertified historical base without adding
+a persisted owner sidecar. The optimized disjoint-write, mapping/incarnation
+and durable-receipt protocol remains an open gate. A host must hold its binding
+authority across activation; this API does not enable registered Consumer ACKs
+or stable Mem activation. Existing legacy prefix refusal remains unchanged.
+
+`tests/support/projection_coverage.rs`, included by the default/minimal staging
+session targets, covers one-input batches, update/delete and ABA, hot/cold source
+reads, exact equality to a full rebuild, cancellation/reopen/retry, incomplete
+set rejection and stale/wrong-instance activation. Reopening after a successful
+publication checks durable E visibility; it is not a power-loss model or an
+idempotent registered-Consumer receipt proof.
+
+### Staging and verification primitives
 
 `begin_projection_staging_session` now owns the C..E cursor, fixed mapper,
 one admitted pending graph/relational input, bounded opaque continuation and

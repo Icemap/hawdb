@@ -824,3 +824,6 @@ fn staging_verification_cannot_reset_mapping_budget_or_finish_a_prefix() {
     assert!(verification.finish().is_err());
     unchanged(&root, &reader);
 }
+
+#[path = "support/projection_coverage.rs"]
+mod coverage;

@@ -16,6 +16,30 @@ pub struct PreparedProjectionFullSource {
     cursor: ProjectionFullSourceCursor,
     failed: bool,
 }
+impl PreparedProjectionFeed {
+    pub(super) fn into_full_source(
+        self,
+        total: ProjectionFeedLimits,
+        source: ProjectionFullSourceLimits,
+        task: hawdb_core::RuntimeTaskContext,
+    ) -> std::result::Result<PreparedProjectionFullSource, ProjectionFeedError> {
+        let mut prepared = self.into_completed_read()?;
+        prepared
+            .dependencies
+            .graph
+            .record(VersionKey::Database)
+            .map_err(|e| ProjectionFeedError::Source(HawDBError::Execution(e.to_string())))?;
+        let cursor = prepared
+            .read
+            .store
+            .capture_full_projection_source(total, source, task)?;
+        Ok(PreparedProjectionFullSource {
+            prepared,
+            cursor,
+            failed: false,
+        })
+    }
+}
 impl Database {
     pub fn begin_prepared_full_projection_source(
         &self,

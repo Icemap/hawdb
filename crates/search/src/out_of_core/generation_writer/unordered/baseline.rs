@@ -133,62 +133,14 @@ impl SearchOutOfCoreBaselineComparison<'_> {
                     "full baseline cannot contain delete intents".into(),
                 ));
             };
-            report.reserved_lookups = report
-                .reserved_lookups
-                .checked_add(1)
-                .filter(|n| *n <= caps.lookups.get())
-                .ok_or_else(|| {
-                    HawDBError::Execution("baseline lookup admission exhausted".into())
-                })?;
-            report.reserved_compressed_bytes = reserve(
-                report.reserved_compressed_bytes,
-                caps.compressed_segment_bytes.get(),
-                caps.total_compressed_bytes.get(),
+            compare_record(
+                base,
+                expected,
+                input.control,
+                caps,
+                report,
+                (&memory, &task, &path),
             )?;
-            report.reserved_expanded_bytes = reserve(
-                report.reserved_expanded_bytes,
-                caps.expanded_segment_bytes.get(),
-                caps.total_expanded_bytes.get(),
-            )?;
-            let route = base.segment_for_document(entry.id())?.ok_or_else(|| {
-                HawDBError::Execution("expected baseline document is absent".into())
-            })?;
-            let range = route
-                .segment
-                .payload_range
-                .ok_or_else(|| HawDBError::Storage("baseline segment has no payload".into()))?;
-            if range.length > caps.compressed_segment_bytes.get() {
-                return Err(HawDBError::Execution(
-                    "baseline segment exceeds comparison admission".into(),
-                ));
-            }
-            let file = io::GenerationIo::new(&memory, &task).native(&[&path], || {
-                OpenOptions::new()
-                    .create(true)
-                    .truncate(true)
-                    .read(true)
-                    .write(true)
-                    .open(&*path)
-            })??;
-            let actual = Source::capture(
-                &base.segments[route.artifact_index],
-                route.segment,
-                entry.id(),
-                file,
-                (
-                    caps.expanded_segment_bytes
-                        .get()
-                        .min(base.config.max_uncompressed_segment_bytes.get()),
-                    base.config.max_document_header_bytes.get(),
-                ),
-                &memory,
-                &task,
-            )?;
-            input.control.read(expected.encoded_bytes)?;
-            expected.require_source(&actual, &memory, &task)?;
-            drop(actual);
-            io::GenerationIo::new(&memory, &task)
-                .native(&[&path], || fs::remove_file(&*path))??;
             report.compared_documents = report
                 .compared_documents
                 .checked_add(1)
@@ -214,6 +166,83 @@ impl<'reader> SearchOutOfCoreBaselineComparison<'reader> {
         })
     }
 }
+pub(super) fn reserve_lookup(
+    report: &mut SearchBaselineComparisonReport,
+    caps: SearchBaselineComparisonLimits,
+) -> Result<()> {
+    report.reserved_lookups = report
+        .reserved_lookups
+        .checked_add(1)
+        .filter(|n| *n <= caps.lookups.get())
+        .ok_or_else(|| HawDBError::Execution("baseline lookup admission exhausted".into()))?;
+    Ok(())
+}
+
+pub(super) fn compare_record(
+    base: &SearchOutOfCoreReader,
+    expected: &spool::SpoolRecord,
+    control: &mut Control,
+    caps: SearchBaselineComparisonLimits,
+    report: &mut SearchBaselineComparisonReport,
+    environment: (
+        &BuildMemory,
+        &RuntimeTaskContext,
+        &crate::build_memory::path::OwnedPath,
+    ),
+) -> Result<()> {
+    let (memory, task, path) = environment;
+    reserve_lookup(report, caps)?;
+    report.reserved_compressed_bytes = reserve(
+        report.reserved_compressed_bytes,
+        caps.compressed_segment_bytes.get(),
+        caps.total_compressed_bytes.get(),
+    )?;
+    report.reserved_expanded_bytes = reserve(
+        report.reserved_expanded_bytes,
+        caps.expanded_segment_bytes.get(),
+        caps.total_expanded_bytes.get(),
+    )?;
+    let route = base
+        .segment_for_document(&expected.header.id)?
+        .ok_or_else(|| HawDBError::Execution("expected baseline document is absent".into()))?;
+    let range = route
+        .segment
+        .payload_range
+        .ok_or_else(|| HawDBError::Storage("baseline segment has no payload".into()))?;
+    if range.length > caps.compressed_segment_bytes.get() {
+        return Err(HawDBError::Execution(
+            "baseline segment exceeds comparison admission".into(),
+        ));
+    }
+    let file = io::GenerationIo::new(memory, task).native(&[path], || {
+        OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .read(true)
+            .write(true)
+            .open(&**path)
+    })??;
+    let actual = Source::capture(
+        &base.segments[route.artifact_index],
+        route.segment,
+        &expected.header.id,
+        file,
+        (
+            caps.expanded_segment_bytes
+                .get()
+                .min(base.config.max_uncompressed_segment_bytes.get()),
+            base.config.max_document_header_bytes.get(),
+        ),
+        memory,
+        task,
+    )?;
+    control.read(expected.encoded_bytes)?;
+    expected.require_source(&actual, memory, task)?;
+    drop(actual);
+    io::GenerationIo::new(memory, task).native(&[path], || fs::remove_file(&**path))??;
+    Ok(())
+}
+
 fn reserve(current: u64, amount: u64, cap: u64) -> Result<u64> {
     current
         .checked_add(amount)

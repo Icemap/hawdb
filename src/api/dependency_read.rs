@@ -31,7 +31,8 @@ mod staging_session;
 pub use staging_session::{
     ProjectionBaselineComparisonConfig, ProjectionBaselineComparisonSession,
     ProjectionBaselineComparisonStep, ProjectionBaselineMappingContext,
-    ProjectionBaselineMappingFunction, ProjectionBaselineMappingLimits,
+    ProjectionBaselineMappingFunction, ProjectionBaselineMappingLimits, ProjectionCoverageConfig,
+    ProjectionCoverageSession, ProjectionCoverageStep, ProjectionCoveredUpdate,
     ProjectionFullRebuildConfig, ProjectionFullRebuildSession, ProjectionFullRebuildStep,
     ProjectionMappingContext, ProjectionMappingFunction, ProjectionMappingInput,
     ProjectionMappingLimits, ProjectionMappingStatus, ProjectionMappingUsage,

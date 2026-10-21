@@ -11,6 +11,8 @@ use crate::SearchOutOfCoreReader;
 use std::num::{NonZeroU64, NonZeroUsize};
 
 mod baseline;
+mod coverage;
+pub use coverage::SearchOutOfCoreDeltaComparison;
 pub(super) mod replacement;
 pub use baseline::{
     SearchBaselineComparisonLimits, SearchBaselineComparisonReport, SearchMatchedBaseline,

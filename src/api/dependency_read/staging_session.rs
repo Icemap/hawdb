@@ -8,6 +8,12 @@ use crate::search::{
     SearchOutOfCorePreparedUpdate, SearchOutOfCoreReader, SearchOutOfCoreUnorderedMutationWriter,
     SearchUnorderedMutationLimits, SearchUnorderedMutationReport,
 };
+#[path = "staging_session/coverage.rs"]
+mod coverage;
+pub use coverage::{
+    ProjectionCoverageConfig, ProjectionCoverageSession, ProjectionCoverageStep,
+    ProjectionCoveredUpdate,
+};
 #[path = "staging_session/baseline.rs"]
 mod baseline;
 pub use baseline::{

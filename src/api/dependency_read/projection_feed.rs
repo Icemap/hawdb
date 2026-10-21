@@ -124,6 +124,22 @@ impl Database {
     }
 }
 impl PreparedProjectionFeed {
+    pub(super) fn into_completed_read(
+        self,
+    ) -> std::result::Result<PreparedRead, ProjectionFeedError> {
+        if self.failed {
+            return Err(ProjectionFeedError::Failed);
+        }
+        if !self.cursor.is_complete() {
+            return Err(ProjectionFeedError::Incomplete);
+        }
+        self.prepared
+            .read
+            .store
+            .ensure_usable()
+            .map_err(ProjectionFeedError::Source)?;
+        Ok(self.prepared)
+    }
     pub(super) fn set_task_context(&mut self, task: hawdb_core::RuntimeTaskContext) {
         self.prepared.read.task_context = Some(task);
     }
