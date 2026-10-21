@@ -1,5 +1,7 @@
 # Repository-wide profiles, including independent developer tools and bindings.
 # Run Cargo from within this repository so its hierarchical config is loaded.
+# Keep every profile unstripped: Rust 1.97.1 stripping can corrupt Mach-O
+# LINKEDIT string pools, rejected by macOS 27 (rust-lang/rust#157750).
 
 [profile.dev]
 opt-level = 1

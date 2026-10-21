@@ -46,7 +46,7 @@ Bazel. A family description does not imply every leaf belongs to every lane.
 | --- | --- |
 | Core, expression, SQL/SQL-syntax, Cypher and DDL | Typed values, expression semantics, parsing/binding and schema constraints. |
 | Optimizer, optimizer-{graph,relational,predicate,vector}, plan-{core,cache,cypher}, explain | Rewrite legality, plan construction, cache/publication concurrency and observable plans. |
-| Executor and query/query-policy | Operator execution, result delivery, cancellation and budget/refusal behavior. Allocation probes retain their own build and measurement contracts. |
+| Executor and query/query-policy | Operator execution, result delivery, cancellation and budget/refusal behavior. Allocation probes use the repository profile; compare measurements only within the same profile. |
 | Storage, integrity, cascades and artifact/bootstrap | WAL/checkpoint, encoded artifacts, indexes, corruption/refusal and startup ownership. |
 | Search | Unit behavior plus nine explicit feature profiles; public streamed-document and source-policy lifecycle fixtures have independent owners below. |
 | Analytics and vector-projection | Streaming algorithms, projected artifact IO and vector representation behavior. |
@@ -123,6 +123,10 @@ is explicitly selected by `//crates/executor:hawdb_query_observer_release_tests`
 under `--config=release` in the required Linux native-bindings job. Its target
 is manual so the ordinary checked crate suite cannot run it in the wrong mode.
 Its assertion remains intact; moving its execution does not waive coverage.
+Tide gates on the `Bazel native bindings (ubuntu-24.04)` context: the current
+[context policy](https://github.com/nowledge-co/test-infra/blob/5a7b3995d384ed4b3f3ba576fe6d06cd700f27e6/config/prow/cluster/config.yaml#L108)
+marks only Windows native contracts optional for HawDB and does not skip unknown
+contexts. Preserve this merge-gate ownership when changing workflow or Tide policy.
 
 The policy follows the distinction illustrated by [TiKV's Cargo profiles](https://github.com/tikv/tikv/blob/master/Cargo.toml):
 cheap development/test code generation with assertions, versus explicit optimized
