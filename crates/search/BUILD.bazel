@@ -1,5 +1,6 @@
 load("@crate_index//:defs.bzl", "aliases", "all_crate_deps")
 load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
+load("//:ci_test_rules.bzl", "checked_rust_test")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -38,14 +39,6 @@ _SEARCH_TEST_PROFILES = {
     "text_background": (["full-text-search", "background-maintenance"], ":hawdb_search_lifecycle_text_background"),
     "vector_background": (["vector-search", "background-maintenance"], ":hawdb_search_lifecycle_vector_background"),
 }
-
-# Large public lifecycles need optimized loops, with debug checks retained.
-# Scope these flags to their private test libraries and fixture executables.
-_STREAMED_LIFECYCLE_RUSTC_FLAGS = [
-    "-Copt-level=2",
-    "-Cdebug-assertions=yes",
-    "-Coverflow-checks=yes",
-]
 
 _SEARCH_BASE_DEPS = [
     "@crate_index//:bitpacking",
@@ -148,7 +141,7 @@ rust_library(
     ],
 )
 
-rust_test(
+checked_rust_test(
     name = "hawdb_search_tests",
     # Streamed document lifecycle coverage includes 128 MiB fixtures.
     timeout = "long",
@@ -180,30 +173,12 @@ rust_test(
     if settings[1].startswith(":hawdb_search_lifecycle_")
 ]
 
-# Isolate optimized lifecycle libraries from production and debug unit owners.
-# All five exact feature sets still execute the complete 32-MiB fixture.
-[
-    rust_library(
-        name = "hawdb_search_streamed_lifecycle_%s" % profile,
-        testonly = True,
-        crate_name = "hawdb_search",
-        crate_root = "src/lib.rs",
-        crate_features = settings[0],
-        srcs = glob(["src/**/*.rs"]) + ["tests/support/live_allocation.rs"],
-        edition = "2024",
-        rustc_flags = _STREAMED_LIFECYCLE_RUSTC_FLAGS,
-        aliases = aliases(),
-        deps = _SEARCH_BASE_DEPS + (_SEARCH_VECTOR_DEPS if "vector-search" in settings[0] else []),
-        proc_macro_deps = all_crate_deps(proc_macro = True),
-        visibility = ["//visibility:private"],
-    )
-    for profile, settings in _SEARCH_TEST_PROFILES.items()
-    if "full-text-search" in settings[0]
-]
-
+# The checked transition optimizes the complete dependency closure. Share the
+# exact profile library with source-policy tests instead of compiling another
+# Search-only optimized copy whose Storage dependencies remain unoptimized.
 # Preserve each original target name, complete lifecycle and 900s deadline.
 [
-    rust_test(
+    checked_rust_test(
         name = "hawdb_search_streamed_lifecycle_tests" if profile == "default" else "hawdb_search_%s_streamed_lifecycle_tests" % profile,
         timeout = "long",
         crate_features = settings[0],
@@ -214,9 +189,8 @@ rust_test(
             "tests/support/out_of_core.rs",
         ],
         edition = "2024",
-        rustc_flags = _STREAMED_LIFECYCLE_RUSTC_FLAGS,
         deps = [
-            ":hawdb_search_streamed_lifecycle_%s" % profile,
+            settings[1],
             "//crates/core:hawdb_core",
             "//crates/storage:hawdb_storage",
         ],
@@ -230,7 +204,7 @@ rust_test(
 # non-FTS profiles retain their finite deadline.
 # Evidence: https://github.com/nowledge-co/hawdb/issues/1034.
 [
-    rust_test(
+    checked_rust_test(
         name = "hawdb_search_source_policy_tests" if profile == "default" else "hawdb_search_%s_source_policy_tests" % profile,
         timeout = "eternal" if "full-text-search" in settings[0] else "long",
         crate_features = settings[0],
@@ -601,7 +575,7 @@ rust_test(
 # only those two unit targets the next standard deadline.
 # Evidence: https://github.com/nowledge-co/hawdb/issues/1034.
 [
-    rust_test(
+    checked_rust_test(
         name = "hawdb_search_%s_tests" % profile,
         timeout = "eternal" if profile in ["text_only", "text_background"] else "long",
         crate_name = "hawdb_search",

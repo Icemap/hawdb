@@ -76,6 +76,25 @@
 - When changing target-specific code, also run strict Clippy for the affected supported target and feature configuration. For the minimal browser WASM runtime, use the compiler and archiver setup in `docs/WASM.md` and run `cargo clippy --locked -p hawdb --no-default-features --target wasm32-unknown-unknown --lib --test in_memory_portable -- -D warnings`.
 - After fixes, rerun the affected checks and appropriate regression tests. Record the commands and results in the PR. If an environment or toolchain problem prevents a required check from passing, report the blocker and leave the changes uncommitted until it is resolved; passing CI or unrelated tests does not replace these checks.
 
+## Test Ownership and CI Cost
+
+- Maintain [docs/TEST_INDEX.md](docs/TEST_INDEX.md) as the test-family index:
+  purpose/failure mode, owning target and execution lane, exact feature or
+  fixture scope, known slow paths/issues and local replay entry points.
+- Update the index in the same change when adding, moving, optimizing or
+  changing the scope, profile, isolation, timeout or execution lane of tests.
+  Keep detailed component specifications linked from the index rather than
+  duplicating all Rust case names there.
+- Diagnose slow CI with complete, source-bound BEP. Separate queue/analysis,
+  compilation, actual test execution, cached result durations and exclusive
+  serialization. Never describe a timeout ceiling as a fuzz run duration.
+- Expensive fixtures may use `ci_test_rules.bzl` checked optimization for their
+  full dependency closure. Preserve debug assertions, overflow checks, public
+  labels, complete feature matrices, fixtures and exclusive measurement gates.
+  Do not change production build settings or reduce coverage to obtain speed.
+- Report first-build cost as well as execution time. Local improvements do not
+  establish remote CI speedup; record final-head CI evidence before that claim.
+
 ## Local Fuzz Verification
 
 - Keep fuzz targets available through Bazel, but do not add them to default or dedicated CI jobs.

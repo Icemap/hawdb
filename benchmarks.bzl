@@ -1,5 +1,6 @@
 load("@crate_index//:defs.bzl", "aliases", "all_crate_deps")
 load("@rules_rust//rust:defs.bzl", "rust_binary")
+load("//:ci_test_rules.bzl", "checked_ci_binary")
 
 HAWDB_BENCHMARKS = [
     "optimizer_smoke",
@@ -29,6 +30,13 @@ HAWDB_BENCHMARKS = [
 
 HAWDB_BENCHMARK_TARGETS = [
     ":hawdb_bench_%s" % benchmark
+    for benchmark in HAWDB_BENCHMARKS
+]
+
+# Keep local debug/release benchmark entry points unchanged. CI wrappers retain
+# executable basenames because the smoke dispatcher identifies workloads by name.
+HAWDB_CI_BENCHMARK_TARGETS = [
+    ":hawdb_bench_%s_ci" % benchmark
     for benchmark in HAWDB_BENCHMARKS
 ]
 
@@ -119,6 +127,14 @@ def hawdb_benchmark_binaries(crate_features):
                 proc_macro = True,
                 proc_macro_dev = True,
             ),
+        )
+    for benchmark in HAWDB_BENCHMARKS:
+        checked_ci_binary(
+            name = "hawdb_bench_%s_ci" % benchmark,
+            binary = ":hawdb_bench_%s" % benchmark,
+            executable_name = "hawdb_bench_%s" % benchmark,
+            testonly = True,
+            tags = ["manual"],
         )
     _release_benchmark(
         name = "hawdb_bench_relational_index_access_release",

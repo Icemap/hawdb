@@ -128,6 +128,10 @@ maintained `rules_tla` module, require coordinated manual updates.
 
 ## Validation and evidence
 
+Start with the [test ownership and slow-path index](docs/TEST_INDEX.md) to find
+which target covers a problem and where it runs. Update that index whenever a
+test family's scope, execution lane, build profile or known cost changes.
+
 Install [prek](https://prek.j178.dev/installation/) and enable the repository's
 pre-commit hooks once in your clone:
 
