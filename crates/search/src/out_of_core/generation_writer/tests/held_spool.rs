@@ -153,7 +153,8 @@ fn held_generation_spool_requires_its_live_owner_instead_of_falling_back_to_a_pa
     assert!(writer.input_source().is_ok());
     writer.held_spool.take();
     assert!(writer.input_source().is_err());
-    assert!(super::super::initial::finish(writer, 1).is_err());
+    assert!(super::super::initial::prepare(&writer, 1).is_err());
+    drop(writer);
     std::fs::remove_dir_all(root).unwrap();
 }
 

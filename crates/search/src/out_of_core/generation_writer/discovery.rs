@@ -26,11 +26,24 @@ use hawdb_core::RuntimeTaskContext;
 use hawdb_storage::file_io as fs;
 use std::path::Path;
 
+pub(super) struct ActiveIdentity {
+    pub(super) generation: u64,
+    pub(super) source_graph_commit_epoch: Option<u64>,
+}
+
 pub(super) fn active(
     root: &Path,
     memory: &BuildMemory,
     task: &RuntimeTaskContext,
 ) -> Result<Option<u64>> {
+    Ok(active_identity(root, memory, task)?.map(|identity| identity.generation))
+}
+
+pub(super) fn active_identity(
+    root: &Path,
+    memory: &BuildMemory,
+    task: &RuntimeTaskContext,
+) -> Result<Option<ActiveIdentity>> {
     let io = GenerationIo::new(memory, task);
     let manifest = io.path(root, Path::new(OUT_OF_CORE_MANIFEST_FILE))?;
     // Preserve the existing absent-path behavior; every materialized file is
@@ -53,7 +66,10 @@ pub(super) fn active(
     }
     envelope.body.validate_names()?;
     checkpoint(task)?;
-    Ok(Some(envelope.body.generation))
+    Ok(Some(ActiveIdentity {
+        generation: envelope.body.generation,
+        source_graph_commit_epoch: envelope.body.source_graph_commit_epoch,
+    }))
 }
 
 pub(super) fn next(

@@ -152,6 +152,11 @@ pub(super) struct DurableStore {
     // maintenance result. A checkpoint-source clone must not hide a failed
     // reclamation from admission, pressure reports, or the next retry.
     generation_reclamation_debt: Arc<std::sync::Mutex<GenerationReclamationDebt>>,
+    // Process-local knowledge, initialized only from the durable checkpoint.
+    // Reading/replaying a WAL or choosing a synchronous future write policy
+    // does not prove that the recovered WAL prefix has completed a barrier.
+    known_durable_commit_epoch: u64,
+    wal_namespace_known_durable: bool,
     wal_free_space_probe: WalFreeSpaceProbeState,
 }
 
@@ -610,6 +615,8 @@ impl DurableStore {
             generation_reclamation_debt: Arc::new(std::sync::Mutex::new(
                 GenerationReclamationDebt::default(),
             )),
+            known_durable_commit_epoch: manifest.checkpoint_commit_epoch,
+            wal_namespace_known_durable: false,
             wal_free_space_probe: WalFreeSpaceProbeState::default(),
         })
     }

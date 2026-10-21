@@ -66,13 +66,19 @@ mod text_seed;
 mod vector_selection_tests;
 mod vector_serving;
 pub use generation_writer::{
-    GovernedSearchGenerationUpdate, GovernedSearchGenerationWriter,
-    ScheduledSearchOutOfCoreSegmentCompactionReport, SearchGenerationAdmission,
-    SearchOutOfCoreGenerationBuildOptions, SearchOutOfCoreGenerationBuildReport,
-    SearchOutOfCoreGenerationUpdate, SearchOutOfCoreGenerationWriter,
-    SearchOutOfCoreMutationWriter, SearchOutOfCoreSegmentCompaction,
-    SearchOutOfCoreSegmentCompactionPolicy, SearchOutOfCoreSegmentCompactionReport,
-    SearchOutOfCoreSegmentCompactionStopReason, SearchStagingCleanupReport,
+    GovernedSearchGenerationUpdate, GovernedSearchGenerationWriter, PreparedSearchPublication,
+    ScheduledSearchOutOfCoreSegmentCompactionReport, SearchBaselineComparisonLimits,
+    SearchBaselineComparisonReport, SearchGenerationAdmission, SearchMatchedBaseline,
+    SearchMutationInspectionInput, SearchMutationInspectionStep, SearchMutationSortStep,
+    SearchMutationSortStepLimits, SearchMutationSortStepUsage, SearchOutOfCoreBaselineComparison,
+    SearchOutOfCoreDeltaComparison, SearchOutOfCoreGenerationBuildOptions,
+    SearchOutOfCoreGenerationBuildReport, SearchOutOfCoreGenerationUpdate,
+    SearchOutOfCoreGenerationWriter, SearchOutOfCoreMutationWriter,
+    SearchOutOfCorePreparedGeneration, SearchOutOfCorePreparedUpdate,
+    SearchOutOfCoreSegmentCompaction, SearchOutOfCoreSegmentCompactionPolicy,
+    SearchOutOfCoreSegmentCompactionReport, SearchOutOfCoreSegmentCompactionStopReason,
+    SearchOutOfCoreUnorderedMutationWriter, SearchOutOfCoreUnorderedReplacementWriter,
+    SearchStagingCleanupReport, SearchUnorderedMutationLimits, SearchUnorderedMutationReport,
 };
 pub(super) use publish_lease::SearchProjectionPublishLease;
 pub use text_seed::{SearchTextSeedOutput, SearchTextSeedReport};
