@@ -26,7 +26,7 @@ use std::fmt;
 #[path = "dependency_read/graph_match.rs"]
 mod graph_match;
 #[path = "dependency_read/relational.rs"]
-mod relational;
+pub(super) mod relational;
 #[cfg(test)]
 #[path = "dependency_read/soundness_tests.rs"]
 mod soundness_tests;
@@ -158,7 +158,7 @@ impl PreparedRead {
     }
 }
 
-fn collect_node_dependencies(
+pub(super) fn collect_node_dependencies(
     plan: &PhysicalPlan,
     catalog: &Catalog,
     store: &GraphStore,

@@ -89,6 +89,10 @@ pub use automatic_checkpoint::AutomaticCheckpointReport;
 mod branch_lifecycle;
 mod canonical_snapshot;
 mod concurrent;
+mod transaction_read_dependencies;
+pub use transaction_read_dependencies::{
+    TransactionIsolation, TransactionReadDependencyLimits, TransactionReadDependencyUsage,
+};
 mod dependency_read;
 pub use dependency_read::{
     PreparedRead, PreparedReadDependencies, PreparedReadLimits, ProjectionPublicationError,
@@ -873,6 +877,7 @@ pub(super) struct DatabaseTransactionRuntime {
 
 #[derive(Debug)]
 pub(super) struct DatabaseTransactionState {
+    read_dependencies: Option<transaction_read_dependencies::TransactionReadDependencies>,
     graph_transaction: Option<GraphMutationTransaction>,
     relational_transaction: hawdb_storage::relational::RelationalTransaction,
     relational_state: hawdb_storage::relational::RelationalState,
@@ -1651,6 +1656,37 @@ impl Database {
     /// failure leaves the project handle available for retry or SQL selection.
     pub fn begin_transaction(&mut self) -> Result<DatabaseTransaction<'_>> {
         self.begin_transaction_inner(None)
+    }
+
+    /// Begins a transaction with explicit isolation and retained-evidence limits.
+    pub fn begin_transaction_with_isolation(
+        &mut self,
+        isolation: TransactionIsolation,
+        limits: TransactionReadDependencyLimits,
+    ) -> Result<DatabaseTransaction<'_>> {
+        self.runtime.get_mut()?;
+        let state =
+            DatabaseTransactionState::from_database_with_isolation(self, isolation, limits)?;
+        let runtime = DatabaseTransactionRuntime::from_database(self)?;
+        Ok(DatabaseTransaction {
+            db: self,
+            runtime,
+            state,
+            task_context: None,
+        })
+    }
+
+    /// Begins an explicitly isolated transaction with cooperative host cancellation.
+    pub fn begin_transaction_with_isolation_and_context(
+        &mut self,
+        isolation: TransactionIsolation,
+        limits: TransactionReadDependencyLimits,
+        task_context: &hawdb_core::RuntimeTaskContext,
+    ) -> Result<DatabaseTransaction<'_>> {
+        query_runtime::query_runtime_checkpoint(Some(task_context))?;
+        let mut transaction = self.begin_transaction_with_isolation(isolation, limits)?;
+        transaction.task_context = Some(task_context.clone());
+        Ok(transaction)
     }
 
     pub fn begin_transaction_with_context(
@@ -20565,6 +20601,7 @@ impl DatabaseTransactionState {
         let (_, pin) = Database::pin_runtime_read_view(&runtime);
         Ok(Self {
             snapshot_pin: Some(pin),
+            read_dependencies: None,
             graph_transaction: Some(runtime.store.begin_mutation_transaction(&runtime.catalog)),
             relational_transaction: hawdb_storage::relational::RelationalTransaction::default(),
             relational_state: runtime.store.relational_state().clone(),
@@ -20584,6 +20621,7 @@ impl DatabaseTransactionState {
     }
 
     pub(super) fn rollback(&mut self) {
+        self.read_dependencies.take();
         self.graph_transaction.take();
         self.relational_transaction.writes.clear();
         self.append_transaction.writes.clear();
@@ -20603,6 +20641,7 @@ impl DatabaseTransactionState {
 
     fn take_for_commit(&mut self) -> Self {
         Self {
+            read_dependencies: self.read_dependencies.take(),
             snapshot_pin: self.snapshot_pin.take(),
             graph_transaction: self.graph_transaction.take(),
             relational_transaction: std::mem::take(&mut self.relational_transaction),
@@ -20680,6 +20719,11 @@ impl DatabaseTransactionState {
     }
 }
 
+struct GraphTransactionStatementOptions<'a> {
+    task_context: Option<&'a hawdb_core::RuntimeTaskContext>,
+    read_dependencies: Option<&'a mut transaction_read_dependencies::TransactionReadDependencies>,
+}
+
 fn execute_graph_transaction_statement(
     runtime: &DatabaseTransactionRuntime,
     transaction: &mut GraphMutationTransaction,
@@ -20687,8 +20731,12 @@ fn execute_graph_transaction_statement(
     cypher_text: &str,
     statement: &cypher::Statement,
     parameters: &BTreeMap<String, Value>,
-    task_context: Option<&hawdb_core::RuntimeTaskContext>,
+    options: GraphTransactionStatementOptions<'_>,
 ) -> Result<GraphTransactionStatementOutcome> {
+    let GraphTransactionStatementOptions {
+        task_context,
+        read_dependencies,
+    } = options;
     query_work_request_for_statement(system_variables, statement)?;
     let optimizer_search =
         query_statement_variables_for_statement(system_variables, statement)?.optimizer_search;
@@ -20711,6 +20759,14 @@ fn execute_graph_transaction_statement(
         },
     )?;
 
+    if let Some(dependencies) = read_dependencies {
+        dependencies.collect_cypher(
+            statement,
+            &optimized.physical_plan,
+            transaction.catalog(),
+            transaction.store(),
+        )?;
+    }
     if executor::is_mutation_plan(&optimized.physical_plan)? {
         runtime.ensure_writable(transaction.store())?;
         let is_mutation_return = matches!(
@@ -20823,6 +20879,10 @@ pub(super) fn execute_database_transaction_query(
     parameters: &BTreeMap<String, Value>,
     task_context: Option<&hawdb_core::RuntimeTaskContext>,
 ) -> Result<QueryOutput> {
+    if let Some(dependencies) = &mut state.read_dependencies {
+        query_runtime::query_runtime_checkpoint(task_context)?;
+        dependencies.admit_cypher(cypher_text, parameters)?;
+    }
     let statement = cypher::parse(cypher_text)?;
     let body = statement_body(&statement);
     if matches!(body, cypher::Statement::SetSystemVariable(_)) {
@@ -20847,7 +20907,10 @@ pub(super) fn execute_database_transaction_query(
         cypher_text,
         &statement,
         parameters,
-        task_context,
+        GraphTransactionStatementOptions {
+            task_context,
+            read_dependencies: state.read_dependencies.as_mut(),
+        },
     )
     .map(|outcome| outcome.output)
 }
@@ -20860,6 +20923,10 @@ pub(super) fn execute_concurrent_graph_transaction_query(
     task_context: Option<&hawdb_core::RuntimeTaskContext>,
 ) -> Result<GraphTransactionStatementOutcome> {
     query_runtime::query_runtime_checkpoint(task_context)?;
+    if let Some(dependencies) = &mut state.read_dependencies {
+        query_runtime::query_runtime_checkpoint(task_context)?;
+        dependencies.admit_cypher(cypher_text, parameters)?;
+    }
     let statement = cypher::parse(cypher_text)?;
     let body = statement_body(&statement);
     if matches!(body, cypher::Statement::SetSystemVariable(_)) {
@@ -20884,7 +20951,10 @@ pub(super) fn execute_concurrent_graph_transaction_query(
         cypher_text,
         &statement,
         parameters,
-        task_context,
+        GraphTransactionStatementOptions {
+            task_context,
+            read_dependencies: state.read_dependencies.as_mut(),
+        },
     )
 }
 
@@ -20897,6 +20967,10 @@ pub(super) fn execute_database_transaction_sql(
     allow_locking_select: bool,
     task_context: Option<&hawdb_core::RuntimeTaskContext>,
 ) -> Result<SqlStatementResult> {
+    if let Some(dependencies) = &mut state.read_dependencies {
+        query_runtime::query_runtime_checkpoint(task_context)?;
+        dependencies.admit_sql(sql_text, parameters)?;
+    }
     let prepared = runtime.relational_plan_template_cache.prepare(sql_text)?;
     execute_database_transaction_prepared_sql(
         runtime,
@@ -20937,6 +21011,15 @@ pub(super) fn execute_database_transaction_prepared_sql(
         (Some(configured), Some(admitted)) => Some(configured.min(admitted)),
         (configured, admitted) => configured.or(admitted),
     };
+    if let Some(dependencies) = &mut state.read_dependencies {
+        query_runtime::query_runtime_checkpoint(options.task_context)?;
+        dependencies.collect_sql(
+            sql_text,
+            prepared.statement(),
+            parameters,
+            &state.relational_state,
+        )?;
+    }
     reject_locking_select_without_manager(prepared.statement(), options.allow_locking_select)?;
     if let crate::sql::SqlStatement::Branch(statement) = prepared.statement() {
         return observability::execute_branch_sql_at_path(
@@ -21498,6 +21581,9 @@ fn commit_database_transaction_state_inner(
     allow_stale_rebase: bool,
 ) -> Result<TransactionCommitResult> {
     db.ensure_writable()?;
+    if let Some(dependencies) = &state.read_dependencies {
+        dependencies.validate(db)?;
+    }
     let returning = std::mem::take(&mut state.relational_returning);
     let graph_transaction = state
         .graph_transaction
@@ -21564,6 +21650,10 @@ fn commit_database_transaction_state_inner(
 }
 
 impl DatabaseTransaction<'_> {
+    pub fn read_dependency_usage(&self) -> Option<TransactionReadDependencyUsage> {
+        self.state.read_dependency_usage()
+    }
+
     pub(crate) fn apply_session_config(&mut self, config: SessionConfig) {
         self.runtime.session_config = config;
     }
@@ -21573,6 +21663,18 @@ impl DatabaseTransaction<'_> {
     }
 
     pub fn query_with_params(
+        &mut self,
+        cypher_text: &str,
+        parameters: &BTreeMap<String, Value>,
+    ) -> Result<QueryOutput> {
+        let result = self.query_with_params_inner(cypher_text, parameters);
+        if result.is_err() {
+            self.state.fail_read_dependencies();
+        }
+        result
+    }
+
+    fn query_with_params_inner(
         &mut self,
         cypher_text: &str,
         parameters: &BTreeMap<String, Value>,
@@ -21606,6 +21708,18 @@ impl DatabaseTransaction<'_> {
 
     /// Parameterized form of [`Self::query_sql_with_result`].
     pub fn query_sql_with_result_and_params(
+        &mut self,
+        sql_text: &str,
+        parameters: &[Value],
+    ) -> Result<SqlStatementResult> {
+        let result = self.query_sql_with_result_and_params_inner(sql_text, parameters);
+        if result.is_err() {
+            self.state.fail_read_dependencies();
+        }
+        result
+    }
+
+    fn query_sql_with_result_and_params_inner(
         &mut self,
         sql_text: &str,
         parameters: &[Value],
@@ -21648,6 +21762,10 @@ impl DatabaseTransaction<'_> {
 
     /// Commits and returns outcomes recomputed against the durable commit state.
     pub fn commit_with_result(mut self) -> Result<TransactionCommitResult> {
+        if let Some(dependencies) = &self.state.read_dependencies {
+            dependencies.ensure_complete()?;
+            query_runtime::query_runtime_checkpoint(self.task_context.as_ref())?;
+        }
         commit_database_transaction_state(self.db, &mut self.state, false)
     }
 
@@ -21897,7 +22015,10 @@ impl DatabaseSession<'_> {
                     cypher_text,
                     statement,
                     parameters,
-                    None,
+                    GraphTransactionStatementOptions {
+                        task_context: None,
+                        read_dependencies: None,
+                    },
                 )
                 .map(|outcome| outcome.output)
             }

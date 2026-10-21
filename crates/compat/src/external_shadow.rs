@@ -498,6 +498,9 @@ fn json_error_from_hawdb(error: HawDBError) -> serde_json::Value {
         error @ (HawDBError::GraphExpansionCandidateLimitExceeded { .. }
         | HawDBError::GraphExpansionPayloadLimitExceeded { .. }) => json_error("execution", error),
         error @ HawDBError::TransactionConflict { .. } => json_error("execution", error),
+        error @ HawDBError::TransactionReadDependencyRefused { .. } => {
+            json_error("execution", error)
+        }
         error @ HawDBError::AppendSequenceExhausted { .. } => json_error("storage", error),
         error @ (HawDBError::BranchBusy { .. } | HawDBError::BranchReclamationBlocked { .. }) => {
             json_error("storage", error)

@@ -106,6 +106,10 @@ pub enum HawDBError {
         committed_epoch: u64,
         key: String,
     },
+    /// Requested read validation cannot be proved; never downgrade isolation.
+    TransactionReadDependencyRefused {
+        reason: String,
+    },
     AppendSequenceExhausted {
         table: String,
         watermark: i64,
@@ -173,6 +177,9 @@ impl Display for HawDBError {
                 f,
                 "append commit sequence exhausted for table {table}: watermark={watermark}, requested={requested}"
             ),
+            HawDBError::TransactionReadDependencyRefused { reason } => {
+                write!(f, "transaction read dependency capture refused: {reason}")
+            }
             HawDBError::CapabilityUnavailable { capability } => {
                 write!(f, "capability unavailable: {}", capability.as_str())
             }

@@ -3,7 +3,7 @@
 
 use crate::cypher;
 
-pub(super) fn match_is_deterministic(
+pub(in crate::api) fn match_is_deterministic(
     patterns: &[cypher::MatchPattern],
     predicate: Option<&cypher::PredicateExpression>,
 ) -> bool {
@@ -23,7 +23,7 @@ pub(super) fn match_is_deterministic(
     }) && predicate.is_none_or(|predicate| predicate_is_deterministic(&predicate.kind))
 }
 
-pub(super) fn projection_is_deterministic(projection: &cypher::ProjectionClause) -> bool {
+pub(in crate::api) fn projection_is_deterministic(projection: &cypher::ProjectionClause) -> bool {
     projection
         .items
         .iter()
@@ -63,7 +63,7 @@ pub(super) fn graph_options_are_deterministic(options: &cypher::GraphAlgorithmOp
     .all(value_is_deterministic)
 }
 
-fn value_is_deterministic(value: &cypher::ValueExpression) -> bool {
+pub(in crate::api) fn value_is_deterministic(value: &cypher::ValueExpression) -> bool {
     match &value.kind {
         cypher::ValueExpressionKind::CurrentTimestamp => false,
         cypher::ValueExpressionKind::List(values) => values.iter().all(value_is_deterministic),

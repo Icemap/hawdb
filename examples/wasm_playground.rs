@@ -85,6 +85,7 @@ impl QueryBridge {
                     HawDBError::StorageIntegrity(_) => "storage_integrity",
                     HawDBError::FileDescriptors(_) => "file_descriptors",
                     HawDBError::Execution(_)
+                    | HawDBError::TransactionReadDependencyRefused { .. }
                     | HawDBError::ReadBudgetExceeded(_)
                     | HawDBError::ResourceBudgetExceeded(_)
                     | HawDBError::GraphExpansionCandidateLimitExceeded { .. }

@@ -373,6 +373,7 @@ pub const fn hawdb_error_class(error: &HawDBError) -> &'static str {
         | HawDBError::GraphExpansionCandidateLimitExceeded { .. }
         | HawDBError::GraphExpansionPayloadLimitExceeded { .. }
         | HawDBError::TransactionConflict { .. }
+        | HawDBError::TransactionReadDependencyRefused { .. }
         | HawDBError::BranchCommandUnsupported { .. } => "execution",
         HawDBError::CapabilityUnavailable { .. } => "capability_unavailable",
     }
