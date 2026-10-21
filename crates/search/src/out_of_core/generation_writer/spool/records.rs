@@ -28,6 +28,7 @@ use std::mem::size_of;
 struct SourceFile {
     file: File,
     length: u64,
+    io_task: Option<RuntimeTaskContext>,
     _memory: QueryMemoryLease,
 }
 
@@ -42,6 +43,28 @@ impl HeldSpool {
         expected: u64,
         memory: &BuildMemory,
     ) -> Result<Self> {
+        Self::capture_inner(file, expected, memory, None)
+    }
+
+    pub(in super::super) fn capture_governed(
+        file: File,
+        expected: u64,
+        memory: &BuildMemory,
+        task: RuntimeTaskContext,
+    ) -> Result<Self> {
+        Self::capture_inner(file, expected, memory, Some(task))
+    }
+
+    fn capture_inner(
+        file: File,
+        expected: u64,
+        memory: &BuildMemory,
+        io_task: Option<RuntimeTaskContext>,
+    ) -> Result<Self> {
+        let _io = io_task
+            .as_ref()
+            .map(|task| crate::out_of_core::scratch_directory::io_scope(task, true))
+            .transpose()?;
         let charge = memory
             .spool
             .reserve(size_of::<SourceFile>() + 2 * size_of::<usize>())?;
@@ -54,6 +77,7 @@ impl HeldSpool {
         Ok(Self(Shared::new(SourceFile {
             file,
             length: expected,
+            io_task,
             _memory: charge,
         })))
     }
@@ -65,6 +89,12 @@ impl HeldSpool {
 }
 
 impl SourceFile {
+    fn io(&self) -> Result<Option<Box<dyn hawdb_core::RuntimeIoWavePermit>>> {
+        match &self.io_task {
+            Some(task) => crate::out_of_core::scratch_directory::io_scope(task, true),
+            None => Ok(None),
+        }
+    }
     fn range(&self) -> Result<RangeReader<'_>> {
         if self.file.metadata()?.len() != self.length {
             return Err(HawDBError::Storage(
@@ -93,6 +123,28 @@ pub(in super::super) struct SpoolRecord {
 }
 
 impl SpoolRecord {
+    pub(in super::super) fn into_document(
+        self,
+        max_metadata_fields: usize,
+    ) -> Result<crate::build_memory::AdmittedDocument> {
+        let _io = self.source.io()?;
+        let mut input = RangeReader {
+            file: &self.source.file,
+            offset: self.offset,
+            remaining: self.encoded_bytes,
+        };
+        decoding::read_frame_admitted(
+            &mut input,
+            usize::try_from(self.encoded_bytes)
+                .map_err(|_| HawDBError::Execution("Consumer record length overflow".into()))?,
+            self.checksum,
+            0,
+            &self.memory,
+            max_metadata_fields,
+            &self.task,
+        )
+    }
+
     pub(in super::super) fn add_digest(&self, digest: &mut DocumentsDigest) {
         digest.add_record(self.checksum, self.encoded_bytes);
     }
@@ -103,6 +155,7 @@ impl SpoolRecord {
         memory: &BuildMemory,
         task: &RuntimeTaskContext,
     ) -> Result<()> {
+        let _io = self.source.io()?;
         let _scratch = memory.spool.reserve(SPOOL_BUFFER_BYTES)?;
         let mut buffer = [0; SPOOL_BUFFER_BYTES];
         let mut input = RangeReader {
@@ -138,6 +191,7 @@ impl SpoolRecord {
         memory: &BuildMemory,
         task: &RuntimeTaskContext,
     ) -> Result<bool> {
+        let _io = self.source.io()?;
         if self.encoded_bytes != other.encoded_bytes || self.checksum != other.checksum {
             return Ok(false);
         }
@@ -180,6 +234,7 @@ impl SpoolRecord {
         memory: &BuildMemory,
         task: &RuntimeTaskContext,
     ) -> Result<()> {
+        let _io = self.source.io()?;
         if expected.encoded_len(Some(task))? as u64 != self.encoded_bytes {
             return Err(HawDBError::Execution(
                 "staged document differs from expected document".into(),
@@ -338,6 +393,7 @@ struct BodyRange {
 
 impl Read for BodyRange {
     fn read(&mut self, output: &mut [u8]) -> io::Result<usize> {
+        let _io = self.source.io().map_err(io::Error::other)?;
         let mut range = RangeReader {
             file: &self.source.file,
             offset: self.offset,
@@ -395,6 +451,7 @@ impl SpoolCursor {
         self.length
     }
     pub(in super::super) fn read_exact_at(&self, offset: u64, bytes: &mut [u8]) -> Result<()> {
+        let _io = self.source.io()?;
         if offset
             .checked_add(bytes.len() as u64)
             .is_none_or(|end| end > self.length)
@@ -438,6 +495,7 @@ impl SpoolCursor {
     }
 
     pub(in super::super) fn next(&mut self) -> Result<Option<SpoolRecord>> {
+        let _io = self.source.io()?;
         checkpoint(&self.task)?;
         if self.ordinal == self.document_count {
             if self.offset != self.length {
@@ -548,11 +606,13 @@ impl SpoolSource<'_> {
                 Shared::new(SourceFile {
                     file,
                     length,
+                    io_task: None,
                     _memory: shared_memory,
                 })
             }
         };
         let length = source.length;
+        let _io = source.io()?;
         let input = source.range()?;
         #[cfg(test)]
         let mut input = read_evidence::track(input);

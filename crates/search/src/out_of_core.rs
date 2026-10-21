@@ -93,6 +93,18 @@ impl std::fmt::Debug for CandidateView {
 }
 
 impl CandidateView {
+    pub(crate) fn prepare_consumer_update(
+        &self,
+        permit: Arc<hawdb_qos::RuntimePermit>,
+        options: SearchOutOfCoreGenerationBuildOptions,
+        limits: SearchUnorderedMutationLimits,
+        task: hawdb_core::RuntimeTaskContext,
+    ) -> Result<SearchOutOfCoreUnorderedMutationWriter<'_>> {
+        self.0
+            .opened
+            .prepare_consumer_update(permit, options, limits, task)
+    }
+
     pub(crate) fn shares_governor_with(&self, permit: &hawdb_qos::RuntimePermit) -> bool {
         self.0._memory.shares_governor_with(permit) && self.0.opened.shares_governor_with(permit)
     }
@@ -220,17 +232,18 @@ mod vector_serving;
 pub use generation_writer::{
     GovernedSearchGenerationUpdate, GovernedSearchGenerationWriter, PreparedSearchPublication,
     ScheduledSearchOutOfCoreSegmentCompactionReport, SearchBaselineComparisonLimits,
-    SearchBaselineComparisonReport, SearchGenerationAdmission, SearchMatchedBaseline,
-    SearchMutationInspectionInput, SearchMutationInspectionStep, SearchMutationSortStep,
-    SearchMutationSortStepLimits, SearchMutationSortStepUsage, SearchOutOfCoreBaselineComparison,
-    SearchOutOfCoreDeltaComparison, SearchOutOfCoreGenerationBuildOptions,
-    SearchOutOfCoreGenerationBuildReport, SearchOutOfCoreGenerationUpdate,
-    SearchOutOfCoreGenerationWriter, SearchOutOfCoreMutationWriter,
-    SearchOutOfCorePreparedGeneration, SearchOutOfCorePreparedUpdate,
-    SearchOutOfCoreSegmentCompaction, SearchOutOfCoreSegmentCompactionPolicy,
-    SearchOutOfCoreSegmentCompactionReport, SearchOutOfCoreSegmentCompactionStopReason,
-    SearchOutOfCoreUnorderedMutationWriter, SearchOutOfCoreUnorderedReplacementWriter,
-    SearchStagingCleanupReport, SearchUnorderedMutationLimits, SearchUnorderedMutationReport,
+    SearchBaselineComparisonReport, SearchComparedConsumerDocuments, SearchGenerationAdmission,
+    SearchMatchedBaseline, SearchMutationInspectionInput, SearchMutationInspectionStep,
+    SearchMutationSortStep, SearchMutationSortStepLimits, SearchMutationSortStepUsage,
+    SearchOutOfCoreBaselineComparison, SearchOutOfCoreDeltaComparison,
+    SearchOutOfCoreGenerationBuildOptions, SearchOutOfCoreGenerationBuildReport,
+    SearchOutOfCoreGenerationUpdate, SearchOutOfCoreGenerationWriter,
+    SearchOutOfCoreMutationWriter, SearchOutOfCorePreparedGeneration,
+    SearchOutOfCorePreparedUpdate, SearchOutOfCoreSegmentCompaction,
+    SearchOutOfCoreSegmentCompactionPolicy, SearchOutOfCoreSegmentCompactionReport,
+    SearchOutOfCoreSegmentCompactionStopReason, SearchOutOfCoreUnorderedMutationWriter,
+    SearchOutOfCoreUnorderedReplacementWriter, SearchStagingCleanupReport,
+    SearchUnorderedMutationLimits, SearchUnorderedMutationReport,
 };
 pub(super) use publish_lease::SearchProjectionPublishLease;
 pub use text_seed::{SearchTextSeedOutput, SearchTextSeedReport};

@@ -17,6 +17,7 @@ use crate::SearchRebuildOptions;
 use std::any::TypeId;
 use std::num::NonZeroU64;
 
+mod covered;
 mod lifecycle;
 
 struct Fixture(PathBuf);

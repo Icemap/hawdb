@@ -160,9 +160,19 @@ impl Control {
         let io = io::GenerationIo::new(&self.memory, &self.task);
         let path = io.path(&writer.stage.path, Path::new(&name))?;
         let buffer = self.memory.spool.reserve(SPOOL_BUFFER_BYTES)?;
-        let file = io.native(&[&path], || {
-            OpenOptions::new().create_new(true).write(true).open(&*path)
-        })??;
+        let scratch = writer.stage.scratch_directory();
+        let file = match &scratch {
+            Some(scratch) => {
+                let _io = crate::out_of_core::scratch_directory::io_scope(
+                    &self.task,
+                    scratch.governed(),
+                )?;
+                scratch.create(&path)?
+            }
+            None => io.native(&[&path], || {
+                OpenOptions::new().create_new(true).write(true).open(&*path)
+            })??,
+        };
         let mut file = BufWriter::with_capacity(SPOOL_BUFFER_BYTES, file);
         if file.capacity() != SPOOL_BUFFER_BYTES {
             return Err(invalid("run buffer exceeds admission"));
@@ -172,6 +182,9 @@ impl Control {
         Ok(Output {
             file,
             path,
+            io_task: scratch.as_ref().map(|_| self.task.clone()),
+            scratch,
+            memory: self.memory.clone(),
             records: 0,
             bytes: spool::SPOOL_HEADER.len() as u64,
             digest: Default::default(),
@@ -195,6 +208,8 @@ fn evidence(digest: &mut DocumentsDigest, record: u64, bytes: u64, tag: u64) {
 
 pub(super) struct Run {
     path: OwnedPath,
+    held: Option<spool::HeldSpool>,
+    scratch: Option<std::sync::Arc<crate::out_of_core::ScratchDirectory>>,
     records: usize,
     bytes: u64,
     digest: DocumentsDigest,
@@ -202,6 +217,9 @@ pub(super) struct Run {
 pub(super) struct Output {
     file: BufWriter<File>,
     path: OwnedPath,
+    io_task: Option<RuntimeTaskContext>,
+    scratch: Option<std::sync::Arc<crate::out_of_core::ScratchDirectory>>,
+    memory: BuildMemory,
     records: usize,
     bytes: u64,
     digest: DocumentsDigest,
@@ -234,6 +252,11 @@ impl Output {
         match entry {
             Buffered::Delete(id) => self.delete(&id, control, writer),
             Buffered::Upsert(document, _) => {
+                let _io = self
+                    .io_task
+                    .as_ref()
+                    .map(|task| crate::out_of_core::scratch_directory::io_scope(task, true))
+                    .transpose()?;
                 let encoding = DocumentEncoding::new_with_context(&document, Some(&control.task))?;
                 let bytes = encoding.len() as u64;
                 if bytes > writer.options.max_record_bytes.get() {
@@ -270,6 +293,11 @@ impl Output {
         writer: &mut SearchOutOfCoreGenerationWriter,
     ) -> Result<()> {
         let length = id.len() as u64;
+        let _io = self
+            .io_task
+            .as_ref()
+            .map(|task| crate::out_of_core::scratch_directory::io_scope(task, true))
+            .transpose()?;
         let extent = length
             .checked_add(17)
             .ok_or_else(|| invalid("delete extent overflow"))?;
@@ -302,9 +330,16 @@ impl Output {
                     .ok_or_else(|| invalid("record extent overflow"))?;
                 control.read(record.encoded_bytes)?;
                 self.reserve(extent, control, writer)?;
-                self.file.write_all(&[1, u8::from(*chinese)])?;
-                self.file.write_all(&record.encoded_bytes.to_le_bytes())?;
-                self.file.write_all(&record.checksum().to_le_bytes())?;
+                {
+                    let _io = self
+                        .io_task
+                        .as_ref()
+                        .map(|task| crate::out_of_core::scratch_directory::io_scope(task, true))
+                        .transpose()?;
+                    self.file.write_all(&[1, u8::from(*chinese)])?;
+                    self.file.write_all(&record.encoded_bytes.to_le_bytes())?;
+                    self.file.write_all(&record.checksum().to_le_bytes())?;
+                }
                 record.write_to(&mut self.file, &control.memory, &control.task)?;
                 let mut value = DocumentsDigest::default();
                 record.add_digest(&mut value);
@@ -319,9 +354,32 @@ impl Output {
         }
     }
     pub(super) fn finish(mut self) -> Result<Run> {
-        self.file.flush()?;
+        {
+            let _io = self
+                .io_task
+                .as_ref()
+                .map(|task| crate::out_of_core::scratch_directory::io_scope(task, true))
+                .transpose()?;
+            self.file.flush()?;
+        }
+        let held = if let Some(task) = self.io_task {
+            let file = self
+                .file
+                .into_inner()
+                .map_err(|e| HawDBError::from(e.into_error()))?;
+            Some(spool::HeldSpool::capture_governed(
+                file,
+                self.bytes,
+                &self.memory,
+                task,
+            )?)
+        } else {
+            None
+        };
         Ok(Run {
             path: self.path,
+            held,
+            scratch: self.scratch,
             records: self.records,
             bytes: self.bytes,
             digest: self.digest,
@@ -368,7 +426,7 @@ impl Reader {
         control.read(spool::SPOOL_HEADER.len() as u64)?;
         let memory = control.memory.spool.reserve(std::mem::size_of::<Self>())?;
         let cursor = spool::SpoolSource {
-            held: None,
+            held: run.held.clone(),
             path: &run.path,
             document_count: 0,
             max_record_bytes: writer.options.max_record_bytes.get(),
@@ -570,8 +628,18 @@ impl Reader {
     pub(super) fn remove(self, control: &Control) -> Result<()> {
         let path = self.run.path;
         drop(self.cursor);
-        io::GenerationIo::new(&control.memory, &self.task)
-            .native(&[&path], || fs::remove_file(&*path))??;
+        drop(self.run.held);
+        match self.run.scratch {
+            Some(scratch) => {
+                let _io = crate::out_of_core::scratch_directory::io_scope(
+                    &self.task,
+                    scratch.governed(),
+                )?;
+                scratch.remove(&path)?;
+            }
+            None => io::GenerationIo::new(&control.memory, &self.task)
+                .native(&[&path], || fs::remove_file(&*path))??,
+        }
         Ok(())
     }
 }

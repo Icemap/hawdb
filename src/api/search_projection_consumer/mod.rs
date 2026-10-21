@@ -39,6 +39,13 @@ use SearchProjectionConsumerError as Error;
 use SearchProjectionConsumerRebuildReason as Reason;
 use SearchProjectionConsumerState as State;
 
+mod covered;
+pub use covered::{
+    ProjectionConsumerCatchUpConfig, ProjectionConsumerCatchUpError,
+    ProjectionConsumerCoverageSession, ProjectionConsumerStagingSession,
+    ProjectionCoveredConsumerUpdate,
+};
+
 impl Database {
     /// Acquires one application-owned projection using a stable logical ID.
     ///

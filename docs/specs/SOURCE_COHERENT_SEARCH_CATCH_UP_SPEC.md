@@ -4,6 +4,10 @@ Tracking: [#1043](https://github.com/nowledge-co/hawdb/issues/1043).
 This is an additive embedded-library preparation path based on main, independent
 of the stationary Consumer implementation in #1039. It does not enable Mem
 Search ACK, replace registered Consumer recovery, or close #1092/#1106.
+The [registered Consumer facade](../REGISTERED_CONSUMER_CATCH_UP.md) now connects
+this comparison to stationary publication and durable Consumer recovery. Its
+token retains the compared full-E stream, exact base receipt and source proof;
+it invokes no mapper again while constructing the registered generation.
 
 ## Source and publication boundaries
 
@@ -135,6 +139,9 @@ this does not supply an idempotent registered-Consumer operation receipt.
 Hosts must hold their binding authority through activation. Versioned host
 binding/incarnation, durable coverage receipts, external vectors, optimized
 owner reduction, short activation and actual Mem integration remain open.
+The registered facade reuses its durable native binding/selection receipt and
+original-operation recovery; it does not persist resumable private coverage work
+or introduce an independently verifiable host mapping certificate.
 The legacy API's #1108 prefix refusal remains intact and is not routed through
 this new path automatically. Its earlier mixed-snapshot bug is historical;
 current main rejects the incoherent prefix.

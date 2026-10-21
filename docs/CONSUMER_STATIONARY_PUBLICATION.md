@@ -54,6 +54,10 @@ does not claim to migrate every Search checkpoint writer to relative native IO.
 
 ## Host API
 
+For bounded fixed-E graph/SQL catch-up with independent complete-source content
+verification, use the [registered Consumer catch-up flow](REGISTERED_CONSUMER_CATCH_UP.md).
+Its opaque covered update enters this same native selector/receipt protocol.
+
 - `open_or_create_search_projection_consumer`: recover/reopen the exact durable
   registration or initialize a genuinely absent registration. Existing UUIDs,
   lease policy and cursor survive reopen; new options do not renew an old lease.

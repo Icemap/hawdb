@@ -47,6 +47,7 @@ pub struct RegisteredConsumerPreparation<'a> {
 #[derive(Debug)]
 pub(super) struct StationaryConsumer {
     pub(super) slot: ConsumerReadSlot,
+    view: crate::out_of_core::CandidateView,
     pub(super) selected: ConsumerSelectionReceipt,
     pending: Option<Box<PreparedRegisteredConsumer>>,
     // The first directory continues to exclude a second logical owner after
@@ -85,6 +86,24 @@ fn binding(
 }
 
 impl ConsumerProjection {
+    /// Create private bounded work from this exact completed native version.
+    /// No ordinary reader, refresh, or serving capability escapes its admission.
+    #[doc(hidden)]
+    pub fn prepare_source_coherent_update(
+        &self,
+        permit: Arc<RuntimePermit>,
+        options: crate::SearchOutOfCoreGenerationBuildOptions,
+        sorting: crate::SearchUnorderedMutationLimits,
+        task: RuntimeTaskContext,
+    ) -> Result<crate::SearchOutOfCoreUnorderedMutationWriter<'_>> {
+        self.stationary_receipt()?;
+        self.stationary
+            .as_ref()
+            .expect("stationary owner")
+            .view
+            .prepare_consumer_update(permit, options, sorting, task)
+    }
+
     pub fn registered_locator(&self) -> Result<&Path> {
         Ok(&self
             .stationary
@@ -454,8 +473,10 @@ impl ConsumerProjection {
         let logical_owner = logical
             .map(operation::Authority::new)
             .unwrap_or_else(|| Arc::clone(&authority));
+        let view = slot.completed_view()?;
         let native = StationaryConsumer {
             slot,
+            view,
             selected,
             pending: None,
             logical_owner,
@@ -544,6 +565,7 @@ impl PreparedRegisteredConsumer {
         let logical_owner = logical_owner.unwrap_or_else(|| Arc::clone(&authority));
         let native = StationaryConsumer {
             slot,
+            view: detached.view,
             selected: receipt,
             pending: None,
             parent,

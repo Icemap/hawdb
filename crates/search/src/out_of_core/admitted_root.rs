@@ -58,6 +58,50 @@ pub(super) struct OpenedRoot {
     _collections_memory: Option<ReaderMemory>,
 }
 impl OpenedRoot {
+    pub(super) fn prepare_consumer_update(
+        &self,
+        permit: Arc<hawdb_qos::RuntimePermit>,
+        options: SearchOutOfCoreGenerationBuildOptions,
+        limits: SearchUnorderedMutationLimits,
+        task: hawdb_core::RuntimeTaskContext,
+    ) -> Result<SearchOutOfCoreUnorderedMutationWriter<'_>> {
+        if !self.stationary_immutable || !self.shares_governor_with(&permit) {
+            return Err(HawDBError::Execution(
+                "Consumer catch-up requires its original stationary reader and governor".into(),
+            ));
+        }
+        if task.has_resource_controllers() {
+            return Err(HawDBError::Execution(
+                "Consumer catch-up requires an unbound task".into(),
+            ));
+        }
+        let task = permit.bind_task_context(task);
+        let mut memory = crate::build_memory::BuildMemory::new(&task)?;
+        memory.host_admission = Some(Arc::clone(&permit));
+        let admission = ReadAdmission {
+            memory: &memory,
+            task: &task,
+            permit: crate::build_memory::read::ReadPermit::Governed(&permit),
+        };
+        let stage = self
+            ._native_custody
+            .as_ref()
+            .ok_or_else(|| HawDBError::Execution("Consumer catch-up lacks native custody".into()))?
+            .validation_stage(&self.reader.root, &admission)?;
+        let inner = generation_writer::mutations::SearchOutOfCoreMutationWriter::create_captured(
+            &self.reader,
+            options,
+            task,
+            memory,
+            stage,
+        )?;
+        generation_writer::unordered::from_inner(
+            inner,
+            limits,
+            self.reader.config.max_document_header_bytes.get(),
+        )
+    }
+
     pub(super) fn shares_governor_with(&self, permit: &hawdb_qos::RuntimePermit) -> bool {
         self._root_memory
             .as_ref()
