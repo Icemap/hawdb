@@ -45,4 +45,5 @@ canonical contracts above govern supported behavior.
 
 | Proposal | Scope and adoption boundary |
 | --- | --- |
+| [`MVCC_COW_EVOLUTION_SPEC.md`](MVCC_COW_EVOLUTION_SPEC.md) | Proposed COW snapshot/retention and persistent Consumer lifecycle work, followed by complete transaction read dependencies and separately qualified opt-in serializability; existing SI/publication contracts remain authoritative |
 | [`ZERO_COPY_COLUMNAR_INTERCHANGE_SPEC.md`](ZERO_COPY_COLUMNAR_INTERCHANGE_SPEC.md) | Measurement-first, opt-in strict zero-copy delivery with bounded pull and Go/Python ownership; producer-layout, SIMD, graph, and FTS extensions require separate workload evidence and implementation scope |
