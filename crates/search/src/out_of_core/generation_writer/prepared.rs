@@ -112,21 +112,42 @@ impl SearchOutOfCorePreparedGeneration {
     /// synchronization; this lifecycle split alone does not bound lock-held I/O
     /// independently of artifact size. A successful selector commit cannot be
     /// undone by cancellation arriving during that commit's durability barrier.
-    pub fn publish(self) -> Result<SearchOutOfCoreGenerationBuildReport> {
-        let _lease = super::super::SearchProjectionPublishLease::acquire_with_context(
+    pub fn publish(mut self) -> Result<SearchOutOfCoreGenerationBuildReport> {
+        let mut lease = super::super::SearchProjectionPublishLease::acquire_with_context(
             &self.writer.root,
             &self.writer.memory,
             &self.writer.task_context,
         )?;
-        self.base.validate(&self.writer)?;
+        lease.prepare_cleanup_resources(&self.writer.memory, &self.writer.task_context)?;
+        let actual = self.base.validate(&self.writer)?;
+        self.writer.resident_snapshot = actual
+            .as_ref()
+            .and_then(|identity| identity.resident_snapshot);
+        let initial = actual.is_none() && self.base.damaged.is_none();
+        let parent_absence = actual
+            .as_ref()
+            .is_some_and(|identity| identity.resident_snapshot_absent);
+        self.writer.resident_snapshot_absent = if initial || parent_absence {
+            lease.prove_resident_absence(
+                &self.writer.root,
+                initial,
+                &self.writer.memory,
+                &self.writer.task_context,
+            )?
+        } else {
+            false
+        };
         match self.content {
             Content::Single {
                 artifacts,
                 private_partition,
-            } => self
-                .writer
-                .publish_artifacts(self.generation, private_partition, artifacts),
-            Content::Partitioned(report) => initial::publish(self.writer, self.base.active, report),
+            } => {
+                self.writer
+                    .publish_artifacts(self.generation, private_partition, artifacts, &lease)
+            }
+            Content::Partitioned(report) => {
+                initial::publish(self.writer, self.base.active, report, &lease)
+            }
         }
     }
 }
@@ -155,7 +176,12 @@ impl CapturedBase {
             }
             Err(error)
                 if writer.expected_active_generation.is_some()
-                    || matches!(error, HawDBError::Execution(_)) =>
+                    || matches!(
+                        error,
+                        HawDBError::Execution(_)
+                            | HawDBError::ResourceBudgetExceeded(_)
+                            | HawDBError::FileDescriptors(_)
+                    ) =>
             {
                 Err(error)
             }
@@ -178,7 +204,10 @@ impl CapturedBase {
         }
     }
 
-    fn validate(&self, writer: &SearchOutOfCoreGenerationWriter) -> Result<()> {
+    fn validate(
+        &self,
+        writer: &SearchOutOfCoreGenerationWriter,
+    ) -> Result<Option<discovery::ActiveIdentity>> {
         if let Some(damaged) = &self.damaged {
             let io = io::GenerationIo::new(&writer.memory, &writer.task_context);
             let path = io.path(
@@ -190,18 +219,21 @@ impl CapturedBase {
                 if let Ok(Some(actual)) =
                     discovery::active(&writer.root, &writer.memory, &writer.task_context)
                 {
-                    return check_active(None, Some(actual));
+                    check_active(None, Some(actual))?;
                 }
                 return Err(HawDBError::StorageIntegrity(
                     "damaged search selector changed during replacement preparation".into(),
                 ));
             }
-            return Ok(());
+            return Ok(None);
         }
+        let actual =
+            discovery::active_identity(&writer.root, &writer.memory, &writer.task_context)?;
         check_active(
             self.active,
-            discovery::active(&writer.root, &writer.memory, &writer.task_context)?,
-        )
+            actual.as_ref().map(|identity| identity.generation),
+        )?;
+        Ok(actual)
     }
 }
 

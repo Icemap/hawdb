@@ -71,15 +71,17 @@ impl DurableStore {
                 "WAL sync group has entries without an open append handle".to_string(),
             )
         })?;
+        self.require_captured_wal_append(file)?;
         file.sync_data()?;
         if group.requires_parent_sync() || !self.wal_namespace_known_durable {
             #[cfg(test)]
             crate::store::read_dependencies::source_sync_failpoint(
                 crate::store::read_dependencies::SourceSyncFailure::Directory,
             )?;
-            sync_parent_dir(&self.wal_path)?;
+            self.sync_wal_namespace()?;
             self.wal_namespace_known_durable = true;
         }
+        self.require_captured_wal_append(file)?;
         self.known_durable_commit_epoch = self.wal_commit_epoch;
         process_crash_failpoint("after_wal_sync");
         Ok(group.into_flush(elapsed_micros(started)))
@@ -151,11 +153,22 @@ impl DurableStore {
             byte_count,
             pressure_signals,
         )?;
+        // Native ownership checks and namespace barriers may open temporary
+        // handles. Fund those before any record bytes can reach the WAL.
+        let _descriptors = self.reserve_wal_operation_resources()?;
         process_crash_failpoint("before_wal_append");
         let sync_deferred = self.wal_sync_group.is_some();
         let result = match self.take_wal_append() {
             Err(error) => Err(error),
             Ok((file, created)) => {
+                #[cfg(test)]
+                if self.wal_append_owner.is_some() {
+                    super::AFTER_CAPTURED_WAL_APPEND_OPEN.with(|hook| {
+                        if let Some(hook) = hook.borrow_mut().take() {
+                            hook();
+                        }
+                    });
+                }
                 let write_result: Result<()> = (|| {
                     let mut writer = file.as_ref();
                     if self.wal_bytes == 0 {
@@ -193,13 +206,11 @@ impl DurableStore {
                     Ok(())
                 })();
                 let append_result = match write_result {
-                    Err(error) => match self.rollback_failed_wal_write(created) {
+                    Err(error) => match self.rollback_failed_wal_write(file.as_ref()) {
                         Ok(()) => {
                             // A group may still need this handle to acknowledge
                             // earlier entries even when no later write retries.
-                            if self.wal_bytes > 0 {
-                                self.wal_append_file = Some(Arc::clone(&file));
-                            }
+                            self.wal_append_file = Some(Arc::clone(&file));
                             Err(HawDBError::Storage(format!(
                                 "WAL write failed and was rolled back to byte {}: {error}",
                                 self.wal_bytes
@@ -226,7 +237,15 @@ impl DurableStore {
                         self.wal_append_file = Some(file);
                         Ok(fsync_micros)
                     }
-                    Err(error) => Err(error),
+                    Err(error) => {
+                        // A poisoned store still owns the actual uncertain file.
+                        // Keep its native evidence until the store closes; a
+                        // directory lease cannot substitute for this object.
+                        if self.wal_append_owner.is_some() {
+                            self.wal_append_file = Some(file);
+                        }
+                        Err(error)
+                    }
                 }
             }
         };
@@ -277,11 +296,17 @@ impl DurableStore {
                 "cannot synchronize a read-only source".into(),
             ));
         }
+        let _descriptors = self.reserve_wal_operation_resources()?;
         // Recovered databases need not have an append handle yet. Never create
         // an empty WAL to replace missing recovery evidence.
         let file = if let Some(file) = &self.wal_append_file {
             Arc::clone(file)
         } else {
+            if self.wal_append_owner.is_some() {
+                return Err(HawDBError::StorageIntegrity(
+                    "captured WAL append handle was lost".into(),
+                ));
+            }
             Arc::new(
                 OpenOptions::new()
                     .descriptor_kind(crate::file_descriptors::DescriptorKind::MutableWal)
@@ -289,28 +314,38 @@ impl DurableStore {
                     .open(&self.wal_path)?,
             )
         };
+        self.require_captured_wal_append(&file)?;
         if file.metadata()?.len() != self.wal_bytes
-            || fs::metadata(&self.wal_path)?.len() != self.wal_bytes
+            || (self.wal_append_owner.is_none()
+                && fs::metadata(&self.wal_path)?.len() != self.wal_bytes)
         {
             return Err(HawDBError::StorageIntegrity(
                 "projection source WAL length changed outside the committed boundary".into(),
             ));
         }
-        #[cfg(test)]
-        crate::store::read_dependencies::source_sync_failpoint(
-            crate::store::read_dependencies::SourceSyncFailure::Wal,
-        )?;
-        file.sync_data()?;
-        // Relaxed creation can leave the WAL name unsynchronized even though
-        // every complete transaction was flushed to the OS.
-        if !self.wal_namespace_known_durable {
+        let synchronization: Result<()> = (|| {
             #[cfg(test)]
             crate::store::read_dependencies::source_sync_failpoint(
-                crate::store::read_dependencies::SourceSyncFailure::Directory,
+                crate::store::read_dependencies::SourceSyncFailure::Wal,
             )?;
-            sync_parent_dir(&self.wal_path)?;
-            self.wal_namespace_known_durable = true;
-        }
+            file.sync_data()?;
+            // Relaxed creation can leave the WAL name unsynchronized even
+            // though the complete transaction was flushed to the OS.
+            if !self.wal_namespace_known_durable {
+                #[cfg(test)]
+                crate::store::read_dependencies::source_sync_failpoint(
+                    crate::store::read_dependencies::SourceSyncFailure::Directory,
+                )?;
+                self.sync_wal_namespace()?;
+                self.wal_namespace_known_durable = true;
+            }
+            self.require_captured_wal_append(&file)
+        })();
+        synchronization.map_err(|error| {
+            HawDBError::StorageIntegrity(format!(
+                "projection source synchronization outcome is uncertain: {error}"
+            ))
+        })?;
         self.known_durable_commit_epoch = self.wal_commit_epoch;
         Ok(self.known_durable_commit_epoch)
     }
@@ -319,28 +354,29 @@ impl DurableStore {
         self.known_durable_commit_epoch
     }
 
-    fn rollback_failed_wal_write(&mut self, created: bool) -> Result<()> {
+    fn rollback_failed_wal_write(&mut self, file: &File) -> Result<()> {
+        #[cfg(test)]
+        BEFORE_WAL_ROLLBACK.with(|hook| {
+            if let Some(hook) = hook.borrow_mut().take() {
+                hook();
+            }
+        });
         #[cfg(any(test, feature = "test-support"))]
         if crate::store::WAL_APPEND_FAILURE.take() == Some(crate::store::WalAppendFailure::Rollback)
         {
             return Err(std::io::Error::from(std::io::ErrorKind::PermissionDenied).into());
         }
-        // Windows append-only handles do not grant the access required to resize.
-        {
-            let file = OpenOptions::new().write(true).open(&self.wal_path)?;
-            if file.metadata()?.len() < self.wal_bytes {
-                return Err(HawDBError::Storage(
-                    "WAL lost previously appended bytes before rollback".to_string(),
-                ));
-            }
-            file.set_len(self.wal_bytes)?;
-            file.sync_all()?;
-        }
-        if created {
-            if self.wal_bytes == 0 {
-                fs::remove_file(&self.wal_path)?;
-            }
-            sync_parent_dir(&self.wal_path)?;
+        let empty_header = encode_binary_wal_header(self.wal_generation, self.wal_replay_start_lsn);
+        self.wal_bytes = file.rollback_wal_append(self.wal_bytes, &empty_header)?;
+        // Keep even a newly created WAL's valid empty header. Removing its saved pathname
+        // could unlink a replacement. A retry reuses this same append handle;
+        // its eventual commit still synchronizes the unsynchronized namespace.
+        // This observation refuses reuse after replacement; it does not grant
+        // authority for any later pathname mutation.
+        if !file.matches_native_path(&self.wal_path)? {
+            return Err(HawDBError::StorageIntegrity(
+                "WAL name changed during append rollback".into(),
+            ));
         }
         self.wal_free_space_probe = WalFreeSpaceProbeState::default();
         Ok(())
@@ -446,7 +482,55 @@ impl DurableStore {
         self.wal_free_space_probe.probe_count
     }
 
+    fn reserve_wal_operation_resources(
+        &self,
+    ) -> Result<Option<crate::file_descriptors::DescriptorReservation>> {
+        let needed = if self.wal_append_owner.is_some() {
+            // Includes Windows directory/identity reopen and rollback checks.
+            4
+        } else {
+            usize::from(self.wal_append_file.is_none())
+                + usize::from(!self.wal_namespace_known_durable)
+        };
+        (needed != 0)
+            .then(|| self.project_files.reserve_admission(needed))
+            .transpose()
+            .map_err(Into::into)
+    }
+
+    fn require_captured_wal_append(&self, file: &File) -> Result<()> {
+        if let Some(owner) = &self.wal_append_owner {
+            let parent = self.wal_path.parent().ok_or_else(|| {
+                HawDBError::StorageIntegrity("captured WAL has no directory".into())
+            })?;
+            if !owner.owns_directory(parent)? || !file.matches_native_path(&self.wal_path)? {
+                return Err(HawDBError::StorageIntegrity(
+                    "captured active WAL writer was replaced".into(),
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    fn sync_wal_namespace(&self) -> Result<()> {
+        if let Some(owner) = &self.wal_append_owner {
+            let directory = owner.captured_directory();
+            directory
+                .sync(&directory.operation_context())
+                .map_err(Into::into)
+        } else {
+            sync_parent_dir(&self.wal_path)
+        }
+    }
+
     fn take_wal_append(&mut self) -> Result<(Arc<File>, bool)> {
+        if let Some(file) = &self.wal_append_file {
+            self.require_captured_wal_append(file)?;
+        } else if self.wal_append_owner.is_some() {
+            return Err(HawDBError::StorageIntegrity(
+                "captured WAL append handle was lost".into(),
+            ));
+        }
         if let Some(file) = self.wal_append_file.take() {
             return Ok((file, false));
         }
@@ -486,6 +570,7 @@ impl DurableStore {
         }
         let mut writer = file;
         writer.flush()?;
+        self.require_captured_wal_append(file)?;
         if let Some(group) = &mut self.wal_sync_group {
             if created {
                 group.record_wal_created();
@@ -501,11 +586,12 @@ impl DurableStore {
                 crate::store::read_dependencies::source_sync_failpoint(
                     crate::store::read_dependencies::SourceSyncFailure::Directory,
                 )?;
-                sync_parent_dir(&self.wal_path)?;
+                self.sync_wal_namespace()?;
                 self.wal_namespace_known_durable = true;
             }
             fsync_micros = elapsed_micros(started);
         }
+        self.require_captured_wal_append(file)?;
         Ok(fsync_micros)
     }
 
@@ -522,5 +608,225 @@ impl DurableStore {
         }
         durable_replace_file(&tmp_path, &wal_path)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    static BEFORE_WAL_ROLLBACK: std::cell::RefCell<Option<Box<dyn FnOnce()>>> = const {
+        std::cell::RefCell::new(None)
+    };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::store::{set_wal_append_failpoint, GraphStore, WalAppendFailure};
+    use hawdb_core::{schema::Catalog, Value};
+    use std::collections::BTreeMap;
+
+    fn path() -> std::path::PathBuf {
+        std::env::temp_dir().join(format!(
+            "hawdb-held-wal-rollback-{}",
+            hawdb_core::generate_uuidv7().unwrap()
+        ))
+    }
+
+    #[test]
+    fn captured_wal_append_prepays_post_write_descriptor_checks() {
+        let root = path();
+        let mut catalog = Catalog::default();
+        let mut store = GraphStore::open(&root, &mut catalog).unwrap();
+        store
+            .create_node(&mut catalog, "Record", BTreeMap::new())
+            .unwrap();
+        let durable = store.durable.as_mut().unwrap();
+        durable.wal_append_owner = Some(Arc::clone(&durable._directory_lease));
+        let files = durable.project_file_descriptors().clone();
+        let baseline = files.metrics();
+        let competitor = files.clone();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let worker = Arc::new(std::sync::Mutex::new(None));
+        let captured_worker = Arc::clone(&worker);
+        super::super::AFTER_CAPTURED_WAL_APPEND_OPEN.with(|hook| {
+            *hook.borrow_mut() = Some(Box::new(move || {
+                let metrics = competitor.metrics();
+                let available =
+                    metrics.limit - metrics.open - metrics.reserved + metrics.cached_handles;
+                let (ready_tx, ready_rx) = std::sync::mpsc::channel();
+                let held = std::thread::spawn(move || {
+                    let _reservation = competitor.reserve(available).unwrap();
+                    ready_tx.send(()).unwrap();
+                    release_rx.recv().unwrap();
+                });
+                ready_rx.recv().unwrap();
+                *captured_worker.lock().unwrap() = Some(held);
+            }));
+        });
+        // A competing owner takes every unreserved descriptor after the append
+        // handle has been acquired. Post-write checks must use prepaid capacity.
+        let result = store.create_node(&mut catalog, "Record", BTreeMap::new());
+        release_tx.send(()).unwrap();
+        worker.lock().unwrap().take().unwrap().join().unwrap();
+        result.unwrap();
+        store.ensure_usable().unwrap();
+        assert_eq!(files.metrics().reserved, baseline.reserved);
+        assert_eq!(files.metrics().open, baseline.open);
+        store
+            .create_node(&mut catalog, "Record", BTreeMap::new())
+            .unwrap();
+        drop(store);
+        let mut catalog = Catalog::default();
+        let reopened = GraphStore::open(&root, &mut catalog).unwrap();
+        assert_eq!(reopened.scan_nodes(None).count(), 3);
+        drop(reopened);
+        drop(files);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn captured_wal_namespace_barrier_persists_the_original_directory_after_replacement() {
+        use crate::power_loss::{
+            image::{CrashPlan, ImageLimits},
+            PowerLossModel,
+        };
+        let root = path();
+        let files = crate::file_descriptors::ProjectFileDescriptors::acquire(
+            &root,
+            crate::config::WalReplayConfig::default().max_open_files,
+        )
+        .unwrap();
+        let model = PowerLossModel::attach(&files, ImageLimits::default()).unwrap();
+        let mut catalog = Catalog::default();
+        let mut store = GraphStore::open(&root, &mut catalog).unwrap();
+        store
+            .create_node(&mut catalog, "Seed", BTreeMap::new())
+            .unwrap();
+        let durable = store.durable.as_mut().unwrap();
+        durable.wal_append_owner = Some(Arc::clone(&durable._directory_lease));
+        let owner = durable.wal_append_owner.as_ref().unwrap();
+        let directory = owner.captured_directory();
+        let mut pending = directory
+            .create_child_new(&directory.operation_context(), "pending.1.hawdb")
+            .unwrap();
+        pending.write_all(b"original namespace barrier").unwrap();
+        pending.sync_all().unwrap();
+        drop(pending);
+        let before = model.capture().unwrap();
+        assert!(before
+            .crash(&CrashPlan::default())
+            .unwrap()
+            .bytes(std::path::Path::new("pending.1.hawdb"))
+            .is_none());
+        let moved = root.with_extension("original");
+        std::fs::rename(&root, &moved).unwrap();
+        std::fs::create_dir(&root).unwrap();
+        durable.sync_wal_namespace().unwrap();
+        std::fs::remove_dir(&root).unwrap();
+        std::fs::rename(moved, &root).unwrap();
+        let after = model.capture().unwrap();
+        assert_eq!(
+            after
+                .crash(&CrashPlan::default())
+                .unwrap()
+                .bytes(std::path::Path::new("pending.1.hawdb"))
+                .unwrap(),
+            b"original namespace barrier"
+        );
+        drop(store);
+        drop(model);
+        drop(files);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn held_wal_rollback_repairs_original_and_preserves_replacement() {
+        for seeded in [false, true] {
+            let root = path();
+            let mut catalog = Catalog::default();
+            let mut store = GraphStore::open(&root, &mut catalog).unwrap();
+            if seeded {
+                store
+                    .create_node(&mut catalog, "Record", BTreeMap::new())
+                    .unwrap();
+            }
+            let durable = store.durable.as_ref().unwrap();
+            let wal_path = durable.wal_path.clone();
+            let original = wal_path.with_extension("original");
+            let before = if seeded {
+                std::fs::read(&wal_path).unwrap()
+            } else {
+                encode_binary_wal_header(durable.wal_generation, durable.wal_replay_start_lsn)
+            };
+            let foreign = b"foreign WAL evidence must never be truncated or unlinked";
+            let replace_path = wal_path.clone();
+            let saved = original.clone();
+            BEFORE_WAL_ROLLBACK.with(|hook| {
+                *hook.borrow_mut() = Some(Box::new(move || {
+                    std::fs::rename(&replace_path, saved).unwrap();
+                    std::fs::write(replace_path, foreign).unwrap();
+                }))
+            });
+            set_wal_append_failpoint(WalAppendFailure::PartialWrite);
+            let result = store.create_node(&mut catalog, "Record", BTreeMap::new());
+            assert!(matches!(result, Err(HawDBError::StorageIntegrity(message))
+                if message.contains("WAL name changed during append rollback")));
+            assert!(store.ensure_usable().is_err());
+            assert_eq!(std::fs::read(&original).unwrap(), before);
+            assert_eq!(std::fs::read(&wal_path).unwrap(), foreign);
+            drop(store);
+            std::fs::remove_file(&wal_path).unwrap();
+            std::fs::rename(original, &wal_path).unwrap();
+            let mut catalog = Catalog::default();
+            let recovered = GraphStore::open(&root, &mut catalog).unwrap();
+            assert_eq!(recovered.scan_nodes(None).count(), usize::from(seeded));
+            drop(recovered);
+            std::fs::remove_dir_all(root).unwrap();
+        }
+    }
+
+    #[test]
+    fn held_wal_rollback_keeps_empty_header_for_reopen_and_same_handle_retry() {
+        for reopen in [false, true] {
+            let root = path();
+            let mut catalog = Catalog::default();
+            let mut store = GraphStore::open(&root, &mut catalog).unwrap();
+            set_wal_append_failpoint(WalAppendFailure::PartialWrite);
+            assert!(matches!(
+                store.create_node(&mut catalog, "Record", BTreeMap::new()),
+                Err(HawDBError::Storage(_))
+            ));
+            store.ensure_usable().unwrap();
+            let durable = store.durable.as_ref().unwrap();
+            assert_eq!(
+                std::fs::read(&durable.wal_path).unwrap(),
+                encode_binary_wal_header(durable.wal_generation, durable.wal_replay_start_lsn)
+            );
+            assert!(durable.wal_append_file.is_some());
+            assert!(!durable.wal_namespace_known_durable);
+            assert_eq!(durable.wal_append_open_count, 1);
+            if reopen {
+                drop(store);
+                catalog = Catalog::default();
+                store = GraphStore::open(&root, &mut catalog).unwrap();
+                assert_eq!(store.scan_nodes(None).count(), 0);
+            }
+            store
+                .create_node(
+                    &mut catalog,
+                    "Record",
+                    BTreeMap::from([("id".into(), Value::Int(1))]),
+                )
+                .unwrap();
+            assert_eq!(store.durable.as_ref().unwrap().wal_append_open_count, 1);
+            assert!(store.durable.as_ref().unwrap().wal_namespace_known_durable);
+            drop(store);
+            let mut catalog = Catalog::default();
+            let recovered = GraphStore::open(&root, &mut catalog).unwrap();
+            assert_eq!(recovered.scan_nodes(None).count(), 1);
+            drop(recovered);
+            std::fs::remove_dir_all(root).unwrap();
+        }
     }
 }

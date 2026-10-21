@@ -186,8 +186,9 @@ pub use api::{
     ScoringTerm, SearchProjectionCatchUpReport, SearchProjectionCatchUpStopReason,
     SearchProjectionChangeBatch, SearchProjectionConsumer, SearchProjectionConsumerCatchUpReport,
     SearchProjectionConsumerError, SearchProjectionConsumerId, SearchProjectionConsumerOptions,
-    SearchProjectionConsumerReadiness, SearchProjectionConsumerRebuildReason,
-    SearchProjectionConsumerResult, SearchProjectionConsumerState, SearchProjectionConsumerStatus,
+    SearchProjectionConsumerReadPin, SearchProjectionConsumerReadiness,
+    SearchProjectionConsumerRebuildReason, SearchProjectionConsumerResult,
+    SearchProjectionConsumerState, SearchProjectionConsumerStatus,
     SearchProjectionGraphDeltaRequest, SearchProjectionRelationalDelta, SessionConfig,
     SlowQueryLogExportOptions, SlowQueryLogRecordSummary, SqlStatementResult,
     StorageResourceProfileLimits, StorageResourceProfileReport, SystemSchemaMigration,
@@ -358,6 +359,7 @@ pub use hawdb_runtime_tokio::{
     TokioRuntimeAdapter, TokioRuntimeConfig, TokioRuntimeError, TokioRuntimeOwnership,
     TokioSegmentReadExecutionError, TokioSegmentReadExecutor, TokioTaskError,
 };
+pub use hawdb_search::{SearchQueryError, SearchQueryResult, SearchRetainedOutput};
 pub use hawdb_storage::file_descriptors::FileDescriptorMetrics;
 pub use hawdb_storage::projection_generation::{
     decode_projection_relational_member, encode_projection_relational_member,

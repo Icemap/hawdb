@@ -18,9 +18,7 @@ use crate::build_memory::{
 };
 use crate::document_encoding::{DocumentEncoding, Header, HeaderSource};
 use crate::error::{HawDBError, Result};
-use crate::generation_cleanup::{
-    once::PreparedCleanup, SearchProjectionCleanupOptions, SearchProjectionGenerations,
-};
+use crate::generation_cleanup::{once::PreparedCleanup, SearchProjectionCleanupOptions};
 #[cfg(test)]
 use crate::lexical_projection::artifact_file as lexical_artifact_file;
 use crate::lexical_projection::{
@@ -59,7 +57,7 @@ mod delta;
 mod discovery;
 mod governed;
 mod initial;
-mod io;
+pub(super) mod io;
 mod mutations;
 mod unordered;
 pub use unordered::{
@@ -254,7 +252,8 @@ pub struct SearchOutOfCoreGenerationWriter {
     metadata_field_bytes: u64,
     expected_active_generation: Option<u64>,
     active_manifest_update: Option<ActiveManifestUpdate>,
-    cleanup_reuse: Option<super::reuse::ValidatedArtifacts>,
+    resident_snapshot: Option<super::ResidentSnapshot>,
+    resident_snapshot_absent: bool,
     mutations: Option<delta::mutation::Prepared>,
     poisoned: bool,
     needs_chinese_analyzer: bool,
@@ -303,6 +302,17 @@ impl SearchOutOfCoreGenerationWriter {
         max_attempts: usize,
     ) -> Result<SearchStagingCleanupReport> {
         spool::retry_staging_cleanup(root.as_ref(), max_attempts)
+    }
+
+    /// Retry retained private stages using fresh caller memory and I/O capacity.
+    /// Captured tickets keep their original native source and metadata funding;
+    /// a governed ticket refuses an ungoverned retry instead of bypassing it.
+    pub fn retry_staging_cleanup_with_context(
+        root: impl AsRef<Path>,
+        max_attempts: usize,
+        task: &RuntimeTaskContext,
+    ) -> Result<SearchStagingCleanupReport> {
+        spool::retry_staging_cleanup_with_context(root.as_ref(), max_attempts, task)
     }
 
     pub fn create(
@@ -470,7 +480,8 @@ impl SearchOutOfCoreGenerationWriter {
             metadata_field_bytes,
             expected_active_generation: None,
             active_manifest_update: None,
-            cleanup_reuse: None,
+            resident_snapshot: None,
+            resident_snapshot_absent: false,
             mutations: None,
             poisoned: false,
             needs_chinese_analyzer: false,
@@ -729,6 +740,38 @@ impl SearchOutOfCoreGenerationWriter {
             .publish()
     }
 
+    fn input_source(&self) -> Result<SpoolSource<'_>> {
+        let held = self.held_spool.as_ref().ok_or_else(|| {
+            HawDBError::Storage("search input requires the original sealed spool".into())
+        })?;
+        Ok(SpoolSource {
+            held: Some(held.clone()),
+            path: &self.spool_path,
+            document_count: self.document_count,
+            max_record_bytes: self.options.max_record_bytes.get(),
+            max_metadata_fields: self.options.max_metadata_fields.get(),
+            memory: self.memory.clone(),
+        })
+    }
+
+    fn seal_input_spool(&mut self) -> Result<()> {
+        let mut spool = self.spool.take().ok_or_else(|| {
+            HawDBError::Storage("search generation spool is already closed".into())
+        })?;
+        spool.flush()?;
+        spool.get_ref().sync_all()?;
+        let file = spool
+            .into_inner()
+            .map_err(|error| HawDBError::from(error.into_error()))?;
+        self.held_spool = Some(spool::HeldSpool::capture(
+            file,
+            self.spool_bytes,
+            &self.memory,
+        )?);
+        self.spool_memory.take();
+        Ok(())
+    }
+
     fn prepare_publication_with_artifacts(
         mut self,
         build: impl FnOnce(&Self, &SpoolSource, u64) -> Result<GenerationArtifacts>,
@@ -818,6 +861,7 @@ impl SearchOutOfCoreGenerationWriter {
         generation: u64,
         private_partition: bool,
         artifacts: GenerationArtifacts,
+        publication: &super::SearchProjectionPublishLease,
     ) -> Result<SearchOutOfCoreGenerationBuildReport> {
         let GenerationArtifacts {
             segment: segment_output,
@@ -841,6 +885,8 @@ impl SearchOutOfCoreGenerationWriter {
             PublishGenerationInput {
                 root: &self.root,
                 stage: &self.stage.path,
+                resident_snapshot: self.resident_snapshot,
+                resident_snapshot_absent: self.resident_snapshot_absent,
                 generation,
                 document_count: self.document_count,
                 documents_digest: self.documents_digest.finish(),
@@ -883,47 +929,21 @@ impl SearchOutOfCoreGenerationWriter {
                 &self.memory,
             );
         }
+        let cleanup_admission = self.memory.host_admission.as_deref().map(|permit| {
+            crate::build_memory::read::ReadAdmission {
+                memory: &self.memory,
+                task: &self.task_context,
+                permit: crate::build_memory::read::ReadPermit::Governed(permit),
+            }
+        });
         let cleanup = cleanup.map(|cleanup| {
-            let cleanup_generations = if self.active_manifest_update.is_some() {
-                match super::published_artifact_generations_with_reuse(
-                    &self.root,
-                    &self.options.analyzer_lexicon,
-                    self.cleanup_reuse.as_ref(),
-                ) {
-                    Ok(Some(retained)) => SearchProjectionGenerations {
-                        lexical: Some(lexical_generation),
-                        out_of_core: Some(retained.active_generation),
-                        rabitq: retained.rabitq_generations.last().copied(),
-                        rabitq_remove_all: retained.rabitq_generations.is_empty(),
-                        retained_lexical: retained.lexical_generations,
-                        retained_out_of_core: retained.out_of_core_generations,
-                        retained_rabitq: retained.rabitq_generations,
-                        out_of_core_discovery_failed: false,
-                    },
-                    Ok(None) | Err(_) => SearchProjectionGenerations {
-                        lexical: Some(lexical_generation),
-                        out_of_core: Some(generation),
-                        rabitq: rabitq.as_ref().map(|_| generation),
-                        rabitq_remove_all: false,
-                        out_of_core_discovery_failed: true,
-                        ..Default::default()
-                    },
-                }
-            } else {
-                SearchProjectionGenerations {
-                    lexical: Some(lexical_generation),
-                    out_of_core: Some(generation),
-                    rabitq: rabitq.as_ref().map(|_| generation),
-                    rabitq_remove_all: rabitq.is_none(),
-                    out_of_core_discovery_failed: false,
-                    ..Default::default()
-                }
-            };
-            cleanup.run(
+            cleanup.run_under_publication(
                 &self.root,
-                cleanup_generations,
                 self.options.cleanup_options,
                 &self.task_context,
+                publication,
+                &self.options.analyzer_lexicon,
+                cleanup_admission.as_ref(),
             )
         });
 
@@ -968,38 +988,6 @@ impl SearchOutOfCoreGenerationWriter {
             cleanup_retry_required: cleanup.is_some_and(|cleanup| cleanup.retry_required)
                 || cleanup_pending_stages != 0,
         })
-    }
-
-    fn input_source(&self) -> Result<SpoolSource<'_>> {
-        let held = self.held_spool.as_ref().ok_or_else(|| {
-            HawDBError::Storage("search input requires the original sealed spool".into())
-        })?;
-        Ok(SpoolSource {
-            held: Some(held.clone()),
-            path: &self.spool_path,
-            document_count: self.document_count,
-            max_record_bytes: self.options.max_record_bytes.get(),
-            max_metadata_fields: self.options.max_metadata_fields.get(),
-            memory: self.memory.clone(),
-        })
-    }
-
-    fn seal_input_spool(&mut self) -> Result<()> {
-        let mut spool = self.spool.take().ok_or_else(|| {
-            HawDBError::Storage("search generation spool is already closed".into())
-        })?;
-        spool.flush()?;
-        spool.get_ref().sync_all()?;
-        let file = spool
-            .into_inner()
-            .map_err(|error| HawDBError::from(error.into_error()))?;
-        self.held_spool = Some(spool::HeldSpool::capture(
-            file,
-            self.spool_bytes,
-            &self.memory,
-        )?);
-        self.spool_memory.take();
-        Ok(())
     }
 
     fn build_artifacts(

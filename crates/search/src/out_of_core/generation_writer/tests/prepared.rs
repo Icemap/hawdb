@@ -326,6 +326,63 @@ fn queued_candidates_retain_governor_admission_through_publish_or_drop() {
 }
 
 #[test]
+fn selector_decode_refusal_does_not_become_a_damaged_replacement_base() {
+    let root = test_dir("prepared_base_decode_refusal");
+    baseline(&root);
+    let path = root.join(OUT_OF_CORE_MANIFEST_FILE);
+    let mut manifest: serde_json::Value =
+        serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    let segment = manifest["body"]["segments"][0].clone();
+    manifest["body"]["segments"] = serde_json::Value::Array(vec![segment; 385]);
+    let bytes = serde_json::to_vec(&manifest).unwrap();
+    assert!(bytes.len() as u64 <= super::super::super::MAX_OUT_OF_CORE_MANIFEST_BYTES);
+    fs::write(&path, &bytes).unwrap();
+    let decode_bytes = crate::out_of_core::SearchOutOfCoreManifestBody::decode_capacity(
+        &bytes,
+        &RuntimeTaskContext::default(),
+    )
+    .unwrap();
+    let task = RuntimeTaskContext::default().with_memory_reservation(
+        hawdb_core::RuntimeMemoryReservation::new(decode_bytes as u64, 0),
+    );
+    let writer =
+        SearchOutOfCoreGenerationWriter::create_with_context(&root, Default::default(), task)
+            .unwrap();
+    let memory = writer.memory.clone();
+    let retained = memory.ledger.snapshot().used_bytes;
+    // Raw retention fits, but decoding does not. Falling back here would turn
+    // an unvalidated selector into permission to rebuild a damaged base.
+    let io = super::super::io::GenerationIo::new(&memory, &writer.task_context);
+    assert_eq!(
+        io.read(&path, super::super::super::MAX_OUT_OF_CORE_MANIFEST_BYTES)
+            .unwrap()
+            .bytes,
+        bytes
+    );
+    let expected = super::super::discovery::active_identity(&root, &memory, &writer.task_context)
+        .err()
+        .expect("the selector decode must exceed admission");
+    let HawDBError::ResourceBudgetExceeded(expected) = expected else {
+        panic!("expected a typed decode refusal, got {expected:?}");
+    };
+    assert_eq!(
+        expected.resource,
+        hawdb_core::ResourceBudgetKind::MemoryBytes
+    );
+    assert_eq!(expected.requested, decode_bytes as u64);
+    let error = super::super::prepared::CapturedBase::capture(&writer)
+        .err()
+        .expect("budget refusal must not authorize damaged-base recovery");
+    assert!(matches!(&error, HawDBError::ResourceBudgetExceeded(cause) if cause == &expected));
+    assert_eq!(memory.ledger.snapshot().used_bytes, retained);
+    assert_eq!(fs::read(&path).unwrap(), bytes);
+    drop(writer);
+    assert_eq!(memory.ledger.snapshot().used_bytes, 0);
+    assert_eq!(stage_directories(&root), 0);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn damaged_selector_replacement_rechecks_exact_bytes_before_installation() {
     for change_base in [false, true] {
         let root = test_dir("prepared_damaged_base");
@@ -352,4 +409,154 @@ fn damaged_selector_replacement_rechecks_exact_bytes_before_installation() {
         assert_eq!(stage_directories(&root), 0);
         fs::remove_dir_all(root).unwrap();
     }
+}
+
+#[cfg(feature = "vector-search")]
+#[test]
+fn stale_cleanup_preserves_the_current_vector_generation() {
+    let root = test_dir("stale_cleanup_current_vectors");
+    let stale = crate::SearchIndex::open(&root).unwrap();
+    stale.checkpoint().unwrap();
+    let mut writer = SearchOutOfCoreGenerationWriter::create(
+        &root,
+        SearchOutOfCoreGenerationBuildOptions {
+            embedding_manifest: Some(SearchEmbeddingManifest {
+                model: "test-model".into(),
+                version: Some("v1".into()),
+                dimension: 2,
+            }),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    writer.push(document(0)).unwrap();
+    let report = writer.finish().unwrap();
+    assert!(report.rabitq_artifact_bytes > 0);
+    let artifact = root.join(format!("search_rabitq.{}.hawdb", report.generation));
+    assert!(artifact.exists());
+    let cleanup = stale.retry_projection_cleanup(Default::default());
+    assert!(
+        artifact.exists(),
+        "stale cleanup removed current vector artifact: {cleanup:?}"
+    );
+    let reader = SearchOutOfCoreReader::open(&root).unwrap();
+    assert_eq!(reader.generation(), report.generation);
+    assert_eq!(reader.document_count(), 1);
+    drop(reader);
+    drop(stale);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn cleanup_defers_without_touching_artifacts_while_publication_owns_the_root() {
+    let root = test_dir("cleanup_publication_exclusion");
+    let index = crate::SearchIndex::open(&root).unwrap();
+    assert!(
+        !index.projection_cleanup_report().retry_required,
+        "open already owns publication authority"
+    );
+    index.checkpoint().unwrap();
+    let artifact = root.join("search_rabitq.777.hawdb");
+    fs::write(&artifact, b"unselected candidate artifact").unwrap();
+    let lease = crate::out_of_core::SearchProjectionPublishLease::acquire(&root).unwrap();
+    let cleanup = index.retry_projection_cleanup(Default::default());
+    assert!(artifact.exists());
+    assert_eq!(cleanup.scanned_entries, 0);
+    assert_eq!(cleanup.delete_attempts, 0);
+    assert!(cleanup.retry_required);
+    assert_eq!(
+        cleanup
+            .failure_kinds
+            .get("publication_exclusion_unavailable"),
+        Some(&1)
+    );
+    drop(lease);
+    let cleanup = index.retry_projection_cleanup(Default::default());
+    assert!(!artifact.exists());
+    assert!(!cleanup.retry_required);
+    drop(index);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[cfg(feature = "vector-search")]
+#[test]
+fn stale_cleanup_preserves_a_peers_standalone_resident_vectors() {
+    let root = test_dir("stale_cleanup_resident_vectors");
+    let stale = crate::SearchIndex::open(&root).unwrap();
+    stale.checkpoint().unwrap();
+    let mut peer = crate::SearchIndex::open(&root).unwrap();
+    peer.upsert(document(0)).unwrap();
+    peer.checkpoint().unwrap();
+    let artifact = crate::latest_rabitq_artifact(&root).unwrap().unwrap().1;
+    assert!(artifact.exists());
+    stale.retry_projection_cleanup(Default::default());
+    assert!(artifact.exists());
+    drop(peer);
+    let reopened = crate::SearchIndex::open(&root).unwrap();
+    assert!(reopened.rabitq_projection().is_some());
+    drop(reopened);
+    drop(stale);
+    fs::remove_dir_all(root).unwrap();
+}
+
+fn reject_changed_installed_payload(prefix: &'static str) {
+    let root = test_dir("prepared_changed_payload");
+    let initial = baseline(&root);
+    let old_head = fs::read(root.join(OUT_OF_CORE_MANIFEST_FILE)).unwrap();
+    let candidate = capture(&root, false, RuntimeTaskContext::default())
+        .prepare_publication()
+        .unwrap();
+    let name = format!("{prefix}{}.hawdb", initial.generation + 1);
+    publication::AFTER_CONTENT_INSTALL.with(|hook| {
+        *hook.borrow_mut() = Some(Box::new(move |root| {
+            let path = root.join(name);
+            let mut bytes = fs::read(&path).unwrap();
+            assert!(!bytes.is_empty(), "fixture must exercise nonempty payload");
+            let last = bytes.len() - 1;
+            bytes[last] ^= 1;
+            fs::write(path, bytes).unwrap();
+        }));
+    });
+    let result = candidate.publish();
+    assert!(publication::AFTER_CONTENT_INSTALL.with(|hook| hook.borrow().is_none()));
+    assert!(
+        matches!(result, Err(HawDBError::StorageIntegrity(_))),
+        "{result:?}"
+    );
+    assert_eq!(
+        fs::read(root.join(OUT_OF_CORE_MANIFEST_FILE)).unwrap(),
+        old_head
+    );
+    let reader = SearchOutOfCoreReader::open(&root).unwrap();
+    assert_eq!(reader.generation(), initial.generation);
+    assert_eq!(
+        reader
+            .hydrate_documents(&[document(99).id])
+            .unwrap()
+            .documents,
+        vec![document(99)]
+    );
+    drop(reader);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn same_length_installed_document_corruption_cannot_select_a_generation() {
+    reject_changed_installed_payload("search_projection_segment_payloads.");
+}
+
+#[test]
+fn same_length_installed_metadata_corruption_cannot_select_a_generation() {
+    reject_changed_installed_payload("search_projection_metadata_payloads.");
+}
+
+#[cfg(feature = "vector-search")]
+#[test]
+fn same_length_installed_vector_corruption_cannot_select_a_generation() {
+    reject_changed_installed_payload("search_projection_vector_payloads.");
+}
+
+#[test]
+fn same_length_installed_lexical_corruption_cannot_select_a_generation() {
+    reject_changed_installed_payload("search_lexical.");
 }

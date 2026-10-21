@@ -24,6 +24,7 @@ const BRANCH_CATALOG_FILE: &str = "catalog.hawdb";
 #[cfg(test)]
 std::thread_local! {
     static INTERRUPT_MAIN_BOOTSTRAP_AFTER_HEAD: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static AFTER_BRANCH_SOURCE_SEAL: std::cell::RefCell<Option<Box<dyn FnOnce()>>> = const { std::cell::RefCell::new(None) };
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -668,6 +669,90 @@ mod tests {
     }
 
     #[test]
+    fn cold_branch_mid_operation_descriptor_refusal_preserves_catalog_and_retries() {
+        let path = test_directory("cold-branch-mid-operation-fd");
+        let mut writer = Database::open(&path).unwrap();
+        writer.query("CREATE (:Memory {id: 'preserved'})").unwrap();
+        writer.checkpoint().unwrap();
+        let epoch = writer.commit_epoch().unwrap();
+        drop(writer);
+        let mut database = Database::open_with_config(
+            &path,
+            crate::DatabaseConfig {
+                max_open_files: 32,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let main = published_main(&database);
+        let request = BranchCreateRequest {
+            name: Some("mid-operation".into()),
+            parent: BranchSelector::Id(main.id),
+            expected_source_commit_epoch: epoch,
+            owner: None,
+            idempotency_key: "mid-operation-fd".into(),
+        };
+        let catalog_path = database.branch_catalog_path().unwrap();
+        let before = std::fs::read(&catalog_path).unwrap();
+        let files =
+            hawdb_storage::file_descriptors::ProjectFileDescriptors::acquire_existing(&path, 32)
+                .unwrap();
+        let baseline = files.metrics();
+        let competitor = files.clone();
+        let (release_tx, release_rx) = mpsc::channel();
+        let worker = Arc::new(Mutex::new(None));
+        let captured_worker = Arc::clone(&worker);
+        AFTER_BRANCH_SOURCE_SEAL.with(|hook| {
+            *hook.borrow_mut() = Some(Box::new(move || {
+                let metrics = competitor.metrics();
+                let available =
+                    metrics.limit - metrics.open - metrics.reserved + metrics.cached_handles;
+                let (ready_tx, ready_rx) = mpsc::channel();
+                let held = std::thread::spawn(move || {
+                    let _reservation = competitor.reserve(available).unwrap();
+                    ready_tx.send(()).unwrap();
+                    release_rx.recv().unwrap();
+                });
+                ready_rx.recv().unwrap();
+                *captured_worker.lock().unwrap() = Some(held);
+            }));
+        });
+        let result = database
+            .create_branch(request.clone())
+            .map_err(HawDBError::from);
+        release_tx.send(()).unwrap();
+        worker.lock().unwrap().take().unwrap().join().unwrap();
+        assert!(
+            matches!(result, Err(HawDBError::FileDescriptors(_))),
+            "{result:?}"
+        );
+        assert_eq!(std::fs::read(&catalog_path).unwrap(), before);
+        assert_eq!(database.list_branches().unwrap().len(), 1);
+        assert!(database.runtime.peek().is_none());
+        let after = files.metrics();
+        assert_eq!(after.open, baseline.open);
+        assert_eq!(after.reserved, baseline.reserved);
+        assert!(after.budget_rejections > baseline.budget_rejections);
+        assert!(after.high_water <= 32);
+        drop(database);
+        drop(files);
+        let mut retry = Database::open_with_config(
+            &path,
+            crate::DatabaseConfig {
+                max_open_files: 64,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let created = retry.create_branch(request.clone()).unwrap();
+        assert_eq!(retry.create_branch(request).unwrap().id, created.id);
+        assert_eq!(retry.list_branches().unwrap().len(), 2);
+        assert!(retry.runtime.peek().is_none());
+        drop(retry);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    #[test]
     fn sql_branch_descriptor_rejection_preserves_source_and_releases_admission_quota() {
         let path = test_directory("sql-branch-fd-admission");
         let config = crate::DatabaseConfig {
@@ -727,12 +812,14 @@ mod tests {
         let error = database
             .query_sql_with_params("USE BRANCH ID $1", &[Value::Uuid(child.id)])
             .unwrap_err();
+        // Admission funds three directory/lock pairs, one WAL and four
+        // temporaries. Query read waves obtain capacity after admission.
         assert!(
             matches!(
                 error,
                 HawDBError::FileDescriptors(
                     hawdb_core::error::FileDescriptorError::BudgetExceeded {
-                        requested: 24,
+                        requested: 11,
                         available: 4,
                         limit: 32
                     }
@@ -2729,6 +2816,19 @@ fn request_fingerprint(request: &BranchCreateRequest) -> [u8; 32] {
 }
 
 impl Database {
+    fn project_metadata_for_mutation(
+        &self,
+    ) -> crate::error::Result<hawdb_storage::branch_project::ProjectMetadata> {
+        if let Some(project) = self.runtime.captured_project() {
+            project.require_original_namespace()?;
+            return project.metadata();
+        }
+        let root = self.project_root_path.as_ref().ok_or_else(|| {
+            HawDBError::Storage("branch metadata requires a persistent project".into())
+        })?;
+        hawdb_storage::branch_project::ProjectMetadata::open(root, self.config.max_open_files)
+    }
+
     /// The last pending-create scan, including incomplete outcomes. Read-only
     /// and in-memory opens do not scan and return `None`. This admits no data.
     pub fn branch_create_recovery_report(&self) -> Option<&super::BranchCreateRecoveryReport> {
@@ -2742,11 +2842,7 @@ impl Database {
         limits: super::BranchCreateRecoveryLimits,
     ) -> crate::error::Result<super::BranchCreateRecoveryReport> {
         self.ensure_branch_writable()?;
-        let root = self.project_root_path.as_ref().ok_or_else(|| {
-            HawDBError::Storage("pending branch recovery requires a persistent project".into())
-        })?;
-        let metadata =
-            hawdb_storage::branch_project::ProjectMetadata::open(root, self.config.max_open_files)?;
+        let metadata = self.project_metadata_for_mutation()?;
         let report = metadata.recover_pending_creates(limits)?;
         self.branch_create_recovery = Some(report.clone());
         Ok(report)
@@ -2762,11 +2858,7 @@ impl Database {
     ) -> crate::error::Result<BranchAbandonmentPlan> {
         self.ensure_branch_writable()?;
         self.ensure_branch_work_idle()?;
-        let root = self.project_root_path.as_ref().ok_or_else(|| {
-            HawDBError::Storage("branch abandonment requires a persistent project".into())
-        })?;
-        let metadata =
-            hawdb_storage::branch_project::ProjectMetadata::open(root, self.config.max_open_files)?;
+        let metadata = self.project_metadata_for_mutation()?;
         metadata.inspect_pending_branch_abandonment(branch_id, limits)
     }
 
@@ -2778,11 +2870,7 @@ impl Database {
     ) -> crate::error::Result<BranchAbandonmentReport> {
         self.ensure_branch_writable()?;
         self.ensure_branch_work_idle()?;
-        let root = self.project_root_path.as_ref().ok_or_else(|| {
-            HawDBError::Storage("branch abandonment requires a persistent project".into())
-        })?;
-        let metadata =
-            hawdb_storage::branch_project::ProjectMetadata::open(root, self.config.max_open_files)?;
+        let metadata = self.project_metadata_for_mutation()?;
         metadata.abandon_pending_branch(acknowledgement)
     }
 
@@ -2890,6 +2978,19 @@ impl Database {
         &self,
         record: &storage::BranchRecord,
     ) -> Result<hawdb_storage::store::AdmittedBranchStore, BranchLifecycleError> {
+        if let Some(project) = self.runtime.captured_project() {
+            return hawdb_storage::store::GraphStore::admit_captured_branch(
+                hawdb_storage::store::CapturedBranchAdmissionRequest {
+                    project,
+                    branch_id: record.id,
+                    expected_metadata_revision: record.metadata_revision,
+                    durability: self.durability,
+                    replay_config: self.branch_replay_config(),
+                    read_only: self.config.read_only,
+                },
+            )
+            .map_err(BranchLifecycleError::Admission);
+        }
         let catalog_path = self.branch_catalog_path()?;
         let head_path = self.branch_head_path(record.id.as_uuid())?;
         let objects = catalog_path
@@ -3021,6 +3122,9 @@ impl Database {
                 candidate.runtime_governor.clone(),
             )
             .map_err(BranchLifecycleError::Runtime)?;
+        candidate
+            .runtime
+            .retain_project_capture(self.runtime.captured_project().cloned());
         self.runtime = candidate.runtime;
         Ok(())
     }
@@ -3046,6 +3150,12 @@ impl Database {
     }
 
     fn read_branch_catalog(&self) -> Result<storage::Catalog, BranchLifecycleError> {
+        if let Some(project) = self.runtime.captured_project() {
+            return project
+                .metadata()
+                .map(hawdb_storage::branch_project::ProjectMetadata::into_catalog)
+                .map_err(BranchLifecycleError::Runtime);
+        }
         storage::read_catalog(&self.branch_catalog_path()?).map_err(BranchLifecycleError::CatalogIo)
     }
 
@@ -3494,6 +3604,12 @@ impl Database {
                 .map_err(BranchLifecycleError::Admission)?,
             )
         };
+        #[cfg(test)]
+        AFTER_BRANCH_SOURCE_SEAL.with(|hook| {
+            if let Some(hook) = hook.borrow_mut().take() {
+                hook();
+            }
+        });
         let parent_head = branch_head::read_branch_head(&parent_head_path)
             .map_err(|error| BranchLifecycleError::CatalogIo(std::io::Error::other(error)))?;
         if parent_head.logical_commit_epoch != request.expected_source_commit_epoch {
