@@ -27,6 +27,9 @@ use std::path::Path;
 
 const GENERATION_METADATA_FILE: &str = "consumer-generation.meta.hawdb";
 
+mod reclamation;
+pub use reclamation::{reclaim_generations, ConsumerCleanupOptions, ConsumerCleanupReport};
+
 mod registered;
 pub use registered::{
     PreparedRegisteredConsumer, RegisteredConsumerLimits, RegisteredConsumerPreparation,

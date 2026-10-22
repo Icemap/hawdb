@@ -22,6 +22,7 @@ use std::sync::Arc;
 pub(crate) const LEDGER_FILE: &str = "consumer-allocations.hawdb";
 const MAX_BYTES: usize = 1024 * 1024;
 const MAX_PENDING: usize = 256;
+const GENERATION_DIRECTORY_PREFIX: &str = "hawdb-generation-";
 const HEADER: &[u8] = b"HAWDB_CONSUMER_ALLOCATIONS_V2\n";
 
 mod native_birth;
@@ -31,7 +32,12 @@ pub use selection::{
     ConsumerSelectionReceipt, ConsumerSelectionResolution, PendingConsumerSelection,
     PreparedConsumerSelection, CONSUMER_SELECTION_MEMORY_BOUND,
 };
+mod reclamation;
 mod reopen;
+pub use reclamation::{
+    ConsumerCleanupOptions, ConsumerCleanupReport, ConsumerCleanupRequest,
+    CONSUMER_CLEANUP_MEMORY_BOUND,
+};
 pub(crate) use reopen::prepare as prepare_reopen;
 pub use reopen::{ConsumerReopenRequest, ReopenedConsumerGeneration, CONSUMER_REOPEN_MEMORY_BOUND};
 
@@ -1177,7 +1183,7 @@ fn generation_name_for(
     operation: u64,
 ) -> String {
     format!(
-        "hawdb-generation-{}-{incarnation}-{generation}-{operation}",
+        "{GENERATION_DIRECTORY_PREFIX}{}-{incarnation}-{generation}-{operation}",
         project.as_uuid()
     )
 }

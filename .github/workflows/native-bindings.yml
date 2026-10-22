@@ -217,6 +217,14 @@ jobs:
           bash scripts/cargo-test-required.sh --locked -p hawdb-executor --lib -- identity_898_ --nocapture --test-threads=1
           bash scripts/cargo-test-required.sh --locked -p hawdb-cypher --lib -- identity_898_ --nocapture --test-threads=1
 
+      - name: Test Consumer generation reclamation
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/cargo-test-required.sh --locked -p hawdb --all-features --lib \
+            consumer_reclamation -- --nocapture --test-threads=1 \
+            2>&1 | tee windows-native-results/consumer-reclamation.txt
+
       - name: Test stationary Consumer publication and retained legacy refusal
         shell: bash
         run: |
