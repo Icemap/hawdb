@@ -10,6 +10,11 @@ on:
         required: false
         type: boolean
         default: false
+      run_writer_gate:
+        description: Run only the original strict 40-pair concurrent writer gate
+        required: false
+        type: boolean
+        default: false
       soak_node_count:
         description: Synthetic nodes in the mixed runtime soak
         required: false
@@ -28,7 +33,7 @@ concurrency:
 
 jobs:
   supply-chain:
-    if: ${{ github.event_name == 'schedule' || !inputs.run_async_io_spike }}
+    if: ${{ github.event_name == 'schedule' || (!inputs.run_async_io_spike && !inputs.run_writer_gate) }}
     name: Supply Chain Refresh
     runs-on: ubuntu-latest
     steps:
@@ -42,7 +47,7 @@ jobs:
           command: check advisories licenses
 
   vector-kernel-sanitizer:
-    if: ${{ github.event_name == 'schedule' || !inputs.run_async_io_spike }}
+    if: ${{ github.event_name == 'schedule' || (!inputs.run_async_io_spike && !inputs.run_writer_gate) }}
     name: Vector Kernel Address Sanitizer
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -66,7 +71,7 @@ jobs:
           kernel::tests
 
   mixed-runtime-soak:
-    if: ${{ github.event_name == 'schedule' || !inputs.run_async_io_spike }}
+    if: ${{ github.event_name == 'schedule' || (!inputs.run_async_io_spike && !inputs.run_writer_gate) }}
     name: Larger Than Memory Mixed Runtime Soak
     runs-on: ubuntu-latest
     timeout-minutes: 90
@@ -184,5 +189,36 @@ jobs:
         with:
           name: async-segment-io-${{ github.sha }}-${{ github.run_attempt }}
           path: artifacts/async-segment-io
+          if-no-files-found: error
+          retention-days: 30
+
+
+  strict-writer-gate:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_writer_gate }}
+    name: Strict Single-Stream Writer Qualification
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.97.1
+
+      - name: Build both revisions and measure the fixed protocol
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/run-concurrent-writer-gate.py \
+            --work "$RUNNER_TEMP/writer-gate" \
+            --fixture-parent "$RUNNER_TEMP/writer-fixtures" \
+            --output artifacts/strict-writer-gate
+
+      - name: Retain build and measurement evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: strict-writer-gate-${{ github.sha }}-${{ github.run_attempt }}
+          path: artifacts/strict-writer-gate
           if-no-files-found: error
           retention-days: 30

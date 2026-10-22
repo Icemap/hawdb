@@ -93,6 +93,17 @@ impl<'reader> ProjectionStagingSession<'reader> {
         config: ProjectionCoverageConfig,
         mapper: ProjectionBaselineMappingFunction,
     ) -> std::result::Result<ProjectionCoverageSession<'reader>, ProjectionFeedError> {
+        self.verify_complete_source_in(config, mapper, ProjectionSourceScope::Database)
+    }
+
+    /// Verify the complete declared input domain at E. Enumeration membership
+    /// and absence are tracked independently of the mapper's hydration queries.
+    pub fn verify_complete_source_in(
+        self,
+        config: ProjectionCoverageConfig,
+        mapper: ProjectionBaselineMappingFunction,
+        scope: ProjectionSourceScope,
+    ) -> std::result::Result<ProjectionCoverageSession<'reader>, ProjectionFeedError> {
         if self.failed {
             return Err(ProjectionFeedError::Failed);
         }
@@ -112,7 +123,7 @@ impl<'reader> ProjectionStagingSession<'reader> {
             .map_err(ProjectionFeedError::Source)?;
         let source = self
             .source
-            .into_full_source(config.feed, config.source, self.task)?;
+            .into_full_source(config.feed, config.source, self.task, scope)?;
         let comparison = self
             .stage
             .compare_complete_delta(config.comparison)

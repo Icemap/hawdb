@@ -26,6 +26,23 @@ pub enum RegisteredConsumerRecovery {
 }
 
 impl RegisteredConsumerRecovery {
+    /// Retain original custody when a reserved build is dropped before its
+    /// producer starts. Retry settles the proven no-effect native reservation.
+    pub fn unstarted(
+        birth: PendingConsumerGeneration,
+        locator: PathBuf,
+        memory: RuntimeRetainedMemory,
+    ) -> Self {
+        Self::Unsealed(Box::new(UnsealedRegisteredConsumer {
+            birth: Some(birth),
+            scratch: None,
+            locator,
+            target_children: Vec::new(),
+            cleaned: false,
+            _memory: Some(memory),
+        }))
+    }
+
     pub fn locator(&self) -> &Path {
         match self {
             Self::Unsealed(owner) => &owner.locator,

@@ -2033,8 +2033,9 @@ impl GraphStore {
         read_barrier: bool,
     ) -> Result<VersionIndex> {
         // The commit's exclusive store borrow excludes fresh canonical captures.
-        // Other sources retain their inherited pin while registering descendants,
-        // so a later registration cannot introduce an older protection floor.
+        // Writable sources retain their inherited protection while registering
+        // descendants. Late upgrades from unregistered read sources are fenced
+        // by the baseline's history floor if their required stamps were retired.
         let baseline = self
             .version_snapshot_pins
             .oldest_epoch()

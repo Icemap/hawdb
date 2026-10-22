@@ -10,12 +10,21 @@ Consumer lifecycle (#1138), read dependency semantics (#1139), serializable
 validation (#1140), result ownership (#1008), Search cleanup remediation (#867)
 and the complete #232 workload acceptance remain separate work.
 
+## Subsequent conflict-history change
+
+The original allocation receipt below remains bound to its recorded unchanged
+kernel. The [Consumer progress and retention delivery](CONSUMER_PROGRESS_AND_RETENTION.md)
+subsequently separates ordinary read data pins from validation-history pins.
+Its new long-read regression proves unrelated stamps reclaim while the reader
+remains live; a history floor rejects stale read-to-write upgrades. The original
+272-byte/macOS measurements are not measurements of that newer implementation.
+
 ## Ownership that callers can rely on
 
 | Owner | Protection and retirement |
 | --- | --- |
 | `GraphStore::snapshot` | Registers a storage epoch before the snapshot escapes. Descendants inherit the minimum original protection epoch, including after private mutations and savepoint restoration. The last `VersionSnapshotPin` retires its registration. |
-| `snapshot_for_read` | Shares canonical COW values, keeps the storage pin and retains a constant conflict baseline rather than the precise historical version map. It is a read path, not a writable transaction workspace. |
+| `snapshot_for_read` | Shares canonical COW values and retains detached-source provenance plus a constant conflict baseline. Ordinary readers do not register a validation-history floor. A later writable upgrade can conflict if its old epoch predates reclaimed history. |
 | Facade read transaction | Owns the published schema/data view and physical-generation `ReaderPin`. Forks share the facade registration while retaining their own storage snapshots. Destruction drops the store before its facade pin. |
 | Writable/queued transaction | `DatabaseTransactionState` retains the source pin through private execution, failed-statement restoration, queue submission and commit/cancellation. Pessimistic first-statement refresh replaces the protected view coherently. |
 | Version root | Clones share a history lease; a changed root reserves its complete estimated key/stamp payload before COW/WAL. The map field is destroyed before its lease field refunds capacity. Different roots may share pages and still have separate conservative charges. |
@@ -49,7 +58,8 @@ retained manifests. A failed retained-manifest decode keeps evidence and reports
 reclamation debt rather than guessing that a file is obsolete.
 
 Source: [`durable/reclamation.rs`](../crates/storage/src/store/durable/reclamation.rs).
-Storage conflict reclamation uses the separate oldest storage snapshot epoch in
+Storage conflict reclamation uses the oldest active validation owner (writable
+workspace/savepoint or dependency collector), independently of ordinary read pins, in
 [`graph_checkpoint.rs`](../crates/storage/src/store/graph_checkpoint.rs).
 Releasing a pin enables later reclamation; it is not a synchronous deletion API.
 

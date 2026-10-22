@@ -96,9 +96,17 @@ fn prepare(
     db: &mut Database,
     consumer: &SearchProjectionConsumer,
 ) -> ProjectionCoveredConsumerUpdate {
+    prepare_in(db, consumer, ProjectionSourceScope::Database)
+}
+
+fn prepare_in(
+    db: &mut Database,
+    consumer: &SearchProjectionConsumer,
+    scope: ProjectionSourceScope,
+) -> ProjectionCoveredConsumerUpdate {
     let cfg = config();
     let mut session = db
-        .begin_search_projection_consumer_catch_up(consumer, cfg.clone(), mapping)
+        .begin_search_projection_consumer_catch_up_in(consumer, cfg.clone(), mapping, scope)
         .unwrap();
     for _ in 0..10000 {
         if session.advance(cfg.feed, Default::default()).unwrap()
@@ -603,4 +611,92 @@ fn registered_stationary_covered_wrong_source_instance_cannot_publish() {
         ))
     ));
     assert_eq!(consumer.projection().receipt(), before);
+}
+
+#[test]
+fn registered_stationary_covered_retention_checks_complete_epoch_not_old_receipt() {
+    for (changes, relevant) in [(2, false), (3, false), (2, true)] {
+        let fixture = Fixture::new();
+        let mut db = fixture.database();
+        db.set_runtime_governor(single_slot_governor());
+        append(&mut db, 1);
+        db.query("CREATE (:Unrelated {value:0})").unwrap();
+        let mut consumer = db
+            .create_search_projection_consumer(
+                id("covered-retention-v1"),
+                fixture.0.join("projection"),
+                options(1000),
+                |_, index| index.upsert(document("document 1")),
+            )
+            .unwrap();
+        let before = consumer.projection().receipt();
+        db.query("MATCH (m:Memory) SET m.content='covered value'")
+            .unwrap();
+        let epoch = db.commit_epoch().unwrap();
+        let covered = prepare_in(
+            &mut db,
+            &consumer,
+            ProjectionSourceScope::Domains {
+                node_labels: vec!["Memory".into()],
+                relational_tables: vec![],
+            },
+        );
+        db.runtime
+            .get_mut()
+            .unwrap()
+            .store
+            .set_max_search_projection_change_log_entries(Some(2));
+        for value in 1..=changes {
+            if relevant && value == changes {
+                db.query("MATCH (m:Memory) SET m.content='conflicting value'")
+                    .unwrap();
+            } else {
+                db.query(&format!("MATCH (n:Unrelated) SET n.value={value}"))
+                    .unwrap();
+            }
+        }
+        let status = db.search_projection_consumer_status(consumer.id()).unwrap();
+        let floor = status.changefeed.resume_floor_commit_epoch;
+        assert!(before.source_epoch < floor);
+        assert!(matches!(
+            status.state,
+            State::RebuildRequired(Reason::RetentionLimitExceeded { .. })
+        ));
+        assert_eq!(floor, epoch + changes - 2);
+        let result = db.publish_search_projection_consumer_covered_update(
+            &mut consumer,
+            covered,
+            ProjectionSourceDurability::RequireKnownDurable,
+        );
+        if relevant {
+            assert!(matches!(
+                result,
+                Err(ProjectionConsumerCatchUpError::Publication(
+                    ProjectionPublicationError::Dependency(_)
+                ))
+            ));
+            assert_eq!(consumer.projection().receipt(), before);
+        } else if changes == 2 {
+            let report = result.unwrap();
+            assert_eq!(report.consumer.state, State::Active);
+            assert_eq!(consumer.projection().receipt().source_epoch, epoch);
+            assert_eq!(
+                consumer
+                    .search_index()
+                    .unwrap()
+                    .document("memory:m1")
+                    .unwrap()
+                    .content,
+                "covered value"
+            );
+        } else {
+            assert!(matches!(
+                result,
+                Err(ProjectionConsumerCatchUpError::Consumer(
+                    Error::RebuildRequired(Reason::RetentionLimitExceeded { .. })
+                ))
+            ));
+            assert_eq!(consumer.projection().receipt(), before);
+        }
+    }
 }

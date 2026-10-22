@@ -58,6 +58,7 @@ pub struct ProjectionFullSourceCursor {
     source: Box<GraphStore>,
     rows: Option<RelationalRowPageSnapshotReader>,
     tables: Vec<String>,
+    labels: Option<Vec<LabelId>>,
     node: u64,
     table: usize,
     announced: bool,
@@ -80,19 +81,63 @@ impl GraphStore {
         limits: ProjectionFullSourceLimits,
         task: RuntimeTaskContext,
     ) -> std::result::Result<ProjectionFullSourceCursor, ProjectionFeedError> {
+        self.capture_projection_source_domains(total, limits, task, None, None)
+    }
+
+    /// Enumerate exactly the declared domains. Missing labels/tables describe
+    /// empty domains; the facade must retain their absence dependencies.
+    #[doc(hidden)]
+    pub fn capture_projection_source_domains(
+        &self,
+        total: ProjectionFeedLimits,
+        limits: ProjectionFullSourceLimits,
+        task: RuntimeTaskContext,
+        labels: Option<Vec<LabelId>>,
+        mut tables: Option<Vec<String>>,
+    ) -> std::result::Result<ProjectionFullSourceCursor, ProjectionFeedError> {
         self.ensure_usable().map_err(ProjectionFeedError::Source)?;
         task.checkpoint()
             .map_err(|e| ProjectionFeedError::Source(HawDBError::Execution(e.to_string())))?;
         let mut bytes = std::mem::size_of::<ProjectionFullSourceCursor>()
             .saturating_add(std::mem::size_of::<GraphStore>())
-            .saturating_add(limits.key_bytes.get().saturating_mul(2));
-        let mut count = 0usize;
-        for schema in self.relational_state.table_schemas() {
-            count += 1;
+            .saturating_add(limits.key_bytes.get().saturating_mul(2))
+            .saturating_add(labels.as_ref().map_or(0, |ids| {
+                ids.capacity()
+                    .saturating_mul(std::mem::size_of::<LabelId>())
+            }));
+        if let Some(names) = &mut tables {
+            if names.len() > limits.max_tables.get() {
+                return Err(ProjectionFeedError::BudgetExceeded(
+                    ProjectionFeedResource::Bytes,
+                ));
+            }
+            names.sort();
+            names.dedup();
+        }
+        // Named scopes perform bounded point lookups. Scanning the complete
+        // schema directory here would make unrelated tables uncharged work.
+        let names: Box<dyn Iterator<Item = &str> + '_> = match &tables {
+            Some(names) => Box::new(names.iter().map(String::as_str)),
+            None => Box::new(
+                self.relational_state
+                    .table_schemas()
+                    .map(|schema| schema.name.as_str()),
+            ),
+        };
+        let mut captured_tables = Vec::new();
+        for name in names {
+            task.checkpoint().map_err(|error| {
+                ProjectionFeedError::Source(HawDBError::Execution(error.to_string()))
+            })?;
+            let Some(schema) = self.relational_state.table_schema(name) else {
+                continue;
+            };
             bytes = bytes
-                .saturating_add(schema.name.len())
+                .saturating_add(name.len())
                 .saturating_add(std::mem::size_of::<String>());
-            if count > limits.max_tables.get() || bytes > limits.metadata_bytes.get() {
+            if captured_tables.len() >= limits.max_tables.get()
+                || bytes > limits.metadata_bytes.get()
+            {
                 return Err(ProjectionFeedError::BudgetExceeded(
                     ProjectionFeedResource::Bytes,
                 ));
@@ -102,13 +147,16 @@ impl GraphStore {
                     "full projection source requires bounded canonical primary keys".into(),
                 )));
             }
+            captured_tables.push(name.to_owned());
         }
         if bytes > limits.metadata_bytes.get() {
             return Err(ProjectionFeedError::BudgetExceeded(
                 ProjectionFeedResource::Bytes,
             ));
         }
-        let rows = if self.relational_state.canonical_row_metadata_only() {
+        let rows = if captured_tables.is_empty() {
+            None
+        } else if self.relational_state.canonical_row_metadata_only() {
             Some(
                 self.open_relational_row_snapshot_reader()
                     .map_err(ProjectionFeedError::Source)?
@@ -121,19 +169,22 @@ impl GraphStore {
         } else {
             self.relational_state
                 .require_materialized_rows("full projection source")
-                .map_err(|e| ProjectionFeedError::Source(HawDBError::Storage(e.to_string())))?;
+                .map_err(|error| {
+                    ProjectionFeedError::Source(HawDBError::Storage(error.to_string()))
+                })?;
             None
         };
-        let tables = self
-            .relational_state
-            .table_schemas()
-            .map(|s| s.name.clone())
-            .collect();
+        let node = if labels.as_ref().is_some_and(Vec::is_empty) {
+            self.next_node_id
+        } else {
+            0
+        };
         Ok(ProjectionFullSourceCursor {
             source: Box::new(self.snapshot_for_read()),
             rows,
-            tables,
-            node: 0,
+            tables: captured_tables,
+            labels,
+            node,
             table: 0,
             announced: false,
             last: None,
@@ -357,11 +408,17 @@ impl ProjectionFullSourceCursor {
                 .checkpoint()
                 .map_err(|e| ProjectionFeedError::Source(HawDBError::Execution(e.to_string())))?;
             if self.node < self.source.next_node_id {
-                if !self.charge(step, &mut used, 1, 1, 8)? {
+                let work = self
+                    .labels
+                    .as_ref()
+                    .map_or(1, |labels| labels.len().saturating_add(1));
+                if !self.charge(step, &mut used, work, 1, 8)? {
                     break;
                 }
-                visitor(ProjectionFullSourceItem::GraphNodeCandidate { node_id: self.node })
-                    .map_err(ProjectionFeedError::Callback)?;
+                if self.includes_node(NodeId(self.node))? {
+                    visitor(ProjectionFullSourceItem::GraphNodeCandidate { node_id: self.node })
+                        .map_err(ProjectionFeedError::Callback)?;
+                }
                 self.node += 1;
             } else if self.table < self.tables.len() {
                 if !self.announced {
@@ -439,5 +496,33 @@ impl ProjectionFullSourceCursor {
             usage: used,
             complete: self.ended,
         })
+    }
+
+    fn includes_node(&self, id: NodeId) -> std::result::Result<bool, ProjectionFeedError> {
+        let Some(labels) = &self.labels else {
+            return Ok(true);
+        };
+        if self.source.node_tombstones.contains(&id) {
+            return Ok(false);
+        }
+        if let Some(node) = self.source.nodes.get(&id) {
+            return Ok(labels.iter().any(|label| node.labels.contains(label)));
+        }
+        let Some(reader) = &self.source.canonical_base else {
+            return Ok(false);
+        };
+        let result = reader
+            .with_node_input(id, |input| {
+                for label in labels {
+                    if input.has_label(*label)? {
+                        return Ok(true);
+                    }
+                }
+                Ok(false)
+            })
+            .map(|present| present.unwrap_or(false))
+            .map_err(canonical_segment_error);
+        self.source.poison_on_storage_error(&result);
+        result.map_err(ProjectionFeedError::Source)
     }
 }

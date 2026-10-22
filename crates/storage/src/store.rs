@@ -2236,19 +2236,25 @@ impl GraphStore {
         Ok(mapping)
     }
 
-    /// Captures query data without retaining historical conflict-index pages.
+    /// Captures query data without protecting canonical conflict history.
     /// Read consumers cannot observe the compressed conflict metadata. New
     /// transactions start at this snapshot's epoch; any older transaction
     /// submitted to this detached store is conservatively rejected by a barrier.
+    /// Upgrading an old read snapshot to a writable workspace may conflict if
+    /// the canonical store has already reclaimed its validation history.
     /// Writable workspaces/savepoints must use `snapshot` to retain precision.
     #[doc(hidden)]
     pub fn snapshot_for_read(&self) -> Self {
-        let mut snapshot = self.snapshot();
+        let mut snapshot = self.snapshot_with_history(false);
         snapshot.version_index = self.version_index.read_baseline(self.commit_epoch);
         snapshot
     }
 
     pub fn snapshot(&self) -> Self {
+        self.snapshot_with_history(true)
+    }
+
+    fn snapshot_with_history(&self, protect_history: bool) -> Self {
         // Private statement execution can advance commit_epoch without
         // advancing the transaction's read epoch. A savepoint or descendant
         // must inherit the original protection floor, even after restore
@@ -2264,7 +2270,11 @@ impl GraphStore {
             checkpoint_capture_started: self.checkpoint_capture_started,
             version_index: self.version_index.clone(),
             version_snapshot_pins: self.version_snapshot_pins.clone(),
-            version_snapshot_pin: Some(self.version_snapshot_pins.pin(pin_epoch)),
+            version_snapshot_pin: Some(if protect_history {
+                self.version_snapshot_pins.pin(pin_epoch)
+            } else {
+                hawdb_storage::version::VersionSnapshotPin::read_only(pin_epoch)
+            }),
             read_dependency_readers: Arc::clone(&self.read_dependency_readers),
             read_dependency_validation_failures: Arc::clone(
                 &self.read_dependency_validation_failures,
@@ -4760,10 +4770,7 @@ mod tests {
             .commit_mutations(&mut catalog, vec![update(2)])
             .unwrap();
         store.checkpoint(&catalog).unwrap();
-        assert!(store
-            .version_index
-            .stamp(&VersionKey::GraphNode(NodeId(0)))
-            .is_some());
+        assert!(store.version_index.is_empty());
         assert_eq!(descendant.commit_epoch(), epoch);
         assert_eq!(descendant.version_index.len(), 1);
         for id in 0..9 {

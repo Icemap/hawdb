@@ -104,6 +104,37 @@ impl Database {
     }
 }
 impl PreparedProjectionFeed {
+    pub(in crate::api) fn record_source_scope(
+        &mut self,
+        scope: &ProjectionSourceScope,
+    ) -> Result<()> {
+        let keys: Box<dyn Iterator<Item = VersionKey> + '_> = match scope {
+            ProjectionSourceScope::Database => Box::new(std::iter::once(VersionKey::Database)),
+            ProjectionSourceScope::Domains {
+                node_labels,
+                relational_tables,
+            } => Box::new(
+                node_labels
+                    .iter()
+                    .map(|label| VersionKey::ReadNodeDomain(Some(label.clone())))
+                    .chain(
+                        relational_tables
+                            .iter()
+                            .cloned()
+                            .map(VersionKey::ReadRelationalTableDomain),
+                    ),
+            ),
+        };
+        for key in keys {
+            self.prepared
+                .dependencies
+                .graph
+                .record(key)
+                .map_err(|error| HawDBError::Execution(error.to_string()))?;
+        }
+        Ok(())
+    }
+
     pub(super) fn into_completed_read(
         self,
     ) -> std::result::Result<PreparedRead, ProjectionFeedError> {

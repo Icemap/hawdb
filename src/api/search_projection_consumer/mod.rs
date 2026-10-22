@@ -43,8 +43,9 @@ use SearchProjectionConsumerState as State;
 mod covered;
 pub use covered::{
     ProjectionConsumerCatchUpConfig, ProjectionConsumerCatchUpError,
-    ProjectionConsumerCoverageSession, ProjectionConsumerStagingSession,
-    ProjectionCoveredConsumerUpdate,
+    ProjectionConsumerCoverageSession, ProjectionConsumerPreparation,
+    ProjectionConsumerPublication, ProjectionConsumerStagingSession,
+    ProjectionCoveredConsumerUpdate, ProjectionPreparedConsumerUpdate,
 };
 
 impl Database {
@@ -1259,6 +1260,19 @@ impl Database {
         &self,
         consumer: &SearchProjectionConsumer,
     ) -> SearchProjectionConsumerResult<()> {
+        self.validate_consumer_receipt_at_retained_epoch(
+            consumer,
+            consumer.projection().receipt().source_epoch,
+        )
+    }
+
+    // Only a complete covered update can replace the old receipt's replay
+    // requirement with its proven E. Other lifecycle operations still require C.
+    fn validate_consumer_receipt_at_retained_epoch(
+        &self,
+        consumer: &SearchProjectionConsumer,
+        retained_epoch: u64,
+    ) -> SearchProjectionConsumerResult<()> {
         consumer.projection().require_completed_view()?;
         let status = self.search_projection_consumer_status(consumer.id())?;
         let runtime = self.runtime.get()?;
@@ -1286,7 +1300,12 @@ impl Database {
             return Err(Error::RebuildRequired(Reason::ProjectionIdentityMismatch));
         }
         if let State::RebuildRequired(reason) = status.state {
-            return Err(Error::RebuildRequired(reason));
+            match reason {
+                Reason::RetentionLimitExceeded {
+                    resume_floor_commit_epoch,
+                } if retained_epoch >= resume_floor_commit_epoch => {}
+                _ => return Err(Error::RebuildRequired(reason)),
+            }
         }
         let receipt = consumer.projection().receipt();
         if receipt.binding.checkpoint_uuid.to_string() != record.checkpoint_uuid

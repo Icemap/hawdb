@@ -23,7 +23,7 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--fixture-parent", type=Path, required=True)
     parser.add_argument("--rounds", type=int, default=3)
-    parser.add_argument("--writes", type=int, default=1024)
+    parser.add_argument("--writes", type=int, default=4096)
     parser.add_argument("--quiet-samples", type=int, default=32)
     args = parser.parse_args()
     if args.rounds < 1 or args.writes < 8 or args.quiet_samples < 1:
@@ -32,13 +32,18 @@ def main():
     source = Path(__file__).resolve().parents[1]
     args.output.mkdir(parents=True, exist_ok=False)
     args.fixture_parent.mkdir(parents=True, exist_ok=True)
-    source_files = [
-        "Cargo.toml", "Cargo.lock", ".cargo/config.toml", "rust-toolchain.toml",
-        "benches/consumer_publication.rs", "benches/consumer_publication/workload.rs",
-        "scripts/measure-consumer-publication.py",
-    ]
+    filesystem = subprocess.check_output(["df", "-T", str(args.fixture_parent)], text=True)
+    if "tmpfs" in filesystem:
+        parser.error("durable qualification requires a disk-backed fixture parent")
+    source_files = sorted(set(
+        name for name in subprocess.check_output(
+            ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"],
+            cwd=source, text=True).split("\0")
+        if name and (Path(name).suffix in {".rs", ".toml", ".lock", ".bzl", ".bazel"}
+                     or name == "scripts/measure-consumer-publication.py")
+    ))
     manifest = {
-        "schema": "consumer-publication-measurement-v1",
+        "schema": "consumer-publication-measurement-v2",
         "started_utc": datetime.now(timezone.utc).isoformat(),
         "source_head": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=source, text=True).strip(),
         "source_status": subprocess.check_output(["git", "status", "--porcelain"], cwd=source, text=True),
@@ -47,13 +52,18 @@ def main():
         "binary": str(binary), "binary_sha256": digest(binary),
         "platform": platform.platform(), "cpu_count": os.cpu_count(),
         "cpuinfo": Path("/proc/cpuinfo").read_text() if Path("/proc/cpuinfo").exists() else None,
-        "filesystem": subprocess.check_output(["df", "-T", str(args.fixture_parent)], text=True),
+        "filesystem": filesystem,
         "profile": "repository Cargo bench profile; no optimization overrides",
-        "features": ["full-text-search", "background-maintenance"], "default_features": False,
+        "features": [], "default_features": True,
+        "default_feature_set": ["background-maintenance", "full-text-search", "graph-analytics", "tokio-runtime", "vector-search"],
         "rounds": args.rounds, "writes_per_case": args.writes,
         "quiescent_publications_per_enabled_case": args.quiet_samples,
+        "concurrent_phase_publications_per_enabled_case": 16,
+        "shared_maintenance_trigger_commits_per_case": 16,
+        "changefeed_retention_entries": args.writes + args.quiet_samples + 64,
+        "changefeed_retention_bytes": 64 << 20,
         "shapes": [[32, 128], [512, 1024]], "writers": [1, 4, 8],
-        "modes": ["disabled", "legacy", "covered"],
+        "modes": ["disabled", "scoped-blocking", "detached"],
         "isolation": "sequential cases; shared host, no exclusive machine or cold-device claim",
     }
     (args.output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")

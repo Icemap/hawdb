@@ -40,6 +40,8 @@ execution lane, fixture size, isolation or known failure mode.
 | Storage `consumer_allocation::bootstrap_tests`, `file_io::source_directory::control_candidate::tests`, `held_wal_rollback` | Torn bootstrap candidate isolation, lost ledger reply, pre-effect retry versus uncertain rename, foreign-name cleanup refusal and original-WAL header preservation | Existing storage unit owner plus explicit native Windows failure-boundary selection. Torn/reordered images use the finite power-loss model, separately from process reopen and native execution. |
 | Storage source-sync and captured-WAL units | Pre-effect FD refusal versus uncertain durability failure | Source-barrier refusal preserves the live handle and retries; captured WAL append prepays native validation handles before writing even when a competing owner fills remaining capacity. The latter also executes explicitly in the native Windows contract lane. |
 | Default/minimal/graph-text consumer, host allocator and portable tests | Public feature boundaries, allocator ownership, in-memory portability and excluded native dependencies | Do not replace exact minimal-feature compilation with a default-feature run. |
+| Scoped Consumer preparation (`cargo test --locked -p hawdb --all-features --test mvcc_staging_session registered_consumer_`) | Real writer commits between capture, reservation, construction and selection; repeated durable watermarks; graph/SQL/schema/source fences; reserved/prepared drop recovery and cold reopen | Root integration lane owns the tests. The split API is described in [Consumer progress and retention](CONSUMER_PROGRESS_AND_RETENTION.md); manual `consumer_publication` timing also records commits during native construction. |
+| Read-only conflict history (`cargo test --locked -p hawdb-storage --lib snapshot_retention_tests`) | Long readers release unrelated stamps; stale read-to-write upgrades fail closed; writable savepoints preserve delete/reinsert conflicts; snapshot allocation accounting | Storage unit lane owns the tests. Read data and dependency/write validation pins have separate lifetimes. |
 | Consumer physical reclamation (`cargo test --locked -p hawdb --all-features --lib consumer_reclamation`) | Old snapshot and initial-lease protection, durable branch and pending-operation roots, bounded retries, unknown-evidence retention, FD/memory release and ledger retirement before unlink | Six lifecycle cases belong to the root unit lane; one recorder case belongs to the power-loss family. The Windows native contract lane selects all seven explicitly. The recorder explores lost/torn/reordered uncovered writes at the first unlink; close/reopen fixtures cover partial retirement but do not qualify the complete platform power-loss matrix. See [cleanup ownership](SEARCH_CLEANUP_OWNERSHIP.md). |
 | Registered covered-token reclamation (`registered_consumer_reclamation_preserves_continuously_invalidated_covered_base`) and manual `consumer_publication` benchmark | Actual post-E writer commits while preparation is paused, typed refusal and retained base during GC; outer publication-owner latency and watermark progress under 1/4/8 writers | Regression: default/minimal `mvcc_staging_session` and native Windows registered selection. Benchmark: local only, repository bench profile, disabled/legacy/covered controls and raw p95/p99 samples. The current post-E dependency blocks continuous watermark progress; quiescent drains are not a pass. [Workload and qualification boundaries](CONSUMER_PUBLICATION_QUALIFICATION.md). |
 | `//:hawdb_system_sql_loom_tests` | Bounded modeled system-table publication interleavings | Model exploration; not a wall-clock fuzz campaign. |
@@ -208,3 +210,16 @@ run locally and in the Python Bindings Cargo release-profile lane after wheel
 construction. They cover a pending `PanicException` and a panicking release callback. No Rust unwind
 may cross the C destructor; descriptors are still released and ordinary pending
 Python exceptions restored.
+
+The `registered_consumer_embedded` cases in
+`tests/support/embedded_consumer_coverage.rs` belong to `mvcc_staging_session`
+and its existing `registered_consumer` native-platform selection. They cover
+#1171 one-operation private progress, cancellation/restart, complete pinned
+rebuild comparison, prepared-drop/conflict recovery, original embedded owner
+lifetime, and legacy full-residency/incremental interval compatibility.
+
+The covered Consumer unit family also checks the exact retention boundary:
+`registered_stationary_covered_retention_checks_complete_epoch_not_old_receipt`
+accepts completed E at the resume floor after C expires, rejects E below the
+floor, and preserves dependency rejection for a relevant post-E write. This is
+part of the existing Search Consumer unit target; no new CI job is required.

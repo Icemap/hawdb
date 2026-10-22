@@ -320,13 +320,14 @@ impl GraphStore {
         Ok(())
     }
 
-    /// Retires process-local conflict stamps after every storage snapshot has
-    /// advanced beyond them. Canonical records and generations are unchanged.
+    /// Retires process-local conflict stamps after validation owners advance.
+    /// Read-only data pins do not hold unrelated conflict history alive.
     #[doc(hidden)]
     pub fn reclaim_version_history(&mut self) {
         // Exclusive store access prevents a new capture from this store;
-        // captures from other snapshots inherit an already-live pin floor.
-        // Thus no pin below this watermark can appear before pruning.
+        // Writable descendants inherit an already-live protection floor.
+        // A later upgrade from an old read-only snapshot is fenced by the
+        // version index's history floor before its writes can be published.
         let watermark = self
             .version_snapshot_pins
             .oldest_epoch()

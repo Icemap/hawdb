@@ -72,9 +72,10 @@ fn feed() -> ProjectionFeedLimits {
 pub fn begin<'a>(
     database: &mut Database,
     consumer: &'a SearchProjectionConsumer,
+    scoped: bool,
 ) -> ProjectionConsumerStagingSession<'a> {
     database
-        .begin_search_projection_consumer_catch_up(
+        .begin_search_projection_consumer_catch_up_in(
             consumer,
             ProjectionConsumerCatchUpConfig {
                 reads: PreparedReadLimits {
@@ -101,12 +102,21 @@ pub fn begin<'a>(
                 task: RuntimeTaskContext::default(),
             },
             delta,
+            if scoped {
+                ProjectionSourceScope::Domains {
+                    node_labels: vec!["Memory".into()],
+                    relational_tables: vec![],
+                }
+            } else {
+                ProjectionSourceScope::Database
+            },
         )
         .unwrap()
 }
 
 pub fn prepare(
     mut session: ProjectionConsumerStagingSession<'_>,
+    scoped: bool,
 ) -> ProjectionCoveredConsumerUpdate {
     let quantum = ProjectionFeedLimits {
         work: nz(256),
@@ -121,7 +131,7 @@ pub fn prepare(
         }
     }
     let mut coverage = session
-        .verify_complete_source(
+        .verify_complete_source_in(
             ProjectionCoverageConfig {
                 feed: feed(),
                 source: Default::default(),
@@ -143,6 +153,14 @@ pub fn prepare(
                 },
             },
             full,
+            if scoped {
+                ProjectionSourceScope::Domains {
+                    node_labels: vec!["Memory".into()],
+                    relational_tables: vec![],
+                }
+            } else {
+                ProjectionSourceScope::Database
+            },
         )
         .unwrap();
     for _ in 0..100_000 {
@@ -175,11 +193,15 @@ pub fn setup(
     documents: usize,
     payload_bytes: usize,
     writers: usize,
+    retention_entries: usize,
 ) -> (Database, SearchProjectionConsumer) {
     let mut database = Database::open_with_config(
         root.join("source"),
         DatabaseConfig {
             automatic_checkpoint_max_age: std::time::Duration::from_secs(3600),
+            // Keep this finite measurement's complete backlog available. The
+            // default 4096-entry window can expire while a slow control builds.
+            max_search_projection_change_log_entries: Some(retention_entries),
             ..Default::default()
         },
     )
@@ -200,6 +222,12 @@ pub fn setup(
     database.set_runtime_governor(governor);
     database
         .query_sql("CREATE TABLE foreground (id BIGINT PRIMARY KEY, value BIGINT)")
+        .unwrap();
+    database
+        .query_sql("CREATE TABLE maintenance_trigger (id BIGINT PRIMARY KEY, value BIGINT)")
+        .unwrap();
+    database
+        .query_sql("INSERT INTO maintenance_trigger (id,value) VALUES (0,0)")
         .unwrap();
     let mut seed = database.begin_transaction().unwrap();
     for id in 0..writers {

@@ -38,15 +38,15 @@ pub const MAX_NODE_PROPERTY_READ_KEY_BYTES: usize = 4096;
 /// Maximum retained identity for one declared relational index-prefix summary.
 pub const MAX_RELATIONAL_INDEX_READ_KEY_BYTES: usize = 4096;
 
-// All storage snapshots register, including transaction workspaces, savepoints,
-// and snapshots from which another transaction might later be created.
+// Writable workspaces, savepoints and dependency collectors protect validation
+// history. Read-only snapshots retain data independently of these registrations.
 #[derive(Debug, Clone, Default)]
 pub(crate) struct VersionSnapshotPins(Arc<Mutex<BTreeMap<u64, usize>>>);
 
 #[derive(Debug)]
 pub(crate) struct VersionSnapshotPin {
     epoch: u64,
-    pins: VersionSnapshotPins,
+    pins: Option<VersionSnapshotPins>,
 }
 
 impl VersionSnapshotPins {
@@ -55,7 +55,7 @@ impl VersionSnapshotPins {
         *pins.entry(epoch).or_default() += 1;
         VersionSnapshotPin {
             epoch,
-            pins: self.clone(),
+            pins: Some(self.clone()),
         }
     }
 
@@ -69,6 +69,10 @@ impl VersionSnapshotPins {
 }
 
 impl VersionSnapshotPin {
+    pub(crate) fn read_only(epoch: u64) -> Self {
+        Self { epoch, pins: None }
+    }
+
     pub(crate) fn epoch(&self) -> u64 {
         self.epoch
     }
@@ -76,8 +80,10 @@ impl VersionSnapshotPin {
 
 impl Drop for VersionSnapshotPin {
     fn drop(&mut self) {
-        let mut pins = self
-            .pins
+        let Some(registration) = &self.pins else {
+            return;
+        };
+        let mut pins = registration
             .0
             .lock()
             .expect("version snapshot pins lock poisoned");
@@ -441,6 +447,10 @@ pub struct VersionConflict {
 /// Mutable version state shared by a live database handle.
 #[derive(Debug, Clone)]
 pub struct VersionIndex {
+    // Read-only snapshots may outlive pruned history and later create a write
+    // workspace. Reject such stale upgrades instead of comparing absent stamps
+    // as zero. Active write/dependency registrations never cross this floor.
+    history_floor: u64,
     // Database publication occurs after WAL on legacy paths. Keep this fixed
     // identity inline so publishing it never detaches a shared COW page.
     database_barrier: Option<VersionStamp>,
@@ -475,6 +485,7 @@ impl VersionIndex {
         let reserved = inline_barrier_bytes();
         assert!(max_estimated_bytes >= reserved);
         Self {
+            history_floor: 0,
             database_barrier: None,
             read_barrier: None,
             stamps: CowSegmentedMap::default(),
@@ -493,6 +504,7 @@ impl VersionIndex {
 
     pub(crate) fn read_baseline(&self, epoch: u64) -> Self {
         let mut baseline = Self {
+            history_floor: epoch,
             database_barrier: None,
             read_barrier: None,
             stamps: CowSegmentedMap::default(),
@@ -587,6 +599,7 @@ impl VersionIndex {
             .map(|(key, stamp)| (key.clone(), *stamp))
             .collect::<BTreeMap<_, _>>();
         let mut staged = Self {
+            history_floor: self.history_floor,
             database_barrier: self.database_barrier,
             read_barrier: self.read_barrier,
             stamps: retained.into(),
@@ -711,6 +724,12 @@ impl VersionIndex {
         writes: &VersionWriteSet,
         read_epoch: u64,
     ) -> Option<VersionConflict> {
+        if !writes.is_empty() && read_epoch < self.history_floor {
+            return Some(VersionConflict {
+                key: VersionKey::Database,
+                committed_epoch: self.history_floor,
+            });
+        }
         writes.iter().find_map(|(key, _)| {
             let stamp = self.stamp(key)?;
             (stamp.commit_epoch > read_epoch).then(|| VersionConflict {
@@ -784,6 +803,9 @@ impl VersionIndex {
     /// Absent stamps compare as zero; a removed stamp was already <= every
     /// protected read epoch. This never removes the canonical record itself.
     pub(crate) fn prune_before(&mut self, oldest_reader_epoch: u64) {
+        self.history_floor = self
+            .history_floor
+            .max(oldest_reader_epoch.saturating_sub(1));
         if self
             .database_barrier
             .is_some_and(|stamp| stamp.commit_epoch < oldest_reader_epoch)

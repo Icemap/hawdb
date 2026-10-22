@@ -20,6 +20,22 @@ const ROUNDS: usize = if SMOKE { 1 } else { 5 };
 const UPDATE: &str = "MATCH (n:MvccCounter) WHERE n.id = $id SET n.value = 1";
 const READ: &str = "MATCH (n:MvccCounter) RETURN n.id AS id, n.value AS value ORDER BY id";
 
+// The original gate baseline returned a bare epoch from Database. Keep one
+// identical harness across that API change; this oracle is outside timing.
+trait ReopenedEpoch {
+    fn checked(self) -> u64;
+}
+impl ReopenedEpoch for u64 {
+    fn checked(self) -> u64 {
+        self
+    }
+}
+impl ReopenedEpoch for hawdb::Result<u64> {
+    fn checked(self) -> u64 {
+        self.unwrap()
+    }
+}
+
 fn nanos(start: Instant) -> u64 {
     start.elapsed().as_nanos().try_into().unwrap()
 }
@@ -170,7 +186,7 @@ fn measure(path: &Path, durable: bool, grouped: bool, writers: usize, serial: bo
     if durable {
         let mut reopened = Database::open(path).unwrap();
         assert_eq!(
-            reopened.commit_epoch().unwrap(),
+            reopened.commit_epoch().checked(),
             initial_epoch + COMMITS as u64
         );
         assert_eq!(reopened.query(READ).unwrap().rows, expected(1));
@@ -200,10 +216,25 @@ fn measure(path: &Path, durable: bool, grouped: bool, writers: usize, serial: bo
 fn main() {
     let mut selected_round = None;
     let mut selected_writers = None;
+    let mut fixture_parent = None;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--bench" => {} // Cargo supplies this for harness-free benchmarks.
+            "--fixture-parent" => {
+                assert!(
+                    fixture_parent.is_none(),
+                    "--fixture-parent may appear only once"
+                );
+                let path = std::path::PathBuf::from(
+                    args.next().expect("--fixture-parent requires a directory"),
+                );
+                assert!(
+                    path.is_dir(),
+                    "fixture parent must be an existing directory"
+                );
+                fixture_parent = Some(path);
+            }
             "--writers" => {
                 assert!(selected_writers.is_none(), "--writers may appear only once");
                 let writers = args
@@ -227,14 +258,16 @@ fn main() {
             _ => panic!("unknown benchmark argument: {arg}"),
         }
     }
-    let root = std::env::temp_dir().join(format!(
-        "hawdb-concurrent-writers-{}-{}",
-        std::process::id(),
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
+    let root = fixture_parent
+        .unwrap_or_else(std::env::temp_dir)
+        .join(format!(
+            "hawdb-concurrent-writers-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
     std::fs::create_dir(&root).unwrap();
     for round in 0..ROUNDS {
         if selected_round.is_some_and(|selected| selected != round) {

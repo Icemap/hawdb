@@ -442,6 +442,11 @@ this model alongside the corresponding runtime change.
 
 ## Read-consumer conflict baseline
 
+This section records the original baseline refinement. The October 22
+[ordinary-read history refinement](#ordinary-read-data-without-conflict-history-protection)
+below supersedes its shared-history-pin assumption; the immutable data and
+private index arguments remain applicable.
+
 `GraphStore::snapshot_for_read` shares the same immutable user-data roots as
 `snapshot`, keeps the same inherited storage epoch pin, and replaces only the
 private version index with a Database stamp at capture epoch F (empty at F=0).
@@ -644,6 +649,11 @@ remain acceptance work for #231/#232.
 
 ## Current-epoch candidate compaction and pin registration
 
+The argument below originally assumes every source registers history protection.
+Its precise-writer completeness result still applies to registered writable
+sources. The following read-history refinement adds conservative rejection for
+unregistered read sources that later request a writable descendant.
+
 Let C be the exclusively borrowed store's current commit epoch, and P the
 minimum epoch in its shared version-pin registry. Candidate preparation may
 replace prior conflict metadata by B = {Database -> C} (empty at C = 0) only
@@ -720,3 +730,55 @@ compaction. Removing the compaction pin guard causes the disjoint writer to fail
 with `TransactionConflict` (0 passed / 1 failed); the guard is restored before
 positive checks. Existing tombstone coverage also checks that a precise tip
 snapshot retains its old tombstone after canonical baseline replacement.
+
+
+## Ordinary read data without conflict-history protection
+
+`GraphStore::snapshot_for_read` now retains immutable data roots and a provenance
+marker without inserting an epoch into `VersionSnapshotPins`. Its private
+`VersionIndex::read_baseline(F)` still contains only the capture-epoch barrier
+and sets `history_floor = F`. `snapshot` continues to register writable
+workspaces and savepoints before they escape; active dependency collectors keep
+their existing history registration. Read results do not consult conflict stamps.
+
+Let H be the canonical index's history floor and P its oldest registered epoch
+(or the current epoch plus one when no registration exists). Strict pruning
+advances H to `max(H, P - 1)` before discarding stamps less than P. Whole-index
+tip compaction sets H to the current epoch C through `read_baseline(C)`. Staging
+and read-summary collapse carry the floor into the resulting index.
+
+For a nonempty submitted write set W at read epoch E:
+
+1. If E < H, `VersionIndex::first_conflict` returns a conservative database
+   conflict before testing individual stamps. Even a completely empty reclaimed
+   index cannot turn unknown old conflicts into absent-stamp zeroes.
+2. Otherwise E >= H. Every stamp discarded by strict pruning was at most H,
+   so it could not satisfy the conflict condition `stamp > E`. Compaction's
+   discarded stamps were at most C = H and obey the same implication. Surviving
+   stamps and subsequent commits retain the existing precise validation rule.
+3. A registered writable ancestor prevents reclamation past its inherited E.
+   Descendant/savepoint registration preserves that floor. These previously
+   supported writers therefore retain precise disjoint-commit behavior.
+4. An unregistered old reader can create a writable descendant after a watermark
+   observation, unlike the earlier pin-only argument. If its E is below the
+   resulting H, rule 1 refuses it. If E >= H, rule 2 establishes that no required
+   stamp was lost. A late pin can delay subsequent reclamation but cannot reduce H.
+5. Empty write sets do not mutate canonical data and need no write-write fence.
+   Serializable/read-dependency validation remains separate and unchanged.
+
+An old ordinary reader therefore keeps its data visible while unrelated conflict
+history can retire. A later write upgrade can receive a conservative conflict,
+including for a disjoint key; it must start a new transaction from the canonical
+source. This is an explicit low-level contract, not a promise that arbitrary old
+read snapshots remain writable.
+
+The existing TLC models retain their registered-source abstraction and their
+reported results remain historical evidence for that abstraction. They do not
+machine-check this new unregistered-reader upgrade transition. The argument above
+is a source refinement, backed by
+`long_read_releases_unrelated_history_and_stale_write_upgrade_fails_closed`,
+`restored_savepoint_preserves_conflicts_after_delete_reinsert_and_pruning`, the
+existing fourteen selected history/baseline regressions, and the current local
+MVCC campaign. It does not extend those finite checks into a global memory,
+fairness, or power-loss proof. See the
+[delivery contract](../CONSUMER_PROGRESS_AND_RETENTION.md#read-data-and-conflict-history).
