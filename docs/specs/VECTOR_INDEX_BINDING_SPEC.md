@@ -184,6 +184,8 @@ and execution use the same escape/folding rules and preallocate those buffers;
 matching has no growing temporary literal string. Repeated `%` tokens compact,
 while alternating `%_` patterns retain their full admitted token cost. Invalid
 patterns retain evaluator diagnostics, including short-circuit and NULL behavior.
+SQL result delivery checks cancellation and deadlines before and after every
+callback, including the final row. Callback errors retain their original cause.
 A narrow grant fails before callback delivery
 and does not change the selected index or poison the canonical read view.
 

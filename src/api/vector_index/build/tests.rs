@@ -1578,3 +1578,74 @@ fn vector_index_sql_rejects_reserved_distance_column() {
         "{rejected:?}"
     );
 }
+
+#[test]
+fn vector_index_sql_observes_cancellation_from_last_result_callback() {
+    use crate::{
+        QueryStreamOptions, VectorIndexLanguageBudget, VectorIndexReadError, VectorIndexSqlRequest,
+    };
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    db.query_sql("CREATE TABLE vectors (id BIGINT PRIMARY KEY, embedding VECTOR(2))")
+        .unwrap();
+    let parameters = [Value::Vector(Vector::new(&[1.0, 0.0]).unwrap())];
+    db.query_sql_with_params(
+        "INSERT INTO vectors (id, embedding) VALUES (1, $1)",
+        &parameters,
+    )
+    .unwrap();
+    let consumer = db
+        .create_vector_index(
+            "rows",
+            &sql_field(),
+            fixture.0.join("index"),
+            registration(),
+            Default::default(),
+        )
+        .unwrap();
+    let permit = db
+        .search_projection_consumer_read_permit(
+            RuntimeWorkRequest::foreground_query(128 << 20, 4 << 20).with_io_wave_slots(1),
+        )
+        .unwrap();
+    let read = db
+        .begin_read_transaction()
+        .unwrap()
+        .bind_vector_index(&consumer, &permit)
+        .unwrap();
+    for cancel in [true, false] {
+        let task = RuntimeTaskContext::default();
+        let cancellation = task.cancellation().clone();
+        let mut delivered = 0;
+        let result = read.query_sql_streaming(
+            &permit,
+            VectorIndexLanguageBudget {
+                index_working_bytes: NonZeroUsize::new(32 << 20).unwrap(),
+                index_result_bytes: NonZeroUsize::new(1 << 20).unwrap(),
+            },
+            VectorIndexSqlRequest {
+                sql: "SELECT id FROM vector_index_search('rows', $1, candidates => 8, top_k => 1)",
+                parameters: &parameters,
+                output_limits: QueryStreamOptions::default(),
+                task,
+            },
+            |row| {
+                assert_eq!(row.get("id"), Some(&Value::Int(1)));
+                delivered += 1;
+                if cancel {
+                    cancellation.cancel();
+                }
+                Ok(())
+            },
+        );
+        assert_eq!(delivered, 1);
+        if cancel {
+            assert!(
+                matches!(&result, Err(VectorIndexReadError::Query(HawDBError::Execution(message))) if message.contains("cancel")),
+                "{result:?}"
+            );
+        } else {
+            assert_eq!(result.unwrap().output_rows, 1);
+        }
+    }
+}
