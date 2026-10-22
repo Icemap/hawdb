@@ -2768,7 +2768,8 @@ mod tests {
         };
         for inject_failure in [false, true] {
             let (directory, catalog_path) = temporary_catalog_path();
-            let project = ProjectFileDescriptors::acquire(&directory, 32).unwrap();
+            let project =
+                ProjectFileDescriptors::acquire_with_capacity_limit(&directory, 32, true).unwrap();
             assert_eq!(project.metrics().open, 0);
             let model = PowerLossModel::attach(&project, ImageLimits::default()).unwrap();
             assert_eq!(project.metrics().open, recorder_root_fds);

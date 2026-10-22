@@ -1465,7 +1465,7 @@ mod tests {
         use crate::immutable_files::ImmutableFileBinding;
 
         let root = test_root("reclamation-cache");
-        let project = ProjectFileDescriptors::acquire(&root, 8).unwrap();
+        let project = ProjectFileDescriptors::acquire_with_capacity_limit(&root, 8, true).unwrap();
         let context = project.io_context();
         let handles = context.state.immutable_handles();
         let mut store = ImmutableObjectStore::open(&root).unwrap();

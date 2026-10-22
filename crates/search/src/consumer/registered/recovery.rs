@@ -13,6 +13,13 @@ pub struct RegisteredConsumerError {
 }
 
 impl RegisteredConsumerError {
+    pub fn with_recovery(error: HawDBError, recovery: RegisteredConsumerRecovery) -> Self {
+        Self {
+            error,
+            recovery: Some(recovery),
+        }
+    }
+
     pub fn into_parts(self) -> (HawDBError, Option<RegisteredConsumerRecovery>) {
         (self.error, self.recovery)
     }

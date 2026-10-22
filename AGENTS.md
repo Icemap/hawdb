@@ -156,3 +156,32 @@
 - Run independent tool formatting and strict Clippy explicitly when changing it:
   `cargo fmt --manifest-path tools/shiro/Cargo.toml -- --check` and
   `cargo clippy --locked --manifest-path tools/shiro/Cargo.toml --all-targets --all-features -- -D warnings`.
+
+## PostgreSQL 18.0 Compatibility
+
+- Keep the manual compatibility project in `tests/pg-regress/`, following the
+  independent `src/`, `data/sql`, `data/expected`, isolation and schedule layout.
+  It is an unpublished independent workspace, excluded from library archives.
+- Pin upstream inputs to PostgreSQL `REL_18_0` commit
+  `3d6a828938a5fa0444275d3d2f67b64ec3199eb7`. Keep checksums, source line ranges,
+  license and explicit adaptations with cases. Do not silently rewrite SQL.
+- Use `make pg-regress-list` to inspect the selected subset and
+  `PGREGRESS_DSN='...' make pg-regress` against an isolated test database. The
+  reference must report server version 180000; later 18.x servers are refused.
+  The driver creates and removes only its own uniquely named schemas.
+- Report PASS, MISMATCH, UNSUPPORTED and infrastructure errors separately.
+  Unselected upstream statements are not coverage. An unsupported case is never
+  a pass; matching arbitrary errors are never agreement. Preserve duplicate
+  multiplicity and explicit ordering; document integer-width/column-label maps.
+- Do not claim PostgreSQL SSI equivalence from strict stepwise comparisons:
+  valid serialization failures may occur at different steps or select different
+  victims. Keep wait-aware isolation schedules and such comparisons explicit.
+- Keep this harness out of CI and scheduled jobs. The comparison CLI is pure
+  Rust: manifest/schedule loading, typed adapters, comparison and reporting stay
+  in this independent project. Use the Rust `libpq` crate for the reference
+  rather than hand-written FFI or a Python/process orchestration layer.
+- Format/lint the independent workspace with all features. Run its native
+  controls with `cargo test --locked --manifest-path tests/pg-regress/Cargo.toml
+  --all-targets --all-features`. The additional manual Bazel target
+  `//tests/pg-regress:hawdb_pg_regress_worker` is only an embedded API fixture;
+  the complete native comparison CLI is built/run through Cargo and Make.

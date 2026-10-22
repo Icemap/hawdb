@@ -294,7 +294,7 @@ fn registered_stationary_metadata_reservation_reuses_identity_after_lost_reply()
 type DescriptorBlockers = Rc<RefCell<Vec<fs::File>>>;
 
 #[cfg(feature = "test-support")]
-pub(super) fn with_ledger_descriptor_refusal<T>(
+pub(super) fn with_ledger_pressure_and_selector_refusal<T>(
     db: &mut Database,
     root: &Path,
     predicate: impl Fn(&serde_json::Value) -> bool + 'static,
@@ -323,21 +323,24 @@ pub(super) fn with_ledger_descriptor_refusal<T>(
             {
                 return;
             }
-            loop {
-                match context.open(
-                    fs::OpenOptions::new().read(true),
-                    &observed_root.join("consumer-allocations.hawdb"),
-                ) {
-                    Ok(file) => blockers.borrow_mut().push(file),
-                    Err(error) => {
-                        assert!(matches!(
-                            HawDBError::from(error),
-                            HawDBError::FileDescriptors(_)
-                        ));
-                        break;
-                    }
-                }
+            let project =
+                hawdb_storage::file_descriptors::ProjectFileDescriptors::from_open_context(
+                    &context,
+                );
+            let metrics = project.metrics();
+            // Keep internal publication above the occupied foreground target.
+            for _ in 0..=metrics.limit {
+                blockers.borrow_mut().push(
+                    context
+                        .open(
+                            fs::OpenOptions::new().read(true),
+                            &observed_root.join("consumer-allocations.hawdb"),
+                        )
+                        .unwrap(),
+                );
             }
+            assert!(project.metrics().open > metrics.limit);
+            PUBLICATION_FAILURE.set(Some((PublicationStage::BeforeSelector, false)));
         },
         || operation(db),
     )
@@ -351,7 +354,7 @@ pub(super) fn with_ledger_descriptor_refusal<T>(
 
 #[cfg(feature = "test-support")]
 #[test]
-fn registered_stationary_post_intent_descriptor_refusal_retains_same_prepared_operation() {
+fn registered_stationary_post_intent_pressure_retains_same_prepared_operation() {
     for after_intent in [false, true] {
         let fixture = Fixture::new();
         let root = fixture.0.join("database");
@@ -359,13 +362,14 @@ fn registered_stationary_post_intent_descriptor_refusal_retains_same_prepared_op
             &root,
             crate::DatabaseConfig {
                 max_open_files: 128,
+                strict_capacity_limit: true,
                 ..Default::default()
             },
         )
         .unwrap();
         append(&mut db, 1);
         let path = fixture.0.join("projection");
-        let (result, held) = with_ledger_descriptor_refusal(
+        let (result, held) = with_ledger_pressure_and_selector_refusal(
             &mut db,
             &root,
             move |row| {
@@ -383,9 +387,12 @@ fn registered_stationary_post_intent_descriptor_refusal_retains_same_prepared_op
         );
         assert!(matches!(
             result,
-            Err(Error::Database(HawDBError::FileDescriptors(_)))
+            Err(Error::Database(HawDBError::Storage(ref message)))
+                if message.contains("injected consumer publication failure")
         ));
         let before = ledger(&root);
+        assert_eq!(db.file_descriptor_metrics().unwrap().budget_rejections, 0);
+        assert!(db.file_descriptor_metrics().unwrap().high_water > 128);
         held.borrow_mut().clear();
         let consumer = db
             .open_or_create_search_projection_consumer(
@@ -410,6 +417,7 @@ fn registered_stationary_lost_reservation_reply_reuses_durable_identity_after_so
         &root,
         crate::DatabaseConfig {
             max_open_files: 128,
+            strict_capacity_limit: true,
             ..Default::default()
         },
     )

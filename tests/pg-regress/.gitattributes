@@ -1,0 +1,6 @@
+# Keep the checksum-pinned upstream bytes stable on every checkout platform.
+data/sql/*.sql text eol=lf
+data/isolation/*.spec text eol=lf
+POSTGRESQL-LICENSE text eol=lf
+# Preserve original psql aligned-column padding.
+data/expected/*.out text eol=lf -whitespace

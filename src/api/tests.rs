@@ -125,6 +125,7 @@ mod community_reads;
 mod concurrent_transactions;
 mod default_pipeline;
 mod delete_mutations;
+mod descriptor_capacity;
 mod expression_functions;
 mod external_content_artifacts;
 mod graph_analytics;

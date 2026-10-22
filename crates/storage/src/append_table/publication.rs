@@ -1280,7 +1280,8 @@ mod tests {
         use hawdb_core::error::{file_descriptor_error, FileDescriptorError, HawDBError};
 
         let directory = directory("descriptor-retry");
-        let project = ProjectFileDescriptors::acquire(&directory, 16).unwrap();
+        let project =
+            ProjectFileDescriptors::acquire_with_capacity_limit(&directory, 16, true).unwrap();
         let config = AppendPublicationConfig::default();
         let report = AppendPublisher::publish_candidate(
             &directory,

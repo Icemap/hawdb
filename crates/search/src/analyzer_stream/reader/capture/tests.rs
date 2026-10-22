@@ -86,7 +86,7 @@ impl Fixture {
             std::process::id(),
             SEQUENCE.fetch_add(1, Ordering::Relaxed)
         ));
-        let project = ProjectFileDescriptors::acquire(&root, 4).unwrap();
+        let project = ProjectFileDescriptors::acquire_with_capacity_limit(&root, 4, true).unwrap();
         Self { root, project }
     }
 }

@@ -24,7 +24,8 @@ impl Fixture {
             hawdb_core::generate_uuidv7().unwrap()
         ));
         let root = base.join("project");
-        let project = ProjectFileDescriptors::acquire(&root, limit).unwrap();
+        let project =
+            ProjectFileDescriptors::acquire_with_capacity_limit(&root, limit, true).unwrap();
         let model = Some(PowerLossModel::attach(&project, limits).unwrap());
         Self {
             base,

@@ -584,7 +584,7 @@ fn descriptor_exhaustion_is_a_retryable_resource_error_and_never_quarantines_pro
     use hawdb_storage::file_descriptors::ProjectFileDescriptors;
     use hawdb_storage::file_io::OpenOptions;
     let root = super::tests::unique_test_dir("rabitq-fd-resource");
-    let project = ProjectFileDescriptors::acquire(&root, 4).unwrap();
+    let project = ProjectFileDescriptors::acquire_with_capacity_limit(&root, 4, true).unwrap();
     let mut index = SearchIndex::in_memory();
     index.path = Some(root.clone());
     index.documents = super::tests::sample_documents();

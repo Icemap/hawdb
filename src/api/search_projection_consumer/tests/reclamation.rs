@@ -2,7 +2,9 @@
 // Licensed under the Apache License, Version 2.0.
 
 use super::*;
-use crate::{SearchProjectionConsumerCleanupOptions, SearchProjectionConsumerCleanupReport};
+use crate::{
+    DatabaseConfig, SearchProjectionConsumerCleanupOptions, SearchProjectionConsumerCleanupReport,
+};
 use std::collections::BTreeSet;
 use std::num::NonZeroUsize;
 
@@ -25,6 +27,56 @@ fn cleanup(
 ) -> SearchProjectionConsumerCleanupReport {
     db.cleanup_search_projection_consumer(consumer, &Default::default())
         .unwrap()
+}
+
+#[test]
+fn consumer_reclamation_progresses_at_strict_foreground_capacity() {
+    let fixture = Fixture::new();
+    let mut db = Database::open_with_config(
+        fixture.0.join("database"),
+        DatabaseConfig {
+            max_open_files: 128,
+            strict_capacity_limit: true,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    append(&mut db, 1);
+    let path = fixture.0.join("projection");
+    let identifier = id("capacity-reclaim");
+    let mut consumer = db
+        .create_search_projection_consumer(identifier.clone(), &path, options(1000), initialize)
+        .unwrap();
+    advance(&mut db, &mut consumer, 2);
+    advance(&mut db, &mut consumer, 3);
+    let mut held = fixture.occupy_descriptor_target(&db);
+    let before = db.file_descriptor_metrics().unwrap();
+    let report = cleanup(&mut db, &consumer);
+    assert_eq!(report.failed_generations, 0, "{report:?}");
+    assert!(report.reclaimed_generations > 0, "{report:?}");
+    assert!(path.exists());
+    assert_eq!(consumer.search_index().unwrap().document_count(), 3);
+    assert_eq!(
+        db.file_descriptor_metrics().unwrap().budget_rejections,
+        before.budget_rejections
+    );
+    db.unregister_search_projection_consumer(&identifier)
+        .unwrap();
+    drop(consumer);
+    held.extend(fixture.occupy_descriptor_target(&db));
+    let before_retry = db.file_descriptor_metrics().unwrap();
+    let report = db
+        .retry_search_projection_consumer_cleanup(&identifier, &path, &Default::default())
+        .unwrap();
+    assert_eq!(report.failed_generations, 0, "{report:?}");
+    assert!(!report.retry_required, "{report:?}");
+    assert!(generations(&fixture).is_empty());
+    assert!(!path.exists());
+    let after = db.file_descriptor_metrics().unwrap();
+    assert_eq!(after.budget_rejections, before_retry.budget_rejections);
+    assert_eq!(after.reserved, 0);
+    assert!(after.high_water > after.limit);
+    drop(held);
 }
 
 #[test]

@@ -54,6 +54,7 @@ impl NowledgeMemRuntimeStatus {
             "protocol": self.protocol,
             "graph_commit_epoch": self.graph_commit_epoch,
             "file_descriptors": self.file_descriptors.map(|metrics| serde_json::json!({
+                "strict_capacity_limit": metrics.strict_capacity_limit,
                 "configured_limit": metrics.configured_limit,
                 "effective_limit": metrics.effective_limit,
                 "os_soft_limit": metrics.os_soft_limit,
@@ -290,6 +291,10 @@ mod tests {
         assert!(status.projection_stale());
         assert_eq!(status.json()["file_descriptors"]["configured_limit"], 1024);
         assert_eq!(status.json()["file_descriptors"]["effective_limit"], 192);
+        assert_eq!(
+            status.json()["file_descriptors"]["strict_capacity_limit"],
+            false
+        );
         assert_eq!(status.json()["file_descriptors"]["os_limit_clamped"], true);
         assert_eq!(
             status.json()["changefeed"]["newest_retained_mutation_id"],

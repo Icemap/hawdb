@@ -17,7 +17,8 @@ impl Fixture {
             "hawdb-private-directory-candidate-{}",
             hawdb_core::generate_uuidv7().unwrap()
         ));
-        let project = ProjectFileDescriptors::acquire(&root, limit).unwrap();
+        let project =
+            ProjectFileDescriptors::acquire_with_capacity_limit(&root, limit, true).unwrap();
         Self { root, project }
     }
     fn parent(&self) -> SourceDirectory {

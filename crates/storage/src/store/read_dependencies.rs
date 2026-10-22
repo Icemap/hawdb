@@ -327,6 +327,7 @@ impl GraphStore {
     /// policy for future writes and must stay under the publication owner.
     #[doc(hidden)]
     pub fn synchronize_source_prefix(&mut self) -> Result<u64> {
+        let _descriptor_operation = self.internal_descriptor_operation()?;
         self.ensure_usable()?;
         if self.version_snapshot_pin.is_some() || self.wal_sync_group_active() {
             return Err(HawDBError::Execution(
@@ -971,13 +972,23 @@ mod tests {
     }
 
     #[test]
-    fn source_sync_descriptor_refusal_preserves_the_handle_and_retries() {
+    fn internal_source_sync_progresses_at_strict_capacity() {
         use crate::config::DurabilityPolicy;
         let (path, _, store) = source_fixture(DurabilityPolicy::SyncOnCheckpoint);
         let epoch = store.commit_epoch();
         drop(store);
         let mut catalog = Catalog::default();
-        let mut store = GraphStore::open(&path, &mut catalog).unwrap();
+        let replay_config = crate::config::WalReplayConfig {
+            strict_capacity_limit: true,
+            ..Default::default()
+        };
+        let mut store = GraphStore::open_with_durability_and_replay_config(
+            &path,
+            &mut catalog,
+            DurabilityPolicy::SyncOnCheckpoint,
+            replay_config,
+        )
+        .unwrap();
         let snapshot = store.snapshot();
         let files = store
             .durable
@@ -996,11 +1007,12 @@ mod tests {
             release_rx.recv().unwrap();
         });
         ready_rx.recv().unwrap();
-        let error = store.synchronize_source_prefix().unwrap_err();
-        assert!(matches!(error, HawDBError::FileDescriptors(_)), "{error}");
+        assert_eq!(store.synchronize_source_prefix().unwrap(), epoch);
+        assert!(files.metrics().high_water > files.metrics().limit);
+        assert_eq!(files.metrics().budget_rejections, 0);
         store.ensure_usable().unwrap();
         snapshot.ensure_usable().unwrap();
-        assert_eq!(store.known_source_durable_epoch(), Some(0));
+        assert_eq!(store.known_source_durable_epoch(), Some(epoch));
         assert_eq!(store.commit_epoch(), epoch);
         release_tx.send(()).unwrap();
         held.join().unwrap();
@@ -1011,7 +1023,13 @@ mod tests {
         drop(snapshot);
         drop(store);
         let mut catalog = Catalog::default();
-        let reopened = GraphStore::open(&path, &mut catalog).unwrap();
+        let reopened = GraphStore::open_with_durability_and_replay_config(
+            &path,
+            &mut catalog,
+            DurabilityPolicy::default(),
+            replay_config,
+        )
+        .unwrap();
         assert_eq!(reopened.commit_epoch(), epoch + 1);
         drop(reopened);
         std::fs::remove_dir_all(path).unwrap();

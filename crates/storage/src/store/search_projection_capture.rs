@@ -408,6 +408,7 @@ impl GraphStore {
         relational: Option<hawdb_storage::relational::RelationalPrimaryKeyChangeCapture>,
         work: Option<&crate::background::CheckpointWorkContext>,
     ) -> Result<PreparedSearchProjectionChange> {
+        let _descriptor_operation = self.internal_descriptor_operation()?;
         if let Some(work) = work {
             work.checkpoint().map_err(HawDBError::from_storage_error)?;
         }

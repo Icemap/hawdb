@@ -83,7 +83,7 @@ impl Fixture {
             .unwrap();
         assert_eq!(count, 1);
         drop(ordinary);
-        let project = ProjectFileDescriptors::acquire(&root, 32).unwrap();
+        let project = ProjectFileDescriptors::acquire_with_capacity_limit(&root, 32, true).unwrap();
         let model = PowerLossModel::attach(&project, ImageLimits::default()).unwrap();
         Self {
             root,

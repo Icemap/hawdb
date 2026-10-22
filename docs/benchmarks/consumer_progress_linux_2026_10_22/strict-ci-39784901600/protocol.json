@@ -1,0 +1,39 @@
+{
+  "schema": "concurrent-writer-strict-gate-v1",
+  "created_utc": "2026-10-22T13:24:12.753803+00:00",
+  "baseline_revision": "a703cc0f18f549918c73f454cda521edb4f0fb13",
+  "candidate_head": "55e6b3873c61b520635d6fe2b55f76a6de1c988d",
+  "candidate_status": "?? artifacts/\n",
+  "candidate_source_manifest_sha256": "14a7da4ff23d490dd0c9c5e1d24d59901d3bb7d7ec966f7c80be1b2964fd4140",
+  "candidate_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "harness_sha256": "cdc3a46dfd993918794ea7c269db23090952c5b000ca335ff6b73f2e80575a9f",
+  "binary_sha256": {
+    "baseline": "78586ec2ea5e21fc1beb1b9bfde5f9994f11236ba727eef44ceef57e33cfe446",
+    "candidate": "9359d2dadcc51537f40da20b994e4e82d2943ffe725f7970ce19b19f89601d0d"
+  },
+  "binary_paths": {
+    "baseline": "/home/runner/work/hawdb/hawdb/artifacts/strict-writer-gate/baseline-concurrent-writers",
+    "candidate": "/home/runner/work/hawdb/hawdb/artifacts/strict-writer-gate/candidate-concurrent-writers"
+  },
+  "cargo_lock_sha256": {
+    "baseline": "70b29b5fa5552b3657e8fcf49a1f2f49b9d0a1b7aaec2210e6f46bfbb69bc575",
+    "candidate": "e8a0a6973a09671602038b8aa2ed2b2fc280186a1e67f6367772911be2af6d1f"
+  },
+  "effective_cargo_config_sha256": "06c7ca26d39223bd90a6412acd8609c380ce2d1650a72b70c90171656ca89819",
+  "build_profile": "bench; opt-level=3, codegen-units=1, thin LTO, strip=none; both builds invoked from candidate repository",
+  "toolchain": "Rust 1.97.1",
+  "default_features": true,
+  "baseline_overlay": "identical writer harness and Cargo benchmark registration only",
+  "measured_pairs": 40,
+  "warm_up_pairs": 1,
+  "interval_ranks_one_based": [
+    12,
+    29
+  ],
+  "primary_endpoints": "commit p50/p95 for non-serialized API in memory, durable ungrouped, durable grouped",
+  "pass_rule": "all six unrounded upper ratio endpoints <= 1.0; no adaptive stopping or sample removal",
+  "order": "baseline first for even pairs, candidate first for odd pairs; alternate --round 0/1",
+  "platform": "Linux-7.0.0-1017-azure-x86_64-with-glibc2.39",
+  "filesystem": "Filesystem     Type 1K-blocks     Used Available Use% Mounted on\n/dev/root      ext4 151263856 64718992  86528480  43% /\n",
+  "limitations": "shared host; no exclusive machine, affinity, cache flush, or power-loss claim; median-ratio intervals assume independent pairs from continuous distributions"
+}

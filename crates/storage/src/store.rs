@@ -1677,21 +1677,24 @@ impl GraphStore {
         }
         let _project_files = match mode {
             DurableOpenMode::CreateIfMissing => {
-                crate::file_descriptors::ProjectFileDescriptors::acquire(
+                crate::file_descriptors::ProjectFileDescriptors::acquire_with_capacity_limit(
                     path.as_ref(),
                     replay_config.max_open_files,
+                    replay_config.strict_capacity_limit,
                 )?
             }
             DurableOpenMode::ExistingOnly => {
                 // Preserve the read-only path contract before descriptor-domain
                 // canonicalization can replace it with an unclassified IO error.
                 DurableStore::validate_read_only_path(path.as_ref())?;
-                crate::file_descriptors::ProjectFileDescriptors::acquire_existing(
+                crate::file_descriptors::ProjectFileDescriptors::acquire_existing_with_capacity_limit(
                     path.as_ref(),
                     replay_config.max_open_files,
+                    replay_config.strict_capacity_limit,
                 )?
             }
         };
+        let _descriptor_operation = _project_files.io_context().internal_operation()?;
         let durable_manifest_open_started = std::time::Instant::now();
         let durable = match mode {
             DurableOpenMode::CreateIfMissing => {
@@ -3505,6 +3508,7 @@ mod tests {
             DurabilityPolicy::default(),
             WalReplayConfig {
                 max_open_files: 64,
+                strict_capacity_limit: true,
                 ..WalReplayConfig::default()
             },
         )

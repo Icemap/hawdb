@@ -38,6 +38,21 @@ impl<'consumer> ProjectionConsumerPreparation<'consumer> {
         let consumer = self.consumer.take().expect("reserved Consumer");
         let context = self.context.take().expect("reserved source");
         let prepared = self.construction.take().map(|work| {
+            // Acquire on the executing thread after releasing the source owner.
+            // Idle tokens retain identity, never an active descriptor inventory.
+            let _descriptor_operation = match context.base.descriptor_operation() {
+                Ok(operation) => operation,
+                Err(error) => {
+                    return Err(Box::new(RegisteredConsumerError::with_recovery(
+                        error,
+                        RegisteredConsumerRecovery::unstarted(
+                            work.birth,
+                            work.locator,
+                            work.recovery_memory,
+                        ),
+                    )));
+                }
+            };
             work.documents.prepare_registered(
                 work.birth,
                 RegisteredConsumerPreparation {
@@ -189,6 +204,7 @@ impl Database {
         durability: ProjectionSourceDurability,
         limits: RegisteredConsumerLimits,
     ) -> CatchUpResult<ProjectionConsumerPreparation<'consumer>> {
+        let _descriptor_operation = self.internal_descriptor_operation()?;
         self.consumer_writable_root()?;
         self.reload_consumer_registry_if_unavailable()?;
         self.validate_consumer_receipt_at_retained_epoch(consumer, covered.source_epoch())?;
@@ -284,6 +300,7 @@ impl Database {
         &mut self,
         mut update: ProjectionPreparedConsumerUpdate<'_>,
     ) -> CatchUpResult<ProjectionConsumerPublication> {
+        let _descriptor_operation = self.internal_descriptor_operation()?;
         let root = self.consumer_writable_root()?;
         // The native pending operation deliberately hides this registration
         // from ordinary status/cache refresh. Its exact source/birth and previous

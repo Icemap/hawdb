@@ -133,3 +133,13 @@ fuzz-help:
 		'' \
 		'Advanced runner arguments:' \
 		'  FUZZ_OPTIMIZER_ARGS="..." FUZZ_STORAGE_ARGS="..." FUZZ_APPEND_ARGS="..." FUZZ_PARSER_ARGS="..."'
+
+# PostgreSQL SQL compatibility; the DSN stays in the caller's environment.
+PG_REGRESS_ARGS ?=
+
+.PHONY: pg-regress pg-regress-list
+pg-regress:
+	cargo run --locked --manifest-path tests/pg-regress/Cargo.toml -- $(PG_REGRESS_ARGS)
+
+pg-regress-list:
+	cargo run --locked --manifest-path tests/pg-regress/Cargo.toml -- --list $(PG_REGRESS_ARGS)

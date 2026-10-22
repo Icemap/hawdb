@@ -14,6 +14,7 @@ use crate::{
 use hawdb_search::{
     SearchComparedConsumerDocuments, SearchMutationSortStepLimits, SearchUnorderedMutationLimits,
 };
+use hawdb_storage::file_descriptors::{DescriptorReservation, FileOpenContext};
 use std::fmt;
 
 /// Cumulative private-work limits for one registered C..E catch-up.
@@ -94,6 +95,18 @@ struct Base {
     _pin: SearchProjectionConsumerReadPin,
     _memory: hawdb_executor::QueryMemoryLease,
     task: RuntimeTaskContext,
+    descriptor_context: Option<FileOpenContext>,
+}
+
+impl Base {
+    fn descriptor_operation(&self) -> Result<Option<DescriptorReservation>> {
+        self.descriptor_context
+            .as_ref()
+            .map(FileOpenContext::internal_operation)
+            .transpose()
+            .map(Option::flatten)
+            .map_err(Into::into)
+    }
 }
 
 /// Bounded invisible C..E work over this registration's exact selected base.
@@ -113,6 +126,7 @@ impl<'consumer> ProjectionConsumerStagingSession<'consumer> {
         feed: ProjectionFeedLimits,
         ordering: SearchMutationSortStepLimits,
     ) -> CatchUpResult<ProjectionStagingSessionStep> {
+        let _descriptor_operation = self.base.descriptor_operation()?;
         Ok(self.session.advance(feed, ordering)?)
     }
     /// The fixed full-source mapper is the trusted projection definition. Keep
@@ -134,6 +148,7 @@ impl<'consumer> ProjectionConsumerStagingSession<'consumer> {
         mapper: ProjectionBaselineMappingFunction,
         scope: crate::ProjectionSourceScope,
     ) -> CatchUpResult<ProjectionConsumerCoverageSession<'consumer>> {
+        let _descriptor_operation = self.base.descriptor_operation()?;
         let operations = self.session.sorting_report().input_operations;
         Ok(ProjectionConsumerCoverageSession {
             session: self
@@ -160,11 +175,13 @@ impl ProjectionConsumerCoverageSession<'_> {
         feed: ProjectionFeedLimits,
         ordering: SearchMutationSortStepLimits,
     ) -> CatchUpResult<ProjectionCoverageStep> {
+        let _descriptor_operation = self.base.descriptor_operation()?;
         Ok(self.session.advance(feed, ordering)?)
     }
     /// Consume only a complete comparison. The resulting owned token retains
     /// the compared records and native base pin, and borrows no Consumer handle.
     pub fn finish(self) -> CatchUpResult<ProjectionCoveredConsumerUpdate> {
+        let _descriptor_operation = self.base.descriptor_operation()?;
         let (dependencies, documents) = self.session.finish_consumer()?;
         Ok(ProjectionCoveredConsumerUpdate {
             dependencies,
@@ -234,6 +251,7 @@ impl Database {
                 ProjectionFeedError::BudgetExceeded(crate::ProjectionFeedResource::Bytes).into(),
             );
         }
+        let _descriptor_operation = self.internal_descriptor_operation()?;
         if consumer.search_index()?.vector_index_descriptor().is_some() {
             return Err(HawDBError::Semantic(
                 "schema-bound vector indexes require rebuild_vector_index maintenance".into(),
@@ -290,6 +308,7 @@ impl Database {
                 _pin: pin,
                 _memory: memory,
                 task,
+                descriptor_context: self.runtime.file_descriptor_context(),
             },
         })
     }

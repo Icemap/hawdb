@@ -1,0 +1,30 @@
+[package]
+name = "hawdb-pg-regress"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.97.1"
+publish = false
+autolib = false
+default-run = "hawdb-pg-regress"
+
+[workspace]
+
+[[bin]]
+name = "hawdb-pg-regress"
+path = "src/main.rs"
+required-features = ["postgres-reference"]
+
+[dependencies]
+libpq = { version = "6.0.1", optional = true }
+hawdb = { path = "../..", default-features = false }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+
+[[bin]]
+name = "hawdb-pg-regress-worker"
+path = "src/worker.rs"
+
+[features]
+default = ["postgres-reference"]
+postgres-reference = ["dep:libpq"]

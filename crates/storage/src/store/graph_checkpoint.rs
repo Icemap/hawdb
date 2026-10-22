@@ -113,6 +113,7 @@ impl CheckpointPreparation {
         &mut self,
         work: &crate::background::CheckpointWorkContext,
     ) -> Result<Option<CheckpointCandidate>> {
+        let _descriptor_operation = self.source.internal_descriptor_operation()?;
         if self.bootstrap.is_none() {
             let Some(prepared) = self.prepare_with_work_context(work)? else {
                 return Ok(None);
@@ -148,6 +149,7 @@ impl CheckpointPreparation {
         &mut self,
         work: &crate::background::CheckpointWorkContext,
     ) -> Result<Option<PreparedCheckpoint>> {
+        let _descriptor_operation = self.source.internal_descriptor_operation()?;
         if self.finished {
             return Err(HawDBError::StorageIntegrity(
                 "checkpoint preparation was already consumed".into(),
@@ -708,6 +710,7 @@ impl GraphStore {
         row_compaction: Option<RelationalRowCompactionCheckpoint<'_>>,
         work: &crate::background::CheckpointWorkContext,
     ) -> Result<Option<PreparedCheckpoint>> {
+        let _descriptor_operation = self.internal_descriptor_operation()?;
         let result = self.prepare_checkpoint_with_maintenance_inner(
             catalog,
             build_config,
@@ -1500,6 +1503,7 @@ impl GraphStore {
         pinned_reader_generations: Option<&BTreeSet<u64>>,
         shadow_admission: Option<ColumnarShadowAdmission>,
     ) -> Result<()> {
+        let _descriptor_operation = self.internal_descriptor_operation()?;
         let result = self.publish_prepared_checkpoint_with_reclamation_inner(
             prepared,
             oldest_reader_commit_epoch,

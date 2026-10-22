@@ -397,12 +397,16 @@ pub struct DatabaseConfig {
     /// Maximum sealed WAL generations recovered for one branch admission.
     /// Checkpoint compaction resets the chain; default is 256.
     pub max_branch_sealed_wal_intervals: usize,
-    /// Finite shared ceiling for all engine-owned project file descriptors.
+    /// Shared capacity target for all engine-owned project file descriptors.
     /// Defaults to 1024 without pre-opening files. Native Unix acquisition limits
     /// effective admission to the OS soft limit minus 64 host-owned handles.
     /// Process limits remain under host control; idle immutable files use LRU.
     /// Independent contexts for one canonical project must request the same value.
     pub max_open_files: usize,
+    /// Reject foreground descriptor admission when `max_open_files` cannot be
+    /// met by evicting idle handles. Defaults to false. Internal control I/O,
+    /// recovery and maintenance admission always use a non-strict policy.
+    pub strict_capacity_limit: bool,
     pub max_wal_quarantine_bytes: u64,
     pub max_wal_record_bytes: Option<usize>,
     pub max_wal_batch_operations: Option<usize>,
@@ -624,6 +628,7 @@ impl DatabaseConfig {
     fn wal_replay_config(&self) -> WalReplayConfig {
         WalReplayConfig {
             max_open_files: self.max_open_files,
+            strict_capacity_limit: self.strict_capacity_limit,
             recovery_mode: self.recovery_mode,
             max_entries: self.max_wal_replay_entries,
             max_bytes: self.max_wal_replay_bytes,
@@ -662,6 +667,7 @@ impl Default for DatabaseConfig {
             max_branch_sealed_wal_intervals:
                 hawdb_storage::config::DEFAULT_MAX_BRANCH_SEALED_WAL_INTERVALS,
             max_open_files: hawdb_storage::file_descriptors::DEFAULT_MAX_OPEN_FILES,
+            strict_capacity_limit: false,
             max_wal_quarantine_bytes: hawdb_storage::config::DEFAULT_MAX_WAL_QUARANTINE_BYTES,
             max_wal_record_bytes: Some(hawdb_storage::config::DEFAULT_MAX_WAL_RECORD_BYTES),
             max_wal_batch_operations: Some(hawdb_storage::config::DEFAULT_MAX_WAL_BATCH_OPERATIONS),
@@ -1324,17 +1330,20 @@ impl Database {
         let local_qos_scheduler = LocalQosScheduler::new(config.local_qos_policy);
         let mut catalog = Catalog::default();
         let files = if config.read_only {
-            hawdb_storage::file_descriptors::ProjectFileDescriptors::acquire_existing(
+            hawdb_storage::file_descriptors::ProjectFileDescriptors::acquire_existing_with_capacity_limit(
                 path.as_ref(),
                 config.max_open_files,
+                config.strict_capacity_limit,
             )?
         } else {
-            hawdb_storage::file_descriptors::ProjectFileDescriptors::acquire(
+            hawdb_storage::file_descriptors::ProjectFileDescriptors::acquire_with_capacity_limit(
                 path.as_ref(),
                 config.max_open_files,
+                config.strict_capacity_limit,
             )?
         };
         let project_root_path = files.root().to_path_buf();
+        let _descriptor_operation = files.io_context().internal_operation()?;
         if matches!(
             hawdb_storage::branch_project::inspect_project_manifest(files.root())?,
             hawdb_storage::branch_project::ProjectManifest::Branch(_)
@@ -2343,6 +2352,7 @@ impl Database {
         &mut self,
         shadow_admission: Option<crate::store::ColumnarShadowAdmission>,
     ) -> Result<()> {
+        let _descriptor_operation = self.internal_descriptor_operation()?;
         self.ensure_writable()?;
         let started = hawdb_core::time::Instant::now();
         let durable = self.runtime.get()?.store.storage_recovery_report().durable;
@@ -2384,6 +2394,17 @@ impl Database {
             });
         }
         result
+    }
+
+    fn internal_descriptor_operation(
+        &self,
+    ) -> Result<Option<hawdb_storage::file_descriptors::DescriptorReservation>> {
+        self.runtime
+            .file_descriptor_context()
+            .map(|context| context.internal_operation())
+            .transpose()
+            .map(Option::flatten)
+            .map_err(Into::into)
     }
 
     fn complete_required_relational_row_checkpoint(&mut self, context: &str) -> Result<()> {

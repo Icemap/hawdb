@@ -47,7 +47,8 @@ fn install(directory: &SourceDirectory, context: &FileOpenContext, temporary: &s
 #[test]
 fn replacement_uses_the_capture_after_its_original_path_is_reused() {
     let fixture = Fixture::new();
-    let project = ProjectFileDescriptors::acquire(&fixture.0, 16).unwrap();
+    let project =
+        ProjectFileDescriptors::acquire_with_capacity_limit(&fixture.0, 16, true).unwrap();
     let context = project.io_context();
     let named = fixture.0.join("named");
     let moved = fixture.0.join("moved");
@@ -123,7 +124,8 @@ fn replacement_uses_the_capture_after_its_original_path_is_reused() {
 fn replacement_accepts_minimum_and_maximum_component_lengths_with_old_readers() {
     for length in [1, 255] {
         let fixture = Fixture::new();
-        let project = ProjectFileDescriptors::acquire(&fixture.0, 8).unwrap();
+        let project =
+            ProjectFileDescriptors::acquire_with_capacity_limit(&fixture.0, 8, true).unwrap();
         let context = project.io_context();
         let directory = SourceDirectory::capture(&fixture.0, &context).unwrap();
         let target = "h".repeat(length);
@@ -162,7 +164,7 @@ fn replacement_accepts_minimum_and_maximum_component_lengths_with_old_readers() 
 #[test]
 fn exclusive_creation_rejects_existing_and_invalid_names_without_adopting_data() {
     let fixture = Fixture::new();
-    let project = ProjectFileDescriptors::acquire(&fixture.0, 4).unwrap();
+    let project = ProjectFileDescriptors::acquire_with_capacity_limit(&fixture.0, 4, true).unwrap();
     let context = project.io_context();
     let directory = SourceDirectory::capture(&fixture.0, &context).unwrap();
     fs::write(fixture.0.join("existing.hawdb"), b"existing evidence").unwrap();
@@ -200,7 +202,8 @@ fn exclusive_creation_rejects_existing_and_invalid_names_without_adopting_data()
 fn descriptor_denial_before_create_and_before_rename_preserves_all_entries() {
     for limit in [1, 2] {
         let fixture = Fixture::new();
-        let project = ProjectFileDescriptors::acquire(&fixture.0, limit).unwrap();
+        let project =
+            ProjectFileDescriptors::acquire_with_capacity_limit(&fixture.0, limit, true).unwrap();
         let context = project.io_context();
         let directory = SourceDirectory::capture(&fixture.0, &context).unwrap();
         let created = directory.create_control_candidate(&context, "next.candidate");
@@ -245,7 +248,7 @@ fn descriptor_denial_before_create_and_before_rename_preserves_all_entries() {
 #[test]
 fn preselection_descriptor_refusal_retries_the_same_sealed_control() {
     let fixture = Fixture::new();
-    let project = ProjectFileDescriptors::acquire(&fixture.0, 4).unwrap();
+    let project = ProjectFileDescriptors::acquire_with_capacity_limit(&fixture.0, 4, true).unwrap();
     let context = project.io_context();
     let directory = SourceDirectory::capture(&fixture.0, &context).unwrap();
     let mut candidate = directory
@@ -295,8 +298,8 @@ fn unselected_control_cleanup_refuses_a_replacement_entry() {
 fn foreign_operation_context_cannot_publish_into_either_directory() {
     let first = Fixture::new();
     let second = Fixture::new();
-    let project = ProjectFileDescriptors::acquire(&first.0, 4).unwrap();
-    let foreign = ProjectFileDescriptors::acquire(&second.0, 4).unwrap();
+    let project = ProjectFileDescriptors::acquire_with_capacity_limit(&first.0, 4, true).unwrap();
+    let foreign = ProjectFileDescriptors::acquire_with_capacity_limit(&second.0, 4, true).unwrap();
     let context = project.io_context();
     let directory = SourceDirectory::capture(&first.0, &context).unwrap();
     let mut candidate = directory
@@ -323,7 +326,8 @@ fn recorder_binds_create_replace_and_barriers_to_the_original_directory_inode() 
     let mut reordered_images = 0;
     for boundary in [ObservationBoundary::Before, ObservationBoundary::After] {
         let fixture = Fixture::new();
-        let project = ProjectFileDescriptors::acquire(&fixture.0, 16).unwrap();
+        let project =
+            ProjectFileDescriptors::acquire_with_capacity_limit(&fixture.0, 16, true).unwrap();
         let model = PowerLossModel::attach(&project, ImageLimits::default()).unwrap();
         let context = project.io_context();
         let named = fixture.0.join("named");
@@ -492,7 +496,7 @@ fn descriptor_denial_after_the_effect_preserves_evidence_and_revokes_retry() {
     use std::cell::RefCell;
     use std::rc::Rc;
     let fixture = Fixture::new();
-    let project = ProjectFileDescriptors::acquire(&fixture.0, 3).unwrap();
+    let project = ProjectFileDescriptors::acquire_with_capacity_limit(&fixture.0, 3, true).unwrap();
     let context = project.io_context();
     fs::write(fixture.0.join("budget.hawdb"), b"held").unwrap();
     let directory = SourceDirectory::capture(&fixture.0, &context).unwrap();
@@ -536,7 +540,7 @@ fn descriptor_denial_after_the_effect_preserves_evidence_and_revokes_retry() {
 #[test]
 fn a_replaced_candidate_name_cannot_publish_foreign_bytes() {
     let fixture = Fixture::new();
-    let project = ProjectFileDescriptors::acquire(&fixture.0, 8).unwrap();
+    let project = ProjectFileDescriptors::acquire_with_capacity_limit(&fixture.0, 8, true).unwrap();
     let context = project.io_context();
     let directory = SourceDirectory::capture(&fixture.0, &context).unwrap();
     install(&directory, &context, "initial.candidate", b"old selector");
@@ -580,7 +584,7 @@ fn a_replaced_candidate_name_cannot_publish_foreign_bytes() {
 #[test]
 fn dropping_pending_selection_keeps_the_effect_without_marking_it_complete() {
     let fixture = Fixture::new();
-    let project = ProjectFileDescriptors::acquire(&fixture.0, 4).unwrap();
+    let project = ProjectFileDescriptors::acquire_with_capacity_limit(&fixture.0, 4, true).unwrap();
     let context = project.io_context();
     let directory = SourceDirectory::capture(&fixture.0, &context).unwrap();
     let mut candidate = directory
@@ -607,7 +611,8 @@ fn dropping_pending_selection_keeps_the_effect_without_marking_it_complete() {
 fn a_hardlinked_target_is_refused_without_platform_dependent_rename_noops() {
     for recorded in [false, true] {
         let fixture = Fixture::new();
-        let project = ProjectFileDescriptors::acquire(&fixture.0, 8).unwrap();
+        let project =
+            ProjectFileDescriptors::acquire_with_capacity_limit(&fixture.0, 8, true).unwrap();
         let model =
             recorded.then(|| PowerLossModel::attach(&project, ImageLimits::default()).unwrap());
         let context = project.io_context();
@@ -645,7 +650,7 @@ fn a_hardlinked_target_is_refused_without_platform_dependent_rename_noops() {
 #[test]
 fn selection_and_finish_take_fresh_inventory_after_constructor_reservation_closes() {
     let fixture = Fixture::new();
-    let project = ProjectFileDescriptors::acquire(&fixture.0, 3).unwrap();
+    let project = ProjectFileDescriptors::acquire_with_capacity_limit(&fixture.0, 3, true).unwrap();
     let directory = SourceDirectory::capture(&fixture.0, &project.io_context()).unwrap();
     let construction = project.reserve(1).unwrap();
     let context = directory.operation_context();
@@ -678,7 +683,7 @@ fn selection_and_finish_take_fresh_inventory_after_constructor_reservation_close
 #[test]
 fn owned_candidate_keeps_native_capture_after_last_external_arc_without_extra_fd() {
     let fixture = Fixture::new();
-    let project = ProjectFileDescriptors::acquire(&fixture.0, 3).unwrap();
+    let project = ProjectFileDescriptors::acquire_with_capacity_limit(&fixture.0, 3, true).unwrap();
     let directory = Arc::new(SourceDirectory::capture(&fixture.0, &project.io_context()).unwrap());
     let weak = Arc::downgrade(&directory);
     let context = directory.operation_context();

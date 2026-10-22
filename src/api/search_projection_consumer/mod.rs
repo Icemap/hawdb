@@ -58,6 +58,7 @@ impl Database {
         consumer: &SearchProjectionConsumer,
         options: &hawdb_search::consumer::ConsumerCleanupOptions,
     ) -> SearchProjectionConsumerResult<hawdb_search::consumer::ConsumerCleanupReport> {
+        let _descriptor_operation = self.internal_descriptor_operation()?;
         self.consumer_writable_root()?;
         let permit = self.consumer_publication_permit()?;
         let request = self.runtime.get()?.store.prepare_search_consumer_cleanup(
@@ -81,6 +82,7 @@ impl Database {
         projection_directory: impl AsRef<Path>,
         options: &hawdb_search::consumer::ConsumerCleanupOptions,
     ) -> SearchProjectionConsumerResult<hawdb_search::consumer::ConsumerCleanupReport> {
+        let _descriptor_operation = self.internal_descriptor_operation()?;
         self.consumer_writable_root()?;
         let permit = self.consumer_publication_permit()?;
         let locator = normalize_consumer_target(projection_directory.as_ref())?;
@@ -145,6 +147,7 @@ impl Database {
     where
         F: FnOnce(&mut DatabaseReadTransaction, &mut SearchIndex) -> Result<()>,
     {
+        let _descriptor_operation = self.internal_descriptor_operation()?;
         self.consumer_writable_root()?;
         self.reload_consumer_registry_if_unavailable()?;
         {
@@ -299,6 +302,7 @@ impl Database {
         }
         task.checkpoint()
             .map_err(|reason| HawDBError::Execution(reason.to_string()))?;
+        let _descriptor_operation = self.internal_descriptor_operation()?;
         self.consumer_writable_root()?;
         self.ensure_runtime_capability(hawdb_core::RuntimeCapability::SearchProjectionPublication)?;
         self.reload_consumer_registry_if_unavailable()?;
@@ -570,6 +574,7 @@ impl Database {
         id: &SearchProjectionConsumerId,
         projection_directory: impl AsRef<Path>,
     ) -> SearchProjectionConsumerResult<SearchProjectionConsumer> {
+        let _descriptor_operation = self.internal_descriptor_operation()?;
         self.ensure_writable()?;
         self.reload_consumer_registry_if_unavailable()?;
         if self
@@ -710,6 +715,7 @@ impl Database {
             &SearchProjectionChangeBatch,
         ) -> Result<SearchProjectionRelationalDelta>,
     {
+        let _descriptor_operation = self.internal_descriptor_operation()?;
         if consumer.search_index()?.vector_index_descriptor().is_some() {
             return Err(HawDBError::Semantic(
                 "schema-bound vector indexes require rebuild_vector_index maintenance".into(),
@@ -964,6 +970,7 @@ impl Database {
         &mut self,
         consumer: &SearchProjectionConsumer,
     ) -> SearchProjectionConsumerResult<SearchProjectionConsumerStatus> {
+        let _descriptor_operation = self.internal_descriptor_operation()?;
         let root = self.consumer_writable_root()?;
         self.reload_consumer_registry_if_unavailable()?;
         self.validate_consumer_receipt(consumer)?;
@@ -996,6 +1003,7 @@ impl Database {
         &mut self,
         id: &SearchProjectionConsumerId,
     ) -> SearchProjectionConsumerResult<()> {
+        let _descriptor_operation = self.internal_descriptor_operation()?;
         self.ensure_writable()?;
         self.reload_consumer_registry_if_unavailable()?;
         if self
@@ -1165,6 +1173,7 @@ impl Database {
         &mut self,
         consumer: &mut SearchProjectionConsumer,
     ) -> SearchProjectionConsumerResult<()> {
+        let _descriptor_operation = self.internal_descriptor_operation()?;
         let root = self.consumer_writable_root()?;
         let permit = self.consumer_publication_permit()?;
         consumer

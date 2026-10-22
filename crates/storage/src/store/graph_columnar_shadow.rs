@@ -1953,7 +1953,7 @@ mod tests {
         use hawdb_core::error::FileDescriptorError;
 
         let root = unique_shadow_dir("recovery_fd_retry");
-        let project = ProjectFileDescriptors::acquire(&root, 32).unwrap();
+        let project = ProjectFileDescriptors::acquire_with_capacity_limit(&root, 32, true).unwrap();
         let mut catalog = Catalog::default();
         let mut store = GraphStore::open_with_durability_and_replay_config(
             &root,
@@ -1961,6 +1961,7 @@ mod tests {
             DurabilityPolicy::SyncOnEveryWrite,
             WalReplayConfig {
                 max_open_files: 32,
+                strict_capacity_limit: true,
                 ..shadow_replay_config()
             },
         )
@@ -1986,7 +1987,7 @@ mod tests {
         store.columnar_shadow.catalog = None;
         store.columnar_shadow.recovery = ColumnarShadowRecoveryStatus::default();
         let mut held = Vec::new();
-        loop {
+        for _ in 0..=32 {
             match fs::File::create(root.join(format!("held-{}", held.len()))) {
                 Ok(file) => held.push(file),
                 Err(error) => {

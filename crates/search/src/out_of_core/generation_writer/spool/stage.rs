@@ -213,6 +213,8 @@ pub(in crate::out_of_core) fn retry_staging_cleanup_with_context(
     max_attempts: usize,
     task: &RuntimeTaskContext,
 ) -> Result<SearchStagingCleanupReport> {
+    let _descriptor_operation =
+        hawdb_storage::file_descriptors::FileOpenContext::for_path(root)?.internal_operation()?;
     let memory = BuildMemory::new(task)?;
     let root = OwnedPath::absolute(root, &memory, task)?;
     // The original absolute spelling also needs no descriptor. In particular,
@@ -338,6 +340,7 @@ fn retry_registered(
                         .expect("registered stage parent"),
                     false,
                 )?;
+                let _operation = _project.io_context().internal_operation()?;
                 attempt.ticket().remove_batches(max_batches)
             })();
             match result {
@@ -600,6 +603,12 @@ impl StageDirectory {
         let mut attempt = CleanupAttempt::new(registration, ticket);
         attempt.ticket().error = Some(CleanupFailure::Other);
         let result = (|| {
+            let _operation = self
+                .project
+                .as_ref()
+                .map(|project| project.io_context().internal_operation())
+                .transpose()?
+                .flatten();
             let governed = attempt
                 .ticket()
                 .captured
@@ -659,22 +668,21 @@ mod tests {
         let mut stage = StageDirectory::create(&root, &memory, &task).unwrap();
         stage.reserve_disk(64);
         let path = stage.path.to_path_buf();
-        fs::write(path.join("retained"), b"evidence").unwrap();
-        let held = File::create(root.join("held")).unwrap();
+        let unexpected = path.join("unexpected-directory");
+        fs::create_dir(&unexpected).unwrap();
+        fs::write(unexpected.join("retained"), b"evidence").unwrap();
         drop(stage);
-        drop(held);
 
-        for descriptor_denied in [true, false] {
-            if !descriptor_denied {
+        for native_blocked in [true, false] {
+            if !native_blocked {
+                fs::rename(unexpected.join("retained"), path.join("retained")).unwrap();
+                fs::remove_dir(&unexpected).unwrap();
                 retry_registered(&root, 1, 0, &memory, &task).unwrap();
             }
             let before = retry_staging_cleanup(&root, 0).unwrap();
-            assert_eq!(before.descriptor_denials, usize::from(descriptor_denied));
-            assert_eq!(
-                before.progress_limited_stages,
-                usize::from(!descriptor_denied)
-            );
-            assert_eq!(before.blocked_stages, 0);
+            assert_eq!(before.descriptor_denials, 0);
+            assert_eq!(before.progress_limited_stages, usize::from(!native_blocked));
+            assert_eq!(before.blocked_stages, usize::from(native_blocked));
             for cancelled in [true, false] {
                 let bytes = if cancelled { 8 * 1024 * 1024 } else { 1 };
                 let retry_task = RuntimeTaskContext::default()
@@ -686,7 +694,7 @@ mod tests {
                 assert!(retry_registered(&root, 1, 4, &retry_memory, &retry_task).is_err());
                 let after = retry_staging_cleanup(&root, 0).unwrap();
                 assert_eq!(after.pending_stages, 1);
-                assert_eq!(after.blocked_stages, 0);
+                assert_eq!(after.blocked_stages, before.blocked_stages);
                 assert_eq!(after.descriptor_denials, before.descriptor_denials);
                 assert_eq!(after.descriptor_error, before.descriptor_error);
                 assert_eq!(
@@ -695,7 +703,15 @@ mod tests {
                 );
                 assert_eq!(after.retained_memory_bytes, before.retained_memory_bytes);
                 assert_eq!(after.reserved_disk_bytes, 64);
-                assert_eq!(fs::read(path.join("retained")).unwrap(), b"evidence");
+                assert_eq!(
+                    fs::read(if native_blocked {
+                        unexpected.join("retained")
+                    } else {
+                        path.join("retained")
+                    })
+                    .unwrap(),
+                    b"evidence"
+                );
                 assert_eq!(retry_memory.ledger.snapshot().used_bytes, 0);
             }
         }
@@ -743,10 +759,11 @@ mod tests {
         let memory = BuildMemory::new(&task).unwrap();
         let stage = StageDirectory::create(&foreign, &memory, &task).unwrap();
         let path = stage.path.to_path_buf();
-        fs::write(path.join("retained"), b"evidence").unwrap();
-        let held = File::create(foreign.join("held")).unwrap();
+        let unexpected = path.join("unexpected-directory");
+        fs::create_dir(&unexpected).unwrap();
+        fs::write(unexpected.join("retained"), b"evidence").unwrap();
         drop(stage);
-        drop(held);
+
         drop(project);
         let registrations = (0..MAX_ROOT_OWNERS)
             .map(|_| StageDirectory::create(&target, &memory, &task).unwrap())
@@ -770,7 +787,9 @@ mod tests {
                 .collect::<std::collections::BTreeSet<_>>(),
             target_paths
         );
-        assert_eq!(fs::read(path.join("retained")).unwrap(), b"evidence");
+        assert_eq!(fs::read(unexpected.join("retained")).unwrap(), b"evidence");
+        fs::rename(unexpected.join("retained"), path.join("retained")).unwrap();
+        fs::remove_dir(&unexpected).unwrap();
         let reopened = ProjectFileDescriptors::acquire_existing(&foreign, 8).unwrap();
         assert_eq!(
             retry_staging_cleanup(&foreign, 1).unwrap().removed_stages,

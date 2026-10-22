@@ -179,6 +179,11 @@ maintenance operation after close or unregister. Both use the same native
 reclamation protocol; neither runs deletion in Drop or retains a background
 permit or FD domain after returning.
 
+Both entry points use non-strict internal descriptor admission, even when the
+project configures strict foreground capacity. Occupied foreground capacity must
+not block reclamation or its retry; every native handle remains counted. Memory,
+I/O, scan, delete-attempt, ownership and durability limits remain in force.
+
 The complete allocation ledger is checked under its catalog exclusion for each
 candidate and synchronized with its parent before deletion. A previous lost
 publication barrier must not leave an older durable retention image behind an

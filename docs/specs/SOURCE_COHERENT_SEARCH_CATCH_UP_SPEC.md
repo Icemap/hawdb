@@ -102,8 +102,12 @@ limits. A successful source commit then installs an explicit gap at its epoch,
 clears earlier retained changes, and makes older consumers return `BehindFloor`.
 It never emits a truncated delta. Hosts should split bulk imports when suitable,
 or finish importing and perform one complete rebuild at the final source epoch.
-A resource/I/O refusal before WAL append instead returns an error; typed FD and
+A resource/I/O refusal before WAL append instead returns an error; native FD and
 resource-budget failures preserve the handle for retry after capacity returns.
+Internal change capture and registered catch-up steps always use non-strict
+project descriptor admission, including when foreground mode is strict. This
+retains accounting without weakening preimage, memory, result or physical-I/O
+limits; see [descriptor capacity](../FILE_DESCRIPTOR_CAPACITY.md).
 Canonical, adjacency, property-spill, property-projection and descriptor readers
 classify nested resource/cancellation causes before latching physical-failure
 poison. Stable-identity I/O maps these causes to its existing admission error
@@ -166,7 +170,7 @@ preserve capture and full-rebuild equality through WAL/checkpoint reopen.
 `hawdb_mvcc_full_source` and `hawdb_mvcc_baseline_comparison` qualify enumeration,
 comparison and the independent full-rebuild reference. All belong to root CI.
 Storage/Search component tests cover 65,537-node bulk capture, oversized-preimage
-gaps, cold node/adjacency/relationship/spill FD exhaustion and retry, nested
+gaps, cold node/adjacency/relationship/spill capture under strict foreground FD pressure, nested
 resource/cancellation refusal versus physical corruption, durability barriers
 and private preparation.
 See [the test index](../TEST_INDEX.md) for execution lanes.

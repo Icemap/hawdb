@@ -201,13 +201,27 @@ jobs:
             -- ::serializable:: --nocapture --test-threads=1 \
             2>&1 | tee windows-native-results/serializable-transactions.txt
 
-      - name: Test original generation spool ownership
+      - name: Test descriptor capacity and namespace probe isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/cargo-test-required.sh --locked -p hawdb-storage --all-features --lib \
+            -- file_descriptors::tests:: --nocapture --test-threads=1 \
+            2>&1 | tee windows-native-results/descriptor-capacity.txt
+          bash scripts/cargo-test-required.sh --locked -p hawdb --all-features --lib \
+            -- api::tests::descriptor_capacity:: --nocapture --test-threads=1 \
+            2>&1 | tee windows-native-results/descriptor-facade.txt
+
+      - name: Test original generation spool and captured publication ownership
         shell: bash
         run: |
           set -euo pipefail
           bash scripts/cargo-test-required.sh --locked -p hawdb-search --all-features --lib \
             -- generation_spool --nocapture --test-threads=1 \
             2>&1 | tee windows-native-results/held-generation-spool.txt
+          bash scripts/cargo-test-required.sh --locked -p hawdb-search --all-features --lib \
+            -- out_of_core::publish_lease::tests::captured_lease --nocapture --test-threads=1 \
+            2>&1 | tee windows-native-results/captured-publication-capacity.txt
 
       - name: Test complete graph algorithm identities
         shell: bash

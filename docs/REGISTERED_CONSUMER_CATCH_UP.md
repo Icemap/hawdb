@@ -126,9 +126,10 @@ Default/minimal `hawdb_mvcc_staging_session` tests own public graph/SQL, hot/col
 one-item, full-rebuild equality, cancellation, budget, competing-base and reopen
 regressions. Root Consumer tests own selector/cache lost-response injection and
 original-operation recovery after later source writes. The covered family also
-checks native generation refusal retires its birth, and real FD exhaustion at
-seal/intent retains the same prepared operation with zero idle execution slots.
-The FD observer cases require `test-support`. Native Windows runs both families
+checks native generation refusal retires its birth, and strict foreground FD
+pressure at seal/intent does not reject necessary internal admission. Injected
+pre-selection failures retain the same prepared operation with zero idle
+execution slots. The rename-observer cases require `test-support`. Native Windows runs both families
 explicitly. Process reopen and deterministic failure injection are distinct from
 power-loss qualification.
 

@@ -18,7 +18,7 @@ impl Fixture {
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
         Self {
-            files: ProjectFileDescriptors::acquire(&root, 32).unwrap(),
+            files: ProjectFileDescriptors::acquire_with_capacity_limit(&root, 32, true).unwrap(),
             child: BranchId::new(Uuid::from_u128(3)).unwrap(),
         }
     }

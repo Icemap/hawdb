@@ -36,7 +36,7 @@ fn assert_budget_rejection(error: &ProjectionError) {
 #[test]
 fn artifact_admission_rejects_before_create_and_mapping_and_releases_for_retry() {
     let root = super::tests::unique_test_dir("artifact-fd");
-    let project = ProjectFileDescriptors::acquire(&root, 4).unwrap();
+    let project = ProjectFileDescriptors::acquire_with_capacity_limit(&root, 4, true).unwrap();
     let artifact = root.join("projection.hawdb");
     let mut writer = ProjectionWriter::create(&artifact, config()).unwrap();
     assert_eq!(project.metrics().open, 1);
@@ -79,9 +79,9 @@ fn artifact_admission_rejects_before_create_and_mapping_and_releases_for_retry()
 #[test]
 fn sibling_artifact_writers_share_the_project_limit_and_other_projects_are_independent() {
     let root = super::tests::unique_test_dir("artifact-siblings");
-    let project = ProjectFileDescriptors::acquire(&root, 4).unwrap();
+    let project = ProjectFileDescriptors::acquire_with_capacity_limit(&root, 4, true).unwrap();
     let other_root = super::tests::unique_test_dir("artifact-independent");
-    let other = ProjectFileDescriptors::acquire(&other_root, 4).unwrap();
+    let other = ProjectFileDescriptors::acquire_with_capacity_limit(&other_root, 4, true).unwrap();
     let filler = root.join("filler");
     std::fs::write(&filler, b"held").unwrap();
     let first =
@@ -127,7 +127,7 @@ impl Drop for ProjectionOpenCallback {
 #[test]
 fn finish_reserves_mapping_and_publication_before_a_competing_owner_fills_the_budget() {
     let root = super::tests::unique_test_dir("artifact-finish-fd");
-    let project = ProjectFileDescriptors::acquire(&root, 4).unwrap();
+    let project = ProjectFileDescriptors::acquire_with_capacity_limit(&root, 4, true).unwrap();
     let filler = root.join("held");
     std::fs::write(&filler, b"competing owner").unwrap();
     let target = root.join("projection.hawdb");
@@ -140,7 +140,11 @@ fn finish_reserves_mapping_and_publication_before_a_competing_owner_fills_the_bu
         slot.replace(Some(Box::new(move || {
             // A different owner must not inherit this thread's reserved quota.
             std::thread::spawn(move || {
-                loop {
+                for attempt in 0..=4 {
+                    assert!(
+                        attempt < 4,
+                        "strict capacity did not reject competing opens"
+                    );
                     match callback_project
                         .io_context()
                         .open(CountedOpenOptions::new().read(true), &filler)
@@ -191,9 +195,9 @@ fn finish_reserves_mapping_and_publication_before_a_competing_owner_fills_the_bu
 }
 
 #[test]
-fn abandoned_writer_retains_only_its_temporary_when_cleanup_has_no_capacity() {
+fn abandoned_writer_cleanup_progresses_at_strict_foreground_capacity() {
     let root = super::tests::unique_test_dir("artifact-drop-fd");
-    let project = ProjectFileDescriptors::acquire(&root, 4).unwrap();
+    let project = ProjectFileDescriptors::acquire_with_capacity_limit(&root, 4, true).unwrap();
     let target = root.join("projection.hawdb");
     let mut writer = ProjectionWriter::create(&target, config()).unwrap();
     writer.push(7, &[1.0, 0.0]).unwrap();
@@ -214,29 +218,32 @@ fn abandoned_writer_retains_only_its_temporary_when_cleanup_has_no_capacity() {
     let bytes = std::fs::read(&temporary).unwrap();
     let rejections = project.metrics().budget_rejections;
     drop(writer);
-    assert!(temporary.exists());
+    assert!(!temporary.exists());
     assert!(!target.exists());
-    assert_eq!(std::fs::read(&temporary).unwrap(), bytes);
+    for file in held.iter_mut().skip(1) {
+        file.rewind().unwrap();
+        let mut actual = Vec::new();
+        file.read_to_end(&mut actual).unwrap();
+        assert_eq!(actual, bytes);
+    }
     assert_eq!(project.metrics().open, 4);
     assert_eq!(project.metrics().reserved, 0);
-    assert!(project.metrics().budget_rejections > rejections);
-    drop(held.pop());
-    fs::remove_file(&temporary).unwrap();
-    assert!(!temporary.exists());
+    assert_eq!(project.metrics().budget_rejections, rejections);
+    assert!(project.metrics().high_water > 4);
     drop(held);
     let mut retried = ProjectionWriter::create(&target, config()).unwrap();
     retried.push(7, &[1.0, 0.0]).unwrap();
     let projection = retried.finish().unwrap();
     assert_eq!(project.metrics().open, 0);
-    assert!(project.metrics().high_water <= 4);
+    assert_eq!(project.metrics().reserved, 0);
     drop(projection);
     std::fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
-fn finish_capacity_rejection_leaves_the_generation_name_available_for_retry() {
+fn native_publication_failure_retries_the_same_generation_at_strict_capacity() {
     let root = super::tests::unique_test_dir("artifact-finish-retry");
-    let project = ProjectFileDescriptors::acquire(&root, 4).unwrap();
+    let project = ProjectFileDescriptors::acquire_with_capacity_limit(&root, 4, true).unwrap();
     let filler = root.join("held");
     std::fs::write(&filler, b"held").unwrap();
     let target = root.join("projection.hawdb");
@@ -251,11 +258,23 @@ fn finish_capacity_rejection_leaves_the_generation_name_available_for_retry() {
         })
         .collect::<Vec<_>>();
     assert_eq!(project.metrics().open, 4);
-    assert_budget_rejection(&writer.finish().unwrap_err());
-    assert!(!target.exists());
+    // A real namespace conflict still prevents publication and retains the
+    // foreign entry even though internal capacity may exceed the target.
+    std::fs::create_dir(&target).unwrap();
+    std::fs::write(target.join("foreign-evidence"), b"retain").unwrap();
+    let rejections = project.metrics().budget_rejections;
+    let error = writer.finish().unwrap_err();
+    assert!(matches!(error, ProjectionError::Io(_)));
+    assert!(file_descriptor_error(&error).is_none());
+    assert_eq!(
+        std::fs::read(target.join("foreign-evidence")).unwrap(),
+        b"retain"
+    );
     assert_eq!(project.metrics().open, 3);
     assert_eq!(project.metrics().reserved, 0);
-    drop(held);
+    assert_eq!(project.metrics().budget_rejections, rejections);
+    std::fs::remove_file(target.join("foreign-evidence")).unwrap();
+    std::fs::remove_dir(&target).unwrap();
     let mut writer = ProjectionWriter::create(&target, config()).unwrap();
     writer.push(7, &[1.0, 0.0]).unwrap();
     let projection = writer.finish().unwrap();
@@ -269,9 +288,12 @@ fn finish_capacity_rejection_leaves_the_generation_name_available_for_retry() {
             .id(0),
         7
     );
-    assert_eq!(project.metrics().open, 0);
+    assert_eq!(project.metrics().open, 3);
     assert_eq!(project.metrics().reserved, 0);
-    assert!(project.metrics().high_water <= 4);
+    assert!(project.metrics().high_water > 4);
+    assert_eq!(project.metrics().budget_rejections, rejections);
+    drop(held);
+    assert_eq!(project.metrics().open, 0);
     drop(projection);
     std::fs::remove_dir_all(root).unwrap();
 }

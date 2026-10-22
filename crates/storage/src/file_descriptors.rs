@@ -26,7 +26,7 @@ use std::sync::{Arc, LazyLock, Mutex, Weak};
 
 mod os_limit;
 
-/// Shared project admission ceiling; capacity is charged only when used.
+/// Shared project descriptor capacity target; capacity is charged only when used.
 /// Native Unix acquisition observes OS capacity without changing process limits.
 pub const DEFAULT_MAX_OPEN_FILES: usize = 1024;
 
@@ -51,10 +51,12 @@ impl DescriptorKind {
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct FileDescriptorMetrics {
-    /// Effective admission ceiling, retained for existing consumers.
+    /// Effective capacity target, retained for existing consumers.
     pub limit: usize,
     pub configured_limit: usize,
     pub effective_limit: usize,
+    /// Whether foreground descriptor admission enforces the capacity target.
+    pub strict_capacity_limit: bool,
     /// A readiness/reporting warning; reduced capacity does not block readiness.
     pub os_limit_clamped: bool,
     /// Current process soft limit on native Unix; unavailable on other platforms.
@@ -106,6 +108,7 @@ pub(crate) struct BudgetState {
     root: PathBuf,
     configured_limit: usize,
     limit: usize,
+    strict_capacity_limit: bool,
     counts: Mutex<Counts>,
     cache: Mutex<Option<Weak<dyn DescriptorCache>>>,
     immutable_handles: Mutex<Weak<crate::immutable_files::ImmutableFileHandles>>,
@@ -116,11 +119,17 @@ pub(crate) struct BudgetState {
 }
 
 impl BudgetState {
-    fn new(root: PathBuf, configured_limit: usize, limit: usize) -> Self {
+    fn new(
+        root: PathBuf,
+        configured_limit: usize,
+        limit: usize,
+        strict_capacity_limit: bool,
+    ) -> Self {
         Self {
             root,
             configured_limit,
             limit,
+            strict_capacity_limit,
             counts: Mutex::new(Counts::default()),
             cache: Mutex::new(None),
             immutable_handles: Mutex::new(Weak::new()),
@@ -131,22 +140,38 @@ impl BudgetState {
         }
     }
 
-    fn reserve(&self, requested: usize) -> io::Result<()> {
-        let attempt = || {
+    fn reserve(&self, requested: usize, strict_capacity_limit: bool) -> io::Result<()> {
+        let attempt = |allow_excess: bool| {
             let mut counts = self
                 .counts
                 .lock()
                 .unwrap_or_else(|error| error.into_inner());
-            let available = self.limit - counts.used();
-            if requested <= available {
-                counts.reserved += requested;
-                counts.record_peak();
-                Ok(())
-            } else {
-                Err((available, requested - available))
+            let used = counts.used();
+            let available = self.limit.saturating_sub(used);
+            let budget_failure = || {
+                (
+                    FileDescriptorError::BudgetExceeded {
+                        requested,
+                        available,
+                        limit: self.limit,
+                    },
+                    requested
+                        .saturating_sub(available)
+                        .saturating_add(used.saturating_sub(self.limit)),
+                )
+            };
+            if used.checked_add(requested).is_none() {
+                return Err((budget_failure().0, usize::MAX));
             }
+            if !allow_excess && requested > available {
+                return Err(budget_failure());
+            }
+            os_limit::reserve(requested)?;
+            counts.reserved += requested;
+            counts.record_peak();
+            Ok(())
         };
-        let needed = match attempt() {
+        let needed = match attempt(false) {
             Ok(()) => return Ok(()),
             Err((_, needed)) => needed,
         };
@@ -159,13 +184,9 @@ impl BudgetState {
         if let Some(cache) = cache {
             cache.evict_idle(needed);
         }
-        match attempt() {
+        match attempt(!strict_capacity_limit) {
             Ok(()) => Ok(()),
-            Err((available, _)) => Err(io::Error::other(FileDescriptorError::BudgetExceeded {
-                requested,
-                available,
-                limit: self.limit,
-            })),
+            Err((error, _)) => Err(io::Error::other(error)),
         }
     }
 
@@ -178,6 +199,7 @@ impl BudgetState {
             limit: self.limit,
             configured_limit: self.configured_limit,
             effective_limit: self.limit,
+            strict_capacity_limit: self.strict_capacity_limit,
             os_limit_clamped: self.limit < self.configured_limit,
             os_soft_limit: os_limit::current_soft_limit(),
             admitted_runtimes: counts.admitted_runtimes,
@@ -205,11 +227,19 @@ impl BudgetState {
             .unwrap_or_else(|error| error.into_inner())
             .cache_hits += 1;
     }
-    fn record_budget_rejection(&self) {
-        self.counts
+    fn record_admission_rejection(&self, error: &io::Error) {
+        let mut counts = self
+            .counts
             .lock()
-            .unwrap_or_else(|error| error.into_inner())
-            .budget_rejections += 1;
+            .unwrap_or_else(|error| error.into_inner());
+        if matches!(
+            hawdb_core::error::file_descriptor_error(error),
+            Some(FileDescriptorError::OsLimit { .. })
+        ) {
+            counts.os_limit_rejections += 1;
+        } else {
+            counts.budget_rejections += 1;
+        }
     }
     pub(crate) fn record_cache_miss(&self) {
         self.counts
@@ -254,11 +284,17 @@ impl BudgetState {
 
 static PROJECTS: LazyLock<Mutex<BTreeMap<PathBuf, Weak<BudgetState>>>> =
     LazyLock::new(|| Mutex::new(BTreeMap::new()));
+// Project identity is not known until canonicalization finishes. PROJECTS
+// serializes these short probes, so one process-owned slot covers the native
+// directory handle without borrowing capacity from unrelated projects.
+static NAMESPACE_PROBES: LazyLock<Arc<BudgetState>> =
+    LazyLock::new(|| Arc::new(BudgetState::new(PathBuf::new(), 1, 1, false)));
 static STANDALONE: LazyLock<Arc<BudgetState>> = LazyLock::new(|| {
     Arc::new(BudgetState::new(
         PathBuf::new(),
         DEFAULT_MAX_OPEN_FILES,
         DEFAULT_MAX_OPEN_FILES,
+        false,
     ))
 });
 
@@ -272,11 +308,28 @@ pub struct ProjectFileDescriptors {
 
 impl ProjectFileDescriptors {
     pub fn acquire(root: &Path, limit: usize) -> Result<Self, HawDBError> {
-        Self::acquire_root(root, limit, true)
+        Self::acquire_root(root, limit, true, None)
     }
 
     pub fn acquire_existing(root: &Path, limit: usize) -> Result<Self, HawDBError> {
-        Self::acquire_root(root, limit, false)
+        Self::acquire_root(root, limit, false, None)
+    }
+
+    /// Configure foreground admission. Internal control I/O stays non-strict.
+    pub fn acquire_with_capacity_limit(
+        root: &Path,
+        limit: usize,
+        strict_capacity_limit: bool,
+    ) -> Result<Self, HawDBError> {
+        Self::acquire_root(root, limit, true, Some(strict_capacity_limit))
+    }
+
+    pub fn acquire_existing_with_capacity_limit(
+        root: &Path,
+        limit: usize,
+        strict_capacity_limit: bool,
+    ) -> Result<Self, HawDBError> {
+        Self::acquire_root(root, limit, false, Some(strict_capacity_limit))
     }
 
     /// Persistent components borrow an existing project domain, including its
@@ -290,7 +343,7 @@ impl ProjectFileDescriptors {
                 }
                 Ok(project)
             }
-            None => Self::acquire_root(root, DEFAULT_MAX_OPEN_FILES, create),
+            None => Self::acquire_root(root, DEFAULT_MAX_OPEN_FILES, create, None),
         }
     }
 
@@ -334,7 +387,12 @@ impl ProjectFileDescriptors {
         }))
     }
 
-    fn acquire_root(root: &Path, limit: usize, create: bool) -> Result<Self, HawDBError> {
+    fn acquire_root(
+        root: &Path,
+        limit: usize,
+        create: bool,
+        strict_capacity_limit: Option<bool>,
+    ) -> Result<Self, HawDBError> {
         if limit == 0 {
             return Err(HawDBError::FileDescriptors(
                 FileDescriptorError::InvalidBudget { limit },
@@ -344,14 +402,19 @@ impl ProjectFileDescriptors {
         let mut projects = PROJECTS.lock().unwrap_or_else(|error| error.into_inner());
         projects.retain(|_, state| state.strong_count() != 0);
         if let Some(state) = projects.get(&lexical).and_then(Weak::upgrade) {
-            let project = configured_state(state, limit)?;
+            let project = configured_capacity_state(state, limit, strict_capacity_limit)?;
             if create {
                 ensure_project_namespace(&project.state, project.root())?;
             }
             return Ok(project);
         }
         let effective_limit = os_limit::effective_limit(limit)?;
-        let tentative = Arc::new(BudgetState::new(lexical.clone(), limit, effective_limit));
+        let tentative = Arc::new(BudgetState::new(
+            lexical.clone(),
+            limit,
+            effective_limit,
+            strict_capacity_limit.unwrap_or(false),
+        ));
         #[cfg(any(test, feature = "test-support"))]
         {
             // A recorder rooted at an existing durable ancestor also observes
@@ -374,13 +437,13 @@ impl ProjectFileDescriptors {
                     .clone();
             }
         }
-        let tentative_probe =
-            FileOpenContext::from_state(tentative.clone()).acquire(DescriptorKind::Transient)?;
+        let namespace_probe = FileOpenContext::from_state(NAMESPACE_PROBES.clone())
+            .acquire_with_capacity_limit(DescriptorKind::Transient, false)?;
         // A directory installed by this operation is a new project object,
         // including when its parent path uses a filesystem alias. Existing
         // roots require alias resolution before choosing their resource domain.
         #[cfg(any(test, feature = "test-support"))]
-        let created = create
+        let _created = create
             && crate::power_loss::namespace(
                 &FileOpenContext::from_state(tentative.clone()),
                 &lexical,
@@ -389,29 +452,13 @@ impl ProjectFileDescriptors {
                 || create_project_directory(&lexical),
             )?;
         #[cfg(not(any(test, feature = "test-support")))]
-        let created = create && create_project_directory(&lexical)?;
-        // Windows canonicalization opens a directory handle. Reserve across
-        // possible alias domains until its identity is known. Unix realpath
-        // returns no engine-owned handle, so unrelated projects stay independent.
-        let mut probe_permits = Vec::new();
-        if cfg!(windows) && !created {
-            let mut probed = Vec::new();
-            for state in projects.values().filter_map(Weak::upgrade) {
-                if probed.iter().any(|prior| Arc::ptr_eq(prior, &state)) {
-                    continue;
-                }
-                probe_permits.push(
-                    FileOpenContext::from_state(state.clone())
-                        .acquire(DescriptorKind::Transient)?,
-                );
-                probed.push(state);
-            }
-        }
+        let _created = create && create_project_directory(&lexical)?;
+        // Windows canonicalization may open a directory handle. Its process-
+        // owned probe closes before the resolved project domain is selected.
         let canonical = std::fs::canonicalize(&lexical)?;
-        drop(tentative_probe);
-        drop(probe_permits);
+        drop(namespace_probe);
         if let Some(state) = projects.get(&canonical).and_then(Weak::upgrade) {
-            let project = configured_state(state, limit)?;
+            let project = configured_capacity_state(state, limit, strict_capacity_limit)?;
             if create {
                 ensure_project_namespace(&project.state, project.root())?;
             }
@@ -467,10 +514,20 @@ impl ProjectFileDescriptors {
     /// Hold capacity across an admission/publication operation. Temporary
     /// handles return capacity to this reservation until it is finished.
     pub fn reserve(&self, requested: usize) -> io::Result<DescriptorReservation> {
-        self.state.reserve(requested).inspect_err(|_| {
-            self.state.record_budget_rejection();
-        })?;
-        Ok(self.begin_reservation(requested))
+        self.reserve_with_capacity_limit(requested, self.io_context().strict_capacity_limit())
+    }
+
+    fn reserve_with_capacity_limit(
+        &self,
+        requested: usize,
+        strict_capacity_limit: bool,
+    ) -> io::Result<DescriptorReservation> {
+        self.state
+            .reserve(requested, strict_capacity_limit)
+            .inspect_err(|error| {
+                self.state.record_admission_rejection(error);
+            })?;
+        Ok(self.begin_reservation(requested, strict_capacity_limit))
     }
 
     /// Reserve the target's lock/WAL and bounded IO-wave capacity through
@@ -483,15 +540,7 @@ impl ProjectFileDescriptors {
                 .inner
                 .lock()
                 .unwrap_or_else(|error| error.into_inner());
-            if inner.active {
-                if inner.remaining < minimum {
-                    self.state.record_budget_rejection();
-                    return Err(io::Error::other(FileDescriptorError::BudgetExceeded {
-                        requested: minimum,
-                        available: inner.remaining,
-                        limit: self.state.limit,
-                    }));
-                }
+            if inner.active && !inventory.strict_capacity_limit && inner.remaining >= minimum {
                 drop(inner);
                 return Ok(DescriptorReservation {
                     inventory,
@@ -500,12 +549,17 @@ impl ProjectFileDescriptors {
                 });
             }
         }
-        self.reserve(minimum)
+        self.reserve_with_capacity_limit(minimum, false)
     }
 
-    fn begin_reservation(&self, requested: usize) -> DescriptorReservation {
+    fn begin_reservation(
+        &self,
+        requested: usize,
+        strict_capacity_limit: bool,
+    ) -> DescriptorReservation {
         let inventory = Arc::new(Inventory {
             state: self.state.clone(),
+            strict_capacity_limit,
             inner: Mutex::new(InventoryState {
                 active: true,
                 remaining: requested,
@@ -526,6 +580,7 @@ impl ProjectFileDescriptors {
 fn ensure_project_namespace(state: &Arc<BudgetState>, root: &Path) -> io::Result<()> {
     if !state.root_namespace_durable.load(Ordering::Acquire) {
         let context = FileOpenContext::from_state(state.clone());
+        let _operation = context.internal_operation()?;
         crate::durability::sync_directory_tree_with_context(root, &context, None)?;
         state.root_namespace_durable.store(true, Ordering::Release);
     }
@@ -592,6 +647,24 @@ fn configured_state(
             state,
         })
     }
+}
+
+fn configured_capacity_state(
+    state: Arc<BudgetState>,
+    limit: usize,
+    strict_capacity_limit: Option<bool>,
+) -> Result<ProjectFileDescriptors, HawDBError> {
+    if let Some(requested) = strict_capacity_limit
+        && requested != state.strict_capacity_limit
+    {
+        return Err(HawDBError::FileDescriptors(
+            FileDescriptorError::CapacityPolicyConflict {
+                configured: state.strict_capacity_limit,
+                requested,
+            },
+        ));
+    }
+    configured_state(state, limit)
 }
 
 pub(crate) fn absolute_path(path: &Path) -> io::Result<PathBuf> {
@@ -699,6 +772,7 @@ struct InventoryState {
 #[derive(Debug)]
 struct Inventory {
     state: Arc<BudgetState>,
+    strict_capacity_limit: bool,
     inner: Mutex<InventoryState>,
 }
 
@@ -726,6 +800,7 @@ impl Drop for DescriptorReservation {
             .lock()
             .unwrap_or_else(|error| error.into_inner())
             .reserved -= inventory.remaining;
+        os_limit::release(inventory.remaining);
         inventory.remaining = 0;
         self.inventory
             .state
@@ -752,7 +827,18 @@ impl FileOpenContext {
     /// Borrow this domain's current operation inventory, without changing the
     /// project registry or keeping the original operation's reservation alive.
     pub(crate) fn for_operation(&self) -> Self {
-        Self::from_state(self.state.clone())
+        let mut context = Self::from_state(self.state.clone());
+        if self.inventory.as_ref().is_some_and(|inventory| {
+            !inventory.strict_capacity_limit
+                && inventory
+                    .inner
+                    .lock()
+                    .unwrap_or_else(|error| error.into_inner())
+                    .active
+        }) {
+            context.inventory = self.inventory.clone();
+        }
+        context
     }
 
     /// Retain project identity without retaining an operation's FD inventory.
@@ -775,6 +861,19 @@ impl FileOpenContext {
 
     pub fn for_path(path: &Path) -> io::Result<Self> {
         context_for_path(path)
+    }
+
+    /// Keep internal recovery, publication and cleanup independent of the
+    /// foreground capacity target while retaining the original project ledger.
+    /// The operation guard is synchronous; pass its context to joined workers.
+    #[doc(hidden)]
+    pub fn internal_operation(&self) -> io::Result<Option<DescriptorReservation>> {
+        if !self.state.strict_capacity_limit {
+            return Ok(None);
+        }
+        ProjectFileDescriptors::from_open_context(self)
+            .reserve_admission(0)
+            .map(Some)
     }
 
     pub fn open(
@@ -850,15 +949,35 @@ impl FileOpenContext {
     }
 
     pub(crate) fn acquire(&self, kind: DescriptorKind) -> io::Result<DescriptorPermit> {
+        let operation = self.for_operation();
+        // A new internal scope also applies to previously captured contexts.
+        // Foreground reservations remain explicitly borrowed by their caller.
+        let context = if !operation.strict_capacity_limit() {
+            &operation
+        } else {
+            self
+        };
+        let strict_capacity_limit = !matches!(
+            kind,
+            DescriptorKind::OwnershipLock | DescriptorKind::MutableWal
+        ) && context.strict_capacity_limit();
+        context.acquire_with_capacity_limit(kind, strict_capacity_limit)
+    }
+
+    fn acquire_with_capacity_limit(
+        &self,
+        kind: DescriptorKind,
+        strict_capacity_limit: bool,
+    ) -> io::Result<DescriptorPermit> {
         if let Some(permit) = self.take_inventory(kind) {
             return Ok(permit);
         }
-        if let Err(error) = self.state.reserve(1) {
+        if let Err(error) = self.state.reserve(1, strict_capacity_limit) {
             // Eviction can return a slot to this operation's reserved quota.
             if let Some(permit) = self.take_inventory(kind) {
                 return Ok(permit);
             }
-            self.state.record_budget_rejection();
+            self.state.record_admission_rejection(&error);
             return Err(error);
         }
         let mut counts = self
@@ -873,6 +992,18 @@ impl FileOpenContext {
             kind,
             from_inventory: false,
         })
+    }
+
+    fn strict_capacity_limit(&self) -> bool {
+        self.state.strict_capacity_limit
+            && !self.inventory.as_ref().is_some_and(|inventory| {
+                !inventory.strict_capacity_limit
+                    && inventory
+                        .inner
+                        .lock()
+                        .unwrap_or_else(|error| error.into_inner())
+                        .active
+            })
     }
 
     pub(crate) fn map_open_error(&self, error: io::Error) -> io::Error {
@@ -929,6 +1060,8 @@ impl Drop for DescriptorPermit {
         {
             inventory.remaining += 1;
             counts.reserved += 1;
+        } else {
+            os_limit::release(1);
         }
     }
 }

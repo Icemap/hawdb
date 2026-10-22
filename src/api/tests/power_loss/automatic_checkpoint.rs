@@ -183,6 +183,7 @@ fn qualify_automatic_cut(cut: AutomaticCut) {
                 durability,
                 DatabaseConfig {
                     max_open_files: 32,
+                    strict_capacity_limit: true,
                     automatic_checkpoint_max_age: Duration::from_millis(20),
                     ..DatabaseConfig::default()
                 },

@@ -17,6 +17,7 @@ use hawdb_core::error::HawDBError;
 use hawdb_storage::artifact_files::*;
 use hawdb_storage::derived_repair::*;
 use hawdb_storage::durable_manifest::*;
+use hawdb_storage::file_descriptors::ProjectFileDescriptors;
 use hawdb_storage::store::derived_repair::audit::*;
 use hawdb_storage::store::doctor::*;
 #[cfg(feature = "test-support")]
@@ -66,14 +67,21 @@ fn root_facade_preserves_storage_repair_contract_type_identity() {
     );
 }
 
+fn strict_project_metadata(path: &Path) -> hawdb_storage::branch_project::ProjectMetadata {
+    let _project =
+        ProjectFileDescriptors::acquire_existing_with_capacity_limit(path, 32, true).unwrap();
+    hawdb_storage::branch_project::ProjectMetadata::open(path, 32).unwrap()
+}
+
 #[test]
 fn branch_repair_recovers_mixed_schema_and_data_wal_under_the_host_descriptor_limit() {
     let path = checkpointed_database("private_wal_plan");
-    let metadata = hawdb_storage::branch_project::ProjectMetadata::open(&path, 32).unwrap();
+    let metadata = strict_project_metadata(&path);
     let mut database = Database::open_with_config(
         &path,
         crate::DatabaseConfig {
             max_open_files: 32,
+            strict_capacity_limit: true,
             ..Default::default()
         },
     )
@@ -123,6 +131,7 @@ fn branch_repair_recovers_mixed_schema_and_data_wal_under_the_host_descriptor_li
         &path,
         crate::DatabaseConfig {
             max_open_files: 32,
+            strict_capacity_limit: true,
             ..Default::default()
         },
     )
@@ -284,11 +293,12 @@ fn branch_repair_keeps_a_live_sibling_snapshot_and_its_immutable_history() {
 #[test]
 fn branch_repair_does_not_open_closed_siblings_under_the_project_descriptor_limit() {
     let path = checkpointed_database("repair_lease_budget");
-    let metadata = hawdb_storage::branch_project::ProjectMetadata::open(&path, 32).unwrap();
+    let metadata = strict_project_metadata(&path);
     let mut database = Database::open_with_config(
         &path,
         crate::DatabaseConfig {
             max_open_files: 32,
+            strict_capacity_limit: true,
             ..Default::default()
         },
     )

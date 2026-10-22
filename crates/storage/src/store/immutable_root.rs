@@ -398,6 +398,7 @@ impl GraphStore {
         &mut self,
         limits: crate::branch_reclamation::BranchReclamationLimits,
     ) -> Result<crate::branch_reclamation::BranchReclamationReport> {
+        let _descriptor_operation = self.internal_descriptor_operation()?;
         limits.validate()?;
         self.ensure_usable()?;
         let durable = self.durable.as_ref().ok_or_else(|| {
@@ -829,6 +830,16 @@ impl GraphStore {
                     .map(|owner| owner.io_context())
             })
             .or_else(|| self.snapshot_file_context.clone())
+    }
+
+    pub(super) fn internal_descriptor_operation(
+        &self,
+    ) -> Result<Option<crate::file_descriptors::DescriptorReservation>> {
+        self.file_descriptor_context()
+            .map(|context| context.internal_operation())
+            .transpose()
+            .map(Option::flatten)
+            .map_err(Into::into)
     }
     /// Seals a closed source from its selector and complete private WAL only.
     /// Existing immutable checkpoint references are reused without recovery.
@@ -2947,6 +2958,7 @@ mod tests {
         let mut catalog = Catalog::default();
         let store_config = WalReplayConfig {
             max_open_files: 32,
+            strict_capacity_limit: true,
             ..Default::default()
         };
         let mut store = GraphStore::open_with_durability_and_replay_config(
@@ -3252,6 +3264,7 @@ mod tests {
             durability: DurabilityPolicy::default(),
             replay_config: WalReplayConfig {
                 max_open_files: 32,
+                strict_capacity_limit: true,
                 ..Default::default()
             },
             read_only: false,
@@ -3308,6 +3321,7 @@ mod tests {
             durability: DurabilityPolicy::default(),
             replay_config: WalReplayConfig {
                 max_open_files: 32,
+                strict_capacity_limit: true,
                 ..Default::default()
             },
             read_only: false,
@@ -3380,6 +3394,7 @@ mod tests {
                 durability,
                 replay_config: WalReplayConfig {
                     max_open_files: 32,
+                    strict_capacity_limit: true,
                     ..Default::default()
                 },
                 read_only: false,
@@ -3438,6 +3453,7 @@ mod tests {
                 durability: DurabilityPolicy::default(),
                 replay_config: WalReplayConfig {
                     max_open_files: 32,
+                    strict_capacity_limit: true,
                     ..Default::default()
                 },
                 read_only: false,
@@ -3504,6 +3520,7 @@ mod tests {
             durability: DurabilityPolicy::default(),
             replay_config: WalReplayConfig {
                 max_open_files: 32,
+                strict_capacity_limit: true,
                 ..Default::default()
             },
             read_only: false,
@@ -3551,6 +3568,7 @@ mod tests {
             durability: DurabilityPolicy::default(),
             replay_config: WalReplayConfig {
                 max_open_files: 32,
+                strict_capacity_limit: true,
                 recovery_mode: RecoveryMode::AutoRepairTornTail,
                 ..Default::default()
             },
@@ -3594,6 +3612,7 @@ mod tests {
             durability: DurabilityPolicy::default(),
             replay_config: WalReplayConfig {
                 max_open_files: 32,
+                strict_capacity_limit: true,
                 ..Default::default()
             },
             read_only: false,
@@ -3654,6 +3673,7 @@ mod tests {
                 durability: DurabilityPolicy::default(),
                 replay_config: WalReplayConfig {
                     max_open_files: 32,
+                    strict_capacity_limit: true,
                     ..Default::default()
                 },
             },
@@ -3757,13 +3777,19 @@ mod tests {
     }
 
     #[test]
-    fn late_descriptor_refusal_keeps_uuid_owner_through_cleanup_and_retries() {
+    fn late_catalog_failure_keeps_uuid_owner_through_internal_cleanup_and_retries() {
         use crate::file_descriptors::ProjectFileDescriptors;
         use std::cell::{Cell, RefCell};
         let fixture = BranchFixture::new();
-        let files = ProjectFileDescriptors::acquire_existing(&fixture.project, 32).unwrap();
+        let files = ProjectFileDescriptors::acquire_existing_with_capacity_limit(
+            &fixture.project,
+            32,
+            true,
+        )
+        .unwrap();
         let config = WalReplayConfig {
             max_open_files: 32,
+            strict_capacity_limit: true,
             ..Default::default()
         };
         let mut source = fixture
@@ -3803,22 +3829,17 @@ mod tests {
                 let context = files.io_context();
                 let mut options = crate::file_io::OpenOptions::new();
                 options.read(true);
-                loop {
-                    match context.open(&options, &fixture.catalog_path) {
-                        Ok(file) => blocked.borrow_mut().push(file),
-                        Err(error) => {
-                            assert!(matches!(
-                                HawDBError::from(error),
-                                HawDBError::FileDescriptors(_)
-                            ));
-                            break;
-                        }
-                    }
+                for _ in files.metrics().open..32 {
+                    blocked
+                        .borrow_mut()
+                        .push(context.open(&options, &fixture.catalog_path).unwrap());
                 }
                 assert_eq!(files.metrics().open, 32);
+                std::fs::write(&fixture.catalog_path, b"invalid catalog after recovery").unwrap();
             },
             |runtime| {
                 blocked.borrow_mut().clear();
+                std::fs::write(&fixture.catalog_path, &catalog_before).unwrap();
                 assert!(matches!(
                     DatabaseDirectoryLease::acquire(target),
                     Err(DatabaseDirectoryLeaseError::AlreadyOpen)
@@ -3833,10 +3854,7 @@ mod tests {
             },
         );
         assert!(recovered.get() && cleaned.get());
-        assert!(
-            matches!(result, Err(BranchAdmissionError::Catalog(ref error))
-            if hawdb_core::error::file_descriptor_error(error).is_some())
-        );
+        assert!(matches!(result, Err(BranchAdmissionError::Catalog(_))));
         assert!(!target.join("runtime").exists());
         assert_eq!(files.metrics().reserved, 0);
         assert_eq!(*source.head(), source_head);
@@ -3849,7 +3867,7 @@ mod tests {
             .try_admit(child, DurabilityPolicy::default(), config)
             .unwrap();
         assert_eq!(retried.store().node_count_for_label(None), 2);
-        assert!(files.metrics().high_water <= 32);
+        assert!(files.metrics().high_water > 32);
         drop((retried, source));
         let remaining = files.metrics();
         assert_eq!(remaining.ownership_locks, 0);

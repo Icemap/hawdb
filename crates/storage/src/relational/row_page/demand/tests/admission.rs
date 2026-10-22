@@ -108,7 +108,8 @@ fn failed_page_attempt_retains_admission_before_retry() {
     statement.demand.max_pages = NonZeroUsize::new(1).unwrap();
     statement.demand.max_bytes = NonZeroUsize::new(PAGE_BYTES).unwrap();
     fixture.reader.cumulative.restrict(statement).unwrap();
-    let project = ProjectFileDescriptors::acquire(&fixture.directory, 16).unwrap();
+    let project =
+        ProjectFileDescriptors::acquire_with_capacity_limit(&fixture.directory, 16, true).unwrap();
     let path = fixture.directory.join("held-descriptor");
     fs::write(&path, b"held").unwrap();
     let held = (0..16)

@@ -145,6 +145,10 @@ unfinished collector or a long writable transaction.
 
 ## Qualification
 
+The [current qualification report](CONSUMER_PROGRESS_QUALIFICATION.md) records
+the failed strict writer gate and remaining matrix/platform work. This design
+document is not an acceptance receipt.
+
 The focused regressions cover materialized/out-of-core source domains, repeated
 watermark advancement after real writer commits, relevant graph/SQL/schema/source
 refusals, reserved/prepared drops, native fault recovery, durable reopen, long-read

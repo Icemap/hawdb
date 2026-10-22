@@ -45,6 +45,9 @@ impl PreparedCleanup {
         memory: &BuildMemory,
         task: &RuntimeTaskContext,
     ) -> Result<Self> {
+        let _descriptor_operation =
+            hawdb_storage::file_descriptors::FileOpenContext::for_path(root)?
+                .internal_operation()?;
         checkpoint(task)?;
         #[cfg(test)]
         evidence::run(evidence::Point::BeforeAdmission, memory);
@@ -66,6 +69,14 @@ impl PreparedCleanup {
         analyzer: &crate::SearchAnalyzerLexicon,
         admission: Option<&crate::build_memory::read::ReadAdmission<'_>>,
     ) -> CleanupResult {
+        let descriptor_operation = hawdb_storage::file_descriptors::FileOpenContext::for_path(root)
+            .and_then(|context| context.internal_operation());
+        let Ok(_descriptor_operation) = descriptor_operation else {
+            return CleanupResult {
+                retry_required: true,
+                ..Default::default()
+            };
+        };
         let memory = self.verification_memory.clone();
         let governed = memory.host_admission.as_deref().map(|permit| {
             crate::build_memory::read::ReadAdmission {
@@ -159,6 +170,14 @@ impl PreparedCleanup {
         source: Option<super::source::CleanupSource<'_>>,
         mut remove: impl FnMut(&str) -> io::Result<()>,
     ) -> CleanupResult {
+        let descriptor_operation = hawdb_storage::file_descriptors::FileOpenContext::for_path(root)
+            .and_then(|context| context.internal_operation());
+        let Ok(_descriptor_operation) = descriptor_operation else {
+            return CleanupResult {
+                retry_required: true,
+                ..Default::default()
+            };
+        };
         let mut result = CleanupResult {
             retry_required: generations.out_of_core_discovery_failed,
             ..Default::default()

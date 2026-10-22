@@ -70,7 +70,9 @@ fn descriptor_exhaustion_preserves_search_artifact_and_allows_retry() {
     use hawdb_storage::file_descriptors::ProjectFileDescriptors;
 
     let directory = Directory::new();
-    let project = ProjectFileDescriptors::acquire(&directory.0.join("project"), 1).unwrap();
+    let project =
+        ProjectFileDescriptors::acquire_with_capacity_limit(&directory.0.join("project"), 1, true)
+            .unwrap();
     let path = project.root().join("artifact");
     fs::write(&path, b"original").unwrap();
     let full = hawdb_storage::file_io::File::open(&path).unwrap();

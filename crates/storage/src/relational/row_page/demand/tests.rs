@@ -43,7 +43,8 @@ fn descriptor_exhaustion_preserves_demand_reader_for_retry() {
     use hawdb_core::error::{file_descriptor_error, FileDescriptorError, HawDBError};
 
     let fixture = DemandFixture::new("descriptor-retry");
-    let project = ProjectFileDescriptors::acquire(&fixture.directory, 16).unwrap();
+    let project =
+        ProjectFileDescriptors::acquire_with_capacity_limit(&fixture.directory, 16, true).unwrap();
     let path = fixture.directory.join("held-descriptor");
     fs::write(&path, b"held").unwrap();
     let held = (0..16)

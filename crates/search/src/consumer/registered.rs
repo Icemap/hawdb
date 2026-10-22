@@ -763,8 +763,9 @@ fn remove_producer(
     directory: SourceDirectory,
     candidate: &mut CapturedDirectoryCandidate,
 ) -> Result<()> {
-    directory.retire_cached_children();
     let context = directory.operation_context();
+    let _operation = context.internal_operation()?;
+    directory.retire_cached_children();
     let mut names = Vec::new();
     directory.visit_children(&context, 4096, |name| {
         names.push(name.to_owned());
@@ -909,13 +910,13 @@ mod tests {
     use hawdb_storage::file_descriptors::ProjectFileDescriptors;
 
     #[test]
-    fn stationary_producer_cleanup_retains_native_evidence_on_descriptor_refusal() {
+    fn stationary_producer_cleanup_retries_native_failure_and_progresses_at_strict_capacity() {
         let root = std::env::temp_dir().join(format!(
             "hawdb-native-cleanup-{}",
             hawdb_core::generate_uuidv7().unwrap()
         ));
         std::fs::create_dir(&root).unwrap();
-        let project = ProjectFileDescriptors::acquire(&root, 6).unwrap();
+        let project = ProjectFileDescriptors::acquire_with_capacity_limit(&root, 6, true).unwrap();
         let context = project.io_context();
         let parent = SourceDirectory::capture(&root, &context).unwrap();
         let mut candidate = parent.prepare_directory_candidate("producer").unwrap();
@@ -926,8 +927,35 @@ mod tests {
         let mut file = directory.create_child_new(&context, "evidence").unwrap();
         file.write_all(b"unpublished bytes").unwrap();
         drop(file);
+        let blocker = root.join("producer/unexpected-directory");
+        std::fs::create_dir(&blocker).unwrap();
+        std::fs::write(
+            blocker.join("foreign-evidence"),
+            b"retain on native failure",
+        )
+        .unwrap();
+        assert!(remove_producer(&parent, directory, &mut candidate).is_err());
+        assert_eq!(
+            std::fs::read(blocker.join("foreign-evidence")).unwrap(),
+            b"retain on native failure"
+        );
+        std::fs::remove_file(blocker.join("foreign-evidence")).unwrap();
+        std::fs::remove_dir(blocker).unwrap();
+        let directory = parent.open_created_directory(&context, &candidate).unwrap();
+        match directory.remove_child(&context, "evidence") {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => panic!("cannot reset cleanup evidence: {error}"),
+        }
+        let mut file = directory.create_child_new(&context, "evidence").unwrap();
+        file.write_all(b"unpublished bytes").unwrap();
+        drop(file);
         let mut held = Vec::new();
-        loop {
+        for attempt in 0..=6 {
+            assert!(
+                attempt < 6,
+                "strict capacity did not reject foreground opens"
+            );
             match directory.open_child(&context, "evidence") {
                 Ok(file) => held.push(file),
                 Err(error) => {
@@ -939,20 +967,19 @@ mod tests {
                 }
             }
         }
-        assert!(matches!(
-            remove_producer(&parent, directory, &mut candidate),
-            Err(HawDBError::FileDescriptors(_))
-        ));
-        assert_eq!(
-            std::fs::read(root.join("producer/evidence")).unwrap(),
-            b"unpublished bytes"
-        );
-        assert_eq!(project.metrics().reserved, 0);
-        drop(held);
-        let directory = parent.open_created_directory(&context, &candidate).unwrap();
+        assert_eq!(project.metrics().open, 6);
+        let rejections = project.metrics().budget_rejections;
         remove_producer(&parent, directory, &mut candidate).unwrap();
         assert!(!root.join("producer").exists());
-        assert!(project.metrics().high_water <= 6);
+        for file in &mut held {
+            let mut bytes = Vec::new();
+            file.read_to_end(&mut bytes).unwrap();
+            assert_eq!(bytes, b"unpublished bytes");
+        }
+        assert_eq!(project.metrics().reserved, 0);
+        assert_eq!(project.metrics().budget_rejections, rejections);
+        assert!(project.metrics().high_water > 6);
+        drop(held);
         drop(parent);
         drop(project);
         std::fs::remove_dir(root).unwrap();

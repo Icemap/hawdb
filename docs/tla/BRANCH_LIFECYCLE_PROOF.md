@@ -79,20 +79,22 @@ schema, identity, optimizer, planning caches, reader pins, and projection
 consumers together. It rejects explicit transaction and shared-session
 selection. Failed admission leaves the source runtime available.
 
-The project descriptor domain has a finite default limit of 1024, configurable
+The project descriptor domain has a default capacity target of 1024, configurable
 through `DatabaseConfig::max_open_files`. Ownership locks, mutable WAL handles,
 cached immutable handles, and temporary recovery/publication operations share
 that domain. Target capacity is reserved before recovery; unopened logical
-artifact aliases retain no native handle. This bounds one project's charged
-descriptors, not all host libraries or independent projects in the process;
-an OS-level descriptor rejection remains possible and is reported explicitly.
-Native Unix project acquisition observes the soft limit and caps effective
-admission below it by 64 host handles. Configured and effective limits are
+artifact aliases retain no native handle. `strict_capacity_limit` defaults to
+`false`; explicit strict mode bounds foreground admission, while internal
+recovery, publication and maintenance always allow accounted excess. Pins remain
+protected. This is project accounting, not a whole-process bound; an OS-level
+descriptor rejection remains possible and is reported explicitly.
+Native Unix project acquisition observes the soft limit and selects an effective
+target below it by 64 host handles. Configured and effective targets are
 reported separately; shared-domain conflicts compare the configured value.
 Insufficient minimum capacity returns a typed OS-limit error. Observation does
-not change process limits. The OS-cap calculation and immutable cache's LRU
-order are implementation policies outside the descriptor-count conservation
-argument, which uses the installed effective limit.
+not change process limits. The OS-cap calculation, capacity enforcement policy
+and immutable cache's LRU order are implementation policies outside this model.
+See [descriptor capacity](../FILE_DESCRIPTOR_CAPACITY.md) for the Rust contract.
 
 Catalog-backed GC serializes metadata through sweep and conservatively defers
 all reclamation while any branch lease remains active. The admitted store and

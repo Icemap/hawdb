@@ -360,8 +360,8 @@ fn registered_stationary_covered_native_refusal_retires_birth_before_retry() {
 
 #[cfg(feature = "test-support")]
 #[test]
-fn registered_stationary_covered_preparation_refusal_retains_owner_without_execution() {
-    use super::recovery::{ledger, with_ledger_descriptor_refusal};
+fn registered_stationary_covered_pressure_preserves_preselection_refusal_custody() {
+    use super::recovery::{ledger, with_ledger_pressure_and_selector_refusal};
 
     for after_intent in [false, true] {
         let fixture = Fixture::new();
@@ -370,6 +370,7 @@ fn registered_stationary_covered_preparation_refusal_retains_owner_without_execu
             &root,
             crate::DatabaseConfig {
                 max_open_files: 128,
+                strict_capacity_limit: true,
                 ..Default::default()
             },
         )
@@ -391,7 +392,7 @@ fn registered_stationary_covered_preparation_refusal_retains_owner_without_execu
         db.query("MATCH (m:Memory) SET m.content='covered value'")
             .unwrap();
         let covered = prepare(&mut db, &consumer);
-        let (result, held) = with_ledger_descriptor_refusal(
+        let (result, held) = with_ledger_pressure_and_selector_refusal(
             &mut db,
             &root,
             move |row| {
@@ -411,8 +412,8 @@ fn registered_stationary_covered_preparation_refusal_retains_owner_without_execu
             matches!(
                 result,
                 Err(ProjectionConsumerCatchUpError::Consumer(
-                    SearchProjectionConsumerError::Database(HawDBError::FileDescriptors(_))
-                ))
+                    SearchProjectionConsumerError::Database(HawDBError::Storage(ref message))
+                )) if message.contains("injected consumer publication failure")
             ),
             "after_intent={after_intent}: {result:?}"
         );
@@ -424,6 +425,8 @@ fn registered_stationary_covered_preparation_refusal_retains_owner_without_execu
         assert_eq!(governor.snapshot().active_background_tasks, 0);
         assert_eq!(governor.snapshot().active_cpu_slots, 0);
         let pending = ledger(&root);
+        assert_eq!(db.file_descriptor_metrics().unwrap().budget_rejections, 0);
+        assert!(db.file_descriptor_metrics().unwrap().high_water > 128);
         held.borrow_mut().clear();
         db.query("MATCH (m:Memory) SET m.content='later source'")
             .unwrap();
@@ -698,5 +701,78 @@ fn registered_stationary_covered_retention_checks_complete_epoch_not_old_receipt
             ));
             assert_eq!(consumer.projection().receipt(), before);
         }
+    }
+}
+
+#[test]
+fn registered_stationary_covered_steps_progress_at_strict_foreground_capacity() {
+    use hawdb_storage::file_descriptors::ProjectFileDescriptors;
+
+    for detached in [false, true] {
+        let fixture = Fixture::new();
+        let root = fixture.0.join("database");
+        let mut db = Database::open_with_config(
+            &root,
+            DatabaseConfig {
+                max_open_files: 128,
+                strict_capacity_limit: true,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        append(&mut db, 1);
+        let mut consumer = db
+            .create_search_projection_consumer(
+                id("covered-capacity-v1"),
+                fixture.0.join("projection"),
+                options(1000),
+                |_, index| index.upsert(document("document 1")),
+            )
+            .unwrap();
+        db.query("MATCH (m:Memory) SET m.content='capacity value'")
+            .unwrap();
+        let context = db.runtime.file_descriptor_context().unwrap();
+        let project = ProjectFileDescriptors::from_open_context(&context);
+        let held = fixture.occupy_descriptor_target(&db);
+        let rejections = project.metrics().budget_rejections;
+        let covered = prepare(&mut db, &consumer);
+        assert_eq!(project.metrics().reserved, 0);
+        if detached {
+            let reservation = db
+                .prepare_search_projection_consumer_covered_update(
+                    &mut consumer,
+                    covered,
+                    ProjectionSourceDurability::RequireKnownDurable,
+                )
+                .unwrap();
+            assert_eq!(project.metrics().reserved, 0);
+            let prepared = reservation.prepare();
+            assert_eq!(project.metrics().reserved, 0);
+            let published = db
+                .publish_search_projection_consumer_prepared_update(prepared)
+                .unwrap();
+            assert_eq!(project.metrics().reserved, 0);
+            drop(published);
+        } else {
+            db.publish_search_projection_consumer_covered_update(
+                &mut consumer,
+                covered,
+                ProjectionSourceDurability::RequireKnownDurable,
+            )
+            .unwrap();
+        }
+        assert_eq!(project.metrics().budget_rejections, rejections);
+        assert!(project.metrics().high_water > project.metrics().limit);
+        assert_eq!(project.metrics().reserved, 0);
+        drop(held);
+        assert_eq!(
+            consumer
+                .search_index()
+                .unwrap()
+                .document("memory:m1")
+                .unwrap()
+                .content,
+            "capacity value"
+        );
     }
 }

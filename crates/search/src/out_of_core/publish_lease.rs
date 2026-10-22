@@ -39,6 +39,8 @@ impl SearchProjectionPublishLease {
     }
 
     pub(crate) fn acquire_for_consumer(root: &Path) -> Result<Self> {
+        let context = hawdb_storage::file_descriptors::FileOpenContext::for_path(root)?;
+        let _operation = context.internal_operation()?;
         let task = RuntimeTaskContext::default();
         let memory = BuildMemory::new(&task)?;
         Self::acquire_lock_with_context(root, &memory, &task)
@@ -47,6 +49,8 @@ impl SearchProjectionPublishLease {
     // Cleanup may inspect registered roots, but must share publication exclusion
     // while discovering the current closure and deleting unreferenced files.
     pub(crate) fn acquire_for_cleanup(root: &Path) -> Result<Self> {
+        let context = hawdb_storage::file_descriptors::FileOpenContext::for_path(root)?;
+        let _operation = context.internal_operation()?;
         let task = RuntimeTaskContext::default();
         let memory = BuildMemory::new(&task)?;
         Self::acquire_lock_with_context(root, &memory, &task)
@@ -103,6 +107,8 @@ impl SearchProjectionPublishLease {
         task: &RuntimeTaskContext,
     ) -> Result<Self> {
         checkpoint(task)?;
+        let context = directory.operation_context();
+        let _operation = context.internal_operation()?;
         let registered = PublicationRegistration::acquire(directory, memory, task)?;
         let lock_file = registered.with_directory(|directory| {
             directory.open_lock_file(
@@ -447,28 +453,63 @@ mod tests {
     }
 
     #[test]
-    fn captured_lease_admission_refusal_releases_its_original_registration() {
+    fn captured_lease_retries_native_failure_and_progresses_at_strict_capacity() {
+        use hawdb_core::error::{file_descriptor_error, FileDescriptorError};
+        use hawdb_storage::file_descriptors::ProjectFileDescriptors;
         let root = test_dir();
-        let project =
-            hawdb_storage::file_descriptors::ProjectFileDescriptors::acquire(&root, 8).unwrap();
+        let project = ProjectFileDescriptors::acquire_with_capacity_limit(&root, 8, true).unwrap();
         let context = project.io_context();
         let original = SourceDirectory::capture(&root, &context).unwrap();
         let captured = original.duplicate(&context).unwrap();
-        let mut blockers = Vec::new();
-        while let Ok(fd) = original.duplicate(&context) {
-            blockers.push(fd);
-        }
+        let blockers = (0..6)
+            .map(|_| original.duplicate(&context).unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(project.metrics().open, 8);
+        assert_eq!(
+            file_descriptor_error(&original.duplicate(&context).unwrap_err()),
+            Some(FileDescriptorError::BudgetExceeded {
+                requested: 1,
+                available: 0,
+                limit: 8
+            })
+        );
+        let rejections = project.metrics().budget_rejections;
+        let blocker = root.join(SEARCH_PROJECTION_PUBLISH_LOCK_FILE);
+        std::fs::create_dir(&blocker).unwrap();
+        std::fs::write(blocker.join("foreign-evidence"), b"retained").unwrap();
         let task = RuntimeTaskContext::default();
         let memory = BuildMemory::new(&task).unwrap();
         let error =
             SearchProjectionPublishLease::acquire_captured(captured, &memory, &task).unwrap_err();
-        assert!(hawdb_core::error::file_descriptor_error(&error).is_some());
+        assert!(file_descriptor_error(&error).is_none(), "{error:?}");
+        assert_eq!(
+            std::fs::read(blocker.join("foreign-evidence")).unwrap(),
+            b"retained"
+        );
+        assert_eq!(project.metrics().open, 7);
+        assert_eq!(project.metrics().reserved, 0);
+        assert_eq!(memory.ledger.snapshot().used_bytes, 0);
+        std::fs::remove_file(blocker.join("foreign-evidence")).unwrap();
+        std::fs::remove_dir(&blocker).unwrap();
+        let captured = original.duplicate(&context).unwrap();
+        assert_eq!(project.metrics().open, 8);
+        let lease =
+            SearchProjectionPublishLease::acquire_captured(captured, &memory, &task).unwrap();
+        assert_eq!(lease.source_identity(), original.identity());
+        assert_eq!(project.metrics().budget_rejections, rejections);
+        assert!(project.metrics().high_water > 8);
+        assert_eq!(project.metrics().reserved, 0);
+        drop(lease);
+        assert_eq!(project.metrics().open, 7);
         drop(blockers);
         let captured = original.duplicate(&context).unwrap();
         let lease =
             SearchProjectionPublishLease::acquire_captured(captured, &memory, &task).unwrap();
         assert_eq!(lease.source_identity(), original.identity());
         drop((lease, original));
+        assert_eq!(project.metrics().open, 0);
+        assert_eq!(project.metrics().reserved, 0);
+        assert_eq!(memory.ledger.snapshot().used_bytes, 0);
         std::fs::remove_dir_all(root).unwrap();
     }
 

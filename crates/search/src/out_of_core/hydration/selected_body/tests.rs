@@ -223,7 +223,7 @@ fn counted_publication_scan_reopen_and_cleanup_preserve_owned_bytes_on_denial() 
         CANDIDATE_SEQUENCE.fetch_add(1, Ordering::Relaxed)
     ));
     fs::create_dir(&root).unwrap();
-    let project = ProjectFileDescriptors::acquire(&root, 6).unwrap();
+    let project = ProjectFileDescriptors::acquire_with_capacity_limit(&root, 6, true).unwrap();
     let active = root.join("active");
     let private = root.join("private");
     fs::write(&active, b"old").unwrap();

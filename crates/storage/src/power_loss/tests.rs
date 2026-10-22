@@ -30,7 +30,7 @@ impl Fixture {
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
-        let project = ProjectFileDescriptors::acquire(&root, 32).unwrap();
+        let project = ProjectFileDescriptors::acquire_with_capacity_limit(&root, 32, true).unwrap();
         let model = PowerLossModel::attach(&project, limits).unwrap();
         Self { root, model }
     }
@@ -656,7 +656,7 @@ fn model_root_capacity_outlives_model_handle_until_last_traced_file_closes() {
         "hawdb-root-retention-{}",
         hawdb_core::generate_uuidv7().unwrap()
     ));
-    let project = ProjectFileDescriptors::acquire(&root, 8).unwrap();
+    let project = ProjectFileDescriptors::acquire_with_capacity_limit(&root, 8, true).unwrap();
     let model = PowerLossModel::attach(&project, ImageLimits::default()).unwrap();
     assert_eq!(project.metrics().open, 1);
     let mut file = fs::File::create(root.join("wal")).unwrap();
@@ -677,7 +677,8 @@ fn root_attachment_admission_and_nonempty_refusal_leave_no_registered_recorder_o
             "hawdb-root-refusal-{}",
             hawdb_core::generate_uuidv7().unwrap()
         ));
-        let project = ProjectFileDescriptors::acquire(&root, limit).unwrap();
+        let project =
+            ProjectFileDescriptors::acquire_with_capacity_limit(&root, limit, true).unwrap();
         if nonempty {
             std::fs::write(root.join("prior"), b"retained").unwrap();
         }

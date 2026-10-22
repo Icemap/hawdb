@@ -452,6 +452,10 @@ fn recover_default_branch(
     pending: &DeferredBranchAdmission,
     project: &CapturedProject,
 ) -> Result<AdmittedBranchRuntime> {
+    let _descriptor_operation = project
+        .file_descriptors()
+        .io_context()
+        .internal_operation()?;
     let resources =
         GraphStore::reserve_project_branch_admission_resources(project.file_descriptors())?;
     project.require_original_namespace()?;

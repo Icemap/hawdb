@@ -533,6 +533,7 @@ mod tests {
             &path,
             crate::DatabaseConfig {
                 max_open_files: 32,
+                strict_capacity_limit: true,
                 execution_memory: crate::executor::ExecutionMemoryConfig {
                     blocking_operator_bytes: NonZeroUsize::new(2048).unwrap(),
                     min_spill_free_bytes: NonZeroU64::MIN,
@@ -591,6 +592,7 @@ mod tests {
         let spill_path = path.with_extension("spill");
         let config = crate::DatabaseConfig {
             max_open_files: 32,
+            strict_capacity_limit: true,
             storage_residency_mode: hawdb_storage::config::StorageResidencyMode::Materialized,
             execution_memory: crate::executor::ExecutionMemoryConfig {
                 blocking_operator_bytes: NonZeroUsize::new(2048).unwrap(),
@@ -669,7 +671,7 @@ mod tests {
     }
 
     #[test]
-    fn cold_branch_mid_operation_descriptor_refusal_preserves_catalog_and_retries() {
+    fn cold_branch_internal_publication_progresses_with_competing_strict_capacity() {
         let path = test_directory("cold-branch-mid-operation-fd");
         let mut writer = Database::open(&path).unwrap();
         writer.query("CREATE (:Memory {id: 'preserved'})").unwrap();
@@ -680,6 +682,7 @@ mod tests {
             &path,
             crate::DatabaseConfig {
                 max_open_files: 32,
+                strict_capacity_limit: true,
                 ..Default::default()
             },
         )
@@ -705,8 +708,10 @@ mod tests {
         AFTER_BRANCH_SOURCE_SEAL.with(|hook| {
             *hook.borrow_mut() = Some(Box::new(move || {
                 let metrics = competitor.metrics();
-                let available =
-                    metrics.limit - metrics.open - metrics.reserved + metrics.cached_handles;
+                let available = metrics
+                    .limit
+                    .saturating_sub(metrics.open + metrics.reserved)
+                    + metrics.cached_handles;
                 let (ready_tx, ready_rx) = mpsc::channel();
                 let held = std::thread::spawn(move || {
                     let _reservation = competitor.reserve(available).unwrap();
@@ -722,29 +727,31 @@ mod tests {
             .map_err(HawDBError::from);
         release_tx.send(()).unwrap();
         worker.lock().unwrap().take().unwrap().join().unwrap();
-        assert!(
-            matches!(result, Err(HawDBError::FileDescriptors(_))),
-            "{result:?}"
+        let created = result.unwrap();
+        assert_ne!(std::fs::read(&catalog_path).unwrap(), before);
+        assert_eq!(
+            database.create_branch(request.clone()).unwrap().id,
+            created.id
         );
-        assert_eq!(std::fs::read(&catalog_path).unwrap(), before);
-        assert_eq!(database.list_branches().unwrap().len(), 1);
+        assert_eq!(database.list_branches().unwrap().len(), 2);
         assert!(database.runtime.peek().is_none());
         let after = files.metrics();
         assert_eq!(after.open, baseline.open);
         assert_eq!(after.reserved, baseline.reserved);
-        assert!(after.budget_rejections > baseline.budget_rejections);
-        assert!(after.high_water <= 32);
+        assert_eq!(after.budget_rejections, baseline.budget_rejections);
+        assert!(after.high_water > 32);
         drop(database);
         drop(files);
         let mut retry = Database::open_with_config(
             &path,
             crate::DatabaseConfig {
-                max_open_files: 64,
+                max_open_files: 32,
+                strict_capacity_limit: true,
                 ..Default::default()
             },
         )
         .unwrap();
-        let created = retry.create_branch(request.clone()).unwrap();
+        assert_eq!(retry.create_branch(request.clone()).unwrap().id, created.id);
         assert_eq!(retry.create_branch(request).unwrap().id, created.id);
         assert_eq!(retry.list_branches().unwrap().len(), 2);
         assert!(retry.runtime.peek().is_none());
@@ -753,10 +760,11 @@ mod tests {
     }
 
     #[test]
-    fn sql_branch_descriptor_rejection_preserves_source_and_releases_admission_quota() {
+    fn sql_branch_internal_admission_preserves_source_with_strict_foreground_capacity() {
         let path = test_directory("sql-branch-fd-admission");
         let config = crate::DatabaseConfig {
             max_open_files: 32,
+            strict_capacity_limit: true,
             ..Default::default()
         };
         let mut database = Database::open_with_config(&path, config).unwrap();
@@ -782,20 +790,16 @@ mod tests {
         }
         let held_count = held.len();
         for query in ["SHOW BRANCHES LIMIT 2", "SHOW BRANCH NAME 'main'"] {
-            let result = database.query_sql(query);
-            assert!(
-                matches!(
-                    &result,
-                    Err(HawDBError::FileDescriptors(
-                        hawdb_core::error::FileDescriptorError::BudgetExceeded {
-                            available: 0,
-                            limit: 32,
-                            ..
-                        }
-                    ))
-                ),
-                "unexpected result for {query}: {result:?}"
-            );
+            assert!(matches!(
+                database.query_sql(query),
+                Err(HawDBError::FileDescriptors(
+                    hawdb_core::error::FileDescriptorError::BudgetExceeded {
+                        available: 0,
+                        limit: 32,
+                        ..
+                    }
+                ))
+            ));
         }
         assert_eq!(
             database
@@ -805,33 +809,22 @@ mod tests {
                 .len(),
             1
         );
-        for _ in 0..4 {
-            drop(held.pop().unwrap());
-        }
         let before = database.file_descriptor_metrics().unwrap();
-        let error = database
+        database
             .query_sql_with_params("USE BRANCH ID $1", &[Value::Uuid(child.id)])
-            .unwrap_err();
-        // Admission funds three directory/lock pairs, one WAL and four
-        // temporaries. Query read waves obtain capacity after admission.
-        assert!(
-            matches!(
-                error,
-                HawDBError::FileDescriptors(
-                    hawdb_core::error::FileDescriptorError::BudgetExceeded {
-                        requested: 11,
-                        available: 4,
-                        limit: 32
-                    }
-                )
-            ),
-            "unexpected rejection: {error:?}"
-        );
+            .unwrap();
         let after = database.file_descriptor_metrics().unwrap();
-        assert_eq!(after.open, before.open);
         assert_eq!(after.reserved, 0);
+        assert_eq!(after.budget_rejections, before.budget_rejections);
+        assert!(after.high_water > 32);
         assert_eq!(std::fs::read(&target_head).unwrap(), head_before);
-        assert!(!runtime.exists());
+        assert!(runtime.exists());
+        assert_eq!(
+            database.current_branch().unwrap().unwrap().info.id,
+            child.id
+        );
+        drop(held);
+        database.query_sql("USE BRANCH main").unwrap();
         assert_eq!(database.current_branch().unwrap().unwrap().info.id, main.id);
         database
             .query("CREATE (:Memory {id: 'after-rejection'})")
@@ -844,7 +837,6 @@ mod tests {
                 .len(),
             2
         );
-        drop(held);
         assert!(held_count > 4);
         for _ in 0..3 {
             database.query_sql("USE BRANCH child").unwrap();
@@ -872,7 +864,7 @@ mod tests {
             let metrics = database.file_descriptor_metrics().unwrap();
             assert_eq!(metrics.reserved, 0);
             assert_eq!(metrics.ownership_locks, 3);
-            assert!(metrics.high_water <= 32);
+            assert!(metrics.high_water > 32);
         }
         let mut snapshot = database.begin_read_transaction().unwrap();
         database.query_sql("USE BRANCH child").unwrap();
@@ -2841,6 +2833,7 @@ impl Database {
         &mut self,
         limits: super::BranchCreateRecoveryLimits,
     ) -> crate::error::Result<super::BranchCreateRecoveryReport> {
+        let _descriptor_operation = self.internal_descriptor_operation()?;
         self.ensure_branch_writable()?;
         let metadata = self.project_metadata_for_mutation()?;
         let report = metadata.recover_pending_creates(limits)?;
@@ -2883,6 +2876,7 @@ impl Database {
         &mut self,
         limits: BranchReclamationLimits,
     ) -> crate::error::Result<BranchReclamationReport> {
+        let _descriptor_operation = self.internal_descriptor_operation()?;
         self.ensure_branch_writable()?;
         if self.derived_artifact_jobs.jobs().iter().any(|job| {
             job.status != hawdb_artifact::DerivedArtifactJobStatus::Succeeded
@@ -3021,6 +3015,9 @@ impl Database {
         &mut self,
         selector: BranchSelector,
     ) -> Result<(), BranchLifecycleError> {
+        let _descriptor_operation = self
+            .internal_descriptor_operation()
+            .map_err(BranchLifecycleError::Runtime)?;
         if let Some(runtime) = self.runtime.peek() {
             runtime
                 .store
@@ -3377,6 +3374,9 @@ impl Database {
         selector: BranchSelector,
         expected_metadata_revision: Option<u64>,
     ) -> Result<BranchInfo, BranchLifecycleError> {
+        let _descriptor_operation = self
+            .internal_descriptor_operation()
+            .map_err(BranchLifecycleError::Runtime)?;
         self.ensure_branch_writable()?;
         let path = self.branch_catalog_path()?;
         let catalog = self.read_branch_catalog()?;
@@ -3497,6 +3497,9 @@ impl Database {
         &mut self,
         request: BranchCreateRequest,
     ) -> Result<BranchInfo, BranchLifecycleError> {
+        let _descriptor_operation = self
+            .internal_descriptor_operation()
+            .map_err(BranchLifecycleError::Runtime)?;
         self.ensure_branch_writable()?;
         let catalog_path = self.branch_catalog_path()?;
         let catalog = self.read_branch_catalog()?;

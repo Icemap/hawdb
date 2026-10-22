@@ -535,6 +535,12 @@ fn json_error_from_hawdb(error: HawDBError) -> serde_json::Value {
                 } => serde_json::json!({
                     "kind": "configuration_conflict", "configured": configured, "requested": requested,
                 }),
+                FileDescriptorError::CapacityPolicyConflict {
+                    configured,
+                    requested,
+                } => serde_json::json!({
+                    "kind": "capacity_policy_conflict", "configured": configured, "requested": requested,
+                }),
                 FileDescriptorError::BudgetExceeded {
                     requested,
                     available,
@@ -1661,6 +1667,10 @@ fn descriptor_error_from_json(details: &serde_json::Value) -> Option<FileDescrip
             configured: count("configured")?,
             requested: count("requested")?,
         },
+        "capacity_policy_conflict" => FileDescriptorError::CapacityPolicyConflict {
+            configured: details.get("configured")?.as_bool()?,
+            requested: details.get("requested")?.as_bool()?,
+        },
         "budget_exceeded" => FileDescriptorError::BudgetExceeded {
             requested: count("requested")?,
             available: count("available")?,
@@ -1941,12 +1951,34 @@ mod protocol_server_tests {
     use super::*;
 
     #[test]
+    fn capacity_policy_conflict_requires_boolean_fields() {
+        for (configured, requested) in [
+            (serde_json::json!(0), serde_json::json!(true)),
+            (serde_json::json!(false), serde_json::json!(1)),
+            (serde_json::Value::Null, serde_json::json!(true)),
+        ] {
+            let details = serde_json::json!({
+                "kind": "capacity_policy_conflict", "configured": configured, "requested": requested,
+            });
+            assert!(descriptor_error_from_json(&details).is_none());
+        }
+    }
+
+    #[test]
     fn descriptor_errors_round_trip_without_becoming_storage_corruption() {
         for error in [
             FileDescriptorError::InvalidBudget { limit: 0 },
             FileDescriptorError::ConfigurationConflict {
                 configured: 64,
                 requested: 256,
+            },
+            FileDescriptorError::CapacityPolicyConflict {
+                configured: false,
+                requested: true,
+            },
+            FileDescriptorError::CapacityPolicyConflict {
+                configured: true,
+                requested: false,
             },
             FileDescriptorError::BudgetExceeded {
                 requested: 23,

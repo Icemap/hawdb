@@ -1539,7 +1539,10 @@ retirement can also defer. Ordinary cold reads retain their existing opening
 serialization. A foreground reader may verify the same object concurrently;
 checkpoint publication reuses that complete verified handle and closes its
 redundant native descriptor outside the cache locks. Such duplicate temporary
-opens remain subject to the shared FD budget.
+opens remain accounted in the shared FD domain. Internal checkpoint admission
+always uses a non-strict descriptor policy; foreground reads retain the host's
+configured policy. This does not relax memory or physical-I/O admission. See
+[descriptor capacity](../FILE_DESCRIPTOR_CAPACITY.md).
 
 Paused real I/O tests prove foreground progress, retirement deferral, verified
 same-object handle reuse and actual object-sweep source retention followed by

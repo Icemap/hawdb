@@ -216,22 +216,25 @@ mod tests {
     const CHILD_RELEASE_PATH: &str = "HAWDB_TEST_CHILD_RELEASE_PATH";
 
     #[test]
-    fn lock_creation_refusal_releases_capture_and_process_registration() {
+    fn native_lock_creation_failure_releases_capture_and_process_registration() {
         use crate::file_descriptors::ProjectFileDescriptors;
         use crate::file_io::SourceDirectory;
         let base = unique_test_dir("capture-admission");
-        let project = ProjectFileDescriptors::acquire(&base, 2).unwrap();
+        let project = ProjectFileDescriptors::acquire_with_capacity_limit(&base, 2, true).unwrap();
         let path = base.join("database");
         fs::create_dir(&path).unwrap();
+        fs::create_dir(path.join(super::DATABASE_DIRECTORY_LOCK_FILE)).unwrap();
         let blocker = SourceDirectory::capture(&base, &project.io_context()).unwrap();
         let error = DatabaseDirectoryLease::acquire(&path).unwrap_err();
-        assert!(
-            matches!(error, DatabaseDirectoryLeaseError::OpenLockFile(ref error)
-            if hawdb_core::error::file_descriptor_error(error).is_some())
-        );
+        assert!(matches!(
+            error,
+            DatabaseDirectoryLeaseError::OpenLockFile(_)
+        ));
         assert_eq!(project.metrics().open, 1);
-        assert!(!path.join(super::DATABASE_DIRECTORY_LOCK_FILE).exists());
+        assert!(path.join(super::DATABASE_DIRECTORY_LOCK_FILE).is_dir());
+        assert_eq!(project.metrics().budget_rejections, 0);
         drop(blocker);
+        fs::remove_dir(path.join(super::DATABASE_DIRECTORY_LOCK_FILE)).unwrap();
         let owner = DatabaseDirectoryLease::acquire(&path).unwrap();
         assert_eq!(project.metrics().open, 2);
         drop(owner);
@@ -243,7 +246,7 @@ mod tests {
     fn captured_root_opens_owner_lock_off_a_replacement_label() {
         use crate::file_descriptors::ProjectFileDescriptors;
         let base = unique_test_dir("original-root-lock");
-        let project = ProjectFileDescriptors::acquire(&base, 8).unwrap();
+        let project = ProjectFileDescriptors::acquire_with_capacity_limit(&base, 8, true).unwrap();
         let path = base.join("database");
         let moved = base.join("original");
         fs::create_dir(&path).unwrap();
@@ -279,7 +282,7 @@ mod tests {
     fn native_close_precedes_process_slot_release_even_on_drop_unwind() {
         use crate::file_descriptors::ProjectFileDescriptors;
         let path = unique_test_dir("close-order");
-        let project = ProjectFileDescriptors::acquire(&path, 4).unwrap();
+        let project = ProjectFileDescriptors::acquire_with_capacity_limit(&path, 4, true).unwrap();
         let owner = DatabaseDirectoryLease::acquire(&path).unwrap();
         assert_eq!(project.metrics().open, 2);
         let label = path.clone();

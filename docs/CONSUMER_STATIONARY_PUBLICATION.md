@@ -155,8 +155,10 @@ must serialize each Consumer key and relinquish the previous token before a
 reservation retry: there is no independent caller nonce. Native births require
 their own retained owner. File-create primitives expose
 successful exclusive creation before fallible metadata checks. Pre-effect
-control-selection FD refusals leave the same sealed owner retryable; attempted
-effects retain outcome resolution. First-WAL rollback keeps the original header
+native resource/I/O refusals leave the same sealed owner retryable; attempted
+effects retain outcome resolution. Descriptor targets do not refuse internal
+selection, recovery or cleanup, including with strict foreground configuration;
+all excess remains counted. See [descriptor capacity](FILE_DESCRIPTOR_CAPACITY.md). First-WAL rollback keeps the original header
 prefix and repairs only a missing suffix before truncating the partial records,
 avoiding a truncate-to-zero window.
 
@@ -207,8 +209,9 @@ or all MVCC work complete.
 
 Local regression fixtures include 260 actual catch-up publications while retaining
 an old read pin, typed refusal for 256 genuinely unresolved allocation rows,
-transient-reopen retry, and mid-operation cold branch refusal at a 32-FD limit
-followed by a successful higher-budget retry. The long ledger fixture suspends
+transient-reopen retry, internal cold branch publication under competing strict
+foreground descriptor capacity, and seal/intent pressure followed by an injected
+pre-selection failure and same-owner recovery. The long ledger fixture suspends
 periodic automatic checkpoint publication to isolate allocation capacity; separate
 checkpoint fixtures retain concurrency coverage.
 

@@ -30,6 +30,10 @@ pub enum FileDescriptorError {
         configured: usize,
         requested: usize,
     },
+    CapacityPolicyConflict {
+        configured: bool,
+        requested: bool,
+    },
     BudgetExceeded {
         requested: usize,
         available: usize,
@@ -49,6 +53,8 @@ impl Display for FileDescriptorError {
             Self::InvalidBudget { limit } => write!(formatter, "invalid file descriptor budget: {limit}"),
             Self::ConfigurationConflict { configured, requested } => write!(formatter,
                 "project file descriptor budget conflict: configured {configured}, requested {requested}"),
+            Self::CapacityPolicyConflict { configured, requested } => write!(formatter,
+                "project strict_capacity_limit conflict: configured {configured}, requested {requested}"),
             Self::BudgetExceeded { requested, available, limit } => write!(formatter,
                 "project file descriptor budget exceeded: requested {requested}, available {available}, limit {limit}"),
             Self::OsLimit { requested, os_code, soft, hard } => write!(formatter,
