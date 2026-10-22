@@ -7,8 +7,6 @@ use crate::power_loss::{
     image::{ImageLimits, PersistOperation},
     IoEvent, ObservationBoundary, ObservationPoint, PowerLossModel,
 };
-use std::cell::RefCell;
-use std::rc::Rc;
 
 fn selector() -> ProjectSelector {
     ProjectSelector::new(
@@ -104,23 +102,20 @@ fn bootstrap_lost_selection_reply_retries_the_original_identity() {
     let project = ProjectFileDescriptors::acquire(&root, 8).unwrap();
     let context = project.io_context();
     let directory = SourceDirectory::capture(&root, &context).unwrap();
-    let held = Rc::new(RefCell::new(Vec::new()));
-    let blockers = Rc::clone(&held);
-    let quota = context.clone();
-    let path = root.join(LEDGER_FILE);
     let identity = selector();
-    let result = SourceDirectory::observe_next_control_rename(
-        move || {
-            while let Ok(file) = quota.open(crate::file_io::OpenOptions::new().read(true), &path) {
-                blockers.borrow_mut().push(file);
-            }
+    let result = SourceDirectory::observe_control_replies(
+        || {
+            Err(io::Error::new(
+                io::ErrorKind::Interrupted,
+                "lost bootstrap selection reply",
+            ))
         },
         || bootstrap(&directory, &context, identity, true),
     )
     .unwrap();
-    assert!(matches!(result, Err(HawDBError::FileDescriptors(_))));
-    assert!(!held.borrow().is_empty());
-    held.borrow_mut().clear();
+    assert!(
+        matches!(result, Err(HawDBError::Storage(ref message)) if message.contains("lost bootstrap selection reply"))
+    );
     assert_eq!(
         bootstrap(&directory, &context, selector(), true).unwrap(),
         identity

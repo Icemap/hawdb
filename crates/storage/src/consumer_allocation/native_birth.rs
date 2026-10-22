@@ -197,7 +197,12 @@ impl ReservedConsumerAllocation {
                 .pending
                 .iter()
                 .find(|row| row.operation == self.operation.0)
-                .ok_or_else(|| invalid("native attempt reservation is missing"))?;
+                .ok_or_else(|| {
+                    HawDBError::Execution(
+                        "Consumer reservation was revoked or settled; reserve a new operation"
+                            .into(),
+                    )
+                })?;
             self.require_row(row)?;
             action(row)
         })
@@ -222,7 +227,12 @@ impl ReservedConsumerAllocation {
                 .pending
                 .iter_mut()
                 .find(|row| row.operation == self.operation.0)
-                .ok_or_else(|| invalid("native attempt reservation is missing"))?;
+                .ok_or_else(|| {
+                    HawDBError::Execution(
+                        "Consumer reservation was revoked or settled; reserve a new operation"
+                            .into(),
+                    )
+                })?;
             self.require_row(row)?;
             if retry_selected && row.native_birth == next {
                 // A prior rename may have completed without its final barrier.
@@ -243,10 +253,7 @@ impl ReservedConsumerAllocation {
                 "consumer-birth-ledger-{}.tmp",
                 hawdb_core::generate_uuidv7()?
             );
-            let mut candidate = root.create_control_candidate(context, &name)?;
-            candidate.write_all(&bytes)?;
-            candidate.seal()?;
-            candidate.replace_head(context, LEDGER_FILE)?;
+            publish_ledger(root, context, &name, &bytes, &mut false)?;
             Ok(())
         })
     }
@@ -292,11 +299,7 @@ impl ReservedConsumerAllocation {
             validate(&ledger)?;
             let bytes = encode(&ledger)?;
             let name = format!("consumer-settlement-{}.tmp", hawdb_core::generate_uuidv7()?);
-            let mut candidate = root.create_control_candidate(context, &name)?;
-            candidate.write_all(&bytes)?;
-            candidate.seal()?;
-            *publication_attempted = true;
-            candidate.replace_head(context, LEDGER_FILE)?;
+            publish_ledger(root, context, &name, &bytes, publication_attempted)?;
             Ok(())
         })
     }
@@ -379,11 +382,13 @@ impl PendingConsumerGeneration {
             || self.publication_intent_attempted
             || self.selection_preparation_attempted
         {
-            return Err(invalid("Consumer cleanup lacks unsealed native custody"));
+            return Err(HawDBError::Execution(
+                "Consumer cleanup requires its unsealed native owner".into(),
+            ));
         }
-        self.directory
-            .as_ref()
-            .ok_or_else(|| invalid("Consumer cleanup directory missing"))
+        self.directory.as_ref().ok_or_else(|| {
+            HawDBError::Execution("Consumer cleanup directory is unavailable".into())
+        })
     }
 
     /// Precompute a Consumer ledger selector outside the source validation

@@ -17,6 +17,9 @@
 use super::*;
 
 impl File {
+    // The caller supplies the header from the same failed first append. Its
+    // existing prefix must be unchanged: legacy append handles may be write-only
+    // and cannot verify arbitrary preexisting bytes without new read authority.
     pub(crate) fn rollback_wal_append(
         &self,
         committed_bytes: u64,

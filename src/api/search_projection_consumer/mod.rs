@@ -54,7 +54,11 @@ impl Database {
     /// `knowledge-v1`); callers must change it when changing the mapping. There is
     /// no pathname alias or adoption of an existing unregistered projection.
     /// `options` and `initialize` apply only to first creation. Reopening does not
-    /// renew the registration. Share the returned owner's immutable search index
+    /// renew the registration. Retrying a retained preparation also uses its
+    /// original options and immutable initializer output; new arguments do not
+    /// replace that operation. A terminal unselected/stale creation is settled
+    /// and returns an execution refusal; use a fresh target to rebuild it.
+    /// Share the returned owner's immutable search index
     /// between query users; dropping it releases only its runtime lease.
     pub fn open_or_create_search_projection_consumer<F>(
         &mut self,
@@ -262,26 +266,17 @@ impl Database {
                 .projection_consumers
                 .database_uuid
                 .is_some_and(|registered_identity| Some(registered_identity) != identity);
-        if !reinitialize_registry {
-            if self
+        if !reinitialize_registry
+            && self
                 .runtime
-                .get_mut()?
+                .get()?
                 .projection_consumers
                 .records
                 .contains_key(id.as_str())
-            {
-                return Err(Error::AlreadyRegistered);
-            }
-            let registry = &self.runtime.get()?.projection_consumers;
-            if registry
-                .records
-                .len()
-                .saturating_add(registry.recovery.len())
-                >= CAPACITY
-            {
-                return Err(Error::RegistryFull);
-            }
+        {
+            return Err(Error::AlreadyRegistered);
         }
+        self.require_consumer_capacity::<CAPACITY>(reinitialize_registry)?;
         let expires_at_commit_epoch = self
             .runtime
             .get()?
@@ -353,6 +348,22 @@ impl Database {
         self.finish_consumer_creation(id, prepared, permit)
     }
 
+    fn require_consumer_capacity<const CAPACITY: usize>(
+        &self,
+        reinitialize_registry: bool,
+    ) -> SearchProjectionConsumerResult<()> {
+        let registry = &self.runtime.get()?.projection_consumers;
+        let records = if reinitialize_registry {
+            0
+        } else {
+            registry.records.len()
+        };
+        if records.saturating_add(registry.recovery.len()) >= CAPACITY {
+            return Err(Error::RegistryFull);
+        }
+        Ok(())
+    }
+
     fn retain_consumer_recovery(
         &mut self,
         id: &SearchProjectionConsumerId,
@@ -392,8 +403,8 @@ impl Database {
         let selected = (|| -> Result<_> {
             if prepared.selection_attempted() {
                 return match prepared.admit_selection(Arc::clone(&permit), RuntimeTaskContext::default())?.resolve()? {
-                    hawdb_storage::consumer_allocation::ConsumerSelectionResolution::Published(receipt) => Ok(*receipt),
-                    hawdb_storage::consumer_allocation::ConsumerSelectionResolution::NotSelected => Err(HawDBError::ProjectionBusy),
+                    hawdb_storage::consumer_allocation::ConsumerSelectionResolution::Published(receipt) => Ok(Some(*receipt)),
+                    hawdb_storage::consumer_allocation::ConsumerSelectionResolution::NotSelected => Ok(None),
                 };
             }
 
@@ -402,10 +413,13 @@ impl Database {
             let report = prepared.report();
             let receipt = {
                 let runtime = self.runtime.get()?;
-                super::require_search_projection_source_epoch(
-                    Some(report.source_epoch),
-                    runtime.store.commit_epoch(),
-                )?;
+                if report.source_epoch != runtime.store.commit_epoch() {
+                    drop(runtime);
+                    prepared
+                        .admit_selection(Arc::clone(&permit), RuntimeTaskContext::default())?
+                        .resolve_or_cancel_unattempted()?;
+                    return Ok(None);
+                }
                 runtime.store.verify_search_consumer_candidate_source(
                     prepared.reservation_binding()?,
                     report.source_epoch,
@@ -421,10 +435,19 @@ impl Database {
                 publication_failpoint(PublicationStage::AfterSelectorBarrier)?;
                 receipt
             };
-            Ok(receipt)
+            Ok(Some(receipt))
         })();
         let receipt = match selected {
-            Ok(receipt) => receipt,
+            Ok(Some(receipt)) => receipt,
+            Ok(None) => {
+                // The durable outcome is terminal. Release native custody and
+                // its registry slot instead of advertising an endless retry.
+                drop(prepared);
+                self.reload_consumer_registry_if_unavailable()?;
+                return Err(HawDBError::Execution(
+                    "Consumer creation was not selected or its source advanced before selection; the operation is settled. Rebuild with a fresh target and initializer".into(),
+                ).into());
+            }
             Err(error) => {
                 self.runtime
                     .get_mut()?

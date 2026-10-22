@@ -236,6 +236,8 @@ impl PreparedConsumerSelection {
         if !matches!(outcome, ConsumerSelectionResolution::NotSelected) {
             return Err(invalid("unattempted Consumer selector became selected"));
         }
+        self.control
+            .discard_unselected(&self.project.file_descriptors().io_context())?;
         self.phase = Phase::NotSelected;
         Ok(())
     }
@@ -303,6 +305,12 @@ impl PreparedConsumerSelection {
             &self.previous,
             ExpectedOutcome::Either,
         )?;
+        if matches!(outcome, ConsumerSelectionResolution::NotSelected)
+            && !self.control.selection_attempted()
+        {
+            self.control
+                .discard_unselected(&self.project.file_descriptors().io_context())?;
+        }
         self.phase = match outcome {
             ConsumerSelectionResolution::Published(_) => Phase::Published,
             ConsumerSelectionResolution::NotSelected => Phase::NotSelected,
@@ -392,10 +400,7 @@ pub(super) fn complete_outcome(
             validate(&ledger)?;
             let bytes = encode(&ledger)?;
             let name = format!("consumer-receipt-{}.tmp", hawdb_core::generate_uuidv7()?);
-            let mut candidate = root.create_control_candidate(context, &name)?;
-            candidate.write_all(&bytes)?;
-            candidate.seal()?;
-            candidate.replace_head(context, LEDGER_FILE)?;
+            publish_ledger(root, context, &name, &bytes, &mut false)?;
         } else {
             // A complete image with a lost barrier still needs real barriers.
             let file = root.open_mutable_child(context, LEDGER_FILE, false)?;

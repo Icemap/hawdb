@@ -280,7 +280,10 @@ fn registered_stationary_metadata_reservation_reuses_identity_after_lost_reply()
         .store
         .forget_search_consumer_selection("metadata-reply")
         .unwrap();
-    assert!(retry.begin_initial_generation(&fixture.0).is_err());
+    assert!(matches!(
+        retry.begin_initial_generation(&fixture.0),
+        Err(HawDBError::Execution(_))
+    ));
     let fresh = reserve();
     assert_ne!(fresh.registration_uuid(), identity.0);
     assert_ne!(fresh.checkpoint_uuid(), identity.2);
@@ -436,7 +439,7 @@ fn registered_stationary_lost_reservation_reply_reuses_durable_identity_after_so
             db.create_search_projection_consumer(
                 id("reservation-reply"),
                 &path,
-                options(100),
+                options(1),
                 initialize,
             )
         },
@@ -450,10 +453,35 @@ fn registered_stationary_lost_reservation_reply_reuses_durable_identity_after_so
     assert!(!path.exists());
     let before = ledger(&root);
     append(&mut db, 2);
+    append(&mut db, 3);
+    assert!(matches!(
+        db.runtime
+            .get()
+            .unwrap()
+            .store
+            .reserve_registered_search_consumer(
+                "reservation-reply",
+                &path,
+                hawdb_storage::consumer_allocation::ConsumerLeasePolicy {
+                    max_idle_commits: 1,
+                    expires_at_commit_epoch: db.commit_epoch().unwrap(),
+                }
+            ),
+        Err(HawDBError::Execution(_))
+    ));
+
     let consumer = db
         .create_search_projection_consumer(id("reservation-reply"), &path, options(100), initialize)
         .unwrap();
     let after = ledger(&root);
+    let status = db.search_projection_consumer_status(consumer.id()).unwrap();
+    assert_eq!(status.state, State::Active);
+    assert_eq!(
+        status.expires_at_commit_epoch,
+        db.commit_epoch().unwrap() + 100
+    );
+    assert_eq!(after["pending"][0]["lease"]["max_idle_commits"], 100);
+
     assert_eq!(before["high_water"], after["high_water"]);
     assert_eq!(
         before["pending"][0]["registration_uuid"],
@@ -468,5 +496,127 @@ fn registered_stationary_lost_reservation_reply_reuses_durable_identity_after_so
         before["pending"][0]["checkpoint_uuid"],
         after["pending"][0]["checkpoint_uuid"]
     );
-    assert_eq!(consumer.search_index().unwrap().document_count(), 2);
+    assert_eq!(consumer.search_index().unwrap().document_count(), 3);
+}
+
+#[test]
+fn registered_stationary_terminal_creation_releases_capacity_and_requires_fresh_target() {
+    for stale_source in [false, true] {
+        let fixture = Fixture::new();
+        let mut db = fixture.database();
+        append(&mut db, 1);
+        let path = fixture.0.join("terminal");
+        PUBLICATION_FAILURE.set(Some((PublicationStage::BeforeSelector, false)));
+        assert!(db
+            .create_consumer_with_capacity::<1, _>(id("terminal"), &path, options(100), initialize)
+            .is_err());
+        if stale_source {
+            append(&mut db, 2);
+        } else {
+            // Publish a different complete ledger image without advancing E.
+            // The retained selector must reject its stale native expected head.
+            let other = db
+                .runtime
+                .get()
+                .unwrap()
+                .store
+                .reserve_registered_search_consumer(
+                    "other-reservation",
+                    &fixture.0.join("other"),
+                    hawdb_storage::consumer_allocation::ConsumerLeasePolicy {
+                        max_idle_commits: 100,
+                        expires_at_commit_epoch: 100,
+                    },
+                )
+                .unwrap();
+            drop(other);
+            assert!(matches!(
+                db.open_or_create_consumer_with_capacity::<1, _>(
+                    id("terminal"),
+                    &path,
+                    options(100),
+                    |_, _| panic!("retained initializer")
+                ),
+                Err(Error::Database(HawDBError::ProjectionBusy))
+            ));
+        }
+        let error = db
+            .open_or_create_consumer_with_capacity::<1, _>(
+                id("terminal"),
+                &path,
+                options(100),
+                |_, _| panic!("retained initializer"),
+            )
+            .unwrap_err();
+        assert!(
+            matches!(&error, Error::Database(HawDBError::Execution(message))
+            if message.contains("settled") && message.contains("fresh target")),
+            "{error}"
+        );
+        {
+            let runtime = db.runtime.get().unwrap();
+            let registry = &runtime.projection_consumers;
+            assert!(registry.recovery.is_empty());
+            assert!(!registry.pending.contains("terminal"));
+            assert!(!registry.records.contains_key("terminal"));
+        }
+        assert!(
+            path.exists(),
+            "sealed generation evidence must survive settlement"
+        );
+        assert!(!std::fs::read_dir(fixture.0.join("database"))
+            .unwrap()
+            .any(|entry| entry
+                .unwrap()
+                .file_name()
+                .to_string_lossy()
+                .starts_with("consumer-selector-")));
+        let fresh = db
+            .open_or_create_consumer_with_capacity::<1, _>(
+                id("terminal"),
+                &fixture.0.join("fresh"),
+                options(100),
+                initialize,
+            )
+            .unwrap();
+        assert_eq!(
+            fresh.search_index().unwrap().document_count(),
+            if stale_source { 2 } else { 1 }
+        );
+        assert_eq!(db.file_descriptor_metrics().unwrap().reserved, 0);
+    }
+}
+
+#[test]
+fn registered_stationary_unavailable_registry_cannot_bypass_recovery_capacity() {
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    append(&mut db, 1);
+    PUBLICATION_FAILURE.set(Some((PublicationStage::BeforeSelector, false)));
+    assert!(db
+        .create_consumer_with_capacity::<1, _>(
+            id("held"),
+            &fixture.0.join("held"),
+            options(100),
+            initialize
+        )
+        .is_err());
+    for reinitialize in [false, true] {
+        assert!(matches!(
+            db.require_consumer_capacity::<1>(reinitialize),
+            Err(Error::RegistryFull)
+        ));
+    }
+    assert!(matches!(
+        db.create_consumer_with_capacity::<1, _>(
+            id("second"),
+            &fixture.0.join("second"),
+            options(100),
+            |_, _| panic!("capacity must precede initialization")
+        ),
+        Err(Error::RegistryFull)
+    ));
+    db.unregister_search_projection_consumer(&id("held"))
+        .unwrap();
+    db.require_consumer_capacity::<1>(true).unwrap();
 }

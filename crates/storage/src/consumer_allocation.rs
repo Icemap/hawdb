@@ -448,10 +448,7 @@ impl ConsumerAllocationSource {
                 .ok_or_else(|| invalid("Consumer expiry overflow"))?;
             let bytes = encode(&ledger)?;
             let name = format!("consumer-renew-{}.tmp", hawdb_core::generate_uuidv7()?);
-            let mut candidate = root.create_control_candidate(context, &name)?;
-            candidate.write_all(&bytes)?;
-            candidate.seal()?;
-            candidate.replace_head(context, LEDGER_FILE)?;
+            publish_ledger(root, context, &name, &bytes, &mut false)?;
             Ok(())
         })
     }
@@ -509,10 +506,7 @@ impl ConsumerAllocationSource {
             validate(&ledger)?;
             let bytes = encode(&ledger)?;
             let name = format!("consumer-unregister-{}.tmp", hawdb_core::generate_uuidv7()?);
-            let mut candidate = root.create_control_candidate(context, &name)?;
-            candidate.write_all(&bytes)?;
-            candidate.seal()?;
-            candidate.replace_head(context, LEDGER_FILE)?;
+            publish_ledger(root, context, &name, &bytes, &mut false)?;
             Ok(())
         })
     }
@@ -601,6 +595,11 @@ fn check_source_custody(
 }
 
 /// Kernel-created reservation, never a native birth/adoption/deletion token.
+///
+/// The caller must serialize each (source branch, database, Consumer ID) and
+/// relinquish any previous returned token before retrying a lost reservation
+/// response. There is no caller nonce: a retry reuses the same metadata-only
+/// operation, not an independent grant for a second concurrent native creator.
 #[doc(hidden)]
 #[derive(Debug)]
 pub struct ReservedConsumerAllocation {
@@ -1038,10 +1037,7 @@ pub(crate) fn bootstrap(
             // Catalog exclusion serializes bootstrap; a lost rename response is
             // resolved by the existing-ledger branch above on the next open.
             let name = format!("consumer-bootstrap-{}.tmp", hawdb_core::generate_uuidv7()?);
-            let mut candidate = root.create_control_candidate(context, &name)?;
-            candidate.write_all(&bytes)?;
-            candidate.seal()?;
-            candidate.replace_head(context, LEDGER_FILE)?;
+            publish_ledger(root, context, &name, &bytes, &mut false)?;
             Ok(proposed)
         }
         Err(error) if error.kind() == io::ErrorKind::NotFound => {
@@ -1129,7 +1125,7 @@ pub(crate) fn reserve(
         }
         // A lost reservation reply can only reuse a metadata-only row. Native
         // births and seals require their original owner/recovery protocol.
-        if let Some(row) = ledger.pending.iter().rev().find(|row| {
+        if let Some(index) = ledger.pending.iter().rposition(|row| {
             row.branch_id == key.0
                 && row.database_uuid == key.1
                 && row.consumer_id == consumer
@@ -1143,12 +1139,27 @@ pub(crate) fn reserve(
                     == previous.map_or(row.registration_uuid.as_str(), |receipt| {
                         receipt.selected.registration_uuid.as_str()
                     })
-                && (previous.is_some() || row.lease.is_some() == policy.is_some())
         }) {
+            if previous.is_none() && ledger.pending[index].lease != policy {
+                if ledger.pending[index].lease.is_some() != policy.is_some()
+                    || policy.is_some_and(|lease| lease.max_idle_commits == 0)
+                {
+                    return Err(HawDBError::Execution(
+                        "Consumer reservation retry has an incompatible lease policy".into(),
+                    ));
+                }
+                // Only a metadata-only reservation can be refreshed. Its UUIDs
+                // and high water remain stable, while a current caller policy
+                // must not inherit an already-expired first-attempt lease.
+                ledger.pending[index].lease = policy;
+                let bytes = encode(&ledger)?;
+                let name = format!("consumer-allocation-{}.tmp", hawdb_core::generate_uuidv7()?);
+                publish_ledger(root, context, &name, &bytes, &mut false)?;
+            }
             let file = root.open_mutable_child(context, LEDGER_FILE, false)?;
             file.sync_all()?;
             root.sync(context)?;
-            return Ok(row.clone());
+            return Ok(ledger.pending[index].clone());
         }
         if ledger.pending.len() >= MAX_PENDING {
             return Err(pending_capacity_exhausted(ledger.pending.len()));

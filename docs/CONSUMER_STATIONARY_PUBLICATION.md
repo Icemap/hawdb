@@ -133,13 +133,23 @@ kind of pending owner can resurrect the removed registration on a later retry.
 These owners are process-local. A process crash still uses the original durable
 birth/intent/selector protocol; an unsealed directory with no complete recovery
 proof remains retained evidence, not an automatically adopted empty projection.
-If source E changes before first selection, the prepared operation refuses
-rather than publishing stale freshness or rerunning the initializer implicitly.
+If source E changes before first selection, the prepared operation durably
+cancels its unattempted selector. A terminal `NotSelected` outcome likewise
+settles creation and releases its process-local owner and registration slot.
+Both return `Database(Execution)` with a fresh-target/rebuild action, never
+retryable `ProjectionBusy`. The sealed generation remains immutable evidence;
+creation on a fresh target with the current initializer is explicit.
+Transient admission, cleanup or outcome uncertainty still retains the owner.
+Retries of a retained preparation use its original options and immutable
+initializer output; new arguments do not replace that operation.
 
 The initial allocation ledger uses a synchronized private candidate and atomic
 head publication, so a torn bootstrap write cannot install partial authority.
-Lost metadata-only reservation replies reuse the original UUIDs/high water;
-native births require their own retained owner. File-create primitives expose
+Lost metadata-only reservation replies reuse the original UUIDs/high water,
+while refreshing a changed full lease policy before any native birth. Callers
+must serialize each Consumer key and relinquish the previous token before a
+reservation retry: there is no independent caller nonce. Native births require
+their own retained owner. File-create primitives expose
 successful exclusive creation before fallible metadata checks. Pre-effect
 control-selection FD refusals leave the same sealed owner retryable; attempted
 effects retain outcome resolution. First-WAL rollback keeps the original header

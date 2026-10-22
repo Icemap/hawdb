@@ -522,6 +522,11 @@ fn bootstrap_descriptor_refusal_keeps_ledger_unpublished_for_identity_retry() {
         assert!(!root.join(BOOTSTRAP_FILE).exists());
         // Refusal before the atomic selector has no authoritative identity.
         assert!(!ledger.exists());
+        assert!(!std::fs::read_dir(&root).unwrap().any(|entry| entry
+            .unwrap()
+            .file_name()
+            .to_string_lossy()
+            .starts_with("consumer-bootstrap-")));
     }
     let files = ProjectFileDescriptors::acquire(&root, 8).unwrap();
     assert_eq!(

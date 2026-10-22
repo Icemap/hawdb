@@ -109,6 +109,9 @@
   Retry cleanup before reinitializing the same target; never adopt or recursively
   delete an unpublished directory by its saved pathname. Keep pre-effect
   refusal, uncertain publication, process recovery and power-loss evidence distinct.
+- Terminal unselected creation and pre-selection source advancement must settle
+  the operation and release runtime custody/capacity. Do not retain them as
+  retryable Busy; require an explicit rebuild on a fresh target.
 
 ## Local Fuzz Verification
 

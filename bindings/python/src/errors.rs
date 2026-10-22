@@ -141,8 +141,15 @@ pub fn format_hawdb_error(error: &HawDBError) -> PyErr {
                 .and_then(|()| exception.value(py).setattr("retryable", true));
             attributes.err().unwrap_or(exception)
         }),
-        HawDBError::Execution(_)
-        | HawDBError::TransactionReadDependencyRefused { .. }
+        HawDBError::Execution(_) => Python::attach(|py| {
+            let exception = ExecutionError::new_err(message);
+            let attributes = exception
+                .value(py)
+                .setattr("kind", "execution")
+                .and_then(|()| exception.value(py).setattr("retryable", false));
+            attributes.err().unwrap_or(exception)
+        }),
+        HawDBError::TransactionReadDependencyRefused { .. }
         | HawDBError::BranchEvidenceBudgetExceeded { .. }
         | HawDBError::ReadBudgetExceeded(_)
         | HawDBError::GraphExpansionCandidateLimitExceeded { .. }
@@ -273,6 +280,12 @@ mod tests {
             assert!(exception.is_instance_of::<ExecutionError>(py));
             assert!(!exception.is_instance_of::<ResourceBudgetError>(py));
             assert!(!exception.value(py).hasattr("budget").unwrap());
+            assert!(!exception
+                .value(py)
+                .getattr("retryable")
+                .unwrap()
+                .extract::<bool>()
+                .unwrap());
         });
     }
 
