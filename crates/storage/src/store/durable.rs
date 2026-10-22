@@ -40,6 +40,7 @@ pub(super) use artifacts::{
     load_published_canonical_adjacency, load_published_property_projection,
 };
 pub(super) use manifest::DurableManifest;
+pub(super) use wal::WalAppendFile;
 
 use super::{
     cleanup_abandoned_checkpoint_preparations, derived_repair, doctor, has_storage_artifacts,
@@ -48,7 +49,7 @@ use super::{
     PROPERTY_SPILL_MANIFEST_MAX_BYTES, STABLE_ID_MAPPING_FILE, WAL_BINARY_FILE_HEADER_BYTES,
 };
 use crate::error::{HawDBError, Result};
-use crate::file_io::{self as fs, File};
+use crate::file_io as fs;
 use hawdb_integrity::Sha256Digest;
 use hawdb_storage::{
     append_table::{AppendGenerationArtifacts, AppendGenerationReader},
@@ -92,7 +93,7 @@ pub(super) struct DurableStore {
     projected_graphs_path: PathBuf,
     stable_id_mapping_path: PathBuf,
     pub(super) wal_path: PathBuf,
-    pub(super) wal_append_file: Option<Arc<File>>,
+    pub(super) wal_append_file: Option<Arc<WalAppendFile>>,
     // Current captured generation only. Explicit checkpoint/rotation transitions
     // still use their legacy paths and clear this custody until native adoption.
     pub(super) wal_append_owner: Option<Arc<DatabaseDirectoryLease>>,

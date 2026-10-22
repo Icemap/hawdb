@@ -1452,7 +1452,8 @@ impl GraphStore {
                     .as_mut()
                     .expect("admission opened a durable store");
                 if !read_only && let Some(file) = captured_active_wal.take() {
-                    durable.wal_append_file = Some(Arc::new(file));
+                    durable.wal_append_file =
+                        Some(Arc::new(super::durable::WalAppendFile::new(file)));
                     durable.wal_append_owner = Some(branch_lease);
                     #[cfg(test)]
                     {
@@ -3406,7 +3407,7 @@ mod tests {
             assert!(durable.wal_append_owner.is_some());
             let wal = durable.wal_path.clone();
             let before = std::fs::read(&wal).unwrap();
-            let mut handle = durable.wal_append_file.as_ref().unwrap().as_ref();
+            let mut handle = durable.wal_append_file.as_ref().unwrap().file();
             handle.seek(SeekFrom::Start(0)).unwrap();
             crate::store::set_wal_append_failpoint(crate::store::WalAppendFailure::PartialWrite);
             assert!(matches!(
@@ -3492,7 +3493,7 @@ mod tests {
                     .wal_append_file
                     .as_ref()
                     .unwrap();
-                assert!(file.matches_native_path(&saved).unwrap());
+                assert!(file.file().matches_native_path(&saved).unwrap());
             } else {
                 assert_eq!(std::fs::read(&saved).unwrap(), before);
             }
@@ -3540,8 +3541,8 @@ mod tests {
             .wal_append_file
             .as_ref()
             .expect("uncertain captured WAL must retain its original native file");
-        assert!(file.matches_native_path(&durable.wal_path).unwrap());
-        assert!(file.metadata().unwrap().len() > before);
+        assert!(file.file().matches_native_path(&durable.wal_path).unwrap());
+        assert!(file.file().metadata().unwrap().len() > before);
         assert_eq!(durable.wal_bytes, before);
         drop(store);
         let reopened = GraphStore::admit_captured_branch(request()).unwrap();
