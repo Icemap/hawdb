@@ -1257,3 +1257,324 @@ fn vector_index_sql_admits_like_matcher_scratch_before_evaluation() {
         }
     }
 }
+
+#[test]
+fn vector_index_sql_rejects_foreign_governor_before_execution() {
+    use crate::{
+        QueryStreamOptions, VectorIndexLanguageBudget, VectorIndexReadError, VectorIndexSqlRequest,
+    };
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    db.query_sql("CREATE TABLE vectors (id BIGINT PRIMARY KEY, embedding VECTOR(2))")
+        .unwrap();
+    let parameters = [Value::Vector(Vector::new(&[1.0, 0.0]).unwrap())];
+    db.query_sql_with_params(
+        "INSERT INTO vectors (id, embedding) VALUES (1, $1)",
+        &parameters,
+    )
+    .unwrap();
+    let consumer = db
+        .create_vector_index(
+            "rows",
+            &sql_field(),
+            fixture.0.join("index"),
+            registration(),
+            Default::default(),
+        )
+        .unwrap();
+    let work = RuntimeWorkRequest::foreground_query(128 << 20, 4 << 20).with_io_wave_slots(1);
+    let permit = db.search_projection_consumer_read_permit(work).unwrap();
+    let other_fixture = Fixture::new();
+    let mut other = other_fixture.database();
+    let foreign = other.search_projection_consumer_read_permit(work).unwrap();
+    let read = db
+        .begin_read_transaction()
+        .unwrap()
+        .bind_vector_index(&consumer, &permit)
+        .unwrap();
+    let budget = VectorIndexLanguageBudget {
+        index_working_bytes: NonZeroUsize::new(32 << 20).unwrap(),
+        index_result_bytes: NonZeroUsize::new(1 << 20).unwrap(),
+    };
+    for suffix in ["", " LIMIT 0"] {
+        let sql = format!(
+            "SELECT id FROM vector_index_search('rows', $1, candidates => 8, top_k => 1){suffix}"
+        );
+        let request = || VectorIndexSqlRequest {
+            sql: &sql,
+            parameters: &parameters,
+            output_limits: QueryStreamOptions::default(),
+            task: RuntimeTaskContext::default()
+                .with_memory_reservation(RuntimeMemoryReservation::new(128 << 20, 4 << 20)),
+        };
+        let mut delivered = 0;
+        let rejected = read.query_sql_streaming(&foreign, budget, request(), |_| {
+            delivered += 1;
+            Ok(())
+        });
+        assert!(
+            matches!(&rejected, Err(VectorIndexReadError::Query(HawDBError::Execution(message))) if message == "vector query permit belongs to another governor"),
+            "{rejected:?}"
+        );
+        assert_eq!(delivered, 0);
+        let accepted = read
+            .query_sql_streaming(&permit, budget, request(), |_| {
+                delivered += 1;
+                Ok(())
+            })
+            .unwrap();
+        let expected = usize::from(suffix.is_empty());
+        assert_eq!(delivered, expected);
+        assert_eq!(accepted.output_rows, expected);
+    }
+}
+
+#[test]
+fn vector_index_sql_rejects_unsupported_shapes_and_bindings() {
+    use crate::{
+        QueryStreamOptions, VectorIndexLanguageBudget, VectorIndexReadError, VectorIndexSqlRequest,
+    };
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    db.query_sql("CREATE TABLE vectors (id BIGINT PRIMARY KEY, embedding VECTOR(2))")
+        .unwrap();
+    let consumer = db
+        .create_vector_index(
+            "rows",
+            &sql_field(),
+            fixture.0.join("index"),
+            registration(),
+            Default::default(),
+        )
+        .unwrap();
+    let permit = db
+        .search_projection_consumer_read_permit(
+            RuntimeWorkRequest::foreground_query(128 << 20, 4 << 20).with_io_wave_slots(1),
+        )
+        .unwrap();
+    let read = db
+        .begin_read_transaction()
+        .unwrap()
+        .bind_vector_index(&consumer, &permit)
+        .unwrap();
+    let embedding = Value::Vector(Vector::new(&[1.0, 0.0]).unwrap());
+    let source = "vector_index_search('rows', $1, candidates => 8, top_k => 1)";
+    let mut cases = vec![
+        (
+            format!("SELECT DISTINCT id FROM {source}"),
+            vec![embedding.clone()],
+            "single source",
+        ),
+        (
+            format!("SELECT id FROM {source} GROUP BY id"),
+            vec![embedding.clone()],
+            "single source",
+        ),
+        (
+            format!("SELECT id FROM {source} FOR UPDATE"),
+            vec![embedding.clone()],
+            "single source",
+        ),
+        (
+            format!("SELECT v.id FROM {source} AS v JOIN vectors AS x ON v.id = x.id"),
+            vec![embedding.clone()],
+            "single source",
+        ),
+        (
+            "SELECT id FROM vector_index_search('rows', 'bad', candidates => 8, top_k => 1)".into(),
+            vec![],
+            "typed vector parameter",
+        ),
+        (
+            format!("SELECT id FROM {source}"),
+            vec![Value::String("bad".into())],
+            "typed vector parameter",
+        ),
+    ];
+    for (candidates, top_k, diagnostic) in [
+        (0, 1, "positive integers"),
+        (-1, 1, "positive integers"),
+        (8, 0, "positive integers"),
+        (8, -1, "positive integers"),
+        (1, 2, "top_k exceeds candidates"),
+    ] {
+        cases.push((format!("SELECT id FROM vector_index_search('rows', $1, candidates => {candidates}, top_k => {top_k})"), vec![embedding.clone()], diagnostic));
+    }
+    for (sql, parameters, diagnostic) in cases {
+        let rejected = read.query_sql_streaming(
+            &permit,
+            VectorIndexLanguageBudget {
+                index_working_bytes: NonZeroUsize::new(32 << 20).unwrap(),
+                index_result_bytes: NonZeroUsize::new(1 << 20).unwrap(),
+            },
+            VectorIndexSqlRequest {
+                sql: &sql,
+                parameters: &parameters,
+                output_limits: QueryStreamOptions::default(),
+                task: RuntimeTaskContext::default()
+                    .with_memory_reservation(RuntimeMemoryReservation::new(128 << 20, 4 << 20)),
+            },
+            |_| panic!("rejected query delivered a row"),
+        );
+        assert!(
+            matches!(&rejected, Err(VectorIndexReadError::Query(HawDBError::Semantic(message))) if message.contains(diagnostic)),
+            "{sql}: {rejected:?}"
+        );
+    }
+}
+
+#[test]
+fn vector_index_cypher_rejects_invalid_bindings_and_yields() {
+    use crate::{QueryRequest, VectorIndexLanguageBudget, VectorIndexReadError};
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    db.query("CREATE NODE TABLE Document").unwrap();
+    db.query("CREATE PROPERTY ON NODE TABLE Document(embedding) TYPE VECTOR(2)")
+        .unwrap();
+    let consumer = db
+        .create_vector_index(
+            "docs",
+            &VectorIndexField::NodeProperty {
+                table: "Document".into(),
+                property: "embedding".into(),
+            },
+            fixture.0.join("index"),
+            registration(),
+            Default::default(),
+        )
+        .unwrap();
+    let permit = db
+        .search_projection_consumer_read_permit(
+            RuntimeWorkRequest::foreground_query(128 << 20, 4 << 20).with_io_wave_slots(1),
+        )
+        .unwrap();
+    let mut read = db
+        .begin_read_transaction()
+        .unwrap()
+        .bind_vector_index(&consumer, &permit)
+        .unwrap();
+    let parameters = BTreeMap::from([
+        ("q".into(), Value::Vector(Vector::new(&[1.0, 0.0]).unwrap())),
+        ("bad".into(), Value::String("bad".into())),
+    ]);
+    for (arguments, yields, diagnostic) in [
+        (
+            "'docs', $q, candidates := 8, topK := -1",
+            "node",
+            "topK must be a non-negative integer",
+        ),
+        (
+            "'docs', $q, candidates := 8, topK := 0",
+            "node",
+            "0 < topK <= candidates",
+        ),
+        (
+            "'docs', $q, candidates := 0, topK := 1",
+            "node",
+            "0 < topK <= candidates",
+        ),
+        (
+            "'docs', $q, candidates := 1, topK := 2",
+            "node",
+            "0 < topK <= candidates",
+        ),
+        (
+            "'docs', 'bad', candidates := 8, topK := 1",
+            "node",
+            "typed vector parameter",
+        ),
+        (
+            "'docs', $bad, candidates := 8, topK := 1",
+            "node",
+            "typed vector parameter",
+        ),
+        (
+            "'docs', $q, candidates := 8, topK := 1",
+            "node, node AS other",
+            "YIELD columns must be distinct",
+        ),
+        (
+            "'docs', $q, candidates := 8, topK := 1",
+            "node AS same, distance AS same",
+            "YIELD aliases must be distinct",
+        ),
+        (
+            "'docs', $q, candidates := 8, topK := 1",
+            "score",
+            "unknown vector index YIELD column",
+        ),
+        (
+            "'docs', $q, candidates := 8, topK := 1",
+            "distance AS node",
+            "output names must be distinct",
+        ),
+    ] {
+        let query =
+            format!("CALL vector_index_search({arguments}) YIELD {yields} RETURN 1 AS value");
+        let rejected = read.query_cypher_streaming(
+            &permit,
+            VectorIndexLanguageBudget {
+                index_working_bytes: NonZeroUsize::new(32 << 20).unwrap(),
+                index_result_bytes: NonZeroUsize::new(1 << 20).unwrap(),
+            },
+            QueryRequest::new(&query).with_params(&parameters),
+            |_| panic!("rejected query delivered a row"),
+        );
+        assert!(
+            matches!(&rejected, Err(VectorIndexReadError::Query(HawDBError::Semantic(message))) if message.contains(diagnostic)),
+            "{query}: {rejected:?}"
+        );
+    }
+}
+
+#[test]
+fn vector_index_sql_rejects_reserved_distance_column() {
+    use crate::{
+        QueryStreamOptions, VectorIndexLanguageBudget, VectorIndexReadError, VectorIndexSqlRequest,
+    };
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    db.query_sql(
+        "CREATE TABLE vectors (id BIGINT PRIMARY KEY, embedding VECTOR(2), distance BIGINT)",
+    )
+    .unwrap();
+    let consumer = db
+        .create_vector_index(
+            "rows",
+            &sql_field(),
+            fixture.0.join("index"),
+            registration(),
+            Default::default(),
+        )
+        .unwrap();
+    let permit = db
+        .search_projection_consumer_read_permit(
+            RuntimeWorkRequest::foreground_query(128 << 20, 4 << 20).with_io_wave_slots(1),
+        )
+        .unwrap();
+    let read = db
+        .begin_read_transaction()
+        .unwrap()
+        .bind_vector_index(&consumer, &permit)
+        .unwrap();
+    let parameters = [Value::Vector(Vector::new(&[1.0, 0.0]).unwrap())];
+    let rejected = read.query_sql_streaming(
+        &permit,
+        VectorIndexLanguageBudget {
+            index_working_bytes: NonZeroUsize::new(32 << 20).unwrap(),
+            index_result_bytes: NonZeroUsize::new(1 << 20).unwrap(),
+        },
+        VectorIndexSqlRequest {
+            sql: "SELECT id FROM vector_index_search('rows', $1, candidates => 8, top_k => 1)",
+            parameters: &parameters,
+            output_limits: QueryStreamOptions::default(),
+            task: RuntimeTaskContext::default()
+                .with_memory_reservation(RuntimeMemoryReservation::new(128 << 20, 4 << 20)),
+        },
+        |_| panic!("rejected query delivered a row"),
+    );
+    assert!(
+        matches!(&rejected, Err(VectorIndexReadError::Query(HawDBError::Semantic(message))) if message == "vector index SQL reserves the distance output column"),
+        "{rejected:?}"
+    );
+}

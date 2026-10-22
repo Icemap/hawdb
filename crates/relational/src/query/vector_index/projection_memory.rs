@@ -137,7 +137,9 @@ fn predicate_scratch_bytes(
 }
 
 // Borrow matcher inputs without invoking scalar evaluation or cloning a parameter.
-// NULL has no matcher workspace; unsupported operands retain evaluator diagnostics.
+// The predicate evaluator accepts a column on the left and Column/Value on the
+// right. If it gains computed operands, this borrowing-only admission must grow
+// with it. NULL has no workspace; unsupported operands retain its diagnostics.
 fn text_operand<'a>(
     expression: &'a SqlExpression,
     row: &'a BoundRow<'_>,

@@ -14,9 +14,10 @@ to data, deletion or a schema changes its identity. Initial closures include
 foreign or stale claims, so acceptance cannot rely on a manifest merely being
 well-formed. A snapshot can be retained before binding and a bound read can
 survive source mutation and successor selection. `Prepare` and `Select` do not
-require `Advance`: two generations can bind the same source stamp. This refines
-full rebuild acknowledgement at an unchanged source epoch, authorized by the
-complete native selected receipt rather than equality with cached old bytes.
+require `Advance`: two generations can bind the same source stamp. This covers
+read-domain safety for a successor built at an unchanged source epoch. The model
+has no registry acknowledgement action and does not prove receipt validation or
+acknowledgement monotonicity; those are covered by the Consumer runtime tests.
 
 | Model action or invariant | Runtime refinement |
 | --- | --- |

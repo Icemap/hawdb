@@ -36,7 +36,10 @@ Canonical vectors and raw projection vectors use the same core distance
 implementation. The result is `1 - cosine_similarity` in [0, 2], including
 negative similarities. Legacy search relevance remains positive-only and
 unchanged. Neither clipped relevance nor quantized estimates may substitute for
-the reported exact distance. Stable identity breaks equal-distance ties.
+the reported exact distance. The kernel breaks equal-distance ties by the
+lexicographic encoded identity, which is not necessarily SQL primary-key order.
+Use an explicit `ORDER BY distance, id` (or the corresponding graph property)
+when the query requires that ordering.
 
 The candidate budget and final k are separate. Results are exact only within
 the generated candidate set. An exhausted candidate window does not establish
@@ -74,7 +77,8 @@ LIMIT 10;
 The embedding must be a canonical typed vector parameter. Both explicit limits
 are required, with `0 < top_k <= candidates`. Filtering cannot refill the
 already selected top-k window. Cypher binds real canonical nodes and can use
-ordinary graph traversal afterward. SQL decodes complete canonical primary keys,
+ordinary graph traversal afterward. Its node and distance output names must
+remain distinct, including the default name of an omitted YIELD output. SQL decodes complete canonical primary keys,
 including composite keys, and uses snapshot row point reads. It does not create
 a temporary copy of the canonical table or run a host-side join/filter.
 
@@ -88,9 +92,17 @@ in EXPLAIN. Broader SQL plan integration remains subject to explicit qualificati
 
 Language reports retain the kernel's actual backend, window, candidate/rerank
 counts, source epoch and native generation. Cypher reports may omit the index
-report if execution never reaches the operator. These observations do not establish ANN recall, process RSS bounds or production
+report if execution never reaches the operator. SQL currently executes candidate
+selection even for LIMIT 0, whereas Cypher can skip the operator. Reports do not
+yet count rows removed by canonical visibility or residual predicates; output
+cardinality alone cannot distinguish a small index from post-window filtering.
+These observations do not establish ANN recall, process RSS bounds or production
 Mem acceptance. Native producer work remains bounded by the existing generation
-writer and its component limits.
+writer and its component limits. Full graph capture currently point-queries each
+node candidate, including nodes outside the target label. A sparse target label
+can therefore exhaust the explicit feed-work budget; the build fails instead
+of publishing a partial source. Label-aware source capture and plan/report cost
+improvements remain subsequent work.
 
 ## Identity and lifecycle refinement
 
@@ -137,6 +149,10 @@ The generic Mem document catch-up mapper is not the maintenance mapping for a
 schema-bound vector index. The facade refuses that combination through both legacy and covered catch-up entrypoints. A full vector
 rebuild may refresh the schema digest after an unrelated schema change, but a
 changed target identity, dimension or algorithm requires a new definition.
+Dropping and recreating a graph property changes its identity; reordering SQL
+columns changes their bound ordinal. Rebuilding the old definition then refuses.
+Remove the old Consumer through its normal lifecycle and create a new vector
+index definition before admitting reads against the changed target.
 
 Recovery preserves the existing project-authority boundary: a canonical read
 transaction retained from a closed database can defer reopening an uncertain
