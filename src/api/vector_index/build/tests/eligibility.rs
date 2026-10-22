@@ -405,8 +405,13 @@ fn vector_index_exact_visibility_precedes_top_k() {
     }
     db.query("CREATE (:Origin {id: 1, scope: 'out'})").unwrap();
     db.query("CREATE (:Origin {id: 2, scope: 'in'})").unwrap();
-    db.query("MATCH (o:Origin), (d:Document) WHERE o.id = d.id CREATE (o)-[:LINK]->(d)")
+    for id in [1, 2] {
+        db.query_with_params(
+            "MATCH (o:Origin {id: $id}), (d:Document {id: $id}) CREATE (o)-[:LINK]->(d)",
+            &BTreeMap::from([("id".into(), Value::Int(id))]),
+        )
         .unwrap();
+    }
     let consumer = db
         .create_vector_index(
             "nodes",
@@ -657,6 +662,8 @@ fn vector_index_exact_sql_hands_one_memory_ledger_to_output() {
         collect_vector_eligible_domain, execute_vector_index_select, VectorIndexCandidates,
         VectorIndexInput, VectorIndexSqlExecution,
     };
+    // Canonical hydration needs a default 1 MiB row page plus live query state.
+    const MEMORY_BYTES: usize = 4 << 20;
     struct Candidates(Vec<(String, f64)>);
     impl VectorIndexCandidates for Candidates {
         fn row_count(&self) -> usize {
@@ -699,14 +706,14 @@ fn vector_index_exact_sql_hands_one_memory_ledger_to_output() {
     let hawdb_sql::SqlStatement::Select(select) = &prepared.statement else {
         panic!("expected SELECT")
     };
-    let ledger = QueryMemoryLedger::new(NonZeroUsize::new(1 << 20).unwrap());
+    let ledger = QueryMemoryLedger::new(NonZeroUsize::new(MEMORY_BYTES).unwrap());
     let execution = || VectorIndexSqlExecution {
         state: read.source.store.relational_state(),
         row_mode: hawdb_relational::row_runtime::RelationalRowReadMode::Store(&read.source.store),
         resources: crate::api::relational_query_resource_context(
             &read.source.config,
             Some(10),
-            Some(1 << 20),
+            Some(MEMORY_BYTES),
             None,
         ),
         memory_ledger: &ledger,
@@ -733,15 +740,15 @@ fn vector_index_exact_sql_hands_one_memory_ledger_to_output() {
     let output = ledger.account(
         QueryMemoryClass::BlockingState,
         "output phase oracle",
-        NonZeroUsize::new(1 << 20).unwrap(),
+        NonZeroUsize::new(MEMORY_BYTES).unwrap(),
     );
     assert!(
-        output.reserve(1 << 20).is_err(),
+        output.reserve(MEMORY_BYTES).is_err(),
         "a second phase cannot spend an independent full allowance"
     );
     drop(domain);
     assert_eq!(ledger.snapshot().used_bytes, 0);
-    drop(output.reserve(1 << 20).unwrap());
+    drop(output.reserve(MEMORY_BYTES).unwrap());
     let rows = execute_vector_index_select(
         select,
         &parameters,
