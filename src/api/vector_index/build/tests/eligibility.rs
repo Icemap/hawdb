@@ -755,8 +755,8 @@ fn vector_index_filtered_ann_refuses_missing_mappings_and_invalid_empty_requests
             eligible: Some(&domain),
         };
         if missing {
-            // Repeat with the same permit: failed mapping must release its
-            // original-custody spill, working memory and single I/O wave.
+            // Repeat with the same permit to preserve the mapping error and
+            // prove that failed queries do not block the next admission.
             for _ in 0..2 {
                 let error = read
                     .pin

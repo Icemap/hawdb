@@ -792,12 +792,11 @@ fn lower_logical(
         LogicalPlan::VectorIndexSearch(scan) => {
             // Bounded eligibility scans use canonical identity order, including
             // range predicates. Do not elide a required sort using index order.
-            let bounded_catalog =
-                (scan.mode == hawdb_core::VectorIndexQueryMode::Exact).then(|| {
-                    let mut catalog = catalog.clone();
-                    catalog.ordered_range_indexes.clear();
-                    catalog
-                });
+            let bounded_catalog = scan.mode.requires_eligible_domain().then(|| {
+                let mut catalog = catalog.clone();
+                catalog.ordered_range_indexes.clear();
+                catalog
+            });
             let input_catalog = bounded_catalog.as_ref().unwrap_or(catalog);
             PhysicalPlan::VectorIndexScan(Box::new((**scan).clone().map_input(|input| {
                 children.lower(

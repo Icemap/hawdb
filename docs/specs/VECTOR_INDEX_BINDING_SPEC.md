@@ -388,8 +388,11 @@ lane is introduced.
 
 Filtered-ANN guards additionally cover zero collection scoring, an exact rerank
 window smaller than eligibility, empty-domain validation, missing/ambiguous
-mappings, rejected metadata work, mapping refusal/retry and retained native
-resource release. SQL/Cypher parity, upstream LIMIT, canonical visibility and
+mappings, rejected metadata work, typed mapping memory refusal/retry and mapping
+lease refunds. Root empty-index retries preserve the mapping error and permit
+reuse; they do not measure native file descriptors or scratch cleanup. The
+existing captured candidate-spill and Stage cleanup guards independently cover
+those resource owners. SQL/Cypher parity, upstream LIMIT, canonical visibility and
 update/delete/NULL/reopen cases exercise both eligible modes. Existing crate,
 root and Search feature lanes own these cases; no new CI lane is introduced.
 

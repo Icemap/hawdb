@@ -112,7 +112,7 @@ mod tests {
                 vector_ordinal: ordinal,
                 metadata: Default::default(),
             };
-            for case in ["complete", "missing", "duplicate", "null", "work"] {
+            for case in ["complete", "missing", "duplicate", "null", "work", "memory"] {
                 let baseline = memory.ledger.snapshot().used_bytes;
                 {
                     let mut domain = VectorEligibleDomain::new(
@@ -130,6 +130,22 @@ mod tests {
                         domain.insert(id, vector.as_ref()).unwrap();
                     }
                     domain.finish().unwrap();
+                    if case == "memory" {
+                        let retained = memory.ledger.snapshot().used_bytes;
+                        let blocked = context
+                            .memory
+                            .reserve(context.memory.available_bytes())
+                            .unwrap();
+                        let error = EligibleMapping::new(&domain, context.memory)
+                            .err()
+                            .expect("mapping admission must refuse before allocation");
+                        assert!(
+                            matches!(error, HawDBError::ResourceBudgetExceeded(ref error) if error.resource == hawdb_core::ResourceBudgetKind::MemoryBytes),
+                            "{error:?}"
+                        );
+                        drop(blocked);
+                        assert_eq!(memory.ledger.snapshot().used_bytes, retained);
+                    }
                     let mut mapping = EligibleMapping::new(&domain, context.memory).unwrap();
                     mapping.charge_visit().unwrap();
                     assert!(!mapping.admit(&document("outside", Some(2))).unwrap());
@@ -150,10 +166,24 @@ mod tests {
                             Err(HawDBError::StorageIntegrity(_))
                         ));
                     } else {
+                        if case == "memory" {
+                            let retained = memory.ledger.snapshot().used_bytes;
+                            let blocked = context
+                                .memory
+                                .reserve(context.memory.available_bytes())
+                                .unwrap();
+                            let error = mapping.admit(&document("a", Some(0))).unwrap_err();
+                            assert!(
+                                matches!(error, HawDBError::ResourceBudgetExceeded(ref error) if error.resource == hawdb_core::ResourceBudgetKind::MemoryBytes),
+                                "{error:?}"
+                            );
+                            drop(blocked);
+                            assert_eq!(memory.ledger.snapshot().used_bytes, retained);
+                        }
                         mapping.charge_visit().unwrap();
                         assert!(mapping.admit(&document("a", Some(0))).unwrap());
                         match case {
-                            "complete" => {
+                            "complete" | "memory" => {
                                 mapping.charge_visit().unwrap();
                                 assert!(mapping.admit(&document("b", Some(1))).unwrap());
                                 mapping.finish().unwrap();
