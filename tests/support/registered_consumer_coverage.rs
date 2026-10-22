@@ -335,6 +335,123 @@ fn registered_consumer_post_e_source_conflict_preserves_receipt_and_retries() {
 }
 
 #[test]
+fn registered_consumer_reclamation_preserves_continuously_invalidated_covered_base() {
+    use std::sync::{mpsc, Arc};
+    use std::time::Duration;
+
+    let (_root, mut db, mut consumer) = setup_consumer(false);
+    let before = consumer.projection().receipt();
+    db.query("MATCH (n:Memory) SET n.value=2").unwrap();
+    let owner = Arc::new(DatabasePublicationOwner::new(db));
+    let (write, writes) = mpsc::channel();
+    let (committed, commits) = mpsc::channel();
+    let writer_owner = Arc::clone(&owner);
+    let writer = std::thread::spawn(move || {
+        for sequence in writes {
+            let epoch = writer_owner
+                .with_write(|db| {
+                    db.query_sql_with_params(
+                        "INSERT INTO unrelated (id) VALUES ($1)",
+                        &[Value::String(format!("writer-{sequence}"))],
+                    )?;
+                    db.commit_epoch()
+                })
+                .unwrap();
+            committed.send(epoch).unwrap();
+        }
+    });
+    for sequence in 0..8 {
+        let session = owner
+            .with_write(|db| {
+                Ok(db.begin_search_projection_consumer_catch_up(
+                    &consumer,
+                    consumer_config(),
+                    delta_e,
+                ))
+            })
+            .unwrap()
+            .unwrap();
+        let captured = session.source_epoch();
+        // The preparer cannot advance until a different thread has committed.
+        // Starting a writer thread alone would not prove this ordering.
+        write.send(sequence).unwrap();
+        let committed = commits.recv_timeout(Duration::from_secs(30)).unwrap();
+        assert!(committed > captured);
+        let mut session = session;
+        let mut complete = false;
+        for _ in 0..10000 {
+            if session.advance(one(), sort()).unwrap() == ProjectionStagingSessionStep::Complete {
+                complete = true;
+                break;
+            }
+        }
+        assert!(complete, "Consumer staging did not complete");
+        let covered = consumer_covered(session);
+        let report = owner
+            .with_write(|db| {
+                Ok(db.cleanup_search_projection_consumer(&consumer, &Default::default()))
+            })
+            .unwrap()
+            .unwrap();
+        assert_eq!(report.failed_generations, 0, "{report:?}");
+        assert_eq!(report.reclaimed_generations, 0, "{report:?}");
+        let outcome = owner
+            .with_write(|db| {
+                Ok(db.publish_search_projection_consumer_covered_update(
+                    &mut consumer,
+                    covered,
+                    ProjectionSourceDurability::RequireKnownDurable,
+                ))
+            })
+            .unwrap();
+        assert!(matches!(
+            outcome,
+            Err(ProjectionConsumerCatchUpError::Publication(
+                ProjectionPublicationError::Dependency(_)
+            ))
+        ));
+        owner
+            .with_read(|db| {
+                receipt_unchanged(db, &consumer, &before);
+                Ok(())
+            })
+            .unwrap();
+    }
+    drop(write);
+    writer.join().unwrap();
+
+    // This quiescent drain proves retained evidence remains usable. It must not
+    // be reported as simultaneous writer/watermark progress: all eight live
+    // attempts above were refused by the current Database dependency.
+    let covered = owner
+        .with_write(|db| Ok(consumer_covered(consumer_stage(db, &consumer))))
+        .unwrap();
+    owner
+        .with_write(|db| {
+            Ok(db.publish_search_projection_consumer_covered_update(
+                &mut consumer,
+                covered,
+                ProjectionSourceDurability::RequireKnownDurable,
+            ))
+        })
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        consumer.projection().receipt().source_epoch,
+        owner.with_read(Database::commit_epoch).unwrap()
+    );
+    assert_eq!(
+        consumer
+            .search_index()
+            .unwrap()
+            .document("memory:a")
+            .unwrap()
+            .content,
+        "2"
+    );
+}
+
+#[test]
 fn registered_consumer_competing_candidate_and_foreign_registration_cannot_publish() {
     // Idle tokens keep their records and memory, while fresh independent work
     // must remain possible with only one background execution slot.

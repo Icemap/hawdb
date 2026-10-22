@@ -1,0 +1,22 @@
+{
+  "command": [
+    "/home/hawkingrei/devel/nowledge/skein/target/consumer-publication-867-release/release/deps/consumer_publication-7f0adf8e1e199222",
+    "--mode",
+    "covered",
+    "--writers",
+    "1",
+    "--documents",
+    "512",
+    "--payload",
+    "1024",
+    "--writes",
+    "1024",
+    "--quiet-samples",
+    "32",
+    "--root",
+    "/home/hawkingrei/devel/nowledge/skein/target/consumer-publication-fixtures/consumer-publication-2-0-11"
+  ],
+  "returncode": 101,
+  "stdout": "",
+  "stderr": "\nthread '<unnamed>' (107) panicked at benches/consumer_publication/workload.rs:147:58:\ncalled `Result::unwrap()` on an `Err` value: Feed(Source(Execution(\"baseline source reservation exhausted\")))\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\nthread 'main' (104) panicked at benches/consumer_publication.rs:191:36:\ncalled `Result::unwrap()` on an `Err` value: Any { .. }\n"
+}

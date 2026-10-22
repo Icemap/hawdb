@@ -1,0 +1,8 @@
+   Compiling hawdb v0.11.0 (/tmp/hawdb-867-generation-reclamation)
+    Finished `test` profile [optimized] target(s) in 2.12s
+     Running tests/mvcc_staging_session.rs (/home/hawkingrei/devel/nowledge/skein/target/consumer-reclamation-867/debug/deps/mvcc_staging_session-788debced1e568bc)
+
+running 1 test
+test coverage::registered_consumer::registered_consumer_reclamation_preserves_continuously_invalidated_covered_base ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 27 filtered out; finished in 0.11s

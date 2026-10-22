@@ -1,0 +1,41 @@
+   Compiling hawdb-core v0.11.0 (/tmp/hawdb-867-generation-reclamation/crates/core)
+   Compiling hawdb-ddl v0.11.0 (/tmp/hawdb-867-generation-reclamation/crates/ddl)
+   Compiling hawdb-expression v0.11.0 (/tmp/hawdb-867-generation-reclamation/crates/expression)
+   Compiling hawdb-qos v0.11.0 (/tmp/hawdb-867-generation-reclamation/crates/qos)
+   Compiling hawdb-analytics v0.11.0 (/tmp/hawdb-867-generation-reclamation/crates/analytics)
+   Compiling hawdb-evidence v0.11.0 (/tmp/hawdb-867-generation-reclamation/crates/evidence)
+   Compiling hawdb-fuzz-contracts v0.11.0 (/tmp/hawdb-867-generation-reclamation/crates/fuzz-contracts)
+   Compiling hawdb-cypher v0.11.0 (/tmp/hawdb-867-generation-reclamation/crates/cypher)
+   Compiling hawdb-optimizer-relational v0.11.0 (/tmp/hawdb-867-generation-reclamation/crates/optimizer-relational)
+   Compiling hawdb-telemetry v0.11.0 (/tmp/hawdb-867-generation-reclamation/crates/telemetry)
+   Compiling hawdb-plan-cypher v0.11.0 (/tmp/hawdb-867-generation-reclamation/crates/plan-cypher)
+   Compiling hawdb-storage v0.11.0 (/tmp/hawdb-867-generation-reclamation/crates/storage)
+   Compiling hawdb-plan-cache v0.11.0 (/tmp/hawdb-867-generation-reclamation/crates/plan-cache)
+   Compiling hawdb-optimizer-graph v0.11.0 (/tmp/hawdb-867-generation-reclamation/crates/optimizer-graph)
+   Compiling hawdb-sql v0.11.0 (/tmp/hawdb-867-generation-reclamation/crates/sql)
+   Compiling hawdb-optimizer v0.11.0 (/tmp/hawdb-867-generation-reclamation/crates/optimizer)
+   Compiling hawdb-query-policy v0.11.0 (/tmp/hawdb-867-generation-reclamation/crates/query-policy)
+   Compiling hawdb-executor v0.11.0 (/tmp/hawdb-867-generation-reclamation/crates/executor)
+   Compiling hawdb-search v0.11.0 (/tmp/hawdb-867-generation-reclamation/crates/search)
+   Compiling hawdb-system-sql v0.11.0 (/tmp/hawdb-867-generation-reclamation/crates/system-sql)
+   Compiling hawdb-artifact v0.11.0 (/tmp/hawdb-867-generation-reclamation/crates/artifact)
+   Compiling hawdb-relational v0.11.0 (/tmp/hawdb-867-generation-reclamation/crates/relational)
+   Compiling hawdb-explain v0.11.0 (/tmp/hawdb-867-generation-reclamation/crates/explain)
+   Compiling hawdb-compat v0.11.0 (/tmp/hawdb-867-generation-reclamation/crates/compat)
+   Compiling hawdb-resource-profile v0.11.0 (/tmp/hawdb-867-generation-reclamation/crates/resource-profile)
+   Compiling hawdb-nowledge-contracts v0.11.0 (/tmp/hawdb-867-generation-reclamation/crates/nowledge-contracts)
+   Compiling hawdb-bootstrap v0.11.0 (/tmp/hawdb-867-generation-reclamation/crates/bootstrap)
+   Compiling hawdb-readiness v0.11.0 (/tmp/hawdb-867-generation-reclamation/crates/readiness)
+   Compiling hawdb v0.11.0 (/tmp/hawdb-867-generation-reclamation)
+   Compiling hawdb-mvcc-fuzz v0.0.0 (/tmp/hawdb-867-generation-reclamation/tools/mvcc-fuzz)
+    Finished `dev` profile [optimized] target(s) in 6m 20s
+     Running `/home/hawkingrei/devel/nowledge/skein/target/consumer-reclamation-867/debug/hawdb-mvcc-fuzz run --seconds 30 --explain`
+PASS | 5352 cases | 30000 ms | target/mvcc-fuzz/331391-1792657110437021140
+  same_key           T1 first:    330  T2 first:    339
+  disjoint           T1 first:    317  T2 first:    352
+  net_zero           T1 first:    165  T2 first:    504
+  absent_delete      T1 first:    341  T2 first:    328
+  delete_insert      T1 first:    181  T2 first:    488
+  broad_narrow       T1 first:    337  T2 first:    332
+  duplicate_insert   T1 first:    337  T2 first:    332
+  rollback           T1 first:    329  T2 first:    340

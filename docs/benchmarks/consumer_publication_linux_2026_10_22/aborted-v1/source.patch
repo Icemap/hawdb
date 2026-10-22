@@ -1,0 +1,51 @@
+--- a/benches/consumer_publication.rs
++++ b/benches/consumer_publication.rs
+@@ -84,7 +84,6 @@
+     let mut capture_wait = 0;
+     let mut capture_held = 0;
+     let mut preparation = 0;
+-    let mut captured_epoch = None;
+     let (outcome, wait, held) = if mode == Mode::Legacy {
+         exclusive(owner, |db| {
+             workload::legacy(db, consumer);
+@@ -94,7 +93,6 @@
+         let (session, wait, held) = exclusive(owner, |db| workload::begin(db, consumer));
+         capture_wait = wait;
+         capture_held = held;
+-        captured_epoch = Some(session.source_epoch());
+         let outside = Instant::now();
+         let covered = workload::prepare(session);
+         preparation = ns(outside);
+@@ -121,7 +119,6 @@
+     json!({
+         "outcome": outcome, "watermark_before": old, "watermark_after": new,
+         "advanced": new > old, "elapsed_ns": ns(started),
+-        "captured_source_epoch": captured_epoch,
+         "capture_wait_plus_entry_ns": capture_wait, "capture_exclusive_callback_ns": capture_held,
+         "preparation_outside_owner_ns": preparation,
+         "publication_wait_plus_entry_ns": wait, "publication_exclusive_callback_ns": held,
+@@ -250,9 +247,6 @@
+         "source_epoch_before": initial, "source_epoch_after_writers": source_after_writers,
+         "watermark_after_concurrent_phase": watermark_after_writers, "watermark_advances_with_active_writers": active_advances,
+         "publication_attempts": attempts, "quiescent_publication_samples": quiet_samples,
+-        "publication_attempt_limit": 128,
+-        "publication_attempt_limit_reached_with_active_writers": attempts.len() == 128
+-            && attempts.last().unwrap()["writers_active_after"].as_u64().unwrap() > 0,
+         "writer_samples": workers, "verified_documents": documents,
+         "simultaneous_progress_qualified": false,
+         "qualification_note": "Thread activity and interleaved serialized publications do not prove progress with a committed post-E write. The deterministic post-E regression remains a refusal; quiescent samples cannot satisfy this gate.",
+--- a/benches/consumer_publication/workload.rs
++++ b/benches/consumer_publication/workload.rs
+@@ -136,10 +136,8 @@
+                     lookups: nz(100_000),
+                     compressed_segment_bytes: NonZeroU64::new(64 << 20).unwrap(),
+                     expanded_segment_bytes: NonZeroU64::new(64 << 20).unwrap(),
+-                    // Each lookup prepays the full segment allowance, even
+-                    // when repeated documents share a much smaller segment.
+-                    total_compressed_bytes: NonZeroU64::new(512 << 30).unwrap(),
+-                    total_expanded_bytes: NonZeroU64::new(512 << 30).unwrap(),
++                    total_compressed_bytes: NonZeroU64::new(4 << 30).unwrap(),
++                    total_expanded_bytes: NonZeroU64::new(4 << 30).unwrap(),
+                 },
+             },
+             full,

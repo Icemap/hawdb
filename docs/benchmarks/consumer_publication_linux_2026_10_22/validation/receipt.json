@@ -1,0 +1,72 @@
+{
+  "recorded_utc": "2026-10-22T08:20:53.493498+00:00",
+  "production_reference": "47fdffc9d626cb0d0c7a7ba4c647366d723cab2e",
+  "measurement_checkout_head": "fad86fd0c58be70de609676a7ed7942b5e41be1d",
+  "measurement_checkout_merge_head": "277178caaeda9affd68b8703d67d71aec3e47a0f",
+  "source_binding": "../source-binding.json",
+  "regression_source_sha256": "7a336ef3575588dae3809cd5dfa397d5219b7be520fb881a71e599cd3d89c470",
+  "cargo_target_directory": "/home/hawkingrei/devel/nowledge/skein/target/consumer-reclamation-867",
+  "rust_toolchain": "1.97.1",
+  "checks": [
+    {
+      "command": "cargo test --locked -p hawdb --all-features --test mvcc_staging_session registered_consumer_reclamation_preserves_continuously_invalidated_covered_base -- --nocapture",
+      "result": "passed",
+      "selected_tests": 1,
+      "filtered_tests": 27,
+      "log": "live-writer-regression.log"
+    },
+    {
+      "command": "bazel test //tools/shiro:shiro_tests //tools/shiro:shiro_cli_tests //:hawdb_linux_ci_fuzz_smoke_test --build_event_json_file=/tmp/hawdb-867-validation/qualification-fuzz.bep.jsonl",
+      "result": "passed",
+      "passed_targets": 98,
+      "executed_runs": 81,
+      "cached_runs": 17,
+      "receipt": "fuzz-receipt.json",
+      "log": "fuzz.log"
+    },
+    {
+      "command": "cargo run --locked --manifest-path tools/mvcc-fuzz/Cargo.toml -- run --seconds 30 --explain",
+      "result": "passed",
+      "completed_cases": 5352,
+      "elapsed_ms": 30000,
+      "seed": 1,
+      "receipt": "mvcc-report.json",
+      "log": "mvcc.log"
+    },
+    {
+      "command": "cargo fmt --all -- --check",
+      "result": "passed"
+    },
+    {
+      "command": "cargo clippy --locked --workspace --all-targets --all-features -- -D warnings",
+      "result": "passed",
+      "log": "clippy.log",
+      "final_rerun": "prek.log"
+    },
+    {
+      "command": "prek run --all-files",
+      "result": "passed",
+      "log": "prek.log"
+    },
+    {
+      "command": "cargo bench --locked --bench consumer_publication --no-default-features --features full-text-search,background-maintenance --no-run --message-format=json",
+      "result": "passed",
+      "log": "release-final-build.log"
+    },
+    {
+      "result": "54 cases completed; all 18 covered cases failed the simultaneous-progress gate",
+      "raw_results": "../results.jsonl",
+      "sample_audit": "sample-audit.json",
+      "replay_command": "python3 scripts/measure-consumer-publication.py --binary /home/hawkingrei/devel/nowledge/skein/target/consumer-publication-867-release/release/deps/consumer_publication-7f0adf8e1e199222 --output /tmp/consumer-publication-replay --fixture-parent /tmp/consumer-publication-replay-fixtures",
+      "original_output_directory": "/tmp/hawdb-867-validation/publication-matrix-v2",
+      "original_fixture_parent": "/home/hawkingrei/devel/nowledge/skein/target/consumer-publication-fixtures"
+    }
+  ],
+  "interpretation": [
+    "Passing negative regressions and fuzz checks do not satisfy the continuous Consumer progress or short-publication gates.",
+    "The MVCC campaign covers independent in-memory optimistic-transaction schedules, not Consumer cleanup interleavings.",
+    "The 4655.194-second Bazel command includes compilation and cache activity, not a wall-clock fuzz campaign of that length.",
+    "No new Windows or minimal-feature execution is claimed locally; existing CI lanes own those checks.",
+    "The final PR branch preserves the production and qualification source bytes; reconstructing its ancestry from the production reference does not constitute a new measurement."
+  ]
+}
