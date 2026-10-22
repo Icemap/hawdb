@@ -1987,7 +1987,7 @@ mod tests {
         store.columnar_shadow.catalog = None;
         store.columnar_shadow.recovery = ColumnarShadowRecoveryStatus::default();
         let mut held = Vec::new();
-        loop {
+        for _ in 0..=32 {
             match fs::File::create(root.join(format!("held-{}", held.len()))) {
                 Ok(file) => held.push(file),
                 Err(error) => {

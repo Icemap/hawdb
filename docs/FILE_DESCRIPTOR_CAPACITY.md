@@ -62,9 +62,10 @@ internal scopes. They can reclaim retired generations while strict foreground
 capacity is occupied, while retaining all native handles and deletion evidence
 in the original project's accounting.
 
-Owned projection-writer temporaries, stationary producer removal, and Consumer
-publication/cleanup lease acquisition also enter internal scopes, including
-capturing their original directory. Strict foreground saturation cannot create
+Owned projection-writer temporaries, stationary producer removal, captured-directory
+publication leases, and Consumer publication/cleanup lease acquisition also enter
+internal scopes. Captured leases borrow their original directory context; path
+entry points include capturing their original directory. Strict foreground saturation cannot create
 cleanup debt by itself. Native unlink, directory-shape, ownership and I/O
 failures still retain evidence and require a retry; cancellation and memory
 admission failures preserve the previous cleanup disposition.

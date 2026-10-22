@@ -435,7 +435,7 @@ fn storage_inventory_tracks_selection_and_retries_budget_exhaustion() {
     let mut options = OpenOptions::new();
     options.read(true);
     let mut held = Vec::new();
-    loop {
+    for _ in 0..=32 {
         match files
             .io_context()
             .open(&options, &project.0.join("manifest.hawdb"))
