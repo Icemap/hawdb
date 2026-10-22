@@ -267,6 +267,7 @@ impl Error for RuntimeIoWaveError {
 }
 
 mod memory;
+mod work;
 pub use memory::{RuntimeMemoryController, RuntimeMemoryError, RuntimeMemoryPermit};
 
 #[derive(Debug, Clone)]
@@ -278,6 +279,7 @@ pub struct RuntimeTaskContext {
     memory_reservation: Option<RuntimeMemoryReservation>,
     memory_controller: Option<Arc<dyn RuntimeMemoryController>>,
     io_wave_controller: Option<Arc<dyn RuntimeIoWaveController>>,
+    work_budget: Option<Arc<work::RuntimeWorkBudget>>,
 }
 
 /// Memory already reserved for one task by the runtime governor.
@@ -329,6 +331,7 @@ impl RuntimeTaskContext {
             memory_reservation: None,
             memory_controller: None,
             io_wave_controller: None,
+            work_budget: None,
         }
     }
 
@@ -356,6 +359,7 @@ impl RuntimeTaskContext {
             memory_reservation: self.memory_reservation,
             memory_controller: self.memory_controller.clone(),
             io_wave_controller: self.io_wave_controller.clone(),
+            work_budget: self.work_budget.clone(),
         }
     }
 
@@ -481,6 +485,48 @@ impl RuntimeTaskContext {
                 RuntimeIoWaveTryAcquire::Acquired(Some(permit))
             })
         })
+    }
+
+    /// Starts a bounded execution scope while retaining every parent limit and
+    /// the original cancellation, memory and I/O admission. Clones share usage.
+    pub fn with_work_limit(mut self, limit: usize) -> Self {
+        self.work_budget = Some(Arc::new(work::RuntimeWorkBudget::new(
+            limit,
+            self.work_budget.take(),
+        )));
+        self
+    }
+
+    pub fn has_work_limit(&self) -> bool {
+        self.work_budget.is_some()
+    }
+
+    pub fn work_units(&self) -> usize {
+        self.work_budget.as_ref().map_or(0, |budget| budget.used())
+    }
+
+    /// Preserve a typed refusal across adapters whose error transport is text.
+    pub fn check_work_limit(&self) -> crate::Result<()> {
+        match self
+            .work_budget
+            .as_ref()
+            .and_then(|budget| budget.refusal())
+        {
+            Some(error) => Err(error.into()),
+            None => Ok(()),
+        }
+    }
+
+    /// Charge explicit candidate work before examining it, including rejected
+    /// candidates. Checkpoints and allocation byte counts are not work units.
+    pub fn charge_work(&self, units: usize) -> crate::Result<()> {
+        let Some(budget) = &self.work_budget else {
+            return Ok(());
+        };
+        self.checkpoint().map_err(|reason| {
+            crate::HawDBError::Execution(format!("runtime task stopped: {reason}"))
+        })?;
+        budget.charge(units)
     }
 
     pub fn deadline(&self) -> Option<Instant> {

@@ -1,21 +1,23 @@
 // Copyright 2026 Nowledge
 // Licensed under the Apache License, Version 2.0.
 
-//! Explicit approximate retrieval, with exact distance only inside its window.
+//! Explicit exact eligible-domain or approximate-window vector retrieval.
 
 use hawdb_core::VectorIndexDescriptor;
 use hawdb_executor::QueryMemoryLease;
 use hawdb_qos::RuntimeRetainedResult;
 use std::num::NonZeroUsize;
 
-/// A resolved definition and an explicit candidate window. The facade must
-/// independently bind canonical hydration to this generation's source epoch.
+/// A resolved definition and explicit execution mode. The facade binds
+/// canonical hydration and eligible domains to this generation's source epoch.
 #[derive(Debug, Clone, Copy)]
 pub struct VectorIndexQuery<'a> {
     pub descriptor: &'a VectorIndexDescriptor,
     pub embedding: &'a [f32],
     pub candidate_limit: NonZeroUsize,
     pub top_k: NonZeroUsize,
+    pub mode: hawdb_core::VectorIndexQueryMode,
+    pub eligible: Option<&'a hawdb_executor::vector_eligibility::VectorEligibleDomain<'a>>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -24,8 +26,8 @@ pub struct VectorIndexHit {
     pub distance: f64,
 }
 
-/// Candidate generation remains approximate even though raw distances are
-/// exact. Local candidates across segments may exceed the retained window.
+/// ANN candidate generation is approximate despite exact reranking. Exact
+/// mode reports its complete eligible domain separately from ANN windows.
 #[derive(Debug)]
 pub struct VectorIndexQueryReport {
     pub index_name: String,
@@ -39,6 +41,9 @@ pub struct VectorIndexQueryReport {
     pub top_k: usize,
     pub generated_candidate_count: usize,
     pub reranked_candidate_count: usize,
+    pub mode: hawdb_core::VectorIndexQueryMode,
+    pub filter_position: &'static str,
+    pub eligibility: Option<hawdb_executor::vector_eligibility::VectorEligibilityReport>,
 }
 
 /// Payload and its admission survive the query, Consumer pin and read permit.

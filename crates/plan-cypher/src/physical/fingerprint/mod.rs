@@ -329,7 +329,16 @@ impl PhysicalPlan {
                     output.push(':');
                 }
                 output.push_str(&format!("{}:{}:", scan.candidate_limit, scan.top_k));
+                output.push_str(&scan.max_work.to_string());
+                output.push_str(scan.mode.as_str());
+                output.push(':');
+                if let Some(variable) = &scan.eligible_variable {
+                    write_identifier(output, variable);
+                }
                 write_optional_predicate(output, scan.node_visibility_predicate.as_ref());
+                if let Some(input) = &scan.input {
+                    input.write_instance_fingerprint(output);
+                }
                 output.push(')');
             }
             PhysicalPlan::CreateNode { label, properties } => {

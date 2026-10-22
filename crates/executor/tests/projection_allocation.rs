@@ -37,6 +37,111 @@ thread_local! {
     static WATCH_COUNT: Cell<usize> = const { Cell::new(0) };
 }
 
+#[test]
+fn point_work_accounting_does_not_admit_extra_payload() {
+    use hawdb_executor::store::admit_graph_read;
+    use hawdb_storage::read_view::{
+        AdmittedNodeRead, AdmittedRelationshipRead, ControlledGraphReadAllocator,
+    };
+    const OVERHEAD: usize = 4096;
+    for persisted in [false, true] {
+        let directory = persisted.then(StoredPropertyDirectory::new);
+        let mut catalog = Catalog::default();
+        let mut store = directory
+            .as_ref()
+            .map_or_else(GraphStore::default, |directory| {
+                GraphStore::open(&directory.0, &mut catalog).unwrap()
+            });
+        let node = store
+            .create_node(&mut catalog, "Item", BTreeMap::new())
+            .unwrap();
+        let other = store
+            .create_node(&mut catalog, "Other", BTreeMap::new())
+            .unwrap();
+        let relationship = store
+            .create_relationship(&mut catalog, node, other, "LINK", BTreeMap::new())
+            .unwrap();
+        if let Some(directory) = &directory {
+            store.checkpoint(&catalog).unwrap();
+            drop(store);
+            catalog = Catalog::default();
+            store = GraphStore::open_with_durability_and_replay_config(
+                &directory.0,
+                &mut catalog,
+                Default::default(),
+                hawdb_storage::store::WalReplayConfig {
+                    residency_mode: hawdb_storage::store::StorageResidencyMode::OutOfCore,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        }
+        for node_read in [true, false] {
+            let bytes = if node_read {
+                hawdb_core::ids::node_allocation_bytes(&store.node_owned(node).unwrap().unwrap())
+            } else {
+                hawdb_core::ids::relationship_allocation_bytes(
+                    &store.relationship_owned(relationship).unwrap().unwrap(),
+                )
+            };
+            let limit = nz(bytes + OVERHEAD);
+            let ledger = QueryMemoryLedger::new(limit);
+            let account = ledger.account(
+                hawdb_executor::QueryMemoryClass::ExternalRead,
+                "point source",
+                limit,
+            );
+            let calls = Cell::new(0);
+            let task = RuntimeTaskContext::with_timeout(std::time::Duration::from_secs(30));
+            let mut allocate = |bytes| {
+                assert!(bytes > 0, "work must not call payload admission");
+                calls.set(calls.get() + 1);
+                admit_graph_read(&account, Some(&task), bytes + OVERHEAD).map(Some)
+            };
+            let mut policy = ControlledGraphReadAllocator::new(&mut allocate, Some(&task));
+            for expected_calls in 1..=16 {
+                if node_read {
+                    let read = store.node_with_allocation(node, None, &mut policy).unwrap();
+                    assert!(matches!(read, AdmittedNodeRead::Node(_)));
+                    assert_eq!(ledger.snapshot().used_bytes, limit.get());
+                    drop(read);
+                } else {
+                    let read = store
+                        .relationship_with_allocation(relationship, &mut policy)
+                        .unwrap();
+                    assert!(matches!(read, AdmittedRelationshipRead::Relationship(_)));
+                    assert_eq!(ledger.snapshot().used_bytes, limit.get());
+                    drop(read);
+                }
+                assert_eq!(calls.get(), expected_calls);
+                assert_eq!(ledger.snapshot().used_bytes, 0);
+            }
+            let other_label = catalog.label_id("Other").unwrap();
+            assert!(matches!(
+                store
+                    .node_with_allocation(node, Some(&[other_label]), &mut policy)
+                    .unwrap(),
+                AdmittedNodeRead::Missing
+            ));
+            assert!(matches!(
+                store
+                    .node_with_allocation(hawdb_storage::NodeId(u64::MAX), None, &mut policy)
+                    .unwrap(),
+                AdmittedNodeRead::Missing
+            ));
+            assert!(matches!(
+                store
+                    .relationship_with_allocation(hawdb_storage::RelId(u64::MAX), &mut policy)
+                    .unwrap(),
+                AdmittedRelationshipRead::Missing
+            ));
+            assert_eq!(calls.get(), 16, "absent reads must not admit payload");
+            assert_eq!(ledger.snapshot().peak_bytes, limit.get());
+            assert_eq!(task.work_units(), 0);
+        }
+    }
+}
+
 struct ProjectionAllocator;
 
 fn observe(layout: Layout) {
@@ -2598,12 +2703,16 @@ fn run_relationship_owned_read(persisted: bool, case: RelationshipReadCase) {
     let window = AllocationWindow::start(size);
     let result: Result<()> = match case {
         RelationshipReadCase::PointRefusal | RelationshipReadCase::PointStop => {
-            GraphExecutionRead::relationship_with_allocation(&store, relationship_id, &mut admit)
-                .map(|read| {
-                    if stop {
-                        assert!(matches!(read, AdmittedRelationshipRead::Stopped));
-                    }
-                })
+            GraphExecutionRead::relationship_with_allocation(
+                &store,
+                relationship_id,
+                &mut hawdb_storage::read_view::ControlledGraphReadAllocator::new(&mut admit, None),
+            )
+            .map(|read| {
+                if stop {
+                    assert!(matches!(read, AdmittedRelationshipRead::Stopped));
+                }
+            })
         }
         _ => GraphExecutionRead::visit_ordered_adjacent_relationships_with_allocation(
             &store,
@@ -2614,7 +2723,7 @@ fn run_relationship_owned_read(persisted: bool, case: RelationshipReadCase) {
                 budget_bytes: limit.get(),
                 account: Some(&account),
             },
-            &mut admit,
+            &mut hawdb_storage::read_view::ControlledGraphReadAllocator::new(&mut admit, None),
             &mut |relationship| {
                 buffered.push(relationship);
                 Ok(ScanControl::Continue)
@@ -2786,7 +2895,10 @@ fn relationship_owned_read_typed_window_streams_without_degree_sized_key_buffer(
                 budget_bytes: 0,
                 account: Some(&account),
             },
-            &mut |bytes| admit_graph_read(&account, None, bytes).map(Some),
+            &mut hawdb_storage::read_view::ControlledGraphReadAllocator::new(
+                &mut |bytes| admit_graph_read(&account, None, bytes).map(Some),
+                None,
+            ),
             &mut |relationship| {
                 selected.push(relationship);
                 Ok(if selected.len() == 2 {

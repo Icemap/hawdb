@@ -311,6 +311,9 @@ impl Parser<'_> {
         let embedding = self.parse_value()?;
         let mut candidates = None;
         let mut top_k = None;
+        let mut mode = None;
+        let mut eligible = None;
+        let mut max_work = None;
         loop {
             self.skip_ws();
             if self.consume_char(')') {
@@ -319,9 +322,17 @@ impl Parser<'_> {
             self.expect_char(',')?;
             let name = self.parse_ident()?;
             self.expect_token(":=")?;
+            if name.eq_ignore_ascii_case("eligible") {
+                if eligible.replace(self.parse_ident()?).is_some() {
+                    return Err(self.error("duplicate vector index search option"));
+                }
+                continue;
+            }
             let slot = match name.to_ascii_lowercase().as_str() {
                 "candidates" => &mut candidates,
                 "topk" => &mut top_k,
+                "mode" => &mut mode,
+                "maxwork" => &mut max_work,
                 _ => return Err(self.error("unsupported vector index search option")),
             };
             if slot.is_some() {
@@ -329,11 +340,41 @@ impl Parser<'_> {
             }
             *slot = Some(self.parse_value()?);
         }
+        let mode = match mode {
+            None => hawdb_core::VectorIndexQueryMode::AnnWindow,
+            Some(ValueExpression {
+                kind: ValueExpressionKind::Literal(hawdb_core::Value::String(mode)),
+                ..
+            }) => hawdb_core::VectorIndexQueryMode::parse(&mode)?,
+            _ => return Err(self.error("vector index mode must be a string literal")),
+        };
+        match mode {
+            hawdb_core::VectorIndexQueryMode::AnnWindow => {
+                if candidates.is_none() {
+                    return Err(self.error("vector index search requires candidates"));
+                }
+                if eligible.is_some() {
+                    return Err(self.error("ann_window does not accept an eligible input"));
+                }
+            }
+            hawdb_core::VectorIndexQueryMode::Exact => {
+                if candidates.is_some() || eligible.is_none() {
+                    return Err(self.error(
+                        "exact vector search requires eligible and does not accept candidates",
+                    ));
+                }
+            }
+        }
+        if (mode == hawdb_core::VectorIndexQueryMode::Exact) != max_work.is_some() {
+            return Err(self.error("maxWork is required only for exact vector search"));
+        }
         Ok(VectorIndexSearch {
             index,
             embedding,
-            candidates: candidates
-                .ok_or_else(|| self.error("vector index search requires candidates"))?,
+            mode,
+            eligible,
+            max_work,
+            candidates,
             top_k: top_k.ok_or_else(|| self.error("vector index search requires topK"))?,
         })
     }

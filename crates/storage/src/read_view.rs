@@ -19,6 +19,7 @@ use crate::cache::ManifestGeneration;
 /// Standalone storage callers may use their own explicit allocation policy.
 pub trait GraphReadAllocation {
     fn bytes(&self) -> usize;
+
     /// Reserve additional bytes atomically before allocation. Refusal leaves
     /// the existing reservation intact.
     fn grow(&mut self, bytes: usize) -> hawdb_core::Result<()>;
@@ -31,12 +32,56 @@ pub trait GraphReadAllocation {
     }
 }
 
-pub type GraphReadAllocator<'a> =
-    dyn FnMut(usize) -> hawdb_core::Result<Box<dyn GraphReadAllocation>> + 'a;
+/// A borrowed read policy. Work accounting never invokes payload admission:
+/// payload callbacks can add fixed overhead, flush a batch, or request Stop.
+pub struct GraphReadAllocator<'a, T = Box<dyn GraphReadAllocation>> {
+    admit: &'a mut dyn FnMut(usize) -> hawdb_core::Result<T>,
+    work: GraphReadWork<'a>,
+}
+
+impl<'a, T> GraphReadAllocator<'a, T> {
+    pub fn new(
+        admit: &'a mut dyn FnMut(usize) -> hawdb_core::Result<T>,
+        task_context: Option<&'a hawdb_core::RuntimeTaskContext>,
+    ) -> Self {
+        Self {
+            admit,
+            work: GraphReadWork(task_context.filter(|task| task.has_work_limit())),
+        }
+    }
+
+    pub fn reserve(&mut self, bytes: usize) -> hawdb_core::Result<T> {
+        (self.admit)(bytes)
+    }
+
+    pub(crate) fn work(&self) -> GraphReadWork<'a> {
+        self.work
+    }
+
+    pub(crate) fn reborrow(&mut self) -> GraphReadAllocator<'_, T> {
+        GraphReadAllocator {
+            admit: self.admit,
+            work: self.work,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct GraphReadWork<'a>(Option<&'a hawdb_core::RuntimeTaskContext>);
+
+impl GraphReadWork<'_> {
+    pub(crate) fn has_work_limit(self) -> bool {
+        self.0.is_some()
+    }
+
+    pub(crate) fn charge_work(self, units: usize) -> hawdb_core::Result<()> {
+        self.0.map_or(Ok(()), |task| task.charge_work(units))
+    }
+}
 
 /// None requests ordinary scan Stop before selected values are owned.
 pub type ControlledGraphReadAllocator<'a> =
-    dyn FnMut(usize) -> hawdb_core::Result<Option<Box<dyn GraphReadAllocation>>> + 'a;
+    GraphReadAllocator<'a, Option<Box<dyn GraphReadAllocation>>>;
 
 /// A point read can be absent from the requested visible label set, or stop
 /// normally before owning its payload. A successful read transfers its permit.
@@ -178,11 +223,15 @@ impl AdmittedNodeRecord {
 
 /// Shared allocation policy for concurrently live graph-read collections.
 pub struct GraphReadAdmission<'a> {
-    admit: std::cell::RefCell<&'a mut GraphReadAllocator<'a>>,
+    admit: std::cell::RefCell<
+        &'a mut dyn FnMut(usize) -> hawdb_core::Result<Box<dyn GraphReadAllocation>>,
+    >,
 }
 
 impl<'a> GraphReadAdmission<'a> {
-    pub fn new(admit: &'a mut GraphReadAllocator<'a>) -> Self {
+    pub fn new(
+        admit: &'a mut dyn FnMut(usize) -> hawdb_core::Result<Box<dyn GraphReadAllocation>>,
+    ) -> Self {
         Self {
             admit: std::cell::RefCell::new(admit),
         }

@@ -44,6 +44,18 @@ pub struct SeedReadContext<'a> {
 pub type VectorSeedContext<'a> = SeedReadContext<'a>;
 
 pub trait BatchExternalRead {
+    fn vector_index_definition(
+        &self,
+        _index: &str,
+    ) -> Result<(
+        hawdb_core::VectorIndexDescriptor,
+        hawdb_core::VectorIndexReadIdentity,
+    )> {
+        Err(HawDBError::Execution(
+            "vector eligibility requires a bound index definition".into(),
+        ))
+    }
+
     fn execute_vector_index(
         &self,
         request: VectorIndexExecutionRequest<'_>,
@@ -83,6 +95,16 @@ impl<'a> BatchExternalReadAdapter<'a> {
 }
 
 impl BatchExternalRead for BatchExternalReadAdapter<'_> {
+    fn vector_index_definition(
+        &self,
+        index: &str,
+    ) -> Result<(
+        hawdb_core::VectorIndexDescriptor,
+        hawdb_core::VectorIndexReadIdentity,
+    )> {
+        self.external.borrow_mut().vector_index_definition(index)
+    }
+
     fn execute_vector_index(
         &self,
         request: VectorIndexExecutionRequest<'_>,

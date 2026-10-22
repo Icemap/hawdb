@@ -152,12 +152,15 @@ pub struct VectorSearch {
     pub top_k: Option<ValueExpression>,
 }
 
-/// An explicit approximate index window, separate from legacy relevance search.
+/// Explicit index retrieval semantics, separate from legacy relevance search.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VectorIndexSearch {
     pub index: ValueExpression,
     pub embedding: ValueExpression,
-    pub candidates: ValueExpression,
+    pub mode: hawdb_core::VectorIndexQueryMode,
+    pub eligible: Option<String>,
+    pub candidates: Option<ValueExpression>,
+    pub max_work: Option<ValueExpression>,
     pub top_k: ValueExpression,
 }
 

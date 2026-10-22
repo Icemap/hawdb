@@ -2,6 +2,7 @@ use super::*;
 use hawdb_cypher::{OrderExpression as CypherOrderExpression, ProcedureCallKind, YieldItem};
 
 mod vector_index;
+pub(super) use vector_index::bind_vector_index;
 use vector_index::bind_vector_index_pipeline;
 
 pub(super) fn bind_procedure_pipeline(

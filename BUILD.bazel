@@ -162,7 +162,6 @@ _HAWDB_COMMON_BASE_DEPS = [
     "//crates/evidence:hawdb_evidence",
     "//crates/explain:hawdb_explain",
     "//crates/executor:hawdb_executor",
-    "//crates/expression:hawdb_expression",
     "//crates/fuzz-contracts:hawdb_fuzz_contracts",
     "//crates/integrity:hawdb_integrity",
     "//crates/optimizer:hawdb_optimizer",

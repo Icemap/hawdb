@@ -7,6 +7,9 @@ mod order;
 
 pub(super) fn normalize(plan: LogicalPlan) -> LogicalPlan {
     match plan {
+        LogicalPlan::VectorIndexSearch(scan) => {
+            LogicalPlan::VectorIndexSearch(Box::new((*scan).map_input(normalize)))
+        }
         LogicalPlan::GraphMatch {
             program,
             input: None,

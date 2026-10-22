@@ -127,7 +127,9 @@ pub struct SqlExplainStatement {
 pub struct SqlVectorIndexSearch {
     pub index: SqlValue,
     pub embedding: SqlValue,
-    pub candidates: SqlValue,
+    pub mode: hawdb_core::VectorIndexQueryMode,
+    pub candidates: Option<SqlValue>,
+    pub max_work: Option<SqlValue>,
     pub top_k: SqlValue,
 }
 

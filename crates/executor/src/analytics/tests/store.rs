@@ -47,7 +47,8 @@ impl GraphExecutionRead for Fixture {
             {
                 token.cancel();
             }
-            let Some(allocation) = admit(hawdb_core::ids::node_allocation_bytes(node))? else {
+            let Some(allocation) = admit.reserve(hawdb_core::ids::node_allocation_bytes(node))?
+            else {
                 return Ok(ScanControl::Stop);
             };
             self.node_visits.set(self.node_visits.get() + 1);
@@ -85,9 +86,9 @@ impl GraphExecutionRead for Fixture {
             {
                 token.cancel();
             }
-            let Some(allocation) = admit(hawdb_core::ids::projected_node_allocation_bytes(
-                node, properties,
-            ))?
+            let Some(allocation) = admit.reserve(
+                hawdb_core::ids::projected_node_allocation_bytes(node, properties),
+            )?
             else {
                 return Ok(ScanControl::Stop);
             };
@@ -124,7 +125,8 @@ impl GraphExecutionRead for Fixture {
             if rel_type.is_some_and(|selected| record.rel_type != selected) {
                 continue;
             }
-            let Some(allocation) = admit(hawdb_core::ids::relationship_allocation_bytes(record))?
+            let Some(allocation) =
+                admit.reserve(hawdb_core::ids::relationship_allocation_bytes(record))?
             else {
                 return Ok(ScanControl::Stop);
             };
@@ -170,7 +172,8 @@ impl GraphExecutionRead for Fixture {
             {
                 token.cancel();
             }
-            let Some(allocation) = admit(hawdb_core::ids::relationship_allocation_bytes(record))?
+            let Some(allocation) =
+                admit.reserve(hawdb_core::ids::relationship_allocation_bytes(record))?
             else {
                 return Ok(ScanControl::Stop);
             };

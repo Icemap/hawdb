@@ -200,10 +200,7 @@ impl GraphExecutionRead for GraphStore {
         &self,
         label_id: Option<LabelId>,
         properties: &BTreeSet<String>,
-        admit: &mut dyn FnMut(
-            usize,
-        )
-            -> Result<Box<dyn hawdb_storage::read_view::GraphReadAllocation>>,
+        admit: &mut hawdb_storage::read_view::GraphReadAllocator<'_>,
         consumer: &mut dyn FnMut(ProjectedNodeRecord) -> Result<ScanControl>,
     ) -> Result<ScanControl> {
         GraphStore::visit_projected_nodes_admitted(self, label_id, properties, admit, &mut |node| {
@@ -236,10 +233,7 @@ impl GraphExecutionRead for GraphStore {
         label_id: LabelId,
         access: &NodeProjectionAccess,
         properties: &BTreeSet<String>,
-        admit: &mut dyn FnMut(
-            usize,
-        )
-            -> Result<Box<dyn hawdb_storage::read_view::GraphReadAllocation>>,
+        admit: &mut hawdb_storage::read_view::GraphReadAllocator<'_>,
         consumer: &mut dyn FnMut(ProjectedNodeRecord) -> Result<ScanControl>,
     ) -> Result<ScanControl> {
         GraphStore::visit_projected_nodes_by_access_admitted(
@@ -259,10 +253,7 @@ impl GraphExecutionRead for GraphStore {
         property: &str,
         values: &[hawdb_core::Value],
         properties: &BTreeSet<String>,
-        admit: &mut dyn FnMut(
-            usize,
-        )
-            -> Result<Box<dyn hawdb_storage::read_view::GraphReadAllocation>>,
+        admit: &mut hawdb_storage::read_view::GraphReadAllocator<'_>,
         consumer: &mut dyn FnMut(ProjectedNodeRecord) -> Result<ScanControl>,
     ) -> Result<ScanControl> {
         GraphStore::visit_projected_nodes_by_property_admitted(
@@ -521,7 +512,10 @@ impl GraphExecutionRead for GraphStore {
             rel_type,
             direction,
             memory,
-            &mut |bytes| memory.admit_node(bytes, 0, None).map(Some),
+            &mut hawdb_storage::read_view::ControlledGraphReadAllocator::new(
+                &mut |bytes| memory.admit_node(bytes, 0, None).map(Some),
+                None,
+            ),
             &mut |relationship| {
                 let (relationship, _allocation) = relationship.into_parts();
                 consumer(relationship)
@@ -616,7 +610,10 @@ impl GraphExecutionRead for GraphStore {
             (node_id, rel_type, direction),
             filter,
             memory.budget_bytes,
-            &mut |bytes| memory.admit_node(bytes, 0, None).map(Some),
+            &mut hawdb_storage::read_view::ControlledGraphReadAllocator::new(
+                &mut |bytes| memory.admit_node(bytes, 0, None).map(Some),
+                None,
+            ),
             |row| {
                 let (relationship, _allocation) = row.into_parts();
                 consumer(relationship).map(to_store_control)
@@ -666,7 +663,10 @@ impl GraphExecutionRead for GraphStore {
         catalog: &Catalog,
         label_id: Option<LabelId>,
         filter: Option<&PropertyFilter>,
-        admit: &mut hawdb_storage::read_view::GraphReadAllocator<'_>,
+        admit: &mut dyn FnMut(
+            usize,
+        )
+            -> Result<Box<dyn hawdb_storage::read_view::GraphReadAllocation>>,
     ) -> Result<PrunedNodeScan<'a>> {
         let (scan, allocation) = GraphStore::scan_nodes_with_filter_pruning_admitted(
             self, catalog, label_id, filter, admit,

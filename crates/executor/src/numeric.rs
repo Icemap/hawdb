@@ -251,6 +251,13 @@ pub fn try_stream_columnar_projection_batches(
     execution_limit: ExecutionLimit,
     emit: &mut dyn FnMut(BindingBatch) -> Result<BatchControl>,
 ) -> Option<Result<BatchControl>> {
+    if context
+        .task_context
+        .is_some_and(RuntimeTaskContext::has_work_limit)
+    {
+        return None;
+    }
+
     let fragment = NumericFragment::try_prepare(items, input, context.catalog)?;
     Some(fragment.stream(items, context, execution_limit, emit))
 }
@@ -264,6 +271,13 @@ pub fn try_stream_columnar_node_projection_batches(
     execution_limit: ExecutionLimit,
     emit: &mut dyn FnMut(BindingBatch) -> Result<BatchControl>,
 ) -> Option<Result<BatchControl>> {
+    if context
+        .task_context
+        .is_some_and(RuntimeTaskContext::has_work_limit)
+    {
+        return None;
+    }
+
     if context.store.is_out_of_core() {
         return None;
     }

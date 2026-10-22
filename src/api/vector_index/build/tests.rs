@@ -7,6 +7,8 @@ use hawdb_qos::RuntimeWorkRequest;
 use std::num::NonZeroU64;
 use std::path::PathBuf;
 
+mod eligibility;
+
 struct Fixture(PathBuf);
 impl Fixture {
     fn new() -> Self {
@@ -380,28 +382,36 @@ fn vector_index_rebuild_replaces_updates_deletes_and_nulls_without_mixing_old_pi
             index_working_bytes: NonZeroUsize::new(32 << 20).unwrap(),
             index_result_bytes: NonZeroUsize::new(1 << 20).unwrap(),
         };
-        let embedding = Value::Vector(Vector::new(&[1.0, 0.0]).unwrap());
-        let mut rows = Vec::new();
-        let mut collect = |row: crate::executor::Row| {
-            rows.push((row["id"].clone(), row["distance"].clone()));
-            Ok(())
-        };
-        let (epoch, generation) = if graph {
-            let parameters = BTreeMap::from([("q".into(), embedding)]);
-            let report = read.query_cypher_streaming(permit, budget,
-                QueryRequest::new("CALL vector_index_search('index', $q, candidates := 10, topK := 10) YIELD node AS n, distance RETURN n.id AS id, distance ORDER BY distance, id").with_params(&parameters), &mut collect).unwrap();
-            let report = report.index().unwrap();
-            (report.source_epoch, report.generation)
-        } else {
-            let report = read.query_sql_streaming(permit, budget, VectorIndexSqlRequest {
-                sql: "SELECT id, distance FROM vector_index_search('index', $1, candidates => 10, top_k => 10) ORDER BY distance, id",
+        let mut expected = None;
+        for exact in [false, true] {
+            let embedding = Value::Vector(Vector::new(&[1.0, 0.0]).unwrap());
+            let mut rows = Vec::new();
+            let mut collect = |row: crate::executor::Row| {
+                rows.push((row["id"].clone(), row["distance"].clone()));
+                Ok(())
+            };
+            let (epoch, generation) = if graph {
+                let parameters = BTreeMap::from([("q".into(), embedding)]);
+                let report = read.query_cypher_streaming(permit, budget,
+                QueryRequest::new(if exact { "MATCH (d:Document) CALL vector_index_search('index', $q, mode := 'exact', eligible := d, topK := 10, maxWork := 100) YIELD node AS n, distance RETURN n.id AS id, distance ORDER BY distance, id" } else { "CALL vector_index_search('index', $q, candidates := 10, topK := 10) YIELD node AS n, distance RETURN n.id AS id, distance ORDER BY distance, id" }).with_params(&parameters), &mut collect).unwrap();
+                let report = report.index().unwrap();
+                (report.source_epoch, report.generation)
+            } else {
+                let report = read.query_sql_streaming(permit, budget, VectorIndexSqlRequest {
+                sql: if exact { "SELECT id, distance FROM vector_index_search('index', $1, mode => 'exact', top_k => 10, max_work => 100) ORDER BY distance, id" } else { "SELECT id, distance FROM vector_index_search('index', $1, candidates => 10, top_k => 10) ORDER BY distance, id" },
                 parameters: &[embedding], output_limits: QueryStreamOptions::default(), task: Default::default(),
             }, &mut collect).unwrap();
-            (report.index().source_epoch, report.index().generation)
-        };
-        assert_eq!(epoch, read.source_epoch());
-        assert_eq!(generation, read.generation());
-        rows
+                (report.index().source_epoch, report.index().generation)
+            };
+            assert_eq!(epoch, read.source_epoch());
+            assert_eq!(generation, read.generation());
+            if let Some(expected) = &expected {
+                assert_eq!(&rows, expected);
+            } else {
+                expected = Some(rows);
+            }
+        }
+        expected.unwrap()
     }
     for graph in [false, true] {
         let fixture = Fixture::new();

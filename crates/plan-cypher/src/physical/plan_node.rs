@@ -134,6 +134,10 @@ impl PhysicalPlan {
 
     pub fn children(&self) -> PhysicalPlanChildren<'_> {
         match self {
+            PhysicalPlan::VectorIndexScan(scan) => scan
+                .input
+                .as_deref()
+                .map_or(PlanChildren::None, PlanChildren::Unary),
             PhysicalPlan::GraphMatchExec { input, .. } => input
                 .as_deref()
                 .map_or(PlanChildren::None, PlanChildren::Unary),
@@ -173,7 +177,6 @@ impl PhysicalPlan {
             | PhysicalPlan::GraphAlgorithmOutput(_)
             | PhysicalPlan::VectorSeedScan { .. }
             | PhysicalPlan::GraphSeedScan { .. }
-            | PhysicalPlan::VectorIndexScan(_)
             | PhysicalPlan::TextSeedScan { .. }
             | PhysicalPlan::CreateNode { .. }
             | PhysicalPlan::UnwindMutation { .. }

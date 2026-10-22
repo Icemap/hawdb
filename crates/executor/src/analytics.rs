@@ -782,7 +782,9 @@ impl hawdb_analytics::ProjectionSource for GraphExecutionProjectionSource<'_> {
             Some(properties) => self.0.visit_projected_nodes_with_allocation(
                 None,
                 properties,
-                &mut admit,
+                &mut hawdb_storage::read_view::ControlledGraphReadAllocator::new(
+                    &mut admit, self.1,
+                ),
                 &mut |input| {
                     let (node, _allocation) = input.into_parts();
                     consume(NodeRecord {
@@ -792,12 +794,16 @@ impl hawdb_analytics::ProjectionSource for GraphExecutionProjectionSource<'_> {
                     })
                 },
             ),
-            None => self
-                .0
-                .visit_nodes_with_allocation(None, &mut admit, &mut |input| {
+            None => self.0.visit_nodes_with_allocation(
+                None,
+                &mut hawdb_storage::read_view::ControlledGraphReadAllocator::new(
+                    &mut admit, self.1,
+                ),
+                &mut |input| {
                     let (node, _allocation) = input.into_parts();
                     consume(node)
-                }),
+                },
+            ),
         };
         control
             .map(|control| match control {
@@ -814,17 +820,23 @@ impl hawdb_analytics::ProjectionSource for GraphExecutionProjectionSource<'_> {
         let mut ordinal = 0usize;
         let mut admit = |bytes| crate::store::admit_graph_read(&self.3, self.1, bytes).map(Some);
         self.0
-            .visit_relationships_with_allocation(None, &mut admit, &mut |input| {
-                let (relationship, _allocation) = input.into_parts();
-                if ordinal.is_multiple_of(1024) {
-                    runtime_checkpoint(self.1)?;
-                }
-                ordinal = ordinal.saturating_add(1);
-                Ok(match visitor(relationship) {
-                    hawdb_analytics::ProjectionScanControl::Continue => ScanControl::Continue,
-                    hawdb_analytics::ProjectionScanControl::Stop => ScanControl::Stop,
-                })
-            })
+            .visit_relationships_with_allocation(
+                None,
+                &mut hawdb_storage::read_view::ControlledGraphReadAllocator::new(
+                    &mut admit, self.1,
+                ),
+                &mut |input| {
+                    let (relationship, _allocation) = input.into_parts();
+                    if ordinal.is_multiple_of(1024) {
+                        runtime_checkpoint(self.1)?;
+                    }
+                    ordinal = ordinal.saturating_add(1);
+                    Ok(match visitor(relationship) {
+                        hawdb_analytics::ProjectionScanControl::Continue => ScanControl::Continue,
+                        hawdb_analytics::ProjectionScanControl::Stop => ScanControl::Stop,
+                    })
+                },
+            )
             .map(|control| match control {
                 ScanControl::Continue => hawdb_analytics::ProjectionScanControl::Continue,
                 ScanControl::Stop => hawdb_analytics::ProjectionScanControl::Stop,

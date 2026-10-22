@@ -181,6 +181,10 @@ pub(super) fn operators() -> Vec<(PhysicalPlan, bool)> {
         (
             PhysicalPlan::VectorIndexScan(Box::new(hawdb_plan_cypher::VectorIndexScan {
                 index: "docs".into(),
+                mode: hawdb_core::VectorIndexQueryMode::AnnWindow,
+                eligible_variable: None,
+                max_work: 0,
+                input: None,
                 embedding_parameter: "q".into(),
                 candidate_limit: 2,
                 top_k: 1,

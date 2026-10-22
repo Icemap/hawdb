@@ -69,19 +69,22 @@ impl GraphSeedScanSpec<'_> {
         let mut visited = 0usize;
         context.store.visit_nodes_with_allocation(
             Some(label_id),
-            &mut |bytes| {
-                runtime_checkpoint(context.task_context)?;
-                // Maps, aliases, private annotations, and overlapping output row
-                // capacity remain covered through the downstream callback.
-                let bytes = bytes
-                    .checked_add(4096)
-                    .and_then(|bytes| bytes.checked_add(self.variable.len()))
-                    .and_then(|bytes| bytes.checked_add(self.score_column.len()))
-                    .ok_or_else(|| {
-                        HawDBError::Execution("graph seed binding size overflow".into())
-                    })?;
-                admit_graph_read(&source_account, context.task_context, bytes).map(Some)
-            },
+            &mut hawdb_storage::read_view::ControlledGraphReadAllocator::new(
+                &mut |bytes| {
+                    runtime_checkpoint(context.task_context)?;
+                    // Maps, aliases, private annotations, and overlapping output row
+                    // capacity remain covered through the downstream callback.
+                    let bytes = bytes
+                        .checked_add(4096)
+                        .and_then(|bytes| bytes.checked_add(self.variable.len()))
+                        .and_then(|bytes| bytes.checked_add(self.score_column.len()))
+                        .ok_or_else(|| {
+                            HawDBError::Execution("graph seed binding size overflow".into())
+                        })?;
+                    admit_graph_read(&source_account, context.task_context, bytes).map(Some)
+                },
+                context.task_context,
+            ),
             &mut |input| {
                 runtime_checkpoint(context.task_context)?;
                 visited = visited.saturating_add(1);

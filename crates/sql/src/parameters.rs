@@ -138,12 +138,13 @@ fn collect_column_default_parameter(default: &SqlColumnDefault, positions: &mut 
 
 fn collect_select_parameters(select: &SelectStatement, positions: &mut BTreeSet<usize>) {
     if let Some(search) = &select.vector_index {
-        for value in [
-            &search.index,
-            &search.embedding,
-            &search.candidates,
-            &search.top_k,
-        ] {
+        for value in [&search.index, &search.embedding, &search.top_k] {
+            collect_value_parameter(value, positions);
+        }
+        if let Some(value) = &search.max_work {
+            collect_value_parameter(value, positions);
+        }
+        if let Some(value) = &search.candidates {
             collect_value_parameter(value, positions);
         }
     }

@@ -33,17 +33,11 @@ pub mod embedded;
 #[cfg(feature = "tokio-runtime")]
 pub mod embedded_tokio;
 pub mod executor;
-pub mod expression {
-    pub use hawdb_expression::*;
-}
 pub mod graph_route_evidence;
 pub mod mem_library_readiness;
 pub mod nowledge_fuzz;
 pub mod nowledge_inventory;
 pub mod nowledge_mem;
-pub mod query {
-    pub use hawdb_query::*;
-}
 pub mod query_runtime_preflight;
 mod relational_sql;
 pub mod replacement_summary;
@@ -64,11 +58,10 @@ pub mod telemetry;
 pub mod workload_fixtures;
 
 pub use compatibility_facades::{
-    background_maintenance_evidence, blackbox, bounded_read_evidence, crash_recovery_evidence,
-    cypher, graph_route_readiness, mem_integration_bundle, mem_integration_readiness, optimizer,
-    planner, previous_wrapper_preflight, production_evidence, qos, query_family_evidence,
-    route_ownership, search_candidate_shadow_evidence, search_projection_evidence,
-    storage_recovery_evidence,
+    background_maintenance_evidence, blackbox, bounded_read_evidence, cypher,
+    graph_route_readiness, mem_integration_bundle, mem_integration_readiness, optimizer, planner,
+    previous_wrapper_preflight, qos, query_family_evidence, route_ownership,
+    search_candidate_shadow_evidence, search_projection_evidence, storage_recovery_evidence,
 };
 
 pub mod error {
@@ -272,10 +265,6 @@ pub use compat::{
     EXTERNAL_SHADOW_PROTOCOL_VERSION, REQUIRED_EXTERNAL_SHADOW_CAPABILITIES,
 };
 pub use compiled_capabilities::compiled_runtime_capabilities;
-pub use crash_recovery_evidence::{
-    StorageCrashCaseEvidence, StorageCrashPoint, StorageCrashRecoveryEvidence,
-    STORAGE_CRASH_RECOVERY_EVIDENCE_PROTOCOL,
-};
 pub use cypher::RelationshipDirection;
 pub use embedded::{
     EmbeddedDeploymentProfile, EmbeddedQueryError, EmbeddedRuntimeResources, HawDBEmbedded,
@@ -341,6 +330,14 @@ pub use hawdb_core::{
 };
 pub use hawdb_core::{LogicalType, Vector, VectorDimension, VectorDistance, VectorRef};
 pub use hawdb_core::{VectorIndexBackend, VectorIndexDescriptor, VectorIndexTarget};
+pub use hawdb_evidence::{
+    ProductionEvidenceBinding, ProductionQualificationIdentity,
+    PRODUCTION_QUALIFICATION_POLICY_VERSION,
+};
+pub use hawdb_evidence::{
+    StorageCrashCaseEvidence, StorageCrashPoint, StorageCrashRecoveryEvidence,
+    STORAGE_CRASH_RECOVERY_EVIDENCE_PROTOCOL,
+};
 pub use hawdb_executor::numeric::retained::{
     NumericBufferIdentity as RetainedBufferIdentity,
     NumericBufferProvenance as RetainedBufferProvenance,
@@ -517,10 +514,6 @@ pub use previous_wrapper_preflight::{
     IntoNowledgePreviousWrapperPreflightInputs, NowledgePreviousWrapperPreflightCheckReport,
     NowledgePreviousWrapperPreflightInputs, NowledgePreviousWrapperPreflightReport,
     NOWLEDGE_PREVIOUS_WRAPPER_PREFLIGHT_PROTOCOL,
-};
-pub use production_evidence::{
-    ProductionEvidenceBinding, ProductionQualificationIdentity,
-    PRODUCTION_QUALIFICATION_POLICY_VERSION,
 };
 pub use qos::{
     BackgroundWorkDecision, BackgroundWorkHint, BackgroundWorkPlan, BackgroundWorkReasonCode,

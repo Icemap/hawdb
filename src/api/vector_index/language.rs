@@ -166,6 +166,25 @@ struct IndexProvider<'a> {
 }
 
 impl ExternalReadOperator for IndexProvider<'_> {
+    fn vector_index_definition(
+        &mut self,
+        index: &str,
+    ) -> Result<(VectorIndexDescriptor, hawdb_core::VectorIndexReadIdentity)> {
+        if index != self.definition.name() {
+            return Err(invalid(
+                "query index differs from the bound index definition",
+            ));
+        }
+        // VectorIndexReadTransaction construction binds the canonical snapshot
+        // and this pin to the same epoch. Returning the pin's identity lets the
+        // domain reject reuse with a different pin; it does not independently
+        // establish snapshot consistency for this transaction.
+        Ok((
+            self.definition.clone(),
+            self.pin.vector_index_read_identity(),
+        ))
+    }
+
     fn execute_vector_seed(
         &mut self,
         _: VectorSeedExecutionRequest<'_>,
@@ -200,7 +219,12 @@ impl IndexProvider<'_> {
                 "query index differs from the bound index definition",
             ));
         }
-        let candidate_limit = NonZeroUsize::new(request.candidate_limit)
+        let candidate_limit =
+            NonZeroUsize::new(if request.mode == hawdb_core::VectorIndexQueryMode::Exact {
+                request.top_k
+            } else {
+                request.candidate_limit
+            })
             .ok_or_else(|| invalid("empty vector candidate window"))?;
         let top_k = NonZeroUsize::new(request.top_k).ok_or_else(|| invalid("empty vector topK"))?;
         let coordinate_bytes = (request.embedding.dimension().get() as usize)
@@ -241,6 +265,8 @@ impl IndexProvider<'_> {
                 embedding: &embedding,
                 candidate_limit,
                 top_k,
+                mode: request.mode,
+                eligible: request.eligible,
             },
         ) {
             Ok(output) => Arc::new(output),

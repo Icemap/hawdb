@@ -119,6 +119,19 @@ impl VectorSeedExecutionOutput {
 }
 
 pub trait ExternalReadOperator {
+    /// Caller admits MAX_VECTOR_INDEX_DESCRIPTOR_BYTES before requesting a copy.
+    fn vector_index_definition(
+        &mut self,
+        _index: &str,
+    ) -> Result<(
+        hawdb_core::VectorIndexDescriptor,
+        hawdb_core::VectorIndexReadIdentity,
+    )> {
+        Err(HawDBError::Execution(
+            "vector eligibility requires a bound index definition".into(),
+        ))
+    }
+
     fn execute_vector_index(
         &mut self,
         request: VectorIndexExecutionRequest<'_>,

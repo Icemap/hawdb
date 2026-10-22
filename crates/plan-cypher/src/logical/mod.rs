@@ -56,7 +56,7 @@ const MAX_RETRIEVER_SEEDED_GRAPH_HOPS: usize = 2;
 /// Shared logical/physical parameters for explicit schema-bound index access.
 /// The attached read domain resolves the index and supplies canonical nodes.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct VectorIndexScan {
+pub struct VectorIndexScan<P> {
     pub index: String,
     pub embedding_parameter: String,
     pub candidate_limit: usize,
@@ -64,6 +64,28 @@ pub struct VectorIndexScan {
     pub variable: String,
     pub distance_column: String,
     pub node_visibility_predicate: Option<Predicate>,
+    pub mode: hawdb_core::VectorIndexQueryMode,
+    pub eligible_variable: Option<String>,
+    pub max_work: usize,
+    pub input: Option<Box<P>>,
+}
+
+impl<P> VectorIndexScan<P> {
+    pub fn map_input<Q>(self, lower: impl FnOnce(P) -> Q) -> VectorIndexScan<Q> {
+        VectorIndexScan {
+            index: self.index,
+            embedding_parameter: self.embedding_parameter,
+            candidate_limit: self.candidate_limit,
+            top_k: self.top_k,
+            variable: self.variable,
+            distance_column: self.distance_column,
+            node_visibility_predicate: self.node_visibility_predicate,
+            mode: self.mode,
+            eligible_variable: self.eligible_variable,
+            max_work: self.max_work,
+            input: self.input.map(|input| Box::new(lower(*input))),
+        }
+    }
 }
 
 /// A mutation property resolved from one bounded `UNWIND` row.
@@ -185,7 +207,7 @@ pub enum LogicalPlan {
         top_k: usize,
         output_external_id: bool,
     },
-    VectorIndexSearch(Box<VectorIndexScan>),
+    VectorIndexSearch(Box<VectorIndexScan<LogicalPlan>>),
     CreateNode {
         label: String,
         properties: BTreeMap<String, Value>,

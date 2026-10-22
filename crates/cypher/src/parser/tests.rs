@@ -178,3 +178,24 @@ fn vector_index_requires_unique_named_window_options() {
     )
     .unwrap();
 }
+
+#[test]
+fn vector_index_exact_options_require_static_mode_and_node_domain() {
+    for options in [
+        "mode := 'exact', topK := 1, maxWork := 10",
+        "mode := 'exact', eligible := d, topK := 1",
+        "mode := 'exact', eligible := d, topK := 1, maxWork := 10, candidates := 2",
+        "mode := $mode, eligible := d, topK := 1, maxWork := 10",
+        "mode := 'filtered_ann', eligible := d, topK := 1, maxWork := 10",
+        "mode := 'ann_window', candidates := 2, topK := 1, maxWork := 10",
+    ] {
+        assert!(
+            crate::parse(&format!(
+                "MATCH (d) CALL vector_index_search('docs', $q, {options}) YIELD node RETURN node"
+            ))
+            .is_err(),
+            "{options}"
+        );
+    }
+    crate::parse("MATCH (d) CALL vector_index_search('docs', $q, mode := 'exact', eligible := d, topK := 1, maxWork := $work) YIELD node RETURN node").unwrap();
+}
