@@ -130,6 +130,16 @@ impl DatabaseReadTransaction {
 }
 
 impl VectorIndexReadTransaction {
+    pub(super) fn require_query_permit(&self, permit: &RuntimePermit) -> Result<()> {
+        self.source.store.ensure_usable()?;
+        if !self._definition_memory.shares_governor_with(permit) {
+            return Err(HawDBError::Execution(
+                "vector query permit belongs to another governor".into(),
+            ));
+        }
+        Ok(())
+    }
+
     pub fn definition(&self) -> &VectorIndexDescriptor {
         &self.definition
     }
@@ -152,7 +162,7 @@ impl VectorIndexReadTransaction {
         candidate_limit: NonZeroUsize,
         top_k: NonZeroUsize,
     ) -> std::result::Result<VectorIndexRetainedOutput, VectorIndexReadError> {
-        self.source.store.ensure_usable()?;
+        self.require_query_permit(permit)?;
         self.pin
             .query_vector_index(
                 permit,

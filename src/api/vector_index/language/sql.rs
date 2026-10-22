@@ -37,7 +37,7 @@ impl VectorIndexReadTransaction {
         request: VectorIndexSqlRequest<'_>,
         mut consumer: impl FnMut(crate::executor::Row) -> Result<()>,
     ) -> std::result::Result<VectorIndexSqlReport, VectorIndexReadError> {
-        self.source.store.ensure_usable()?;
+        self.require_query_permit(permit)?;
         let (index_task, query_task) = budget.split(permit, request.task)?;
         crate::api::query_runtime::query_runtime_checkpoint(Some(&query_task))?;
         let VectorIndexTarget::Relational { table, .. } = self.definition.target() else {

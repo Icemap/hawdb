@@ -368,6 +368,41 @@ fn vector_index_read_domain_rejects_a_forged_schema_definition() {
 
 #[test]
 fn vector_index_rebuild_replaces_updates_deletes_and_nulls_without_mixing_old_pins() {
+    fn language_rows(
+        read: &mut crate::VectorIndexReadTransaction,
+        permit: &hawdb_qos::RuntimePermit,
+        graph: bool,
+    ) -> Vec<(Value, Value)> {
+        use crate::{
+            QueryRequest, QueryStreamOptions, VectorIndexLanguageBudget, VectorIndexSqlRequest,
+        };
+        let budget = VectorIndexLanguageBudget {
+            index_working_bytes: NonZeroUsize::new(32 << 20).unwrap(),
+            index_result_bytes: NonZeroUsize::new(1 << 20).unwrap(),
+        };
+        let embedding = Value::Vector(Vector::new(&[1.0, 0.0]).unwrap());
+        let mut rows = Vec::new();
+        let mut collect = |row: crate::executor::Row| {
+            rows.push((row["id"].clone(), row["distance"].clone()));
+            Ok(())
+        };
+        let (epoch, generation) = if graph {
+            let parameters = BTreeMap::from([("q".into(), embedding)]);
+            let report = read.query_cypher_streaming(permit, budget,
+                QueryRequest::new("CALL vector_index_search('index', $q, candidates := 10, topK := 10) YIELD node AS n, distance RETURN n.id AS id, distance ORDER BY distance, id").with_params(&parameters), &mut collect).unwrap();
+            let report = report.index().unwrap();
+            (report.source_epoch, report.generation)
+        } else {
+            let report = read.query_sql_streaming(permit, budget, VectorIndexSqlRequest {
+                sql: "SELECT id, distance FROM vector_index_search('index', $1, candidates => 10, top_k => 10) ORDER BY distance, id",
+                parameters: &[embedding], output_limits: QueryStreamOptions::default(), task: Default::default(),
+            }, &mut collect).unwrap();
+            (report.index().source_epoch, report.index().generation)
+        };
+        assert_eq!(epoch, read.source_epoch());
+        assert_eq!(generation, read.generation());
+        rows
+    }
     for graph in [false, true] {
         let fixture = Fixture::new();
         let mut db = fixture.database();
@@ -411,10 +446,10 @@ fn vector_index_rebuild_replaces_updates_deletes_and_nulls_without_mixing_old_pi
             .unwrap();
         let permit = db
             .search_projection_consumer_read_permit(
-                RuntimeWorkRequest::foreground_query(64 << 20, 1 << 20).with_io_wave_slots(1),
+                RuntimeWorkRequest::foreground_query(128 << 20, 4 << 20).with_io_wave_slots(1),
             )
             .unwrap();
-        let old = db
+        let mut old = db
             .begin_read_transaction()
             .unwrap()
             .bind_vector_index(&consumer, &permit)
@@ -464,7 +499,7 @@ fn vector_index_rebuild_replaces_updates_deletes_and_nulls_without_mixing_old_pi
         assert!(db.rebuild_vector_index(&mut consumer, cancelled).is_err());
         db.rebuild_vector_index(&mut consumer, Default::default())
             .unwrap();
-        let current = db
+        let mut current = db
             .begin_read_transaction()
             .unwrap()
             .bind_vector_index(&consumer, &permit)
@@ -498,6 +533,22 @@ fn vector_index_rebuild_replaces_updates_deletes_and_nulls_without_mixing_old_pi
             assert_eq!(result.report().generation, read.generation());
             assert_eq!(result.report().source_epoch, read.source_epoch());
         }
+        assert_eq!(
+            language_rows(&mut old, &permit, graph),
+            vec![
+                (Value::Int(1), Value::Float(0.0)),
+                (Value::Int(2), Value::Float(1.0)),
+                (Value::Int(3), Value::Float(2.0)),
+            ]
+        );
+        let expected_current = vec![
+            (Value::Int(1), Value::Float(1.0)),
+            (Value::Int(4), Value::Float(2.0)),
+        ];
+        assert_eq!(
+            language_rows(&mut current, &permit, graph),
+            expected_current
+        );
         let generation = current.generation();
         drop(current);
         drop(old);
@@ -514,12 +565,21 @@ fn vector_index_rebuild_replaces_updates_deletes_and_nulls_without_mixing_old_pi
         assert_eq!(distances(&mut db, &consumer), [1.0, 2.0]);
         let permit = db
             .search_projection_consumer_read_permit(
-                RuntimeWorkRequest::foreground_query(64 << 20, 1 << 20).with_io_wave_slots(1),
+                RuntimeWorkRequest::foreground_query(128 << 20, 4 << 20).with_io_wave_slots(1),
             )
             .unwrap();
         assert_eq!(
             consumer.pin(&permit).unwrap().publication_generation(),
             generation
+        );
+        let mut reopened = db
+            .begin_read_transaction()
+            .unwrap()
+            .bind_vector_index(&consumer, &permit)
+            .unwrap();
+        assert_eq!(
+            language_rows(&mut reopened, &permit, graph),
+            expected_current
         );
     }
 }
@@ -825,6 +885,35 @@ fn vector_index_sql_denies_wide_canonical_rows_before_delivery_and_can_retry() {
             assert_eq!(delivered, 0);
         }
     }
+    let repeated = (0..100)
+        .map(|ordinal| format!("body AS body{ordinal}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let sort = (0..100)
+        .map(|ordinal| format!("body{ordinal}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let repeated = format!("SELECT {repeated} FROM vector_index_search('rows', $1, candidates => 8, top_k => 1) ORDER BY {sort}");
+    let result = read.query_sql_streaming(
+        &permit,
+        VectorIndexLanguageBudget {
+            index_working_bytes: NonZeroUsize::new(32 << 20).unwrap(),
+            index_result_bytes: NonZeroUsize::new(1 << 20).unwrap(),
+        },
+        VectorIndexSqlRequest {
+            sql: &repeated,
+            parameters: &parameters,
+            output_limits: QueryStreamOptions::default(),
+            task: RuntimeTaskContext::default()
+                .with_memory_reservation(RuntimeMemoryReservation::new(40 << 20, 4 << 20)),
+        },
+        |_| panic!("unadmitted projection must not deliver"),
+    );
+    let Err(VectorIndexReadError::Query(HawDBError::ResourceBudgetExceeded(error))) = result else {
+        panic!("projection must exceed its grant");
+    };
+    assert_eq!(error.owner, "VectorIndexSqlScan source");
+    assert!(error.requested >= 100 * 256 * 1024, "{error:?}");
 }
 
 #[test]
@@ -918,4 +1007,98 @@ fn vector_index_read_domain_rejects_another_branch_of_the_same_database() {
             .bind_vector_index(&consumer, &permit),
         Err(VectorIndexReadError::BranchMismatch)
     ));
+}
+
+#[test]
+fn vector_index_language_rejects_foreign_governor_before_skipped_execution() {
+    use crate::{QueryRequest, VectorIndexLanguageBudget, VectorIndexReadError};
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    db.query("CREATE NODE TABLE Document").unwrap();
+    db.query("CREATE PROPERTY ON NODE TABLE Document(embedding) TYPE VECTOR(2)")
+        .unwrap();
+    let consumer = db
+        .create_vector_index(
+            "docs",
+            &VectorIndexField::NodeProperty {
+                table: "Document".into(),
+                property: "embedding".into(),
+            },
+            fixture.0.join("index"),
+            registration(),
+            Default::default(),
+        )
+        .unwrap();
+    let work = RuntimeWorkRequest::foreground_query(128 << 20, 4 << 20).with_io_wave_slots(1);
+    let permit = db.search_projection_consumer_read_permit(work).unwrap();
+    let other_fixture = Fixture::new();
+    let mut other = other_fixture.database();
+    let foreign = other.search_projection_consumer_read_permit(work).unwrap();
+    let mut read = db
+        .begin_read_transaction()
+        .unwrap()
+        .bind_vector_index(&consumer, &permit)
+        .unwrap();
+    let budget = VectorIndexLanguageBudget {
+        index_working_bytes: NonZeroUsize::new(32 << 20).unwrap(),
+        index_result_bytes: NonZeroUsize::new(1 << 20).unwrap(),
+    };
+    let parameters =
+        BTreeMap::from([("q".into(), Value::Vector(Vector::new(&[1.0, 0.0]).unwrap()))]);
+    for query in [
+        "CALL vector_index_search('docs', $q, candidates := 8, topK := 1) YIELD node AS m, distance RETURN m.id AS id LIMIT 0",
+        "MATCH (m:Document) RETURN m.id AS id",
+    ] {
+        let mut delivered = 0;
+        let rejected = read.query_cypher_streaming(&foreign, budget, QueryRequest::new(query).with_params(&parameters), |_| { delivered += 1; Ok(()) });
+        assert!(matches!(rejected, Err(VectorIndexReadError::Query(HawDBError::Execution(_)))), "{rejected:?}");
+        assert_eq!(delivered, 0);
+        let accepted = read.query_cypher_streaming(&permit, budget, QueryRequest::new(query).with_params(&parameters), |_| panic!("empty input"));
+        assert!(accepted.is_ok(), "{accepted:?}");
+    }
+}
+
+#[test]
+fn vector_index_sql_admits_empty_projection_literals_and_parameters_before_copy() {
+    use crate::{
+        QueryStreamOptions, VectorIndexLanguageBudget, VectorIndexReadError, VectorIndexSqlRequest,
+    };
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    db.query_sql("CREATE TABLE vectors (id BIGINT PRIMARY KEY, embedding VECTOR(2))")
+        .unwrap();
+    let consumer = db
+        .create_vector_index(
+            "rows",
+            &sql_field(),
+            fixture.0.join("index"),
+            registration(),
+            Default::default(),
+        )
+        .unwrap();
+    let permit = db
+        .search_projection_consumer_read_permit(
+            RuntimeWorkRequest::foreground_query(128 << 20, 4 << 20).with_io_wave_slots(1),
+        )
+        .unwrap();
+    let read = db
+        .begin_read_transaction()
+        .unwrap()
+        .bind_vector_index(&consumer, &permit)
+        .unwrap();
+    let embedding = Value::Vector(Vector::new(&[1.0, 0.0]).unwrap());
+    let wide = "x".repeat(256 << 10);
+    let literal = format!("SELECT '{wide}' AS body FROM vector_index_search('rows', $1, candidates => 8, top_k => 1) LIMIT 0");
+    for (sql, parameters) in [
+        (literal.as_str(), vec![embedding.clone()]),
+        ("SELECT coalesce($2, NULL) AS body FROM vector_index_search('rows', $1, candidates => 8, top_k => 1) LIMIT 0", vec![embedding, Value::String(wide)]),
+    ] {
+        for (working, succeeds) in [(32 * 1024 * 1024 + 64 * 1024, false), (128 << 20, true)] {
+            let result = read.query_sql_streaming(&permit, VectorIndexLanguageBudget {
+                index_working_bytes: NonZeroUsize::new(32 << 20).unwrap(), index_result_bytes: NonZeroUsize::new(1 << 20).unwrap(),
+            }, VectorIndexSqlRequest { sql, parameters: &parameters, output_limits: QueryStreamOptions::default(), task: RuntimeTaskContext::default().with_memory_reservation(RuntimeMemoryReservation::new(working, 4 << 20)) }, |_| panic!("LIMIT 0 must not deliver"));
+            if succeeds { assert_eq!(result.unwrap().output_rows, 0); }
+            else { assert!(matches!(result, Err(VectorIndexReadError::Query(HawDBError::ResourceBudgetExceeded(_)))), "{result:?}"); }
+        }
+    }
 }

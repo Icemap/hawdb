@@ -18,6 +18,16 @@ impl SearchOutOfCoreGenerationWriter {
         let root = index.path.as_deref().ok_or_else(|| {
             HawDBError::StorageIntegrity("Consumer producer has no private root".into())
         })?;
+        // The permit declares wave capacity but does not occupy an I/O slot.
+        // This fresh private producer uses uncaptured staging and no retirement
+        // pass, so its synchronous I/O and cleanup share this one wave. Return
+        // releases it before Consumer target preparation acquires its own wave.
+        let _io = task
+            .acquire_io_wave(NonZeroUsize::MIN)
+            .map_err(|error| HawDBError::Execution(error.to_string()))?
+            .ok_or_else(|| {
+                HawDBError::Execution("Consumer producer requires I/O admission".into())
+            })?;
         if !publication.matches_source_directory(root)? {
             return Err(HawDBError::StorageIntegrity(
                 "Consumer producer changed native root".into(),
@@ -114,3 +124,6 @@ impl SearchOutOfCoreGenerationWriter {
         Ok(snapshot)
     }
 }
+
+#[cfg(all(test, feature = "vector-search"))]
+mod tests;

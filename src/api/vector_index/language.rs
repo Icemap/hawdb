@@ -114,6 +114,7 @@ impl VectorIndexReadTransaction {
         request: QueryRequest<'_>,
         consumer: impl FnMut(crate::executor::Row) -> Result<()>,
     ) -> std::result::Result<VectorIndexLanguageReport, VectorIndexReadError> {
+        self.require_query_permit(permit)?;
         let task = request
             .task_context
             .or(self.source.task_context.as_ref())

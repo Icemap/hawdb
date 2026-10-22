@@ -106,6 +106,23 @@ fn vector_index_kernel_preserves_signed_distances_and_retained_reopen_results() 
     assert_eq!(output.report().candidate_limit, 8);
     assert_eq!(output.report().reranked_candidate_count, 5);
     assert_eq!(output.report().backend, "rabitq");
+    let narrow = pin
+        .query_vector_index(
+            &admission,
+            Default::default(),
+            VectorIndexQuery {
+                candidate_limit: NonZeroUsize::new(2).unwrap(),
+                top_k: NonZeroUsize::MIN,
+                ..request(&binding)
+            },
+        )
+        .unwrap();
+    assert_eq!(narrow.report().candidate_limit, 2);
+    assert_eq!(narrow.report().reranked_candidate_count, 2);
+    assert_eq!(narrow.hits().len(), 1);
+    assert_eq!(narrow.hits()[0].id, "a");
+    assert_eq!(narrow.hits()[0].distance, 0.0);
+    drop(narrow);
     drop(pin);
     drop(admission);
     drop(consumer);

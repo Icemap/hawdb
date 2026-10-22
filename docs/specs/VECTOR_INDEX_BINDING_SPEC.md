@@ -51,6 +51,8 @@ for both languages. `query_cypher_streaming` accepts an ordinary `QueryRequest`;
 `query_sql_streaming` accepts a `VectorIndexSqlRequest`. Both require a fresh
 same-governor permit and an explicit `VectorIndexLanguageBudget`: the index
 sub-budget is deducted before the canonical query receives its allowance.
+Governor identity is checked at each language entrypoint before execution or
+allocation, including LIMIT 0 and plans that never reach the index operator.
 The source name in the query must match the bound descriptor.
 
 ```cypher
@@ -149,13 +151,18 @@ Its compatibility snapshot admits compression and encoding scratch before use;
 its private artifacts use the existing generation writer under the original
 Consumer publication lease, including the original governor admission. This
 private producer cannot advance a previously selected root. It is installed and
-selected only by the existing Consumer protocol.
+selected only by the existing Consumer protocol. The producer holds an actual
+I/O wave from that governor throughout synchronous private snapshot/artifact
+work and releases it before Consumer target preparation. A saturated slot waits
+cancellably before writing; staging cleanup shares the producer wave.
 
 Canonical SQL point reads admit key/field/overflow decoding before copying and
 retain the allocation owner through projection. The storage allocation controller
 composes the query ledger with the original governor controller. Candidate and
 canonical execution have disjoint sub-budgets; original vectors are reranked by
-the shared distance implementation. A narrow grant fails before callback delivery
+the shared distance implementation. Every projection, expression input and sort-key occurrence is admitted before
+copying, including repeated wide columns and the empty-input binding probe.
+A narrow grant fails before callback delivery
 and does not change the selected index or poison the canonical read view.
 
 ## Acceptance evidence
@@ -172,6 +179,23 @@ be admitted before allocation. Budget exhaustion is an error, not successful
 truncation. Query evidence identifies backend, candidate budget/count, exact
 rerank count, source epoch and generation; it does not claim filtered ANN or
 production Mem acceptance.
+
+The root vector-index unit family is owned by `//:hawdb_unit_test_binary` in
+the existing root presubmit lane; Search binding and producer-I/O cases are
+owned by `//crates/search:hawdb_search_tests` and applicable existing feature
+variants in the crates lane. The canonical point allocation guard belongs to
+`//crates/relational:hawdb_relational_tests`. Fixtures use isolated UUID paths,
+at most five vectors for semantic cases, and a 256-KiB synthetic text value for
+allocation boundaries. The I/O test uses a channel to observe the acquisition
+boundary and cancellation to release a saturated wait; its receive timeout is
+a failure ceiling, not a timing assertion. No new CI job, serialization gate or
+heavy benchmark is added.
+
+These guards are separate from pre-existing ordinary relational projection and
+standalone writer admission gaps, tracked by
+https://github.com/nowledge-co/hawdb/issues/1160 and
+https://github.com/nowledge-co/hawdb/issues/1161. This vector-index qualification
+does not claim those independent paths are repaired.
 
 Mem App schema/import migration, runtime activation, the graph-eligibility
 planner, and FreshDiskANN evaluation remain subsequent roadmap phases.

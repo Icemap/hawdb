@@ -6,6 +6,8 @@
 //! projections and Top-N execute after the complete ANN window is fixed.
 
 use super::*;
+
+mod projection_memory;
 use hawdb_storage::relational::{decode_relational_primary_key, RelationalColumnSchema};
 use projection::{
     add_relational_order_keys, execute_relational_order, strip_relational_sort_columns,
@@ -137,15 +139,24 @@ pub fn execute_vector_index_select<R: RelationalRowStoreReader>(
             row: None,
         }],
     };
-    let mut empty_projection = project_bound_row(&empty, &select.projection, parameters)?;
-    add_relational_order_keys(select, &empty, &mut empty_projection)?;
-    let _predicate = select
-        .selection
-        .as_ref()
-        .map(|predicate| {
-            BoundStreamingPredicate::bind(predicate, parameters, &schema, input.table, qualifier)
-        })
-        .transpose()?;
+    {
+        let _memory = projection_memory::admit(select, &empty, parameters, &account)?;
+        let mut empty_projection = project_bound_row(&empty, &select.projection, parameters)?;
+        add_relational_order_keys(select, &empty, &mut empty_projection)?;
+        let _predicate = select
+            .selection
+            .as_ref()
+            .map(|predicate| {
+                BoundStreamingPredicate::bind(
+                    predicate,
+                    parameters,
+                    &schema,
+                    input.table,
+                    qualifier,
+                )
+            })
+            .transpose()?;
+    }
     let original_task = task.cloned().unwrap_or_default();
     let row_task = original_task
         .clone()
@@ -310,10 +321,10 @@ impl BindingBatchSource<()> for CandidateRows<'_> {
                     "vector candidate is absent from the bound SQL snapshot".into(),
                 )
             })?;
-            // Original decoded row, virtual-column ownership, projection and
-            // order-key copies overlap until the output batch has admitted them.
+            // The decoded row remains admitted while adding the virtual column.
+            // Projection and sort copies are admitted per expression below.
             let _row_memory =
-                account.reserve(row.resident_bytes().saturating_mul(4).saturating_add(8192))?;
+                account.reserve(row.resident_bytes().saturating_mul(2).saturating_add(8192))?;
             let row = row.with_vector_distance(self.schema.columns.len() - 1, distance);
             let binding = BoundRow {
                 bindings: vec![Binding {
@@ -324,6 +335,8 @@ impl BindingBatchSource<()> for CandidateRows<'_> {
                     row: Some(row),
                 }],
             };
+            let _projection_memory =
+                projection_memory::admit(self.select, &binding, self.parameters, &account)?;
             if let Some(predicate) = &self.select.selection
                 && predicate_truth(predicate, &binding, self.parameters)? != Some(true)
             {
