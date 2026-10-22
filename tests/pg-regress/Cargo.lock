@@ -421,7 +421,6 @@ dependencies = [
  "hawdb-evidence",
  "hawdb-executor",
  "hawdb-explain",
- "hawdb-expression",
  "hawdb-fuzz-contracts",
  "hawdb-integrity",
  "hawdb-nowledge-contracts",
