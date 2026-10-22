@@ -26,7 +26,12 @@ This flag controls descriptor capacity only. It does not disable query memory,
 result, disk, decoding, cancellation, ownership or durability checks.
 
 Contexts for the same project share one ledger. Explicitly conflicting capacity
-settings are rejected; internal operations borrow the original ledger rather
+settings are rejected: `max_open_files` conflicts use `FileDescriptorError::ConfigurationConflict`,
+and strict/soft policy conflicts use `FileDescriptorError::CapacityPolicyConflict`
+with the original and requested boolean values. Component constructors without
+a policy argument inherit the active domain. `DatabaseConfig` supplies its
+boolean policy, including the default `false`; conflicting opens do not change
+the active domain or its counts. Internal operations borrow the original ledger rather
 than opening a second project domain or changing the foreground policy.
 `FileDescriptorMetrics::strict_capacity_limit` reports the configured policy.
 Open/reserved counts and high-water marks can exceed the target in soft mode.

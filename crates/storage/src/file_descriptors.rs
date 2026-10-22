@@ -663,12 +663,15 @@ fn configured_capacity_state(
     limit: usize,
     strict_capacity_limit: Option<bool>,
 ) -> Result<ProjectFileDescriptors, HawDBError> {
-    if strict_capacity_limit.is_some_and(|strict| strict != state.strict_capacity_limit) {
-        return Err(HawDBError::Storage(format!(
-            "project strict_capacity_limit conflict: configured {}, requested {}",
-            state.strict_capacity_limit,
-            strict_capacity_limit.expect("checked capacity policy")
-        )));
+    if let Some(requested) = strict_capacity_limit
+        && requested != state.strict_capacity_limit
+    {
+        return Err(HawDBError::FileDescriptors(
+            FileDescriptorError::CapacityPolicyConflict {
+                configured: state.strict_capacity_limit,
+                requested,
+            },
+        ));
     }
     configured_state(state, limit)
 }

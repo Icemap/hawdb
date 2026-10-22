@@ -219,13 +219,52 @@ fn default_capacity_is_soft_and_existing_domains_preserve_their_policy() {
     assert!(!shared.metrics().strict_capacity_limit);
     let held = shared.reserve(2).unwrap();
     assert_eq!(fixture.project.metrics().reserved, 2);
-    assert!(
+    assert_eq!(
         ProjectFileDescriptors::acquire_existing_with_capacity_limit(&fixture.root, 1, true)
-            .is_err()
+            .unwrap_err(),
+        super::HawDBError::FileDescriptors(FileDescriptorError::CapacityPolicyConflict {
+            configured: false,
+            requested: true,
+        })
     );
+    assert!(!fixture.project.metrics().strict_capacity_limit);
     assert_eq!(fixture.project.metrics().reserved, 2);
     drop(held);
     assert_eq!(fixture.project.metrics().reserved, 0);
+}
+
+#[test]
+fn conflicting_capacity_policy_is_typed_without_changing_active_owners() {
+    for configured in [false, true] {
+        let fixture = Fixture::with_capacity_limit(2, configured);
+        let held = fixture.project.reserve(2).unwrap();
+        let before = fixture.project.metrics();
+        for create in [false, true] {
+            let result = if create {
+                ProjectFileDescriptors::acquire_with_capacity_limit(&fixture.root, 2, !configured)
+            } else {
+                ProjectFileDescriptors::acquire_existing_with_capacity_limit(
+                    &fixture.root,
+                    2,
+                    !configured,
+                )
+            };
+            let error = result.unwrap_err();
+            assert_eq!(
+                file_descriptor_error(&error),
+                Some(FileDescriptorError::CapacityPolicyConflict {
+                    configured,
+                    requested: !configured,
+                })
+            );
+            assert_eq!(fixture.project.metrics(), before);
+        }
+        let inherited = ProjectFileDescriptors::acquire_existing(&fixture.root, 2).unwrap();
+        assert_eq!(inherited.metrics(), before);
+        drop(held);
+        assert_eq!(fixture.project.metrics().open, 0);
+        assert_eq!(fixture.project.metrics().reserved, 0);
+    }
 }
 
 #[cfg(all(unix, not(target_arch = "wasm32")))]

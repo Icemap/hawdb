@@ -241,3 +241,38 @@ fn os_headroom_refuses_before_wal_effect_and_keeps_the_database_retryable() {
     drop(reopened);
     std::fs::remove_dir_all(path).unwrap();
 }
+
+#[test]
+fn conflicting_descriptor_policy_remains_typed_through_database_open() {
+    use hawdb_core::error::{file_descriptor_error, FileDescriptorError};
+    let path = unique_test_dir("typed_descriptor_policy_conflict");
+    let config = DatabaseConfig {
+        max_open_files: 32,
+        ..Default::default()
+    };
+    let db = Database::open_with_config(&path, config.clone()).unwrap();
+    let before = db.file_descriptor_metrics().unwrap();
+    let strict = DatabaseConfig {
+        strict_capacity_limit: true,
+        ..config
+    };
+    let error = Database::open_with_config(&path, strict.clone()).unwrap_err();
+    assert_eq!(
+        file_descriptor_error(&error),
+        Some(FileDescriptorError::CapacityPolicyConflict {
+            configured: false,
+            requested: true,
+        })
+    );
+    assert_eq!(db.file_descriptor_metrics().unwrap(), before);
+    drop(db);
+    let reopened = Database::open_with_config(&path, strict).unwrap();
+    assert!(
+        reopened
+            .file_descriptor_metrics()
+            .unwrap()
+            .strict_capacity_limit
+    );
+    drop(reopened);
+    std::fs::remove_dir_all(path).unwrap();
+}
