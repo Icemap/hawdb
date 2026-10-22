@@ -101,8 +101,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Windows alias probes reserve handles across registered FD domains.
-          # Budget-exhaustion cases must not overlap unrelated reopen cases.
+          # Preserve native Windows namespace/handle qualification isolation.
+          # Changing this lane's concurrency requires separate native evidence.
           if [[ "$RUNNER_OS" == "Windows" ]]; then
             export RUST_TEST_THREADS=1
           fi

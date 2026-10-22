@@ -57,6 +57,13 @@ internal scopes. They can reclaim retired generations while strict foreground
 capacity is occupied, while retaining all native handles and deletion evidence
 in the original project's accounting.
 
+Owned projection-writer temporaries, stationary producer removal, and Consumer
+publication/cleanup lease acquisition also enter internal scopes, including
+capturing their original directory. Strict foreground saturation cannot create
+cleanup debt by itself. Native unlink, directory-shape, ownership and I/O
+failures still retain evidence and require a retry; cancellation and memory
+admission failures preserve the previous cleanup disposition.
+
 Internal maintenance must not hold foreground execution resources while waiting
 for another owner. This descriptor policy does not replace the separate CPU,
 memory, physical-I/O or checkpoint state-machine progress contracts.
@@ -96,6 +103,22 @@ Unix `RLIMIT_NOFILE` is process-wide and shared by threads. HawDB reads it with
 configuration. Project acquisition retains the existing OS-capacity preflight
 and host-headroom policy. `strict_capacity_limit=false` does not raise the OS
 limit or suppress native exhaustion and sharing errors.
+
+Unix project registration snapshots a separate OS allowance of the observed
+soft limit minus 64 host descriptors. Soft foreground and internal admission may
+exceed the configured target, but they cannot exceed that allowance. After idle
+cache eviction, an admission that would cross it returns a typed `OsLimit`
+without opening a file or changing the reservation count. Prepaid slots count
+against the allowance and remain usable by their owning operation while a
+competing owner occupies the remainder. Strict foreground target refusal
+continues to return `BudgetExceeded`.
+
+This allowance is per project, not a kernel reservation or a process-wide pool
+shared with the host and other projects. Untracked host activity, later changes
+to process limits and native sharing or I/O failures can still reject native
+opens. Reservations do not make those external failures impossible; an uncertain
+durable effect must still fail closed and retain recovery evidence. HawDB does
+not consume the 64-descriptor host headroom as a separate internal reserve.
 
 RocksDB likewise
 [reads the current soft limit](https://github.com/facebook/rocksdb/blob/074134d98fb14e3ae1b81eb6dbab80dbf6dbdbd5/port/port_posix.cc#L237-L251)

@@ -8155,7 +8155,9 @@ mod tests {
             std::process::id()
         ));
         std::fs::create_dir(&root).unwrap();
-        let project = ProjectFileDescriptors::acquire(&root.join("first"), 4).unwrap();
+        let project =
+            ProjectFileDescriptors::acquire_with_capacity_limit(&root.join("first"), 4, true)
+                .unwrap();
         let search_root = project.root().join("search");
         let first = SearchIndex::open(&search_root).unwrap();
         assert_eq!(first._project_files.as_ref().unwrap().metrics().limit, 4);
@@ -11826,7 +11828,7 @@ mod tests {
         use hawdb_storage::file_descriptors::ProjectFileDescriptors;
 
         let path = unique_test_dir("search_range_fd_retry");
-        let project = ProjectFileDescriptors::acquire(&path, 32).unwrap();
+        let project = ProjectFileDescriptors::acquire_with_capacity_limit(&path, 32, true).unwrap();
         let mut index = SearchIndex::open(&path).unwrap();
         for (id, space) in [
             ("memory:0", "space-a"),
@@ -11873,7 +11875,11 @@ mod tests {
         );
         let baseline_open = project.metrics().open;
         let mut held = Vec::new();
-        loop {
+        for attempt in 0..=32 {
+            assert!(
+                attempt < 32,
+                "strict capacity did not reject foreground opens"
+            );
             match File::create(path.join(format!("held-{}", held.len()))) {
                 Ok(file) => held.push(file),
                 Err(error) => {

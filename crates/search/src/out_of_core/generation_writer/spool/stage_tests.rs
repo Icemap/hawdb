@@ -494,11 +494,12 @@ fn pending_cleanup_releases_work_admission_and_retries_on_the_next_create() {
     memory.host_admission = Some(permit.clone());
     let stage = StageDirectory::create(&fixture.0, &memory, &task).unwrap();
     let path = stage.path.to_path_buf();
-    let held = File::create(fixture.0.join("held")).unwrap();
+    let unexpected = path.join("unexpected-directory");
+    fs::create_dir(&unexpected).unwrap();
     drop(stage);
     drop(memory);
     drop(permit);
-    drop(held);
+
     let pending =
         crate::SearchOutOfCoreGenerationWriter::retry_staging_cleanup(&fixture.0, 0).unwrap();
     assert_eq!(
@@ -511,6 +512,7 @@ fn pending_cleanup_releases_work_admission_and_retries_on_the_next_create() {
 
     let task = RuntimeTaskContext::default();
     let memory = BuildMemory::new(&task).unwrap();
+    fs::remove_dir(&unexpected).unwrap();
     let next = StageDirectory::create(&fixture.0, &memory, &task).unwrap();
     assert!(!path.exists());
     let report =
@@ -530,12 +532,14 @@ fn pending_cleanup_does_not_pin_the_previous_project_descriptor_limit() {
     let memory = BuildMemory::new(&task).unwrap();
     let stage = StageDirectory::create(&fixture.0, &memory, &task).unwrap();
     let path = stage.path.to_path_buf();
-    let held = File::create(fixture.0.join("held")).unwrap();
+    let unexpected = path.join("unexpected-directory");
+    fs::create_dir(&unexpected).unwrap();
     drop(stage);
     drop(memory);
-    drop(held);
+
     drop(project);
     let reopened = ProjectFileDescriptors::acquire_existing(&fixture.0, 3).unwrap();
+    fs::remove_dir(&unexpected).unwrap();
     let report =
         crate::SearchOutOfCoreGenerationWriter::retry_staging_cleanup(&fixture.0, 1).unwrap();
     assert_eq!(report.removed_stages, 1);
@@ -611,7 +615,7 @@ fn native_stage_cleanup_unlinks_symlinks_without_following_their_targets() {
 }
 
 #[test]
-fn descriptor_denial_retains_only_cleanup_metadata_until_retry() {
+fn native_unlink_failure_retains_only_cleanup_metadata_until_retry() {
     use crate::SearchGenerationAdmission;
     use hawdb_qos::IoConcurrencyBudget;
     use hawdb_qos::{RuntimeGovernor, RuntimeGovernorConfig, RuntimeWorkRequest};
@@ -646,27 +650,41 @@ fn descriptor_denial_retains_only_cleanup_metadata_until_retry() {
     let (release_tx, release_rx) = std::sync::mpsc::channel();
     stage::evidence::install(fixture.0.clone(), start_tx, ready_rx);
     let root = fixture.0.clone();
+    let (failure_tx, failure_rx) = std::sync::mpsc::channel();
     let competitor = std::thread::spawn(move || {
         start_rx.recv().unwrap();
-        let held = (0..4)
-            .map(|index| File::create(root.join(format!("competitor-{index}"))).unwrap())
-            .collect::<Vec<_>>();
+        let path = std::fs::read_dir(&root)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .find(|path| {
+                path.extension()
+                    .is_some_and(|extension| extension == "stage")
+            })
+            .unwrap();
+        let file = std::fs::read_dir(path)
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .path();
+        let failure = stage::evidence::fail_unlink(&file);
+        failure_tx.send(failure).unwrap();
         ready_tx.send(()).unwrap();
         release_rx.recv().unwrap();
-        drop(held);
     });
-    // Exhaust the real project after the scan closes, immediately before unlink.
+    // Refuse native unlink after the scan closes, immediately before removal.
     drop(writer);
+    let failure = failure_rx.recv().unwrap();
     let report =
         crate::SearchOutOfCoreGenerationWriter::retry_staging_cleanup(&fixture.0, 0).unwrap();
     assert_eq!(report.pending_stages, 1);
     assert!(report.reserved_disk_bytes > 0);
     assert!(report.retained_memory_bytes > 0);
     assert!(report.retained_memory_bytes < 8192);
-    assert!(matches!(
-        report.descriptor_error,
-        Some(hawdb_core::error::FileDescriptorError::BudgetExceeded { .. })
-    ));
+    assert_eq!(report.blocked_stages, 1);
+    assert_eq!(report.descriptor_denials, 0);
+    assert!(report.descriptor_error.is_none());
+    assert!(failure.attempts() > 0);
     assert_eq!(
         governor.snapshot().admitted_memory_bytes,
         report.retained_memory_bytes as u64
@@ -679,6 +697,7 @@ fn descriptor_denial_retains_only_cleanup_metadata_until_retry() {
     assert_eq!(denied.reserved_disk_bytes, report.reserved_disk_bytes);
     release_tx.send(()).unwrap();
     competitor.join().unwrap();
+    drop(failure);
     let released =
         crate::SearchOutOfCoreGenerationWriter::retry_staging_cleanup(&fixture.0, 1).unwrap();
     assert_eq!(released.removed_stages, 1);
@@ -795,9 +814,11 @@ fn cleanup_retry_resolves_root_aliases_and_preserves_active_stages() {
     let pending = StageDirectory::create(&root, &memory, &task).unwrap();
     let pending_path = pending.path.to_path_buf();
     let active = StageDirectory::create(&root, &memory, &task).unwrap();
-    let held = File::create(root.join("held")).unwrap();
+    let unexpected = pending_path.join("unexpected-directory");
+    fs::create_dir(&unexpected).unwrap();
     drop(pending);
-    drop(held);
+    assert!(pending_path.exists());
+    fs::remove_dir(&unexpected).unwrap();
     let report =
         crate::SearchOutOfCoreGenerationWriter::retry_staging_cleanup(alias.join("."), 1).unwrap();
     assert_eq!(report.removed_stages, 1);

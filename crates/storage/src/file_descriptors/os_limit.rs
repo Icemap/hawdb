@@ -14,14 +14,32 @@
 
 //! Observe process capacity without modifying host-owned resource limits.
 
-use hawdb_core::error::HawDBError;
+use hawdb_core::error::{FileDescriptorError, HawDBError};
+
+#[derive(Debug, Clone, Copy)]
+pub(super) struct Capacity {
+    pub allowance: usize,
+    pub soft: u64,
+    pub hard: u64,
+}
+
+impl Capacity {
+    pub fn rejection(self, requested: usize) -> FileDescriptorError {
+        FileDescriptorError::OsLimit {
+            requested,
+            os_code: None,
+            soft: Some(self.soft),
+            hard: Some(self.hard),
+        }
+    }
+}
 
 #[cfg(all(unix, not(target_arch = "wasm32")))]
 pub(super) const HOST_HEADROOM: usize = 64;
 
 #[cfg(all(unix, not(target_arch = "wasm32")))]
 mod native {
-    use super::{HawDBError, HOST_HEADROOM};
+    use super::{Capacity, HawDBError, HOST_HEADROOM};
     use hawdb_core::error::FileDescriptorError;
     use std::io;
 
@@ -54,7 +72,7 @@ mod native {
         Ok(limit)
     }
 
-    pub(super) fn effective_limit(budget: usize) -> Result<usize, HawDBError> {
+    pub(super) fn project_limits(budget: usize) -> Result<(usize, Option<Capacity>), HawDBError> {
         let minimum = budget.min(MIN_PROJECT_CAPACITY);
         let requested = minimum + HOST_HEADROOM;
         let current = read().map_err(|error| rejected(None, requested, error.raw_os_error()))?;
@@ -65,7 +83,14 @@ mod native {
         if effective < minimum {
             return Err(rejected(Some(current), requested, None));
         }
-        Ok(effective)
+        Ok((
+            effective,
+            Some(Capacity {
+                allowance,
+                soft: value(current.rlim_cur),
+                hard: value(current.rlim_max),
+            }),
+        ))
     }
 
     pub(super) fn current_soft_limit() -> Option<u64> {
@@ -73,14 +98,14 @@ mod native {
     }
 }
 
-pub(super) fn effective_limit(budget: usize) -> Result<usize, HawDBError> {
+pub(super) fn project_limits(budget: usize) -> Result<(usize, Option<Capacity>), HawDBError> {
     #[cfg(all(unix, not(target_arch = "wasm32")))]
     {
-        native::effective_limit(budget)
+        native::project_limits(budget)
     }
     #[cfg(not(all(unix, not(target_arch = "wasm32"))))]
     {
-        Ok(budget)
+        Ok((budget, None))
     }
 }
 

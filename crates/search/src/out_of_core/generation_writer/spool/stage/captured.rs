@@ -34,6 +34,8 @@ impl Custody {
         Ok(self.namespace.as_ref().unwrap().clone())
     }
     pub(super) fn remove_batches(&mut self, max_batches: usize) -> Result<bool> {
+        let context = self.parent.operation_context();
+        let _operation = context.internal_operation()?;
         if self.candidate.removal_completed() || !self.candidate.may_own_entry() {
             return Ok(true);
         }

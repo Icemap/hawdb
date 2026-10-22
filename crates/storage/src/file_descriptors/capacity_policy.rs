@@ -227,3 +227,89 @@ fn default_capacity_is_soft_and_existing_domains_preserve_their_policy() {
     drop(held);
     assert_eq!(fixture.project.metrics().reserved, 0);
 }
+
+#[cfg(all(unix, not(target_arch = "wasm32")))]
+#[test]
+fn soft_and_internal_capacity_preserve_os_headroom_and_prepaid_slots() {
+    const NAME: &str = "file_descriptors::tests::capacity_policy::soft_and_internal_capacity_preserve_os_headroom_and_prepaid_slots";
+    if super::run_descriptor_child(NAME) {
+        return;
+    }
+    let original = super::descriptor_os_limits();
+    let lowered = libc::rlimit {
+        rlim_cur: 256,
+        rlim_max: original.rlim_max,
+    };
+    // SAFETY: Only this isolated child lowers its own soft limit.
+    assert_eq!(unsafe { libc::setrlimit(libc::RLIMIT_NOFILE, &lowered) }, 0);
+    let allowance = 256 - super::super::os_limit::HOST_HEADROOM;
+    for strict in [false, true] {
+        let fixture = Fixture::with_capacity_limit(2, strict);
+        let context = fixture.project.io_context();
+        let path = fixture.root.join("evidence");
+        std::fs::write(&path, b"complete committed bytes").unwrap();
+        let baseline = fixture.project.metrics();
+        let operation = strict.then(|| context.internal_operation().unwrap());
+        let prepaid = fixture.project.reserve(3).unwrap();
+        let captured = context.for_operation();
+        let project = fixture.project.clone();
+        let (ready_tx, ready_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let competitor = std::thread::spawn(move || {
+            let _internal = project.io_context().internal_operation().unwrap();
+            let _competing = project.reserve(allowance - 3).unwrap();
+            ready_tx.send(()).unwrap();
+            let _ = release_rx.recv();
+        });
+        ready_rx.recv().unwrap();
+        assert_eq!(fixture.project.metrics().reserved, allowance);
+        let rejected = |error: std::io::Error| {
+            assert_eq!(
+                file_descriptor_error(&error),
+                Some(FileDescriptorError::OsLimit {
+                    requested: 1,
+                    os_code: None,
+                    soft: Some(256),
+                    hard: Some(original.rlim_max),
+                })
+            );
+        };
+        rejected(fixture.project.reserve(1).unwrap_err());
+        let independent_project = fixture.project.clone();
+        rejected(
+            std::thread::spawn(move || {
+                let independent = independent_project.io_context();
+                let _internal = independent.internal_operation().unwrap();
+                independent.acquire(DescriptorKind::Transient).unwrap_err()
+            })
+            .join()
+            .unwrap(),
+        );
+        let file = captured
+            .open(crate::file_io::OpenOptions::new().read(true), &path)
+            .unwrap();
+        assert_eq!(fixture.project.metrics().open, baseline.open + 1);
+        assert_eq!(
+            fixture.project.metrics().open + fixture.project.metrics().reserved,
+            allowance
+        );
+        let mut bytes = [0; 24];
+        crate::io::read_exact_at(&file, &mut bytes, 0).unwrap();
+        assert_eq!(&bytes, b"complete committed bytes");
+        assert_eq!(std::fs::read(&path).unwrap(), bytes);
+        drop(file);
+        release_tx.send(()).unwrap();
+        competitor.join().unwrap();
+        drop((prepaid, operation));
+        let after = fixture.project.metrics();
+        assert_eq!(after.open, baseline.open);
+        assert_eq!(after.reserved, baseline.reserved);
+        assert_eq!(after.high_water, allowance);
+        assert_eq!(after.os_limit_rejections, baseline.os_limit_rejections + 2);
+        assert_eq!(after.budget_rejections, baseline.budget_rejections);
+        assert_eq!(super::descriptor_os_limits().rlim_cur, 256);
+        if strict {
+            assert!(fixture.project.reserve(3).is_err());
+        }
+    }
+}

@@ -222,10 +222,20 @@ impl ProjectionWriter {
 impl Drop for ProjectionWriter {
     fn drop(&mut self) {
         if !self.finished {
+            #[cfg(feature = "storage-io")]
+            let Ok(context) =
+                hawdb_storage::file_descriptors::FileOpenContext::for_path(&self.temporary)
+            else {
+                return;
+            };
+            #[cfg(feature = "storage-io")]
+            let Ok(_operation) = context.internal_operation() else {
+                return;
+            };
             drop(self.file.take());
-            // Budget/OS exhaustion may defer best-effort removal. Retain the
-            // unpublished temporary name for explicit cleanup; never bypass
-            // descriptor admission or remove the final published generation.
+            // Internal cleanup keeps the original ledger and may exceed the
+            // foreground target. Native failure retains only the unpublished
+            // temporary name; the final generation is never removed here.
             let _ = fs::remove_file(&self.temporary);
         }
     }

@@ -24,7 +24,8 @@ fn with_query(
         hawdb_core::generate_uuidv7().unwrap()
     )));
     std::fs::create_dir(&directory.0).unwrap();
-    let project = ProjectFileDescriptors::acquire(&directory.0, 64).unwrap();
+    let project =
+        ProjectFileDescriptors::acquire_with_capacity_limit(&directory.0, 64, true).unwrap();
     let parent = SourceDirectory::capture(&directory.0, &project.io_context()).unwrap();
     let governor = governor();
     let permit = governor

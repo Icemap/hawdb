@@ -248,7 +248,7 @@ fn descriptor_denial_before_create_and_before_rename_preserves_all_entries() {
 #[test]
 fn preselection_descriptor_refusal_retries_the_same_sealed_control() {
     let fixture = Fixture::new();
-    let project = ProjectFileDescriptors::acquire(&fixture.0, 4).unwrap();
+    let project = ProjectFileDescriptors::acquire_with_capacity_limit(&fixture.0, 4, true).unwrap();
     let context = project.io_context();
     let directory = SourceDirectory::capture(&fixture.0, &context).unwrap();
     let mut candidate = directory

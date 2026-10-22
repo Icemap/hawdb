@@ -39,6 +39,8 @@ impl SearchProjectionPublishLease {
     }
 
     pub(crate) fn acquire_for_consumer(root: &Path) -> Result<Self> {
+        let context = hawdb_storage::file_descriptors::FileOpenContext::for_path(root)?;
+        let _operation = context.internal_operation()?;
         let task = RuntimeTaskContext::default();
         let memory = BuildMemory::new(&task)?;
         Self::acquire_lock_with_context(root, &memory, &task)
@@ -47,6 +49,8 @@ impl SearchProjectionPublishLease {
     // Cleanup may inspect registered roots, but must share publication exclusion
     // while discovering the current closure and deleting unreferenced files.
     pub(crate) fn acquire_for_cleanup(root: &Path) -> Result<Self> {
+        let context = hawdb_storage::file_descriptors::FileOpenContext::for_path(root)?;
+        let _operation = context.internal_operation()?;
         let task = RuntimeTaskContext::default();
         let memory = BuildMemory::new(&task)?;
         Self::acquire_lock_with_context(root, &memory, &task)

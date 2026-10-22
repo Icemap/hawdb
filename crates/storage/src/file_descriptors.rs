@@ -51,7 +51,7 @@ impl DescriptorKind {
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct FileDescriptorMetrics {
-    /// Effective admission ceiling, retained for existing consumers.
+    /// Effective capacity target, retained for existing consumers.
     pub limit: usize,
     pub configured_limit: usize,
     pub effective_limit: usize,
@@ -109,6 +109,7 @@ pub(crate) struct BudgetState {
     configured_limit: usize,
     limit: usize,
     strict_capacity_limit: bool,
+    os_capacity: Option<os_limit::Capacity>,
     counts: Mutex<Counts>,
     cache: Mutex<Option<Weak<dyn DescriptorCache>>>,
     immutable_handles: Mutex<Weak<crate::immutable_files::ImmutableFileHandles>>,
@@ -124,12 +125,14 @@ impl BudgetState {
         configured_limit: usize,
         limit: usize,
         strict_capacity_limit: bool,
+        os_capacity: Option<os_limit::Capacity>,
     ) -> Self {
         Self {
             root,
             configured_limit,
             limit,
             strict_capacity_limit,
+            os_capacity,
             counts: Mutex::new(Counts::default()),
             cache: Mutex::new(None),
             immutable_handles: Mutex::new(Weak::new()),
@@ -148,19 +151,32 @@ impl BudgetState {
                 .unwrap_or_else(|error| error.into_inner());
             let used = counts.used();
             let available = self.limit.saturating_sub(used);
-            if used.checked_add(requested).is_none() {
-                return Err((available, usize::MAX));
+            let budget_failure = || {
+                (
+                    FileDescriptorError::BudgetExceeded {
+                        requested,
+                        available,
+                        limit: self.limit,
+                    },
+                    requested
+                        .saturating_sub(available)
+                        .saturating_add(used.saturating_sub(self.limit)),
+                )
+            };
+            let Some(total) = used.checked_add(requested) else {
+                return Err((budget_failure().0, usize::MAX));
+            };
+            if !allow_excess && requested > available {
+                return Err(budget_failure());
             }
-            if requested <= available || allow_excess {
-                counts.reserved += requested;
-                counts.record_peak();
-                Ok(())
-            } else {
-                Err((
-                    available,
-                    (requested - available).saturating_add(used.saturating_sub(self.limit)),
-                ))
+            if let Some(capacity) = self.os_capacity
+                && total > capacity.allowance
+            {
+                return Err((capacity.rejection(requested), total - capacity.allowance));
             }
+            counts.reserved += requested;
+            counts.record_peak();
+            Ok(())
         };
         let needed = match attempt(false) {
             Ok(()) => return Ok(()),
@@ -177,11 +193,7 @@ impl BudgetState {
         }
         match attempt(!strict_capacity_limit) {
             Ok(()) => Ok(()),
-            Err((available, _)) => Err(io::Error::other(FileDescriptorError::BudgetExceeded {
-                requested,
-                available,
-                limit: self.limit,
-            })),
+            Err((error, _)) => Err(io::Error::other(error)),
         }
     }
 
@@ -222,11 +234,19 @@ impl BudgetState {
             .unwrap_or_else(|error| error.into_inner())
             .cache_hits += 1;
     }
-    fn record_budget_rejection(&self) {
-        self.counts
+    fn record_admission_rejection(&self, error: &io::Error) {
+        let mut counts = self
+            .counts
             .lock()
-            .unwrap_or_else(|error| error.into_inner())
-            .budget_rejections += 1;
+            .unwrap_or_else(|error| error.into_inner());
+        if matches!(
+            hawdb_core::error::file_descriptor_error(error),
+            Some(FileDescriptorError::OsLimit { .. })
+        ) {
+            counts.os_limit_rejections += 1;
+        } else {
+            counts.budget_rejections += 1;
+        }
     }
     pub(crate) fn record_cache_miss(&self) {
         self.counts
@@ -275,13 +295,14 @@ static PROJECTS: LazyLock<Mutex<BTreeMap<PathBuf, Weak<BudgetState>>>> =
 // serializes these short probes, so one process-owned slot covers the native
 // directory handle without borrowing capacity from unrelated projects.
 static NAMESPACE_PROBES: LazyLock<Arc<BudgetState>> =
-    LazyLock::new(|| Arc::new(BudgetState::new(PathBuf::new(), 1, 1, false)));
+    LazyLock::new(|| Arc::new(BudgetState::new(PathBuf::new(), 1, 1, false, None)));
 static STANDALONE: LazyLock<Arc<BudgetState>> = LazyLock::new(|| {
     Arc::new(BudgetState::new(
         PathBuf::new(),
         DEFAULT_MAX_OPEN_FILES,
         DEFAULT_MAX_OPEN_FILES,
         false,
+        None,
     ))
 });
 
@@ -395,12 +416,13 @@ impl ProjectFileDescriptors {
             }
             return Ok(project);
         }
-        let effective_limit = os_limit::effective_limit(limit)?;
+        let (effective_limit, os_capacity) = os_limit::project_limits(limit)?;
         let tentative = Arc::new(BudgetState::new(
             lexical.clone(),
             limit,
             effective_limit,
             strict_capacity_limit.unwrap_or(false),
+            os_capacity,
         ));
         #[cfg(any(test, feature = "test-support"))]
         {
@@ -511,8 +533,8 @@ impl ProjectFileDescriptors {
     ) -> io::Result<DescriptorReservation> {
         self.state
             .reserve(requested, strict_capacity_limit)
-            .inspect_err(|_| {
-                self.state.record_budget_rejection();
+            .inspect_err(|error| {
+                self.state.record_admission_rejection(error);
             })?;
         Ok(self.begin_reservation(requested, strict_capacity_limit))
     }
@@ -960,7 +982,7 @@ impl FileOpenContext {
             if let Some(permit) = self.take_inventory(kind) {
                 return Ok(permit);
             }
-            self.state.record_budget_rejection();
+            self.state.record_admission_rejection(&error);
             return Err(error);
         }
         let mut counts = self

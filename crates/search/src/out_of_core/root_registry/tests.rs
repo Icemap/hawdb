@@ -47,7 +47,8 @@ impl Fixture {
             "hawdb-root-registry-{}",
             hawdb_core::generate_uuidv7().unwrap()
         ));
-        let project = ProjectFileDescriptors::acquire(&root, limit).unwrap();
+        let project =
+            ProjectFileDescriptors::acquire_with_capacity_limit(&root, limit, true).unwrap();
         let governor = governor();
         let permit = governor
             .try_admit(RuntimeWorkRequest::background_maintenance(16 << 20).with_io_wave_slots(1))
@@ -270,13 +271,33 @@ fn retirement_excludes_reacquisition_before_and_after_actual_native_close() {
 }
 
 #[test]
-fn lock_fd_denial_cleans_initializing_entry_and_never_creates_lock() {
-    let fixture = Fixture::new(1);
+fn native_lock_failure_cleans_initializing_entry_and_retries() {
+    let fixture = Fixture::new(2);
     let baseline = fixture.memory.ledger.snapshot().used_bytes;
+    let blocker = fixture.root.join(PROCESS_LOCK);
+    std::fs::create_dir(&blocker).unwrap();
     assert!(fixture.open().is_err());
     assert_eq!(fixture.project.metrics().open, 0);
-    assert!(!fixture.root.join(PROCESS_LOCK).exists());
+    assert!(blocker.is_dir());
     assert!(!fixture.is_registered());
+    assert_eq!(fixture.memory.ledger.snapshot().used_bytes, baseline);
+    std::fs::remove_dir(blocker).unwrap();
+    drop(fixture.open().unwrap());
+    assert_eq!(fixture.project.metrics().open, 0);
+}
+
+#[test]
+fn ownership_lock_progresses_at_strict_foreground_capacity() {
+    let fixture = Fixture::new(1);
+    let baseline = fixture.memory.ledger.snapshot().used_bytes;
+    let root = fixture.open().unwrap();
+    assert_eq!(fixture.project.metrics().open, 2);
+    assert!(fixture.root.join(PROCESS_LOCK).is_file());
+    assert_eq!(fixture.project.metrics().budget_rejections, 0);
+    assert!(fixture.project.metrics().high_water > 1);
+    drop(root);
+    assert_eq!(fixture.project.metrics().open, 0);
+    assert_eq!(fixture.project.metrics().reserved, 0);
     assert_eq!(fixture.memory.ledger.snapshot().used_bytes, baseline);
 }
 
@@ -353,7 +374,7 @@ fn retained_root_releases_execution_but_keeps_peer_exclusion_until_final_close()
         "hawdb-root-registry-retained-peer-{}",
         hawdb_core::generate_uuidv7().unwrap()
     ));
-    let project = ProjectFileDescriptors::acquire(&root, 8).unwrap();
+    let project = ProjectFileDescriptors::acquire_with_capacity_limit(&root, 8, true).unwrap();
     let governor = governor();
     let retained = {
         let permit = governor
@@ -405,8 +426,8 @@ fn retained_root_releases_execution_but_keeps_peer_exclusion_until_final_close()
     // A failed publisher must close only its own captured directory. Closing a
     // duplicate record-lock handle here could release this root's peer lock on
     // Unix implementations whose locks belong to the process.
-    // Same-thread reservations are deliberately borrowed by nested operations;
-    // occupy actual descriptors to exercise a genuine final-slot denial.
+    let blocker = root.join(".search_projection.publish.lock");
+    std::fs::create_dir(&blocker).unwrap();
     let occupied: Vec<_> = (0..5)
         .map(|_| SourceDirectory::capture(&root, &project.io_context()).unwrap())
         .collect();
@@ -417,6 +438,20 @@ fn retained_root_releases_execution_but_keeps_peer_exclusion_until_final_close()
     );
     assert_eq!(project.metrics().open, 7);
     assert_eq!(project.metrics().reserved, 0);
+    probe(true);
+    std::fs::remove_dir(blocker).unwrap();
+    // Publication locks must progress even when the strict target is occupied.
+    let extra = SourceDirectory::capture(&root, &project.io_context()).unwrap();
+    assert_eq!(project.metrics().open, 8);
+    let rejections = project.metrics().budget_rejections;
+    let pressured =
+        super::super::publish_lease::SearchProjectionPublishLease::acquire_for_consumer(&root)
+            .unwrap();
+    assert!(project.metrics().high_water > 8);
+    assert_eq!(project.metrics().budget_rejections, rejections);
+    probe(true);
+    drop(pressured);
+    drop(extra);
     drop(occupied);
     assert_eq!(project.metrics().open, 2);
     probe(true);

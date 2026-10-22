@@ -56,8 +56,10 @@ impl Fixture {
     ) {
         let directory = Self::directory();
         let project =
-            hawdb_storage::file_descriptors::ProjectFileDescriptors::acquire(&directory, limit)
-                .unwrap();
+            hawdb_storage::file_descriptors::ProjectFileDescriptors::acquire_with_capacity_limit(
+                &directory, limit, true,
+            )
+            .unwrap();
         (Self::in_directory(directory), project)
     }
 

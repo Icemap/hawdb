@@ -1198,7 +1198,8 @@ mod tests {
 
         let memory = test_memory("project-descriptors");
         let project_path = memory.spill_directory.with_extension("project");
-        let project = ProjectFileDescriptors::acquire(&project_path, 4).unwrap();
+        let project =
+            ProjectFileDescriptors::acquire_with_capacity_limit(&project_path, 4, true).unwrap();
         assert!(!memory.spill_directory.starts_with(project.root()));
         let ledger = QueryMemoryLedger::new(memory.query_memory_bytes)
             .with_file_descriptors(Some(project.io_context()));
@@ -1274,8 +1275,10 @@ mod tests {
         let memory = test_memory("shared-project-descriptors");
         let first_path = memory.spill_directory.with_extension("first-project");
         let second_path = memory.spill_directory.with_extension("second-project");
-        let first = ProjectFileDescriptors::acquire(&first_path, 4).unwrap();
-        let second = ProjectFileDescriptors::acquire(&second_path, 4).unwrap();
+        let first =
+            ProjectFileDescriptors::acquire_with_capacity_limit(&first_path, 4, true).unwrap();
+        let second =
+            ProjectFileDescriptors::acquire_with_capacity_limit(&second_path, 4, true).unwrap();
         let first_ledger = QueryMemoryLedger::new(memory.query_memory_bytes)
             .with_file_descriptors(Some(first.io_context()));
         let second_ledger = QueryMemoryLedger::new(memory.query_memory_bytes)
