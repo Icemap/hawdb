@@ -403,8 +403,8 @@ fn vector_index_exact_visibility_precedes_top_k() {
         )
         .unwrap();
     }
-    db.query("CREATE (:Origin {id: 1, scope: 'out'}), (:Origin {id: 2, scope: 'in'})")
-        .unwrap();
+    db.query("CREATE (:Origin {id: 1, scope: 'out'})").unwrap();
+    db.query("CREATE (:Origin {id: 2, scope: 'in'})").unwrap();
     db.query("MATCH (o:Origin), (d:Document) WHERE o.id = d.id CREATE (o)-[:LINK]->(d)")
         .unwrap();
     let consumer = db
@@ -672,7 +672,7 @@ fn vector_index_exact_sql_hands_one_memory_ledger_to_output() {
         .unwrap();
     let embedding = Vector::new(&[1.0, 0.0]).unwrap();
     db.query_sql_with_params(
-        "INSERT INTO vectors VALUES (1, $1)",
+        "INSERT INTO vectors (id, embedding) VALUES (1, $1)",
         &[Value::Vector(embedding.clone())],
     )
     .unwrap();
