@@ -6225,7 +6225,10 @@ impl<S: crate::executor::ExecutionStore> KnowledgeRetrievalPipelineContext<'_, S
         let mut candidate_count = 0usize;
         self.store.visit_nodes_with_allocation(
             None,
-            &mut |bytes| admit_graph_read(account, None, bytes).map(Some),
+            &mut hawdb_storage::read_view::ControlledGraphReadAllocator::new(
+                &mut |bytes| admit_graph_read(account, None, bytes).map(Some),
+                None,
+            ),
             &mut |input| {
                 let (node, _input_allocation) = input.into_parts();
                 if !filter.matches(

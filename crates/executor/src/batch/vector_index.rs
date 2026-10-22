@@ -124,6 +124,8 @@ pub(super) fn stream(
                     match node.properties.get(property) {
                         None | Some(Value::Null) => {}
                         Some(Value::Vector(vector)) => {
+                            // Cover the temporary formatted identity until insert
+                            // has admitted and copied its own retained key.
                             let _identity_memory = eligibility_account.reserve(64)?;
                             domain.insert(&format!("n:{:016x}", node.id.0), vector.as_ref())?;
                         }
@@ -186,24 +188,29 @@ pub(super) fn stream(
                 "vector index returned an invalid cosine distance".into(),
             ));
         }
-        let input = context
-            .store
-            .node_with_allocation(candidate.node_id, None, &mut |bytes| {
-                let bytes = bytes
-                    .saturating_add(4096)
-                    .saturating_add(scan.variable.len())
-                    .saturating_add(scan.distance_column.len());
-                if !output.is_empty()
-                    && (!account.can_reserve(bytes) || output.would_exceed_payload(bytes))
-                {
-                    let control = output.emit(emit)?;
-                    allocations.clear();
-                    if control == BatchControl::Stop {
-                        return Ok(None);
+        let input = context.store.node_with_allocation(
+            candidate.node_id,
+            None,
+            &mut hawdb_storage::read_view::ControlledGraphReadAllocator::new(
+                &mut |bytes| {
+                    let bytes = bytes
+                        .saturating_add(4096)
+                        .saturating_add(scan.variable.len())
+                        .saturating_add(scan.distance_column.len());
+                    if !output.is_empty()
+                        && (!account.can_reserve(bytes) || output.would_exceed_payload(bytes))
+                    {
+                        let control = output.emit(emit)?;
+                        allocations.clear();
+                        if control == BatchControl::Stop {
+                            return Ok(None);
+                        }
                     }
-                }
-                crate::store::admit_graph_read(&account, context.task_context, bytes).map(Some)
-            })?;
+                    crate::store::admit_graph_read(&account, context.task_context, bytes).map(Some)
+                },
+                context.task_context,
+            ),
+        )?;
         let node = match input {
             AdmittedNodeRead::Node(node) => node,
             AdmittedNodeRead::Stopped => return Ok(BatchControl::Stop),

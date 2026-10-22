@@ -72,7 +72,7 @@ impl GraphExecutionRead for ChainStore {
         if !crate::predicate::node_matches_label_pattern(node, label_ids) {
             return Ok(AdmittedNodeRead::Missing);
         }
-        let Some(allocation) = admit(hawdb_core::ids::node_allocation_bytes(node))? else {
+        let Some(allocation) = admit.reserve(hawdb_core::ids::node_allocation_bytes(node))? else {
             return Ok(AdmittedNodeRead::Stopped);
         };
         self.node_copies.set(self.node_copies.get() + 1);
@@ -122,13 +122,13 @@ impl GraphExecutionRead for ChainStore {
         if self.cancel_before_admission {
             self.context.cancellation().cancel();
         }
-        let Some(_source) = admit(2048)? else {
+        let Some(_source) = admit.reserve(2048)? else {
             return Ok(ScanControl::Stop);
         };
         self.visit_adjacent_relationships_owned(node_id, rel_type, direction, &mut |relationship| {
-            let Some(allocation) = admit(hawdb_core::ids::relationship_allocation_bytes(
-                &relationship,
-            ))?
+            let Some(allocation) = admit.reserve(
+                hawdb_core::ids::relationship_allocation_bytes(&relationship),
+            )?
             else {
                 return Ok(ScanControl::Stop);
             };

@@ -96,6 +96,15 @@ mod tests {
     }
 
     #[test]
+    fn unbounded_work_charge_leaves_cancellation_to_checkpoints() {
+        let task = RuntimeTaskContext::default();
+        task.cancellation().cancel();
+        task.charge_work(1).unwrap();
+        assert_eq!(task.work_units(), 0);
+        assert!(task.checkpoint().is_err());
+    }
+
+    #[test]
     fn work_charge_observes_original_cancellation() {
         let task = RuntimeTaskContext::default().with_work_limit(1);
         let child = task.child();

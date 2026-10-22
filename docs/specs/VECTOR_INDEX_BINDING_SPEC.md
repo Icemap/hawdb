@@ -172,6 +172,14 @@ optimizer scope clears ordered range-index properties to preserve an explicit
 ORDER BY before LIMIT under canonical fallback. Work exhaustion
 and cancellation fail without delivering a successful partial domain.
 
+This is not a bound on every executor operation or CPU time. UNWIND/list
+expansion, Cartesian/hash-join combinations, and Sort/Aggregate/Distinct
+internal work are not charged individually. An aggregate can consume many
+join combinations while emitting few charged domain rows. Deadline and
+cancellation checks still apply; use them alongside the work and memory
+limits. Graph-read work accounting is separate from payload admission and
+does not reserve memory or invoke batch flush/Stop callbacks.
+
 Reports expose `mode`, `filter_position`, source epoch and generation. Exact
 reports name backend `exact`, set ANN `candidate_limit` to zero and include
 `input_rows`, `eligible_vectors`, `scored_vectors`, `work_units`, `max_work`,

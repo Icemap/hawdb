@@ -520,13 +520,13 @@ impl RuntimeTaskContext {
     /// Charge explicit candidate work before examining it, including rejected
     /// candidates. Checkpoints and allocation byte counts are not work units.
     pub fn charge_work(&self, units: usize) -> crate::Result<()> {
+        let Some(budget) = &self.work_budget else {
+            return Ok(());
+        };
         self.checkpoint().map_err(|reason| {
             crate::HawDBError::Execution(format!("runtime task stopped: {reason}"))
         })?;
-        if let Some(budget) = &self.work_budget {
-            budget.charge(units)?;
-        }
-        Ok(())
+        budget.charge(units)
     }
 
     pub fn deadline(&self) -> Option<Instant> {

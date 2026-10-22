@@ -29,7 +29,7 @@ impl GraphStore {
         rel_type: RelTypeId,
         filter: &PropertyFilter,
         max_keys: usize,
-        admit: &mut ControlledGraphReadAllocator<'_>,
+        admit: &mut dyn FnMut(usize) -> Result<Option<Box<dyn GraphReadAllocation>>>,
     ) -> Result<Option<AdmittedRelationshipCandidates>> {
         if let PropertyFilter::And(filters) = filter {
             let mut best: Option<AdmittedRelationshipCandidates> = None;
@@ -377,7 +377,7 @@ mod tests {
                     (source, Some(rel_type), AdjacencyDirection::Outgoing),
                     &filter,
                     64 * 1024,
-                    &mut admit,
+                    &mut crate::read_view::ControlledGraphReadAllocator::new(&mut admit, None),
                     |record| {
                         actual.push(record.into_parts().0.id);
                         Ok(GraphScanControl::Continue)
@@ -411,7 +411,7 @@ mod tests {
                 (source, Some(rel_type), AdjacencyDirection::Outgoing),
                 &active,
                 64 * 1024,
-                &mut admit,
+                &mut crate::read_view::ControlledGraphReadAllocator::new(&mut admit, None),
                 |_| panic!("stopped probe must not own or emit a source record"),
             )
             .unwrap();

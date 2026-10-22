@@ -175,6 +175,10 @@ impl ExternalReadOperator for IndexProvider<'_> {
                 "query index differs from the bound index definition",
             ));
         }
+        // VectorIndexReadTransaction construction binds the canonical snapshot
+        // and this pin to the same epoch. Returning the pin's identity lets the
+        // domain reject reuse with a different pin; it does not independently
+        // establish snapshot consistency for this transaction.
         Ok((
             self.definition.clone(),
             self.pin.vector_index_read_identity(),

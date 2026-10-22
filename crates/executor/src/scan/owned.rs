@@ -79,7 +79,8 @@ fn visit_full_nodes(
         observer.record_scan_pruning_report(scan.report.clone());
         for node in scan.nodes {
             runtime_checkpoint(context.task_context)?;
-            let Some(allocation) = admit(hawdb_core::ids::node_allocation_bytes(&node))? else {
+            let Some(allocation) = admit.reserve(hawdb_core::ids::node_allocation_bytes(&node))?
+            else {
                 return Ok(ScanVisit {
                     control: ScanControl::Stop,
                     fallback_label: None,
@@ -249,7 +250,10 @@ pub(super) fn stream(
         spec,
         context,
         observer,
-        &mut |bytes| state.borrow_mut().admit(bytes),
+        &mut ControlledGraphReadAllocator::new(
+            &mut |bytes| state.borrow_mut().admit(bytes),
+            context.task_context,
+        ),
         &mut |node, allocation| state.borrow_mut().push(node, allocation),
     )?;
     let mut state = state.into_inner();
@@ -282,14 +286,17 @@ pub(super) fn materialize(
         spec,
         context,
         observer,
-        &mut |bytes| {
-            admit_graph_read(
-                context.memory_account,
-                context.task_context,
-                bytes.saturating_add(binding_overhead(spec.variable)),
-            )
-            .map(Some)
-        },
+        &mut ControlledGraphReadAllocator::new(
+            &mut |bytes| {
+                admit_graph_read(
+                    context.memory_account,
+                    context.task_context,
+                    bytes.saturating_add(binding_overhead(spec.variable)),
+                )
+                .map(Some)
+            },
+            context.task_context,
+        ),
         &mut |node, allocation| {
             runtime_checkpoint(context.task_context)?;
             if !matches_scan(spec, context, &node) {
@@ -338,10 +345,16 @@ pub(super) fn stream_visited(
         emitted: 0,
         stopped: false,
     });
-    let control = visit(&mut |bytes| state.borrow_mut().admit(bytes), &mut |input| {
-        let (node, allocation) = input.into_parts();
-        state.borrow_mut().push(node, allocation)
-    })?;
+    let control = visit(
+        &mut ControlledGraphReadAllocator::new(
+            &mut |bytes| state.borrow_mut().admit(bytes),
+            context.task_context,
+        ),
+        &mut |input| {
+            let (node, allocation) = input.into_parts();
+            state.borrow_mut().push(node, allocation)
+        },
+    )?;
     let mut state = state.into_inner();
     state.flush()?;
     Ok(if state.stopped || control == ScanControl::Stop {

@@ -50,10 +50,16 @@ const EXECUTOR_BENCH_MODE_ENV: &str = "HAWDB_EXECUTOR_BENCH_MODE";
 mod adjacency;
 #[path = "executor_vectorization/morsel.rs"]
 mod morsel;
+#[path = "executor_vectorization/work_admission.rs"]
+mod work_admission;
 
 fn main() {
-    let requested_workers = morsel::benchmark_workers();
     let mode = std::env::var(EXECUTOR_BENCH_MODE_ENV).unwrap_or_else(|_| "full".to_string());
+    if mode == "work-admission" {
+        println!("executor_work_admission {}", work_admission::benchmark());
+        return;
+    }
+    let requested_workers = morsel::benchmark_workers();
     assert!(
         matches!(
             mode.as_str(),

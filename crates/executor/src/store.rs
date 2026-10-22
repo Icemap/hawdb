@@ -55,18 +55,6 @@ struct QueryGraphReadAllocation {
 }
 
 impl hawdb_storage::read_view::GraphReadAllocation for QueryGraphReadAllocation {
-    fn has_work_limit(&self) -> bool {
-        self.task_context
-            .as_ref()
-            .is_some_and(hawdb_core::RuntimeTaskContext::has_work_limit)
-    }
-
-    fn charge_work(&self, units: usize) -> Result<()> {
-        self.task_context
-            .as_ref()
-            .map_or(Ok(()), |task| task.charge_work(units))
-    }
-
     fn bytes(&self) -> usize {
         self.allocation.bytes()
     }
@@ -152,18 +140,6 @@ struct LocalGraphReadAllocation {
 }
 
 impl hawdb_storage::read_view::GraphReadAllocation for LocalGraphReadAllocation {
-    fn has_work_limit(&self) -> bool {
-        self.task_context
-            .as_ref()
-            .is_some_and(hawdb_core::RuntimeTaskContext::has_work_limit)
-    }
-
-    fn charge_work(&self, units: usize) -> Result<()> {
-        self.task_context
-            .as_ref()
-            .map_or(Ok(()), |task| task.charge_work(units))
-    }
-
     fn bytes(&self) -> usize {
         self.bytes
     }
@@ -360,10 +336,7 @@ pub trait GraphExecutionRead {
         &self,
         _label_id: Option<LabelId>,
         _properties: &BTreeSet<String>,
-        _admit: &mut dyn FnMut(
-            usize,
-        )
-            -> Result<Box<dyn hawdb_storage::read_view::GraphReadAllocation>>,
+        _admit: &mut hawdb_storage::read_view::GraphReadAllocator<'_>,
         _consumer: &mut dyn FnMut(ProjectedNodeRecord) -> Result<ScanControl>,
     ) -> Result<ScanControl> {
         Err(hawdb_core::HawDBError::Execution(
@@ -394,10 +367,7 @@ pub trait GraphExecutionRead {
         _label_id: LabelId,
         _access: &NodeProjectionAccess,
         _properties: &BTreeSet<String>,
-        _admit: &mut dyn FnMut(
-            usize,
-        )
-            -> Result<Box<dyn hawdb_storage::read_view::GraphReadAllocation>>,
+        _admit: &mut hawdb_storage::read_view::GraphReadAllocator<'_>,
         _consumer: &mut dyn FnMut(ProjectedNodeRecord) -> Result<ScanControl>,
     ) -> Result<ScanControl> {
         Err(hawdb_core::HawDBError::Execution(
@@ -413,10 +383,7 @@ pub trait GraphExecutionRead {
         _property: &str,
         _values: &[hawdb_core::Value],
         _properties: &BTreeSet<String>,
-        _admit: &mut dyn FnMut(
-            usize,
-        )
-            -> Result<Box<dyn hawdb_storage::read_view::GraphReadAllocation>>,
+        _admit: &mut hawdb_storage::read_view::GraphReadAllocator<'_>,
         _consumer: &mut dyn FnMut(ProjectedNodeRecord) -> Result<ScanControl>,
     ) -> Result<ScanControl> {
         Err(hawdb_core::HawDBError::Execution(
@@ -547,7 +514,10 @@ pub trait GraphExecutionRead {
             rel_type,
             direction,
             memory,
-            &mut |bytes| memory.admit_node(bytes, 0, None).map(Some),
+            &mut hawdb_storage::read_view::ControlledGraphReadAllocator::new(
+                &mut |bytes| memory.admit_node(bytes, 0, None).map(Some),
+                None,
+            ),
             &mut |input| {
                 let (relationship, _allocation) = input.into_parts();
                 consumer(relationship)
@@ -665,7 +635,10 @@ pub trait GraphExecutionRead {
         _catalog: &Catalog,
         _label_id: Option<LabelId>,
         _filter: Option<&PropertyFilter>,
-        _admit: &mut hawdb_storage::read_view::GraphReadAllocator<'_>,
+        _admit: &mut dyn FnMut(
+            usize,
+        )
+            -> Result<Box<dyn hawdb_storage::read_view::GraphReadAllocation>>,
     ) -> Result<PrunedNodeScan<'a>> {
         Err(hawdb_core::HawDBError::Execution(
             "graph store does not support admitted pruning reads".into(),

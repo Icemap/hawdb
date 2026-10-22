@@ -327,19 +327,27 @@ pub(super) fn stream_source_segment_scan_batches(
             if execution_limit.is_reached(emitted.get().saturating_add(output.len())) {
                 return Ok(ScanControl::Stop);
             }
-            let input = store.node_with_allocation(NodeId(row.node_id), None, &mut |bytes| {
-                let bytes = bytes.saturating_add(1024 + variable.len());
-                if !output.is_empty()
-                    && (!node_account.can_reserve(bytes) || output.would_exceed_payload(bytes))
-                {
-                    let control = output.emit(&mut emit_output)?;
-                    allocations.clear();
-                    if control == BatchControl::Stop {
-                        return Ok(None);
-                    }
-                }
-                crate::store::admit_graph_read(&node_account, task_context, bytes).map(Some)
-            })?;
+            let input = store.node_with_allocation(
+                NodeId(row.node_id),
+                None,
+                &mut hawdb_storage::read_view::ControlledGraphReadAllocator::new(
+                    &mut |bytes| {
+                        let bytes = bytes.saturating_add(1024 + variable.len());
+                        if !output.is_empty()
+                            && (!node_account.can_reserve(bytes)
+                                || output.would_exceed_payload(bytes))
+                        {
+                            let control = output.emit(&mut emit_output)?;
+                            allocations.clear();
+                            if control == BatchControl::Stop {
+                                return Ok(None);
+                            }
+                        }
+                        crate::store::admit_graph_read(&node_account, task_context, bytes).map(Some)
+                    },
+                    task_context,
+                ),
+            )?;
             if matches!(input, hawdb_storage::read_view::AdmittedNodeRead::Stopped) {
                 return Ok(ScanControl::Stop);
             }

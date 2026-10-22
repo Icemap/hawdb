@@ -57,7 +57,8 @@ impl ReadFixture {
             if !label.is_none_or(|label| node.labels.contains(&label)) || !matches(node) {
                 continue;
             }
-            let Some(allocation) = admit(hawdb_core::ids::node_allocation_bytes(node))? else {
+            let Some(allocation) = admit.reserve(hawdb_core::ids::node_allocation_bytes(node))?
+            else {
                 return Ok(ScanControl::Stop);
             };
             self.node_admissions.set(self.node_admissions.get() + 1);
@@ -104,7 +105,7 @@ impl GraphExecutionRead for ReadFixture {
         if !crate::predicate::node_matches_label_pattern(node, label_ids) {
             return Ok(AdmittedNodeRead::Missing);
         }
-        let Some(allocation) = admit(hawdb_core::ids::node_allocation_bytes(node))? else {
+        let Some(allocation) = admit.reserve(hawdb_core::ids::node_allocation_bytes(node))? else {
             return Ok(AdmittedNodeRead::Stopped);
         };
         AdmittedNodeRecord::clone_admitted(node, allocation).map(AdmittedNodeRead::Node)
@@ -157,7 +158,7 @@ impl GraphExecutionRead for ReadFixture {
                 continue;
             }
             let Some(allocation) =
-                admit(hawdb_core::ids::relationship_allocation_bytes(relationship))?
+                admit.reserve(hawdb_core::ids::relationship_allocation_bytes(relationship))?
             else {
                 return Ok(ScanControl::Stop);
             };
@@ -241,7 +242,8 @@ impl GraphExecutionRead for ReadFixture {
             if rel_type.is_some_and(|selected| record.rel_type != selected) {
                 continue;
             }
-            let Some(allocation) = admit(hawdb_core::ids::relationship_allocation_bytes(record))?
+            let Some(allocation) =
+                admit.reserve(hawdb_core::ids::relationship_allocation_bytes(record))?
             else {
                 return Ok(ScanControl::Stop);
             };
@@ -269,9 +271,9 @@ impl GraphExecutionRead for ReadFixture {
             if label.is_some_and(|selected| !node.labels.contains(&selected)) {
                 continue;
             }
-            let Some(allocation) = admit(hawdb_core::ids::projected_node_allocation_bytes(
-                node, properties,
-            ))?
+            let Some(allocation) = admit.reserve(
+                hawdb_core::ids::projected_node_allocation_bytes(node, properties),
+            )?
             else {
                 return Ok(ScanControl::Stop);
             };
@@ -304,17 +306,14 @@ impl GraphExecutionRead for ReadFixture {
         &self,
         label: Option<LabelId>,
         properties: &BTreeSet<String>,
-        admit: &mut dyn FnMut(
-            usize,
-        )
-            -> Result<Box<dyn hawdb_storage::read_view::GraphReadAllocation>>,
+        admit: &mut hawdb_storage::read_view::GraphReadAllocator<'_>,
         consumer: &mut dyn FnMut(ProjectedNodeRecord) -> Result<ScanControl>,
     ) -> Result<ScanControl> {
         for node in &self.nodes {
             if label.is_none_or(|label| node.labels.contains(&label)) {
-                let _allocation = admit(hawdb_core::ids::projected_node_allocation_bytes(
-                    node, properties,
-                ))?;
+                let _allocation = admit.reserve(
+                    hawdb_core::ids::projected_node_allocation_bytes(node, properties),
+                )?;
                 if consumer(hawdb_core::ids::project_node_record_ref(node, properties))?
                     == ScanControl::Stop
                 {
@@ -475,7 +474,10 @@ impl GraphExecutionRead for ReadFixture {
         _: &Catalog,
         label_id: Option<LabelId>,
         filter: Option<&PropertyFilter>,
-        admit: &mut hawdb_storage::read_view::GraphReadAllocator<'_>,
+        admit: &mut dyn FnMut(
+            usize,
+        )
+            -> Result<Box<dyn hawdb_storage::read_view::GraphReadAllocation>>,
     ) -> Result<PrunedNodeScan<'a>> {
         let admission = hawdb_storage::read_view::GraphReadAdmission::new(admit);
         let mut nodes = hawdb_storage::read_view::AdmittedVec::new(&admission)?;

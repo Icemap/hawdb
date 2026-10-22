@@ -64,7 +64,10 @@ impl AnalyticsEdgeSource for EdgeSource<'_> {
                         budget_bytes: self.record_budget,
                         account: Some(&self.record_account),
                     },
-                    &mut admit,
+                    &mut hawdb_storage::read_view::ControlledGraphReadAllocator::new(
+                        &mut admit,
+                        self.context.task_context,
+                    ),
                     &mut |input| {
                         let (relationship, _allocation) = input.into_parts();
                         if ordinal.is_multiple_of(1024) {
@@ -206,7 +209,10 @@ impl GraphAlgorithmSpec<'_> {
                 context.store.visit_projected_nodes_with_allocation(
                     None,
                     &BTreeSet::new(),
-                    &mut admit,
+                    &mut hawdb_storage::read_view::ControlledGraphReadAllocator::new(
+                        &mut admit,
+                        context.task_context,
+                    ),
                     &mut |input| {
                         let (node, _allocation) = input.into_parts();
                         consume(NodeRecord {
@@ -217,12 +223,17 @@ impl GraphAlgorithmSpec<'_> {
                     },
                 )?
             } else {
-                context
-                    .store
-                    .visit_nodes_with_allocation(None, &mut admit, &mut |input| {
+                context.store.visit_nodes_with_allocation(
+                    None,
+                    &mut hawdb_storage::read_view::ControlledGraphReadAllocator::new(
+                        &mut admit,
+                        context.task_context,
+                    ),
+                    &mut |input| {
                         let (node, _allocation) = input.into_parts();
                         consume(node)
-                    })?
+                    },
+                )?
             };
             if control == ScanControl::Stop {
                 return Err(HawDBError::Execution(

@@ -20,6 +20,71 @@ struct Allocation {
     bytes: usize,
     live: Rc<Cell<usize>>,
 }
+
+#[test]
+fn point_work_charges_missing_rejected_and_tombstoned_records_without_payload() {
+    use crate::read_view::{
+        AdmittedNodeRead, AdmittedRelationshipRead, ControlledGraphReadAllocator,
+    };
+    let mut catalog = Catalog::default();
+    let mut store = GraphStore::in_memory();
+    let node = store
+        .create_node(&mut catalog, "Item", BTreeMap::new())
+        .unwrap();
+    let deleted = store
+        .create_node(&mut catalog, "Other", BTreeMap::new())
+        .unwrap();
+    let relationship = store
+        .create_relationship(&mut catalog, node, deleted, "LINK", BTreeMap::new())
+        .unwrap();
+    store.node_tombstones.insert(deleted);
+    store.relationship_tombstones.insert(relationship);
+    let other_label = catalog.label_id("Other").unwrap();
+    let task = hawdb_core::RuntimeTaskContext::default().with_work_limit(5);
+    let mut unexpected = |_| panic!("absent records must not admit payload");
+    let mut policy = ControlledGraphReadAllocator::new(&mut unexpected, Some(&task));
+    for (id, labels) in [
+        (NodeId(u64::MAX), None),
+        (node, Some([other_label])),
+        (deleted, None),
+    ] {
+        assert!(matches!(
+            store
+                .node_with_allocation(
+                    id,
+                    labels.as_ref().map(|labels| labels.as_slice()),
+                    &mut policy
+                )
+                .unwrap(),
+            AdmittedNodeRead::Missing
+        ));
+    }
+    for id in [RelId(u64::MAX), relationship] {
+        assert!(matches!(
+            store.relationship_with_allocation(id, &mut policy).unwrap(),
+            AdmittedRelationshipRead::Missing
+        ));
+    }
+    assert_eq!(task.work_units(), 5);
+    assert!(
+        matches!(store.node_with_allocation(node, None, &mut policy), Err(HawDBError::ResourceBudgetExceeded(ref error)) if error.resource == hawdb_core::ResourceBudgetKind::WorkUnits)
+    );
+    assert!(
+        matches!(store.relationship_with_allocation(relationship, &mut policy), Err(HawDBError::ResourceBudgetExceeded(ref error)) if error.resource == hawdb_core::ResourceBudgetKind::WorkUnits)
+    );
+    assert!(task.check_work_limit().is_err());
+    let retry = hawdb_core::RuntimeTaskContext::default().with_work_limit(1);
+    assert!(matches!(
+        store
+            .relationship_with_allocation(
+                relationship,
+                &mut ControlledGraphReadAllocator::new(&mut unexpected, Some(&retry))
+            )
+            .unwrap(),
+        AdmittedRelationshipRead::Missing
+    ));
+    assert_eq!(retry.work_units(), 1);
+}
 impl crate::read_view::GraphReadAllocation for Allocation {
     fn bytes(&self) -> usize {
         self.bytes
@@ -126,15 +191,19 @@ fn admitted_relationship_stream_preserves_overlay_filter_stop_and_inventory() {
     let mut seen = BTreeMap::new();
     assert_eq!(
         store
-            .visit_relationships_with_allocation(Some(selected), &mut admit, &mut |row| {
-                assert_eq!(live.get(), 1);
-                let record = row.relationship();
-                assert_eq!(record.source, source);
-                assert_eq!(record.target, target);
-                assert_eq!(record.rel_type, selected);
-                seen.insert(record.id, record.properties["body"].clone());
-                Ok(GraphScanControl::Continue)
-            })
+            .visit_relationships_with_allocation(
+                Some(selected),
+                &mut crate::read_view::ControlledGraphReadAllocator::new(&mut admit, None),
+                &mut |row| {
+                    assert_eq!(live.get(), 1);
+                    let record = row.relationship();
+                    assert_eq!(record.source, source);
+                    assert_eq!(record.target, target);
+                    assert_eq!(record.rel_type, selected);
+                    seen.insert(record.id, record.properties["body"].clone());
+                    Ok(GraphScanControl::Continue)
+                }
+            )
             .unwrap(),
         GraphScanControl::Continue
     );
@@ -144,10 +213,14 @@ fn admitted_relationship_stream_preserves_overlay_filter_stop_and_inventory() {
     let mut visits = 0;
     assert_eq!(
         store
-            .visit_relationships_with_allocation(Some(selected), &mut admit, &mut |_| {
-                visits += 1;
-                Ok(GraphScanControl::Stop)
-            })
+            .visit_relationships_with_allocation(
+                Some(selected),
+                &mut crate::read_view::ControlledGraphReadAllocator::new(&mut admit, None),
+                &mut |_| {
+                    visits += 1;
+                    Ok(GraphScanControl::Stop)
+                }
+            )
             .unwrap(),
         GraphScanControl::Stop
     );
@@ -156,9 +229,11 @@ fn admitted_relationship_stream_preserves_overlay_filter_stop_and_inventory() {
     let mut deny = |_| Ok(None);
     assert_eq!(
         store
-            .visit_relationships_with_allocation(Some(selected), &mut deny, &mut |_| panic!(
-                "refused row reached consumer"
-            ))
+            .visit_relationships_with_allocation(
+                Some(selected),
+                &mut crate::read_view::ControlledGraphReadAllocator::new(&mut deny, None),
+                &mut |_| panic!("refused row reached consumer")
+            )
             .unwrap(),
         GraphScanControl::Stop
     );
@@ -177,7 +252,7 @@ fn admitted_relationship_stream_preserves_overlay_filter_stop_and_inventory() {
     assert!(matches!(
         store.visit_relationships_with_allocation(
             Some(selected),
-            &mut insufficient,
+            &mut crate::read_view::ControlledGraphReadAllocator::new(&mut insufficient, None),
             &mut |_| panic!("under-admitted row reached consumer")
         ),
         Err(HawDBError::Execution(_))
@@ -189,22 +264,34 @@ fn admitted_relationship_stream_preserves_overlay_filter_stop_and_inventory() {
         .unwrap();
     assert!(matches!(
         store
-            .relationship_with_allocation(canonical_id, &mut deny)
+            .relationship_with_allocation(
+                canonical_id,
+                &mut crate::read_view::ControlledGraphReadAllocator::new(&mut deny, None)
+            )
             .unwrap(),
         AdmittedRelationshipRead::Stopped
     ));
     assert!(matches!(
-        store.relationship_with_allocation(canonical_id, &mut insufficient),
+        store.relationship_with_allocation(
+            canonical_id,
+            &mut crate::read_view::ControlledGraphReadAllocator::new(&mut insufficient, None)
+        ),
         Err(HawDBError::Execution(_))
     ));
     assert_eq!(live.get(), 0);
     let mut fail = |_| Err(HawDBError::Execution("query budget exhausted".into()));
     assert!(matches!(
-        store.relationship_with_allocation(canonical_id, &mut fail),
+        store.relationship_with_allocation(
+            canonical_id,
+            &mut crate::read_view::ControlledGraphReadAllocator::new(&mut fail, None)
+        ),
         Err(HawDBError::Execution(_))
     ));
     let AdmittedRelationshipRead::Relationship(row) = store
-        .relationship_with_allocation(canonical_id, &mut admit)
+        .relationship_with_allocation(
+            canonical_id,
+            &mut crate::read_view::ControlledGraphReadAllocator::new(&mut admit, None),
+        )
         .unwrap()
     else {
         panic!("query admission failure poisoned the canonical reader");
@@ -218,7 +305,10 @@ fn admitted_relationship_stream_preserves_overlay_filter_stop_and_inventory() {
     assert_eq!(live.get(), 0);
     assert!(matches!(
         store
-            .relationship_with_allocation(deleted, &mut admit)
+            .relationship_with_allocation(
+                deleted,
+                &mut crate::read_view::ControlledGraphReadAllocator::new(&mut admit, None)
+            )
             .unwrap(),
         AdmittedRelationshipRead::Missing
     ));
