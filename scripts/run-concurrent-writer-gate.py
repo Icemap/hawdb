@@ -5,6 +5,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -39,19 +40,23 @@ def main():
     parser.add_argument("--work", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--fixture-parent", type=Path, required=True)
+    parser.add_argument("--baseline-revision", default=BASELINE)
     args = parser.parse_args()
+    if not re.fullmatch(r"[0-9a-f]{40}", args.baseline_revision):
+        parser.error("--baseline-revision must be a full lowercase commit SHA")
+    baseline_revision = args.baseline_revision
     source = Path(__file__).resolve().parents[1]
     work = args.work.resolve()
     output = args.output.resolve()
     work.mkdir(parents=True, exist_ok=False)
     output.mkdir(parents=True, exist_ok=False)
-    if subprocess.run(["git", "cat-file", "-e", BASELINE + "^{commit}"],
+    if subprocess.run(["git", "cat-file", "-e", baseline_revision + "^{commit}"],
                       cwd=source, capture_output=True, check=False).returncode:
-        subprocess.run(["git", "fetch", "--no-tags", "--depth=1", "origin", BASELINE],
+        subprocess.run(["git", "fetch", "--no-tags", "--depth=1", "origin", baseline_revision],
                        cwd=source, check=True)
     archive = work / "baseline.tar"
     with archive.open("xb") as contents:
-        subprocess.run(["git", "archive", BASELINE], cwd=source, stdout=contents,
+        subprocess.run(["git", "archive", baseline_revision], cwd=source, stdout=contents,
                        check=True)
     baseline = work / "baseline"
     baseline.mkdir()
@@ -61,10 +66,10 @@ def main():
                  baseline / "benches/concurrent_writers.rs")
     manifest = baseline / "Cargo.toml"
     registration = '\n[[bench]]\nname = "concurrent_writers"\nharness = false\n'
-    assert 'name = "concurrent_writers"' not in manifest.read_text()
-    with manifest.open("a") as file:
-        file.write(registration)
-    build_record = {"baseline": BASELINE,
+    if 'name = "concurrent_writers"' not in manifest.read_text():
+        with manifest.open("a") as file:
+            file.write(registration)
+    build_record = {"baseline": baseline_revision,
                     "candidate": subprocess.check_output(
                         ["git", "rev-parse", "HEAD"], cwd=source, text=True).strip(),
                     "harness_sha256": hashlib.sha256(
@@ -80,6 +85,7 @@ def main():
                     "--baseline", str(binaries["baseline"]),
                     "--candidate", str(binaries["candidate"]),
                     "--baseline-source", str(baseline),
+                    "--baseline-revision", baseline_revision,
                     "--fixture-parent", str(args.fixture_parent.resolve()),
                     "--output", str(output / "measurement")], cwd=source, check=True)
     receipt = json.loads((output / "measurement/receipt.json").read_text())

@@ -87,7 +87,9 @@ impl Drop for ProjectionConsumerPreparation<'_> {
                 .expect("reserved Consumer")
                 .projection_mut()
                 .retain_failed_preparation(recovery);
-            debug_assert!(retained.is_ok());
+            if let Err(error) = retained {
+                report_retention_failure(&error);
+            }
         }
     }
 }
@@ -118,14 +120,27 @@ impl Drop for ProjectionPreparedConsumerUpdate<'_> {
                     .consumer
                     .projection_mut()
                     .retain_pending_publication(prepared);
-                debug_assert!(retained.is_ok());
+                if let Err(error) = retained {
+                    report_retention_failure(&error);
+                }
             }
             Some(Err(error)) => {
-                let _ = retain_failed_owner(self.consumer, *error);
+                if let ProjectionConsumerCatchUpError::RecoveryRetention { retention, .. } =
+                    retain_failed_owner(self.consumer, *error)
+                {
+                    report_retention_failure(&retention);
+                }
             }
             None => {}
         }
     }
+}
+
+fn report_retention_failure(error: &HawDBError) {
+    use std::io::Write;
+    // Drop cannot return an error. Report the failed custody transfer in release
+    // builds too, without a second panic if the host's diagnostic stream fails.
+    let _ = writeln!(std::io::stderr().lock(), "HawDB Consumer recovery retention failed: {error}; durable birth and publication evidence retained");
 }
 
 /// Completed publication with deferred resident/source retirement. Return this
@@ -271,8 +286,17 @@ impl Database {
             .get()?
             .store
             .reserve_search_consumer_update(consumer.projection().stationary_receipt()?)?;
-        let birth = consumer.projection().prepare_successor_birth(allocation)?;
+        let mut birth = consumer.projection().prepare_successor_birth(allocation)?;
         let locator = consumer.projection().registered_locator()?.to_owned();
+        if let Err(error) = birth.complete_birth_intent() {
+            return Err(retain_failed_owner(
+                consumer,
+                RegisteredConsumerError::with_recovery(
+                    error,
+                    RegisteredConsumerRecovery::unstarted(birth, locator, recovery_memory),
+                ),
+            ));
+        }
         Ok(ProjectionConsumerPreparation {
             consumer: Some(consumer),
             context: Some(PublicationContext {

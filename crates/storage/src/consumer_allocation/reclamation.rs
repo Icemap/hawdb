@@ -389,7 +389,7 @@ fn read_bytes(directory: &SourceDirectory, name: &str) -> io::Result<Vec<u8>> {
 }
 
 fn decode_marker(bytes: &[u8], ledger: &Ledger) -> Result<Reservation> {
-    const HEADER: &[u8] = b"HAWDB_CONSUMER_BIRTH_V1\n";
+    const HEADER: &[u8] = b"HAWDB_CONSUMER_BIRTH_V2\n";
     if !bytes.starts_with(HEADER) || bytes.len() < HEADER.len() + 4 {
         return Err(invalid("cleanup birth header is incomplete"));
     }

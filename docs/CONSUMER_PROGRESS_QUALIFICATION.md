@@ -89,6 +89,25 @@ publication; a result for that schedule does not waive the performance gates.
 
 ## Retained evidence
 
+The detached-publication review adds reservation-time predecessor fencing and
+excludes unregister/competing reservation throughout native preparation. The
+pre-selection check reads the native registration, since the disposable cache
+hides pending intents. Consumer allocation ledgers now use V3 and birth markers
+V2; older development databases must be recreated, with no compatibility
+migration or automatic deletion. Existing files fail closed and remain intact.
+
+Narrow source scopes limit dependency conflicts and mapper input. The full-source
+cursor still visits the database-wide node-ID range, with bounded work per step;
+total scan cost remains proportional to that range, including holes. This PR
+does not claim scope-proportional full-source scan performance. An index-driven
+enumerator requires separate performance and coverage qualification.
+
+The manual writer job accepts `writer_baseline_revision` for a separate paired
+comparison against a pinned current-main SHA. Its default remains the original
+acceptance baseline. Both runs keep the same harness, 40 pairs, six primary
+endpoints and zero-increase threshold; current-main attribution cannot replace
+the failed original-baseline receipt above.
+
 [Evidence directory](benchmarks/consumer_progress_linux_2026_10_22/README.md)
 contains raw samples, source/binary hashes, both strict receipts, the failed
 Consumer dataset and labelled historical validation. Rebuild using the checked-in

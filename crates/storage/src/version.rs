@@ -739,6 +739,10 @@ impl VersionIndex {
         })
     }
 
+    pub(crate) fn history_reclaimed_after(&self, read_epoch: u64) -> bool {
+        read_epoch < self.history_floor
+    }
+
     /// Applies stamps to an unmanaged index without resource admission.
     /// Callers must supply a nonzero epoch. Production commits use `stage`
     /// before WAL, then install that prepared index after canonical application.
@@ -780,7 +784,11 @@ impl VersionIndex {
 
     /// Removes tombstones only after every pinned reader is newer than the
     /// deletion that created them. Live stamps are retained indefinitely.
+    /// Older nonempty write sets must fail closed after this boundary advances.
     pub fn prune_tombstones_before(&mut self, oldest_reader_epoch: u64) {
+        self.history_floor = self
+            .history_floor
+            .max(oldest_reader_epoch.saturating_sub(1));
         if self.database_barrier.is_some_and(|stamp| {
             stamp.disposition == VersionDisposition::Tombstone
                 && stamp.commit_epoch < oldest_reader_epoch
@@ -1223,11 +1231,34 @@ mod tests {
         index.prune_before(6);
         assert!(index.is_empty());
         assert_eq!(snapshot.len(), 4);
+        assert_eq!(index.first_conflict(&writes, 4).unwrap().committed_epoch, 5);
+        assert!(index
+            .first_conflict(&VersionWriteSet::default(), 4)
+            .is_none());
         assert!(index.first_conflict(&writes, 6).is_none());
         index.apply(&writes, 7);
         assert_eq!(index.first_conflict(&writes, 6).unwrap().committed_epoch, 7);
         index.prune_before(6);
         assert_eq!(index.len(), 4);
+    }
+
+    #[test]
+    fn tombstone_pruning_alone_rejects_reads_below_the_history_floor() {
+        let mut writes = VersionWriteSet::default();
+        writes
+            .record_tombstone(VersionKey::GraphNode(NodeId(1)))
+            .unwrap();
+        let mut index = VersionIndex::default();
+        index.apply(&writes, 5);
+        index.prune_tombstones_before(6);
+        assert!(index.is_empty());
+        assert_eq!(index.first_conflict(&writes, 4).unwrap().committed_epoch, 5);
+        assert!(index.first_conflict(&writes, 5).is_none());
+        assert!(index
+            .first_conflict(&VersionWriteSet::default(), 4)
+            .is_none());
+        index.prune_tombstones_before(2);
+        assert_eq!(index.first_conflict(&writes, 4).unwrap().committed_epoch, 5);
     }
 
     #[test]

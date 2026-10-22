@@ -104,6 +104,16 @@ fn prepare_in(
     consumer: &SearchProjectionConsumer,
     scope: ProjectionSourceScope,
 ) -> ProjectionCoveredConsumerUpdate {
+    prepare_with(db, consumer, scope, mapping, full)
+}
+
+fn prepare_with(
+    db: &mut Database,
+    consumer: &SearchProjectionConsumer,
+    scope: ProjectionSourceScope,
+    mapping: ProjectionMappingFunction,
+    full: ProjectionBaselineMappingFunction,
+) -> ProjectionCoveredConsumerUpdate {
     let cfg = config();
     let mut session = db
         .begin_search_projection_consumer_catch_up_in(consumer, cfg.clone(), mapping, scope)
@@ -146,6 +156,120 @@ fn prepare_in(
         }
     }
     coverage.finish().unwrap()
+}
+
+#[test]
+fn registered_stationary_detached_update_excludes_unregister_and_competing_reservation() {
+    for phase in ["reserved", "pending", "recorded"] {
+        let fixture = Fixture::new();
+        let mut db = fixture.database();
+        append(&mut db, 1);
+        let consumer = db
+            .create_search_projection_consumer(
+                id("detached-birth-v1"),
+                fixture.0.join("projection"),
+                options(1000),
+                |_, index| index.upsert(document("document 1")),
+            )
+            .unwrap();
+        let reserve = |db: &Database| {
+            db.runtime
+                .get()
+                .unwrap()
+                .store
+                .reserve_search_consumer_update(consumer.projection().stationary_receipt().unwrap())
+        };
+        let allocation = reserve(&db).unwrap();
+        assert!(matches!(
+            db.runtime
+                .get()
+                .unwrap()
+                .store
+                .renew_search_consumer_lease(consumer.projection().stationary_receipt().unwrap(),),
+            Err(HawDBError::ProjectionBusy)
+        ));
+        let mut birth = if phase == "reserved" {
+            assert!(matches!(
+                db.unregister_search_projection_consumer(consumer.id()),
+                Err(Error::Database(HawDBError::ProjectionBusy))
+            ));
+            allocation
+                .prepare_stationary_generation(&fixture.0)
+                .unwrap()
+        } else {
+            let mut birth = allocation
+                .prepare_stationary_generation(&fixture.0)
+                .unwrap();
+            if phase == "recorded" {
+                birth.create().unwrap();
+            }
+            assert!(matches!(
+                db.unregister_search_projection_consumer(consumer.id()),
+                Err(Error::Database(HawDBError::ProjectionBusy))
+            ));
+            birth
+        };
+        assert!(matches!(reserve(&db), Err(HawDBError::ProjectionBusy)));
+        if phase == "recorded" {
+            birth.retire_unpublished().unwrap();
+        } else {
+            birth.settle_no_effect().unwrap();
+        }
+        db.unregister_search_projection_consumer(consumer.id())
+            .unwrap();
+    }
+}
+
+#[test]
+fn registered_stationary_detached_publication_survives_busy_unregister_and_cache_reload() {
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    append(&mut db, 1);
+    let consumer_id = id("detached-registration-v1");
+    let mut consumer = db
+        .create_search_projection_consumer(
+            consumer_id.clone(),
+            fixture.0.join("projection"),
+            options(1000),
+            |_, index| index.upsert(document("document 1")),
+        )
+        .unwrap();
+    db.query("MATCH (m:Memory) SET m.content='covered value'")
+        .unwrap();
+    let epoch = db.commit_epoch().unwrap();
+    let covered = prepare(&mut db, &consumer);
+    let previous = consumer.projection().stationary_receipt().unwrap().clone();
+    let reservation = db
+        .prepare_search_projection_consumer_covered_update(
+            &mut consumer,
+            covered,
+            ProjectionSourceDurability::RequireKnownDurable,
+        )
+        .unwrap();
+    assert!(matches!(
+        db.runtime
+            .get()
+            .unwrap()
+            .store
+            .reserve_search_consumer_update(&previous),
+        Err(HawDBError::ProjectionBusy)
+    ));
+    assert!(matches!(
+        db.unregister_search_projection_consumer(&consumer_id),
+        Err(Error::Database(HawDBError::ProjectionBusy))
+    ));
+    let prepared = reservation.prepare();
+    assert!(matches!(
+        db.unregister_search_projection_consumer(&consumer_id),
+        Err(Error::Database(HawDBError::ProjectionBusy))
+    ));
+    let publication = db
+        .publish_search_projection_consumer_prepared_update(prepared)
+        .unwrap();
+    drop(publication);
+    assert_eq!(consumer.projection().receipt().source_epoch, epoch);
+    db.unregister_search_projection_consumer(&consumer_id)
+        .unwrap();
 }
 
 fn single_slot_governor() -> hawdb_qos::RuntimeGovernor {
@@ -774,5 +898,106 @@ fn registered_stationary_covered_steps_progress_at_strict_foreground_capacity() 
                 .content,
             "capacity value"
         );
+    }
+}
+
+#[test]
+fn registered_stationary_scoped_mapping_rejects_out_of_scope_relationship_reads() {
+    fn mapped(
+        ctx: &mut ProjectionMappingContext<'_, '_, '_>,
+        input: ProjectionMappingInput<'_>,
+        _: &[u8],
+    ) -> Result<ProjectionMappingStatus> {
+        if let ProjectionMappingInput::GraphNode { node_id, .. } = input {
+            let rows = ctx.query_with_params(
+                "MATCH (m:Memory)-[:LINK]->(d:Document) WHERE id(m)=$id RETURN d.content AS content",
+                &BTreeMap::from([("id".into(), Value::Int(node_id as i64))]),
+            )?;
+            if let Some(row) = rows.output.rows.first() {
+                let Value::String(content) = &row["content"] else {
+                    panic!("text content")
+                };
+                ctx.upsert(document(content))?;
+            }
+        }
+        Ok(ProjectionMappingStatus::Done)
+    }
+    fn baseline(
+        ctx: &mut ProjectionBaselineMappingContext<'_, '_>,
+        input: ProjectionFullSourceItem<'_>,
+    ) -> Result<Option<SearchDocument>> {
+        let ProjectionFullSourceItem::GraphNodeCandidate { node_id } = input else {
+            return Ok(None);
+        };
+        let rows = ctx.query_with_params(
+            "MATCH (m:Memory)-[:LINK]->(d:Document) WHERE id(m)=$id RETURN d.content AS content",
+            &BTreeMap::from([("id".into(), Value::Int(node_id as i64))]),
+        )?;
+        Ok(rows.output.rows.first().map(|row| {
+            let Value::String(content) = &row["content"] else {
+                panic!("text content")
+            };
+            document(content)
+        }))
+    }
+    for mutate_outside_scope in [false, true] {
+        let fixture = Fixture::new();
+        let mut db = fixture.database();
+        append(&mut db, 1);
+        db.query("CREATE (:Document {content:'outside old'})")
+            .unwrap();
+        db.query("MATCH (m:Memory), (d:Document) CREATE (m)-[:LINK]->(d)")
+            .unwrap();
+        let mut consumer = db
+            .create_search_projection_consumer(
+                id("scoped-mapper-read-v1"),
+                fixture.0.join("projection"),
+                options(1000),
+                |_, index| index.upsert(document("outside old")),
+            )
+            .unwrap();
+        let before = consumer.projection().receipt();
+        db.query("MATCH (m:Memory) SET m.content='trigger mapping'")
+            .unwrap();
+        let covered = prepare_with(
+            &mut db,
+            &consumer,
+            ProjectionSourceScope::Domains {
+                node_labels: vec!["Memory".into()],
+                relational_tables: vec![],
+            },
+            mapped,
+            baseline,
+        );
+        if mutate_outside_scope {
+            db.query("MATCH (d:Document) SET d.content='outside new'")
+                .unwrap();
+        }
+        let result = db.publish_search_projection_consumer_covered_update(
+            &mut consumer,
+            covered,
+            ProjectionSourceDurability::RequireKnownDurable,
+        );
+        if mutate_outside_scope {
+            assert!(matches!(
+                result,
+                Err(ProjectionConsumerCatchUpError::Publication(
+                    ProjectionPublicationError::Dependency(_)
+                ))
+            ));
+            assert_eq!(consumer.projection().receipt(), before);
+        } else {
+            result.unwrap();
+            assert!(consumer.projection().receipt().source_epoch > before.source_epoch);
+            assert_eq!(
+                consumer
+                    .search_index()
+                    .unwrap()
+                    .document("memory:m1")
+                    .unwrap()
+                    .content,
+                "outside old"
+            );
+        }
     }
 }

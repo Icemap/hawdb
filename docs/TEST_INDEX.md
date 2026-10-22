@@ -244,3 +244,10 @@ working-tree state, first differing SQL, both observations and incomplete runs.
 The stationary strict-capacity test also exercises detached reservation, native
 construction and publication with the foreground descriptor target occupied;
 no idle token may retain a descriptor reservation between those stages.
+
+The same unit family covers unregister and competing reservation at Reserved,
+Pending and Recorded native-birth states, busy unregister followed by successful
+publication after registry-cache reload, and a scoped mapper that follows a
+relationship to an out-of-scope label whose post-E mutation must invalidate
+publication. Storage units check immutable reservation predecessors, missing
+registration policy, and direct history pruning without staging compaction.

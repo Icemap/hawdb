@@ -15,6 +15,11 @@ on:
         required: false
         type: boolean
         default: false
+      writer_baseline_revision:
+        description: Full baseline SHA for paired attribution; defaults to the original acceptance baseline
+        required: false
+        type: string
+        default: "a703cc0f18f549918c73f454cda521edb4f0fb13"
       soak_node_count:
         description: Synthetic nodes in the mixed runtime soak
         required: false
@@ -207,9 +212,12 @@ jobs:
 
       - name: Build both revisions and measure the fixed protocol
         shell: bash
+        env:
+          WRITER_BASELINE_REVISION: ${{ inputs.writer_baseline_revision }}
         run: |
           set -euo pipefail
           python3 scripts/run-concurrent-writer-gate.py \
+            --baseline-revision "$WRITER_BASELINE_REVISION" \
             --work "$RUNNER_TEMP/writer-gate" \
             --fixture-parent "$RUNNER_TEMP/writer-fixtures" \
             --output artifacts/strict-writer-gate

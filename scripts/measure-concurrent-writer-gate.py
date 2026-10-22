@@ -22,6 +22,7 @@ def main():
     parser.add_argument("--baseline", type=Path, required=True)
     parser.add_argument("--candidate", type=Path, required=True)
     parser.add_argument("--baseline-source", type=Path, required=True)
+    parser.add_argument("--baseline-revision", default="a703cc0f18f549918c73f454cda521edb4f0fb13")
     parser.add_argument("--fixture-parent", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
@@ -43,7 +44,7 @@ def main():
     protocol = {
         "schema": "concurrent-writer-strict-gate-v1",
         "created_utc": datetime.now(timezone.utc).isoformat(),
-        "baseline_revision": "a703cc0f18f549918c73f454cda521edb4f0fb13",
+        "baseline_revision": args.baseline_revision,
         "candidate_head": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=source, text=True).strip(),
         "candidate_status": subprocess.check_output(["git", "status", "--porcelain"], cwd=source, text=True),
         "candidate_source_manifest_sha256": sha256(args.output / "candidate-source.json"),

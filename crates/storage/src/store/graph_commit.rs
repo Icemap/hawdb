@@ -2064,6 +2064,13 @@ impl GraphStore {
 
     fn validate_version_writes(&self, writes: &VersionWriteSet, read_epoch: u64) -> Result<()> {
         if let Some(conflict) = self.version_index.first_conflict(writes, read_epoch) {
+            if self.version_index.history_reclaimed_after(read_epoch) {
+                return Err(HawDBError::TransactionConflict {
+                    read_epoch,
+                    committed_epoch: conflict.committed_epoch,
+                    key: "reclaimed_history".into(),
+                });
+            }
             return Err(transaction_conflict_error(read_epoch, conflict));
         }
         for key in [VersionKey::Database, VersionKey::Schema] {
