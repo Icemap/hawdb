@@ -109,7 +109,6 @@ pub(crate) struct BudgetState {
     configured_limit: usize,
     limit: usize,
     strict_capacity_limit: bool,
-    os_capacity: Option<os_limit::Capacity>,
     counts: Mutex<Counts>,
     cache: Mutex<Option<Weak<dyn DescriptorCache>>>,
     immutable_handles: Mutex<Weak<crate::immutable_files::ImmutableFileHandles>>,
@@ -125,14 +124,12 @@ impl BudgetState {
         configured_limit: usize,
         limit: usize,
         strict_capacity_limit: bool,
-        os_capacity: Option<os_limit::Capacity>,
     ) -> Self {
         Self {
             root,
             configured_limit,
             limit,
             strict_capacity_limit,
-            os_capacity,
             counts: Mutex::new(Counts::default()),
             cache: Mutex::new(None),
             immutable_handles: Mutex::new(Weak::new()),
@@ -163,17 +160,13 @@ impl BudgetState {
                         .saturating_add(used.saturating_sub(self.limit)),
                 )
             };
-            let Some(total) = used.checked_add(requested) else {
+            if used.checked_add(requested).is_none() {
                 return Err((budget_failure().0, usize::MAX));
-            };
+            }
             if !allow_excess && requested > available {
                 return Err(budget_failure());
             }
-            if let Some(capacity) = self.os_capacity
-                && total > capacity.allowance
-            {
-                return Err((capacity.rejection(requested), total - capacity.allowance));
-            }
+            os_limit::reserve(requested)?;
             counts.reserved += requested;
             counts.record_peak();
             Ok(())
@@ -295,14 +288,13 @@ static PROJECTS: LazyLock<Mutex<BTreeMap<PathBuf, Weak<BudgetState>>>> =
 // serializes these short probes, so one process-owned slot covers the native
 // directory handle without borrowing capacity from unrelated projects.
 static NAMESPACE_PROBES: LazyLock<Arc<BudgetState>> =
-    LazyLock::new(|| Arc::new(BudgetState::new(PathBuf::new(), 1, 1, false, None)));
+    LazyLock::new(|| Arc::new(BudgetState::new(PathBuf::new(), 1, 1, false)));
 static STANDALONE: LazyLock<Arc<BudgetState>> = LazyLock::new(|| {
     Arc::new(BudgetState::new(
         PathBuf::new(),
         DEFAULT_MAX_OPEN_FILES,
         DEFAULT_MAX_OPEN_FILES,
         false,
-        None,
     ))
 });
 
@@ -416,13 +408,12 @@ impl ProjectFileDescriptors {
             }
             return Ok(project);
         }
-        let (effective_limit, os_capacity) = os_limit::project_limits(limit)?;
+        let effective_limit = os_limit::effective_limit(limit)?;
         let tentative = Arc::new(BudgetState::new(
             lexical.clone(),
             limit,
             effective_limit,
             strict_capacity_limit.unwrap_or(false),
-            os_capacity,
         ));
         #[cfg(any(test, feature = "test-support"))]
         {
@@ -809,6 +800,7 @@ impl Drop for DescriptorReservation {
             .lock()
             .unwrap_or_else(|error| error.into_inner())
             .reserved -= inventory.remaining;
+        os_limit::release(inventory.remaining);
         inventory.remaining = 0;
         self.inventory
             .state
@@ -1068,6 +1060,8 @@ impl Drop for DescriptorPermit {
         {
             inventory.remaining += 1;
             counts.reserved += 1;
+        } else {
+            os_limit::release(1);
         }
     }
 }

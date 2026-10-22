@@ -71,6 +71,10 @@ impl Drop for Fixture {
 
 #[test]
 fn default_budget_admits_large_reader_reservations_without_opening_files() {
+    #[cfg(all(unix, not(target_arch = "wasm32")))]
+    if run_descriptor_child("file_descriptors::tests::default_budget_admits_large_reader_reservations_without_opening_files") {
+        return;
+    }
     let fixture = Fixture::new(crate::config::WalReplayConfig::default().max_open_files);
     let sibling = ProjectFileDescriptors::acquire_existing(
         &fixture.root,

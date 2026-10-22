@@ -352,3 +352,214 @@ fn soft_and_internal_capacity_preserve_os_headroom_and_prepaid_slots() {
         }
     }
 }
+
+#[cfg(all(unix, not(target_arch = "wasm32")))]
+#[test]
+fn projects_share_process_capacity_and_cannot_steal_prepaid_slots() {
+    const NAME: &str = "file_descriptors::tests::capacity_policy::projects_share_process_capacity_and_cannot_steal_prepaid_slots";
+    if super::run_descriptor_child(NAME) {
+        return;
+    }
+    let original = super::descriptor_os_limits();
+    let lowered = libc::rlimit {
+        rlim_cur: 96,
+        rlim_max: original.rlim_max,
+    };
+    // SAFETY: This isolated child changes only its own soft limit.
+    assert_eq!(unsafe { libc::setrlimit(libc::RLIMIT_NOFILE, &lowered) }, 0);
+    let allowance = 96 - super::super::os_limit::HOST_HEADROOM;
+    let mut options = crate::file_io::OpenOptions::new();
+    options.read(true);
+    let rejected = |error: std::io::Error| {
+        assert_eq!(
+            file_descriptor_error(&error),
+            Some(FileDescriptorError::OsLimit {
+                requested: 1,
+                os_code: None,
+                soft: Some(96),
+                hard: Some(original.rlim_max),
+            })
+        );
+    };
+    for strict in [false, true] {
+        let fixtures = (0..3)
+            .map(|_| Fixture::with_capacity_limit(4, strict))
+            .collect::<Vec<_>>();
+        let bytes = b"shared process budget";
+        for fixture in &fixtures {
+            std::fs::write(fixture.root.join("evidence"), bytes).unwrap();
+        }
+        let standalone = fixtures[0].root.with_extension("standalone");
+        std::fs::write(&standalone, bytes).unwrap();
+        let standalone_context = super::super::FileOpenContext::for_path(&standalone).unwrap();
+        let scopes = fixtures
+            .iter()
+            .map(|fixture| {
+                strict.then(|| fixture.project.io_context().internal_operation().unwrap())
+            })
+            .collect::<Vec<_>>();
+        let baseline = super::native_descriptor_count();
+        let prepaid = fixtures[0].project.reserve(2).unwrap();
+        let captured = fixtures[0].project.io_context();
+        let mut held = (0..allowance - 2)
+            .map(|index| {
+                let fixture = &fixtures[1 + index % 2];
+                fixture
+                    .project
+                    .io_context()
+                    .open(&options, &fixture.root.join("evidence"))
+                    .unwrap()
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            fixtures
+                .iter()
+                .map(|fixture| {
+                    let m = fixture.project.metrics();
+                    m.open + m.reserved
+                })
+                .sum::<usize>(),
+            allowance
+        );
+        for fixture in &fixtures {
+            rejected(fixture.project.reserve(1).unwrap_err());
+            assert_eq!(fixture.project.metrics().budget_rejections, 0);
+            assert_eq!(fixture.project.metrics().strict_capacity_limit, strict);
+        }
+        rejected(standalone_context.open(&options, &standalone).unwrap_err());
+        let new_root = fixtures[0].root.with_extension("new-project");
+        let error =
+            ProjectFileDescriptors::acquire_with_capacity_limit(&new_root, 4, strict).unwrap_err();
+        assert_eq!(
+            file_descriptor_error(&error),
+            Some(FileDescriptorError::OsLimit {
+                requested: 1,
+                os_code: None,
+                soft: Some(96),
+                hard: Some(original.rlim_max),
+            })
+        );
+        assert!(!new_root.exists());
+        let mut protected = (0..2)
+            .map(|_| {
+                captured
+                    .open(&options, &fixtures[0].root.join("evidence"))
+                    .unwrap()
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(super::native_descriptor_count(), baseline + allowance);
+        // The kernel still has host headroom even though engine admission is full.
+        drop(std::fs::File::open("/dev/null").unwrap());
+        let mut actual = vec![0; bytes.len()];
+        crate::io::read_exact_at(&protected[0], &mut actual, 0).unwrap();
+        assert_eq!(actual, bytes);
+        drop(protected.pop());
+        assert_eq!(fixtures[0].project.metrics().reserved, 1);
+        rejected(fixtures[2].project.reserve(1).unwrap_err());
+        protected.push(
+            captured
+                .open(&options, &fixtures[0].root.join("evidence"))
+                .unwrap(),
+        );
+        drop(prepaid);
+        drop(protected.pop());
+        assert_eq!(fixtures[0].project.metrics().reserved, 0);
+        let start = Arc::new(std::sync::Barrier::new(3));
+        let (result_tx, result_rx) = std::sync::mpsc::channel();
+        let workers = fixtures[1..]
+            .iter()
+            .map(|fixture| {
+                let project = fixture.project.clone();
+                let path = fixture.root.join("evidence");
+                let start = Arc::clone(&start);
+                let result_tx = result_tx.clone();
+                let (release_tx, release_rx) = std::sync::mpsc::channel();
+                let worker = std::thread::spawn(move || {
+                    let context = project.io_context();
+                    let _internal = context.internal_operation().unwrap();
+                    let mut options = crate::file_io::OpenOptions::new();
+                    options.read(true);
+                    start.wait();
+                    let file = context.open(&options, &path);
+                    result_tx
+                        .send(
+                            file.as_ref()
+                                .map(|_| ())
+                                .map_err(|error| file_descriptor_error(error)),
+                        )
+                        .unwrap();
+                    let _ = release_rx.recv();
+                    drop(file);
+                });
+                (worker, release_tx)
+            })
+            .collect::<Vec<_>>();
+        start.wait();
+        let results = (0..2)
+            .map(|_| result_rx.recv().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
+        assert_eq!(
+            results
+                .iter()
+                .filter(|result| matches!(
+                    result,
+                    Err(Some(FileDescriptorError::OsLimit {
+                        os_code: None,
+                        soft: Some(96),
+                        ..
+                    }))
+                ))
+                .count(),
+            1
+        );
+        assert_eq!(
+            fixtures
+                .iter()
+                .map(|fixture| {
+                    let metrics = fixture.project.metrics();
+                    metrics.open + metrics.reserved
+                })
+                .sum::<usize>(),
+            allowance
+        );
+        for (_, release) in &workers {
+            release.send(()).unwrap();
+        }
+        for (worker, _) in workers {
+            worker.join().unwrap();
+        }
+        let missing = fixtures[1]
+            .project
+            .io_context()
+            .open(&options, &fixtures[1].root.join("missing"))
+            .unwrap_err();
+        assert_eq!(missing.kind(), std::io::ErrorKind::NotFound);
+        // A failed native open returns the shared slot for another domain.
+        held.push(
+            fixtures[2]
+                .project
+                .io_context()
+                .open(&options, &fixtures[2].root.join("evidence"))
+                .unwrap(),
+        );
+        rejected(fixtures[1].project.reserve(1).unwrap_err());
+        assert_eq!(super::native_descriptor_count(), baseline + allowance);
+        drop((protected, held));
+        assert_eq!(super::native_descriptor_count(), baseline);
+        for fixture in &fixtures {
+            assert_eq!(fixture.project.metrics().open, 0);
+            assert_eq!(fixture.project.metrics().reserved, 0);
+        }
+        let all_credit = fixtures[1].project.reserve(allowance).unwrap();
+        assert_eq!(fixtures[1].project.metrics().reserved, allowance);
+        drop(all_credit);
+        drop(scopes);
+        let reopened =
+            ProjectFileDescriptors::acquire_with_capacity_limit(&new_root, 4, strict).unwrap();
+        assert_eq!(reopened.metrics().open, 0);
+        drop(reopened);
+        std::fs::remove_dir(&new_root).unwrap();
+        std::fs::remove_file(standalone).unwrap();
+    }
+}

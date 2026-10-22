@@ -110,21 +110,28 @@ configuration. Project acquisition retains the existing OS-capacity preflight
 and host-headroom policy. `strict_capacity_limit=false` does not raise the OS
 limit or suppress native exhaustion and sharing errors.
 
-Unix project registration snapshots a separate OS allowance of the observed
-soft limit minus 64 host descriptors. Soft foreground and internal admission may
-exceed the configured target, but they cannot exceed that allowance. After idle
-cache eviction, an admission that would cross it returns a typed `OsLimit`
-without opening a file or changing the reservation count. Prepaid slots count
-against the allowance and remain usable by their owning operation while a
-competing owner occupies the remainder. Strict foreground target refusal
-continues to return `BudgetExceeded`.
+Unix uses one process-wide ledger for HawDB's observed OS allowance: the soft
+limit minus 64 host descriptors. Every project, standalone file operation and
+namespace probe shares it. A new project registration refreshes the observed
+limits without discarding already charged handles or reservation credit.
+Per-project strict targets remain independent; they do not each receive a copy
+of the process allowance.
 
-This allowance is per project, not a kernel reservation or a process-wide pool
-shared with the host and other projects. Untracked host activity, later changes
-to process limits and native sharing or I/O failures can still reject native
-opens. Reservations do not make those external failures impossible; an uncertain
-durable effect must still fail closed and retain recovery evidence. HawDB does
-not consume the 64-descriptor host headroom as a separate internal reserve.
+Soft foreground and internal admission may exceed a project's target, but all
+new slots must fit the shared process allowance. After local idle-cache eviction,
+exhaustion returns a typed `OsLimit` before native open or reservation mutation.
+A prepaid slot is charged once: converting it to an open handle does not charge
+again. A failed open returns credit to its active reservation; closing an
+unreserved handle or retiring unused reservation credit releases the process
+charge. Another project cannot consume an operation's prepaid slots. Strict
+foreground target refusal continues to return `BudgetExceeded`.
+
+The process ledger covers managed HawDB resources, not a kernel reservation or
+all host activity. Untracked host pressure beyond the headroom, changes to OS
+limits between observations, and native sharing or I/O failures can still reject
+native opens. Such external failures do not authorize uncertain durable effects;
+those still fail closed and retain recovery evidence. The 64-descriptor host
+headroom is not a separate internal pool.
 
 RocksDB likewise
 [reads the current soft limit](https://github.com/facebook/rocksdb/blob/074134d98fb14e3ae1b81eb6dbab80dbf6dbdbd5/port/port_posix.cc#L237-L251)
@@ -139,7 +146,12 @@ foreground refusal, nested internal progress, worker handoff, restoration of the
 foreground policy, alias identity and reservation/handle retirement. Facade
 regressions cover low-target open/commit/checkpoint/reopen and maintenance while
 strict foreground capacity is occupied. Existing refusal fixtures explicitly
-opt into strict mode.
+opt into strict mode. A Unix subprocess lowers only its own soft limit and
+saturates the shared allowance across three projects in both soft and internal
+modes. It verifies typed refusal before raw exhaustion, preserved host headroom,
+standalone/probe accounting, cross-project prepaid-slot protection, native-open
+failure retirement, atomic cross-project admission of the final slot, and
+complete shared-credit reuse.
 
 See [the test index](TEST_INDEX.md) for owning targets and execution lanes.
 The `windows-native-contracts` job in
