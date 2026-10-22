@@ -625,6 +625,36 @@ impl SourceDirectory {
         native()
     }
 
+    /// Consumer retirement already holds durable name ownership and excludes
+    /// readers/publication. Recheck the held child before removing its empty
+    /// directory; never follow a replacement or recursively remove evidence.
+    pub(crate) fn remove_reclaimed_directory(
+        &self,
+        context: &FileOpenContext,
+        name: &str,
+        expected: &Self,
+    ) -> io::Result<()> {
+        self.require_context(context)?;
+        let observed = self.open_directory(context, name)?;
+        if !observed.same_directory(expected) {
+            return Err(io::Error::other("reclaimed directory binding changed"));
+        }
+        drop(observed);
+        let name = ChildName::new(name)?;
+        let scope = native_scope(context)?;
+        self.require_scope(&scope)?;
+        let native = || {
+            self.root
+                .with_native(|root| platform::remove_directory(root, name, context))
+                .map_err(|error| context.map_open_error(error))
+        };
+        #[cfg(any(test, feature = "test-support"))]
+        if let Some(trace) = self.trace.as_deref() {
+            return trace.remove_directory(Path::new(name.0), native);
+        }
+        native()
+    }
+
     /// Persist this captured directory's direct entries. Windows admits a
     /// separate write-capable handle to the same native directory; failures
     /// propagate and cannot substitute for a successful namespace barrier.

@@ -60,7 +60,7 @@ pub(super) struct StationaryConsumer {
     // selection advances to a sibling. No reader or publication lock is dropped
     // to make a namespace move possible.
     logical_owner: Arc<operation::Authority>,
-    parent: SourceDirectory,
+    pub(super) parent: SourceDirectory,
     locator: PathBuf,
     _resident_memory: RuntimeRetainedMemory,
 }

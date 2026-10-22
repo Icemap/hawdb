@@ -33,6 +33,33 @@ impl Fixture {
         Database::open(self.0.join("database")).unwrap()
     }
 
+    fn occupy_descriptor_target(&self, database: &Database) -> Vec<fs::File> {
+        let context = database.runtime.file_descriptor_context().unwrap();
+        let project =
+            hawdb_storage::file_descriptors::ProjectFileDescriptors::from_open_context(&context);
+        assert!(project.metrics().strict_capacity_limit);
+        let mut held = Vec::new();
+        for _ in 0..=project.metrics().limit {
+            match context.open(
+                fs::OpenOptions::new().read(true),
+                &self.0.join("database/manifest.hawdb"),
+            ) {
+                Ok(file) => held.push(file),
+                Err(error) => {
+                    assert!(matches!(
+                        HawDBError::from(error),
+                        HawDBError::FileDescriptors(
+                            hawdb_core::error::FileDescriptorError::BudgetExceeded { .. }
+                        )
+                    ));
+                    break;
+                }
+            }
+        }
+        assert!(project.reserve(1).is_err());
+        held
+    }
+
     fn registry_path(&self, project: &str) -> PathBuf {
         let root = self.0.join(project);
         let runtime_root =
@@ -1307,3 +1334,5 @@ fn legacy_registered_prefix_1043_refuses_before_hydration_and_reopens_complete_r
 }
 
 mod stationary;
+
+mod reclamation;

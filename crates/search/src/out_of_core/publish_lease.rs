@@ -153,6 +153,10 @@ impl SearchProjectionPublishLease {
         self.root.protects(key)
     }
 
+    pub(crate) fn has_readers(&self) -> bool {
+        self.root.has_readers()
+    }
+
     pub(super) fn capture_source_root<'a, 'execution>(
         &mut self,
         context: &hawdb_storage::file_descriptors::FileOpenContext,

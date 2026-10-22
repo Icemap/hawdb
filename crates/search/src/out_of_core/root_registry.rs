@@ -174,6 +174,13 @@ impl PublicationRegistration {
             .is_some_and(|entry| entry.phase != Phase::Ready || entry.pins.protects(key))
     }
 
+    pub(super) fn has_readers(&self) -> bool {
+        registry().iter().any(|entry| {
+            entry.state.identity == self._marker.identity
+                && (entry.phase != Phase::Ready || !entry.pins.is_empty())
+        })
+    }
+
     pub(super) fn with_directory<T>(&self, action: impl FnOnce(&SourceDirectory) -> T) -> T {
         match &self.custody {
             PublicationCustody::Native(native) => action(&native.directory),

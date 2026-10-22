@@ -50,6 +50,10 @@ pub mod replacement_summary;
 pub mod search;
 pub mod sql_session;
 pub use hawdb_route_ownership as search_route_ownership;
+pub use hawdb_search::consumer::{
+    ConsumerCleanupOptions as SearchProjectionConsumerCleanupOptions,
+    ConsumerCleanupReport as SearchProjectionConsumerCleanupReport,
+};
 pub use hawdb_storage::store;
 pub use sql_session::{SqlSession, SqlSessionTransaction};
 

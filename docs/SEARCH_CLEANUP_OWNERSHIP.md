@@ -170,3 +170,58 @@ Delta input conversion and ordered hydration now retain operation admission;
 see the [delta contract](SEARCH_DELTA_OWNERSHIP.md) and
 [context facade](SEARCH_GENERATION_CONTEXT.md). The 4 MiB source guard remains; shared host admission/adaptive
 profiles and the original #206 corpus acceptance remain distinct requirements.
+
+## Registered Consumer generation retirement
+
+`Database::cleanup_search_projection_consumer` uses the live Consumer's captured
+parent. `Database::retry_search_projection_consumer_cleanup` admits a fresh
+maintenance operation after close or unregister. Both use the same native
+reclamation protocol; neither runs deletion in Drop or retains a background
+permit or FD domain after returning.
+
+Both entry points use non-strict internal descriptor admission, even when the
+project configures strict foreground capacity. Occupied foreground capacity must
+not block reclamation or its retry; every native handle remains counted. Memory,
+I/O, scan, delete-attempt, ownership and durability limits remain in force.
+
+The complete allocation ledger is checked under its catalog exclusion for each
+candidate and synchronized with its parent before deletion. A previous lost
+publication barrier must not leave an older durable retention image behind an
+observed compacted ledger. Every selected branch, initial logical-target birth, unresolved
+reservation and unresolved selector's previous root remains protected. Expiry,
+a missing runtime handle, or a missing registry-cache row never removes a root.
+The search publication/process exclusion additionally rejects pending captures
+and exact reader pins, including pins held after their Consumer closes. A
+completed predecessor can be discovered through its canonical, checksummed birth
+marker even after its completed ledger row is compacted. Its operation must
+belong to this allocation domain and fall within the durable issued boundary.
+Unknown or inconsistent evidence fails closed.
+
+Before any payload unlink, maintenance durably installs a parent-side
+`.consumer-reclaim-<project>-<operation>.hawdb` intent containing the original
+birth bytes. This is deletion evidence, not a new selection or serving receipt.
+The flat child inventory must contain only recognized regular generated files
+and lock/birth controls; unknown entries and nested directories stop that
+candidate without recursive deletion. Payload removal is synchronized before
+removing the birth marker. Empty-directory removal and the parent barrier
+precede intent deletion and a final parent barrier. A missing birth marker is
+accepted only with that durable intent and an otherwise empty/control-only
+directory. A missing directory completes its parent barrier before intent
+retirement. Native identity comparisons stay scoped to live handles.
+
+The default pass examines at most 32 candidate entries and attempts at most 256
+deletions. Enumeration refuses beyond 65,536 parent entries or 4,096 generation
+children. At most 256 candidates can be admitted per call. The five-step
+finalization unit requires at least five delete attempts. A bounded lexical
+cursor permits progress past retained or blocked entries; after reaching the
+end, start a fresh pass without a cursor to revisit earlier failures/pins.
+Reports distinguish durable retention, runtime exclusion, failures and bounded
+progress. Partial removal keeps its intent; the next attempt reacquires fresh
+working, I/O and descriptor admission. No allocator identity is reused.
+
+Maintenance prepays a 16 MiB control/inventory envelope inside the facade's
+existing 64 MiB background admission. This is engine accounting, not an RSS or
+allocator-overhead measurement. Windows native execution and modeled power-loss
+qualification of this complete Consumer retirement protocol remain separate
+from ordinary close/reopen and deterministic failure tests. Private writer-stage
+remediation and crash-orphan adoption remain the separate #867 contracts above.

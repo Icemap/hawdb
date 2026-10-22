@@ -611,7 +611,6 @@ fn registered_stationary_covered_wrong_source_instance_cannot_publish() {
 #[test]
 fn registered_stationary_covered_steps_progress_at_strict_foreground_capacity() {
     use hawdb_storage::file_descriptors::ProjectFileDescriptors;
-    use hawdb_storage::file_io::OpenOptions;
 
     let fixture = Fixture::new();
     let root = fixture.0.join("database");
@@ -637,20 +636,7 @@ fn registered_stationary_covered_steps_progress_at_strict_foreground_capacity() 
         .unwrap();
     let context = db.runtime.file_descriptor_context().unwrap();
     let project = ProjectFileDescriptors::from_open_context(&context);
-    let mut held = Vec::new();
-    for _ in 0..=project.metrics().limit {
-        match context.open(OpenOptions::new().read(true), &root.join("manifest.hawdb")) {
-            Ok(file) => held.push(file),
-            Err(error) => {
-                assert!(matches!(
-                    HawDBError::from(error),
-                    HawDBError::FileDescriptors(_)
-                ));
-                break;
-            }
-        }
-    }
-    assert!(project.reserve(1).is_err());
+    let held = fixture.occupy_descriptor_target(&db);
     let rejections = project.metrics().budget_rejections;
     let covered = prepare(&mut db, &consumer);
     assert_eq!(project.metrics().reserved, 0);

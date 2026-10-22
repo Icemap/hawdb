@@ -48,6 +48,57 @@ pub use covered::{
 };
 
 impl Database {
+    /// Reclaim unreferenced immutable generations using the Consumer's original
+    /// captured parent. Old read pins, the initial logical lease, all durable
+    /// branch selections and unresolved operations remain roots. Failed work
+    /// keeps durable retry evidence and releases this call's active resources.
+    pub fn cleanup_search_projection_consumer(
+        &mut self,
+        consumer: &SearchProjectionConsumer,
+        options: &hawdb_search::consumer::ConsumerCleanupOptions,
+    ) -> SearchProjectionConsumerResult<hawdb_search::consumer::ConsumerCleanupReport> {
+        let _descriptor_operation = self.internal_descriptor_operation()?;
+        self.consumer_writable_root()?;
+        let permit = self.consumer_publication_permit()?;
+        let request = self.runtime.get()?.store.prepare_search_consumer_cleanup(
+            consumer.id().as_str(),
+            consumer.projection().registered_locator()?,
+        )?;
+        Ok(consumer.projection().reclaim_registered_generations(
+            request,
+            options,
+            permit,
+            RuntimeTaskContext::default(),
+        )?)
+    }
+
+    /// Retry maintenance after the Consumer closes or unregisters. The path
+    /// selects a parent to inspect, never deletion authority: canonical birth
+    /// evidence and the complete source ledger must agree before any unlink.
+    pub fn retry_search_projection_consumer_cleanup(
+        &mut self,
+        id: &SearchProjectionConsumerId,
+        projection_directory: impl AsRef<Path>,
+        options: &hawdb_search::consumer::ConsumerCleanupOptions,
+    ) -> SearchProjectionConsumerResult<hawdb_search::consumer::ConsumerCleanupReport> {
+        let _descriptor_operation = self.internal_descriptor_operation()?;
+        self.consumer_writable_root()?;
+        let permit = self.consumer_publication_permit()?;
+        let locator = normalize_consumer_target(projection_directory.as_ref())?;
+        let request = self
+            .runtime
+            .get()?
+            .store
+            .prepare_search_consumer_cleanup(id.as_str(), &locator)?;
+        Ok(hawdb_search::consumer::reclaim_generations(
+            request,
+            None,
+            options,
+            permit,
+            RuntimeTaskContext::default(),
+        )?)
+    }
+
     /// Acquires one application-owned projection using a stable logical ID.
     ///
     /// Existing registrations are reopened and verified against this source and

@@ -26,6 +26,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 mod automatic_checkpoint;
 mod branch_abandonment;
+mod consumer_reclamation;
 mod runtime_roots;
 mod search_projection;
 
@@ -72,7 +73,7 @@ impl Fixture {
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
-        let project = ProjectFileDescriptors::acquire(&root, 32).unwrap();
+        let project = ProjectFileDescriptors::acquire_with_capacity_limit(&root, 32, true).unwrap();
         let model = PowerLossModel::attach(&project, ImageLimits::default()).unwrap();
         Self {
             root,

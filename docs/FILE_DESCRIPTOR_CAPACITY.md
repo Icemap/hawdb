@@ -52,6 +52,11 @@ Registered Consumer staging and coverage sessions retain their original project
 context and enter a fresh internal scope for each synchronous step. Idle tokens
 retain neither descriptor reservations nor execution slots.
 
+Registered Consumer generation cleanup and its explicit retry also enter fresh
+internal scopes. They can reclaim retired generations while strict foreground
+capacity is occupied, while retaining all native handles and deletion evidence
+in the original project's accounting.
+
 Internal maintenance must not hold foreground execution resources while waiting
 for another owner. This descriptor policy does not replace the separate CPU,
 memory, physical-I/O or checkpoint state-machine progress contracts.

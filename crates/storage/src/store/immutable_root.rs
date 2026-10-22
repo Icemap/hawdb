@@ -587,6 +587,33 @@ impl GraphStore {
         )
     }
 
+    /// Prepare bounded generation maintenance without target I/O under SourceOwner.
+    #[doc(hidden)]
+    pub fn prepare_search_consumer_cleanup(
+        &self,
+        consumer: &str,
+        locator: &Path,
+    ) -> Result<crate::consumer_allocation::ConsumerCleanupRequest> {
+        if self
+            .durable
+            .as_ref()
+            .is_some_and(|durable| durable.read_only)
+        {
+            return Err(HawDBError::Storage(
+                "Consumer cleanup requires writable ownership".into(),
+            ));
+        }
+        let database = self.search_projection_database_identity().ok_or_else(|| {
+            HawDBError::StorageIntegrity("Consumer cleanup requires source identity".into())
+        })?;
+        Ok(crate::consumer_allocation::ConsumerCleanupRequest {
+            source: self.consumer_allocation_source_custody()?,
+            database,
+            consumer: consumer.to_owned(),
+            locator: locator.to_owned(),
+        })
+    }
+
     /// Verify that a recorded candidate still belongs to this admitted source.
     /// The candidate itself verifies its original marker and ledger row before
     /// supplying this binding; this check does not select or settle it.
