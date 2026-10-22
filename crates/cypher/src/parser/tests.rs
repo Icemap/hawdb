@@ -141,6 +141,23 @@ fn identity_898_dispatches_extended_syntax_without_reparsing_legacy_errors() {
 }
 
 #[test]
+fn complete_text_search_requires_unique_named_options() {
+    crate::parse("CALL text_search($q, complete := true, maxCandidates := $cap) YIELD id, score RETURN id, score").unwrap();
+    for options in [
+        "complete := true, complete := false",
+        "maxCandidates := 1, maxCandidates := 2",
+        "topK := 1, limit := 2",
+        "maxCandidate := 1",
+    ] {
+        let query = format!("CALL text_search($q, {options}) YIELD id RETURN id");
+        assert!(
+            matches!(crate::parse(&query), Err(hawdb_core::HawDBError::Parse(_))),
+            "{query}"
+        );
+    }
+}
+
+#[test]
 fn vector_index_requires_unique_named_window_options() {
     for (arguments, diagnostic) in [
         ("'docs', $q", "requires candidates"),
@@ -177,21 +194,4 @@ fn vector_index_requires_unique_named_window_options() {
         "CALL vector_index_search('docs', $q, topK := 1, candidates := 8) YIELD node RETURN node",
     )
     .unwrap();
-}
-
-#[test]
-fn complete_text_search_requires_unique_named_options() {
-    crate::parse("CALL text_search($q, complete := true, maxCandidates := $cap) YIELD id, score RETURN id, score").unwrap();
-    for options in [
-        "complete := true, complete := false",
-        "maxCandidates := 1, maxCandidates := 2",
-        "topK := 1, limit := 2",
-        "maxCandidate := 1",
-    ] {
-        let query = format!("CALL text_search($q, {options}) YIELD id RETURN id");
-        assert!(
-            matches!(crate::parse(&query), Err(hawdb_core::HawDBError::Parse(_))),
-            "{query}"
-        );
-    }
 }
