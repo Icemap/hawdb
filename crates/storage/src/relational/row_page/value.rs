@@ -138,6 +138,16 @@ pub(super) fn encode_value_with_work<W: super::encoding::EncodeWork, O: ValueOut
             encoded.append(value, work)?;
             return work.checkpoint();
         }
+        RelationalValue::Vector(value) => {
+            validate_inline_value_len(value.encoded().len(), limits)?;
+            encoded.push(8)?;
+            encoded.extend_from_slice(
+                &u32_len(value.encoded().len(), "VECTOR length")?.to_le_bytes(),
+            )?;
+            unit.finish();
+            encoded.append(value.encoded(), work)?;
+            return work.checkpoint();
+        }
         RelationalValue::Uuid(value) => {
             encoded.push(7)?;
             encoded.extend_from_slice(value.as_bytes())?;
@@ -219,7 +229,7 @@ pub(super) fn decode_row_fields_with_allocations(
             )));
         }
         let value = bounded_slice(payload, value_offset, value_len, "row value")?;
-        validate_value(value, limits)?;
+        validate_value(value, limits, allocations.map(|context| &context.work))?;
         if requested_fields.is_none()
             || requested_fields
                 .and_then(|fields| fields.get(requested_index))
@@ -296,7 +306,7 @@ pub(super) fn decode_row_field_refs<'page>(
             )));
         }
         let value = bounded_slice(payload, value_offset, value_len, "row value")?;
-        validate_value(value, limits)?;
+        validate_value(value, limits, None)?;
         if requested_fields.get(requested_index).copied() == Some(ordinal) {
             fields.push(RelationalProjectedFieldRef {
                 ordinal,
@@ -319,6 +329,7 @@ pub(super) fn decode_row_field_refs<'page>(
 fn validate_value(
     encoded: &[u8],
     limits: RelationalRowPageLimits,
+    work: Option<&crate::background::CheckpointWorkContext>,
 ) -> Result<(), RelationalRowPageError> {
     let Some(tag) = encoded.first().copied() else {
         return Err(RelationalRowPageError::Corrupt(
@@ -329,7 +340,7 @@ fn validate_value(
         0 if encoded.len() == 1 => Ok(()),
         1 if encoded.len() == 2 && matches!(encoded[1], 0 | 1) => Ok(()),
         2 | 3 if encoded.len() == 9 => Ok(()),
-        4 | 5 => {
+        4 | 5 | 8 => {
             if encoded.len() < 5 {
                 return Err(RelationalRowPageError::Corrupt(
                     "inline value is smaller than its length header".to_string(),
@@ -341,6 +352,26 @@ fn validate_value(
                 return Err(RelationalRowPageError::Corrupt(
                     "inline value length does not match its slot".to_string(),
                 ));
+            }
+            if tag == 8 {
+                hawdb_core::VectorRef::from_encoded_with_work(
+                    &encoded[5..],
+                    || {
+                        work.map(crate::background::CheckpointWorkContext::start_unit)
+                            .transpose()
+                            .map_err(super::checkpoint::work_error)
+                    },
+                    |unit| {
+                        if let Some(unit) = unit {
+                            unit.finish();
+                        }
+                        work.map(crate::background::CheckpointWorkContext::checkpoint)
+                            .transpose()
+                            .map(|_| ())
+                            .map_err(super::checkpoint::work_error)
+                    },
+                    |error| RelationalRowPageError::Corrupt(error.to_string()),
+                )?;
             }
             if tag == 4 {
                 std::str::from_utf8(&encoded[5..]).map_err(|error| {
@@ -403,6 +434,9 @@ fn decode_validated_value(encoded: &[u8]) -> Result<RelationalValue, RelationalR
                 .to_string(),
         )),
         5 => Ok(RelationalValue::Bytea(encoded[5..].to_vec())),
+        8 => hawdb_core::VectorRef::from_encoded(&encoded[5..])
+            .map(|value| RelationalValue::Vector(value.to_owned()))
+            .map_err(|error| RelationalRowPageError::Corrupt(error.to_string())),
         6 => Ok(RelationalValue::Overflow(RelationalOverflowRef {
             digest: Sha256Digest::from_bytes(
                 encoded[18..50]
@@ -433,7 +467,7 @@ fn decode_validated_value_with_allocations(
             .string(std::str::from_utf8(&encoded[5..]).expect("validated TEXT value is UTF-8"))
             .map(RelationalValue::Text)
             .map_err(admission),
-        5 => {
+        5 | 8 => {
             let mut bytes = context
                 .vector_capacity(encoded.len() - 5)
                 .map_err(admission)?;
@@ -447,7 +481,13 @@ fn decode_validated_value_with_allocations(
             context
                 .checkpoint()
                 .map_err(super::checkpoint::work_error)?;
-            Ok(RelationalValue::Bytea(bytes))
+            if encoded[0] == 8 {
+                crate::background::decode_vector(bytes, Some(&context.work))
+                    .map(RelationalValue::Vector)
+                    .map_err(admission)
+            } else {
+                Ok(RelationalValue::Bytea(bytes))
+            }
         }
         _ => decode_validated_value(encoded),
     }
@@ -471,6 +511,9 @@ fn decode_validated_value_ref(
             std::str::from_utf8(&encoded[5..]).expect("validated TEXT value is UTF-8"),
         )),
         5 => Ok(RelationalValueRef::Bytea(&encoded[5..])),
+        8 => hawdb_core::VectorRef::from_encoded(&encoded[5..])
+            .map(RelationalValueRef::Vector)
+            .map_err(|error| RelationalRowPageError::Corrupt(error.to_string())),
         6 => Ok(RelationalValueRef::Overflow(RelationalOverflowRef {
             digest: Sha256Digest::from_bytes(
                 encoded[18..50]
@@ -597,6 +640,7 @@ fn scalar_type_tag(scalar_type: RelationalScalarType) -> u8 {
         RelationalScalarType::Text => 4,
         RelationalScalarType::Bytea => 5,
         RelationalScalarType::Uuid => 6,
+        RelationalScalarType::Vector(_) => 7,
     }
 }
 

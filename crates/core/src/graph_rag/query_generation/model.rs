@@ -253,6 +253,9 @@ fn value_matches_property_type(value: &Value, value_type: PropertyType) -> bool 
             PropertyType::Float => matches!(value, Value::Int(_) | Value::Float(_)),
             PropertyType::String | PropertyType::Text => matches!(value, Value::String(_)),
             PropertyType::List => matches!(value, Value::List(_)),
+            PropertyType::Vector(dimension) => {
+                matches!(value, Value::Vector(value) if value.dimension() == dimension)
+            }
         }
 }
 
@@ -264,6 +267,7 @@ fn value_type_name(value: &Value) -> &'static str {
         Value::Float(_) => "float",
         Value::String(_) => "string",
         Value::Binary(_) => "binary",
+        Value::Vector(_) => "vector",
         Value::Uuid(_) => "uuid",
         Value::List(_) => "list",
         Value::Map(_) => "map",
@@ -279,6 +283,7 @@ fn parameter_requirement_name(requirement: &GraphRagQueryParameterRequirement) -
         PropertyType::String => "string",
         PropertyType::Text => "text",
         PropertyType::List => "list",
+        PropertyType::Vector(_) => "vector",
     };
     match requirement.cardinality {
         GraphRagQueryParameterCardinality::Scalar => value_type.to_string(),

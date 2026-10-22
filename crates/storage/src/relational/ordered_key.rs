@@ -18,6 +18,7 @@ use std::fmt;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum OrderedRelationalKeyError {
     UnsupportedOverflow,
+    UnsupportedVector,
     Corrupt(String),
     Admission(String),
 }
@@ -25,6 +26,9 @@ pub(super) enum OrderedRelationalKeyError {
 impl fmt::Display for OrderedRelationalKeyError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::UnsupportedVector => {
+                formatter.write_str("vector values cannot be ordered index keys")
+            }
             Self::UnsupportedOverflow => {
                 formatter.write_str("ordered relational keys must not contain overflow references")
             }

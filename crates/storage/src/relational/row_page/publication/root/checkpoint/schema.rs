@@ -81,6 +81,10 @@ fn same_default(
             Some(Literal(RelationalValue::Bytea(left))),
             Some(Literal(RelationalValue::Bytea(right))),
         ) => Ok(compare(left, right, work)?.is_eq()),
+        (
+            Some(Literal(RelationalValue::Vector(left))),
+            Some(Literal(RelationalValue::Vector(right))),
+        ) => Ok(compare(left.encoded(), right.encoded(), work)?.is_eq()),
         // Other matching payloads are fixed-size. Different variants compare
         // their discriminants first, preserving RelationalValue's total order.
         _ => fixed(work, || left == right),
@@ -162,6 +166,10 @@ fn clone_default(
         Some(Literal(RelationalValue::Bytea(value))) => {
             Some(Literal(RelationalValue::Bytea(clone_bytes(value, work)?)))
         }
+        Some(Literal(RelationalValue::Vector(value))) => Some(Literal(RelationalValue::Vector(
+            crate::background::decode_vector(clone_bytes(value.encoded(), work)?, Some(work))
+                .map_err(|error| RelationalRowPagePublicationError::Admission(error.to_string()))?,
+        ))),
         _ => return fixed(work, || value.clone()),
     };
     work.checkpoint().map_err(work_error)?;

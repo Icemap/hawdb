@@ -116,6 +116,7 @@ impl RelationalRowLocator {
                     .map(|value| match value {
                         RelationalValue::Text(value) => value.capacity(),
                         RelationalValue::Bytea(value) => value.capacity(),
+                        RelationalValue::Vector(value) => value.retained_capacity(),
                         RelationalValue::Null
                         | RelationalValue::Boolean(_)
                         | RelationalValue::BigInt(_)

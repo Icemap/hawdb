@@ -14,6 +14,8 @@
 
 use super::*;
 
+mod vector_schema;
+
 fn database() -> Database {
     let mut database = Database::new();
     database
@@ -202,7 +204,7 @@ fn sql_session_unsupported_postgres_shapes_preserve_errors_and_rollback() {
         "CREATE FUNCTION f() RETURNS void LANGUAGE plpgsql AS $$ BEGIN END $$",
         "CREATE TRIGGER t BEFORE INSERT ON pages EXECUTE FUNCTION f()",
         "CREATE TABLE unsupported (body TSVECTOR)",
-        "CREATE TABLE unsupported (body VECTOR(1536))",
+        "CREATE TABLE unsupported (body VECTOR(0))",
         "SELECT to_tsvector(body) FROM pages",
         "SELECT body::jsonb ->> 'name' FROM pages",
         "SELECT now() FROM pages",

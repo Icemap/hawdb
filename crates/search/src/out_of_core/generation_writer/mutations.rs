@@ -66,7 +66,7 @@ impl<'reader> SearchOutOfCoreMutationWriter<'reader> {
         task: RuntimeTaskContext,
         memory: BuildMemory,
     ) -> Result<Self> {
-        Self::create_mode(reader, options, task, memory, true)
+        Self::create_mode(reader, options, task, memory, true, None)
     }
 
     pub(super) fn create_replacement(
@@ -75,7 +75,17 @@ impl<'reader> SearchOutOfCoreMutationWriter<'reader> {
         task: RuntimeTaskContext,
         memory: BuildMemory,
     ) -> Result<Self> {
-        Self::create_mode(reader, options, task, memory, false)
+        Self::create_mode(reader, options, task, memory, false, None)
+    }
+
+    pub(in crate::out_of_core) fn create_captured(
+        reader: &'reader SearchOutOfCoreReader,
+        options: SearchOutOfCoreGenerationBuildOptions,
+        task: RuntimeTaskContext,
+        memory: BuildMemory,
+        stage: StageDirectory,
+    ) -> Result<Self> {
+        Self::create_mode(reader, options, task, memory, true, Some(stage))
     }
 
     fn create_mode(
@@ -84,6 +94,7 @@ impl<'reader> SearchOutOfCoreMutationWriter<'reader> {
         task: RuntimeTaskContext,
         memory: BuildMemory,
         incremental: bool,
+        stage: Option<StageDirectory>,
     ) -> Result<Self> {
         checkpoint(&task)?;
         let epoch_updated = options.source_graph_commit_epoch.is_some();
@@ -95,18 +106,33 @@ impl<'reader> SearchOutOfCoreMutationWriter<'reader> {
         let report_memory = memory
             .retained
             .reserve("search_projection".len() * 2 + "incremental_mutation_publish".len())?;
-        let mut writer = SearchOutOfCoreGenerationWriter::create_with_memory(
-            &reader.root,
-            options,
-            task,
-            memory,
-        )?;
+        let comparison_only = stage.is_some();
+        let mut writer = match stage {
+            Some(stage) => {
+                let creation_memory =
+                    SearchOutOfCoreGenerationWriter::reserve_creation_memory(&memory)?;
+                SearchOutOfCoreGenerationWriter::create_in_stage(
+                    context_memory::OwnedPath::copy(&reader.root, &memory, &task)?,
+                    options,
+                    task,
+                    memory,
+                    stage,
+                    creation_memory,
+                )?
+            }
+            None => SearchOutOfCoreGenerationWriter::create_with_memory(
+                &reader.root,
+                options,
+                task,
+                memory,
+            )?,
+        };
         writer.set_lexical_term_policy(reader.lexical_term_policy());
         writer.set_lexical_source_policy(reader.lexical_source_policy());
         writer.set_max_lexical_manifest_bytes(reader.config.max_lexical_manifest_bytes)?;
         writer.embedding_dimension = reader.manifest.embedding_dimension;
         writer.expected_active_generation = Some(reader.generation());
-        if incremental {
+        if incremental && !comparison_only {
             writer
                 .stage
                 .reserve_additional_disk(delta::mutation::Prepared::disk_reservation(reader)?)?;
@@ -263,6 +289,11 @@ impl<'reader> SearchOutOfCoreMutationWriter<'reader> {
 
     /// Builds an invisible candidate while retaining the original base selector.
     pub fn prepare_publication(self) -> Result<SearchOutOfCorePreparedUpdate> {
+        if self.writer.stage.scratch_directory().is_some() {
+            return Err(HawDBError::Execution(
+                "captured Consumer comparison requires registered publication".into(),
+            ));
+        }
         let reader = self
             .reader
             .ok_or_else(|| HawDBError::Storage("full replacement has no mutation reader".into()))?;

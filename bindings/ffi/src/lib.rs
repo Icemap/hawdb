@@ -57,6 +57,8 @@ pub use retained::*;
 
 #[cfg(test)]
 mod error_tests;
+#[cfg(test)]
+mod vector_tests;
 
 /// Developer profiling build only. This observation is not an admission ledger
 /// or an allocator-capacity bound. NULL output is a no-op; no buffer is allocated.
@@ -266,7 +268,7 @@ unsafe fn read_opt_str<'a>(text: FfiStr, name: &str) -> Result<Option<&'a str>, 
 ///
 /// `Binary` becomes `{"$binary": "<base64>"}` and `Uuid` becomes
 /// `{"$uuid": "<canonical>"}` so both stay distinguishable from plain
-/// strings.
+/// strings. `Vector` uses `{"$vector": [1.0, 0.0]}` with Float32 coordinates.
 fn value_to_json(value: &Value) -> serde_json::Value {
     match value {
         Value::Null => serde_json::Value::Null,
@@ -277,6 +279,9 @@ fn value_to_json(value: &Value) -> serde_json::Value {
         Value::String(item) => json!(item),
         Value::Binary(item) => json!({ "$binary": BASE64.encode(item) }),
         Value::Uuid(item) => json!({ "$uuid": item.to_string() }),
+        Value::Vector(item) => {
+            json!({ "$vector": item.as_ref().coordinates().collect::<Vec<_>>() })
+        }
         Value::List(items) => serde_json::Value::Array(items.iter().map(value_to_json).collect()),
         Value::Map(items) => serde_json::Value::Object(
             items
@@ -290,8 +295,9 @@ fn value_to_json(value: &Value) -> serde_json::Value {
 /// Convert a `serde_json::Value` into a HawDB [`Value`] for parameters.
 ///
 /// This is the inverse of [`value_to_json`]: the single-key objects
-/// `{"$binary": "<base64>"}` and `{"$uuid": "<canonical>"}` decode to
-/// `Binary` and `Uuid`; every other object becomes a `Map`.
+/// `{"$binary": "<base64>"}`, `{"$uuid": "<canonical>"}` and
+/// `{"$vector": [1.0, 0.0]}` decode to their typed values; other objects
+/// become maps.
 fn json_to_value(value: &serde_json::Value) -> Result<Value, String> {
     Ok(match value {
         serde_json::Value::Null => Value::Null,
@@ -311,6 +317,22 @@ fn json_to_value(value: &serde_json::Value) -> Result<Value, String> {
         }
         serde_json::Value::Object(items) => {
             if items.len() == 1 {
+                if let Some(encoded) = items.get("$vector") {
+                    let coordinates = encoded
+                        .as_array()
+                        .ok_or("$vector must be a numeric array")?
+                        .iter()
+                        .map(|value| {
+                            value
+                                .as_f64()
+                                .map(|value| value as f32)
+                                .ok_or_else(|| "$vector must contain numbers".to_owned())
+                        })
+                        .collect::<Result<Vec<_>, _>>()?;
+                    return hawdb::Vector::new(&coordinates)
+                        .map(Value::Vector)
+                        .map_err(|error| error.to_string());
+                }
                 if let Some(encoded) = items.get("$binary").and_then(|v| v.as_str()) {
                     return BASE64
                         .decode(encoded)

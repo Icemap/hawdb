@@ -29,15 +29,23 @@ use crate::{
 use hawdb_core::uuidv7::generate_uuidv7;
 use hawdb_core::RuntimeTaskContext;
 use hawdb_search::consumer::{
-    CheckpointReceipt, ConsumerProjection, RegisteredConsumerLimits, RegisteredConsumerPreparation,
+    CheckpointReceipt, ConsumerProjection, PreparedRegisteredConsumer, RegisteredConsumerError,
+    RegisteredConsumerLimits, RegisteredConsumerPreparation, RegisteredConsumerRecovery,
 };
-use hawdb_search::projection_consumer::{Record, MAX_CONSUMERS};
+use hawdb_search::projection_consumer::MAX_CONSUMERS;
 use hawdb_storage::file_io as fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use SearchProjectionConsumerError as Error;
 use SearchProjectionConsumerRebuildReason as Reason;
 use SearchProjectionConsumerState as State;
+
+mod covered;
+pub use covered::{
+    ProjectionConsumerCatchUpConfig, ProjectionConsumerCatchUpError,
+    ProjectionConsumerCoverageSession, ProjectionConsumerStagingSession,
+    ProjectionCoveredConsumerUpdate,
+};
 
 impl Database {
     /// Acquires one application-owned projection using a stable logical ID.
@@ -53,7 +61,11 @@ impl Database {
     /// `knowledge-v1`); callers must change it when changing the mapping. There is
     /// no pathname alias or adoption of an existing unregistered projection.
     /// `options` and `initialize` apply only to first creation. Reopening does not
-    /// renew the registration. Share the returned owner's immutable search index
+    /// renew the registration. Retrying a retained preparation also uses its
+    /// original options and immutable initializer output; new arguments do not
+    /// replace that operation. A terminal unselected/stale creation is settled
+    /// and returns an execution refusal; use a fresh target to rebuild it.
+    /// Share the returned owner's immutable search index
     /// between query users; dropping it releases only its runtime lease.
     pub fn open_or_create_search_projection_consumer<F>(
         &mut self,
@@ -99,6 +111,20 @@ impl Database {
             {
                 return Err(Error::RebuildRequired(Reason::DatabaseIdentityMismatch));
             }
+        }
+        if self
+            .runtime
+            .get()?
+            .projection_consumers
+            .recovery
+            .contains_key(id.as_str())
+        {
+            return self.create_consumer_with_capacity::<CAPACITY, F>(
+                id,
+                projection_directory,
+                options,
+                initialize,
+            );
         }
         if self
             .runtime
@@ -193,7 +219,7 @@ impl Database {
         F: FnOnce(&mut DatabaseReadTransaction, &mut SearchIndex) -> Result<()>,
     {
         let _descriptor_operation = self.internal_descriptor_operation()?;
-        let root = self.consumer_writable_root()?;
+        self.consumer_writable_root()?;
         self.ensure_runtime_capability(hawdb_core::RuntimeCapability::SearchProjectionPublication)?;
         self.reload_consumer_registry_if_unavailable()?;
         self.runtime
@@ -203,6 +229,27 @@ impl Database {
         let destination = normalize_consumer_target(destination)?;
         let destination = destination.as_path();
         let permit = self.consumer_publication_permit()?;
+        let recovery = self
+            .runtime
+            .get_mut()?
+            .projection_consumers
+            .recovery
+            .remove(id.as_str());
+        if let Some(recovery) = recovery {
+            if recovery.locator() != destination {
+                self.runtime
+                    .get_mut()?
+                    .projection_consumers
+                    .recovery
+                    .insert(id.as_str().into(), recovery);
+                return Err(Error::InvalidHandle);
+            }
+            match recovery.retry(&permit, RuntimeTaskContext::default()) {
+                Ok(Some(prepared)) => return self.finish_consumer_creation(id, prepared, permit),
+                Ok(None) => {}
+                Err(error) => return Err(self.retain_consumer_recovery(&id, *error)?),
+            }
+        }
         if destination.try_exists().map_err(HawDBError::from)? {
             return Err(HawDBError::Storage(
                 "consumer projection destination already exists".into(),
@@ -228,20 +275,17 @@ impl Database {
                 .projection_consumers
                 .database_uuid
                 .is_some_and(|registered_identity| Some(registered_identity) != identity);
-        if !reinitialize_registry {
-            if self
+        if !reinitialize_registry
+            && self
                 .runtime
-                .get_mut()?
+                .get()?
                 .projection_consumers
                 .records
                 .contains_key(id.as_str())
-            {
-                return Err(Error::AlreadyRegistered);
-            }
-            if self.runtime.get_mut()?.projection_consumers.records.len() >= CAPACITY {
-                return Err(Error::RegistryFull);
-            }
+        {
+            return Err(Error::AlreadyRegistered);
         }
+        self.require_consumer_capacity::<CAPACITY>(reinitialize_registry)?;
         let expires_at_commit_epoch = self
             .runtime
             .get()?
@@ -254,15 +298,14 @@ impl Database {
             .get()?
             .store
             .search_projection_database_identity();
-        let database_uuid = match identity {
-            Some(identity) => identity,
+        match identity {
+            Some(_) => {}
             None => {
                 let identity = generate_uuidv7()?;
                 self.runtime
                     .get_mut()?
                     .store
                     .set_search_projection_database_identity(identity);
-                identity
             }
         };
         // Also retry this checkpoint after an earlier identity publication error.
@@ -273,6 +316,12 @@ impl Database {
                 .store
                 .forget_search_consumer_selection(id.as_str())?;
         }
+        let mut snapshot = self.begin_read_transaction()?;
+        let recovery_memory = permit
+            .reserve_retained_memory(
+                hawdb_storage::consumer_allocation::CONSUMER_SELECTION_MEMORY_BOUND,
+            )
+            .map_err(|error| HawDBError::Execution(error.to_string()))?;
         let allocation = self
             .runtime
             .get()?
@@ -285,10 +334,7 @@ impl Database {
                     expires_at_commit_epoch,
                 },
             )?;
-        let registration_uuid = allocation.registration_uuid();
-        let mut birth = allocation.prepare_initial_generation(parent)?;
-        birth.create()?;
-        let mut snapshot = self.begin_read_transaction()?;
+        let birth = allocation.begin_initial_generation(parent)?;
         let epoch = snapshot.commit_epoch();
         let prepared = ConsumerProjection::prepare_registered(
             birth,
@@ -297,60 +343,137 @@ impl Database {
                 epoch,
                 permit: Arc::clone(&permit),
                 task: RuntimeTaskContext::default(),
-                limits: RegisteredConsumerLimits::default(),
+                limits: registered_creation_limits(),
+                recovery_memory,
                 previous: None,
             },
             |index| initialize(&mut snapshot, index),
         );
         drop(snapshot);
-        let mut prepared = prepared?;
-        publication_failpoint(PublicationStage::AfterCheckpoint)?;
-        self.runtime.get_mut()?.store.synchronize_source_prefix()?;
-        let report = prepared.report();
-        let receipt = {
-            let runtime = self.runtime.get()?;
-            super::require_search_projection_source_epoch(
-                Some(report.source_epoch),
-                runtime.store.commit_epoch(),
-            )?;
-            runtime.store.verify_search_consumer_candidate_source(
-                prepared.reservation_binding()?,
-                report.source_epoch,
-                report.metadata_reference,
-            )?;
-            let mut attempt =
-                prepared.admit_selection(Arc::clone(&permit), RuntimeTaskContext::default())?;
-            publication_failpoint(PublicationStage::BeforeSelector)?;
-            let pending = attempt.select()?;
-            drop(runtime);
-            publication_failpoint(PublicationStage::AfterSelector)?;
-            let receipt = pending.finish()?;
-            publication_failpoint(PublicationStage::AfterSelectorBarrier)?;
-            receipt
+        let prepared = match prepared {
+            Ok(prepared) => prepared,
+            Err(error) => return Err(self.retain_consumer_recovery(&id, *error)?),
         };
-        let projection = prepared.complete(receipt)?;
-        let receipt = projection.receipt();
-        // Invalid foreign/corrupt records have no authority in this database.
-        // Replace them only after explicit initialization actually succeeds.
-        if reinitialize_registry {
-            self.runtime.get_mut()?.projection_consumers = ConsumerRegistry::default();
-        }
-        self.runtime.get_mut()?.projection_consumers.database_uuid = Some(database_uuid);
+        self.finish_consumer_creation(id, prepared, permit)
+    }
 
-        self.runtime.get_mut()?.projection_consumers.records.insert(
-            id.as_str().into(),
-            Record {
-                checkpoint_uuid: receipt.binding.checkpoint_uuid.to_string(),
-                durable_complete_through_epoch: receipt.source_epoch,
-                expires_at_commit_epoch,
-                id: id.as_str().into(),
-                max_idle_commits: options.max_idle_commits().get(),
-                projection_uuid: receipt.binding.projection_uuid.to_string(),
-                registration_uuid: registration_uuid.to_string(),
-                snapshot_encoded_len: receipt.encoded_len,
-                snapshot_sha256: receipt.sha256,
-            },
-        );
+    fn require_consumer_capacity<const CAPACITY: usize>(
+        &self,
+        reinitialize_registry: bool,
+    ) -> SearchProjectionConsumerResult<()> {
+        let registry = &self.runtime.get()?.projection_consumers;
+        let records = if reinitialize_registry {
+            0
+        } else {
+            registry.records.len()
+        };
+        if records.saturating_add(registry.recovery.len()) >= CAPACITY {
+            return Err(Error::RegistryFull);
+        }
+        Ok(())
+    }
+
+    fn retain_consumer_recovery(
+        &mut self,
+        id: &SearchProjectionConsumerId,
+        failure: RegisteredConsumerError,
+    ) -> SearchProjectionConsumerResult<Error> {
+        let (error, recovery) = failure.into_parts();
+        if let Some(recovery) = recovery {
+            self.runtime
+                .get_mut()?
+                .projection_consumers
+                .recovery
+                .insert(id.as_str().into(), recovery);
+        }
+        Ok(error.into())
+    }
+
+    fn finish_consumer_creation(
+        &mut self,
+        id: SearchProjectionConsumerId,
+        mut prepared: PreparedRegisteredConsumer,
+        permit: Arc<hawdb_qos::RuntimePermit>,
+    ) -> SearchProjectionConsumerResult<SearchProjectionConsumer> {
+        let root = match self.consumer_writable_root() {
+            Ok(root) => root,
+            Err(error) => {
+                self.runtime
+                    .get_mut()?
+                    .projection_consumers
+                    .recovery
+                    .insert(
+                        id.as_str().into(),
+                        RegisteredConsumerRecovery::Prepared(Box::new(prepared)),
+                    );
+                return Err(error);
+            }
+        };
+        let selected = (|| -> Result<_> {
+            if prepared.selection_attempted() {
+                return match prepared.admit_selection(Arc::clone(&permit), RuntimeTaskContext::default())?.resolve()? {
+                    hawdb_storage::consumer_allocation::ConsumerSelectionResolution::Published(receipt) => Ok(Some(*receipt)),
+                    hawdb_storage::consumer_allocation::ConsumerSelectionResolution::NotSelected => Ok(None),
+                };
+            }
+
+            publication_failpoint(PublicationStage::AfterCheckpoint)?;
+            self.runtime.get_mut()?.store.synchronize_source_prefix()?;
+            let report = prepared.report();
+            let receipt = {
+                let runtime = self.runtime.get()?;
+                if report.source_epoch != runtime.store.commit_epoch() {
+                    drop(runtime);
+                    prepared
+                        .admit_selection(Arc::clone(&permit), RuntimeTaskContext::default())?
+                        .resolve_or_cancel_unattempted()?;
+                    return Ok(None);
+                }
+                runtime.store.verify_search_consumer_candidate_source(
+                    prepared.reservation_binding()?,
+                    report.source_epoch,
+                    report.metadata_reference,
+                )?;
+                let mut attempt =
+                    prepared.admit_selection(Arc::clone(&permit), RuntimeTaskContext::default())?;
+                publication_failpoint(PublicationStage::BeforeSelector)?;
+                let pending = attempt.select()?;
+                drop(runtime);
+                publication_failpoint(PublicationStage::AfterSelector)?;
+                let receipt = pending.finish()?;
+                publication_failpoint(PublicationStage::AfterSelectorBarrier)?;
+                receipt
+            };
+            Ok(Some(receipt))
+        })();
+        let receipt = match selected {
+            Ok(Some(receipt)) => receipt,
+            Ok(None) => {
+                // The durable outcome is terminal. Release native custody and
+                // its registry slot instead of advertising an endless retry.
+                drop(prepared);
+                self.reload_consumer_registry_if_unavailable()?;
+                return Err(HawDBError::Execution(
+                    "Consumer creation was not selected or its source advanced before selection; the operation is settled. Rebuild with a fresh target and initializer".into(),
+                ).into());
+            }
+            Err(error) => {
+                self.runtime
+                    .get_mut()?
+                    .projection_consumers
+                    .recovery
+                    .insert(
+                        id.as_str().into(),
+                        RegisteredConsumerRecovery::Prepared(Box::new(prepared)),
+                    );
+                return Err(error.into());
+            }
+        };
+        let projection = match prepared.complete(receipt) {
+            Ok(projection) => projection,
+            Err(error) => return Err(self.retain_consumer_recovery(&id, *error)?),
+        };
+        self.reload_consumer_registry_if_unavailable()?;
         self.publish_consumer_registry(&root)?;
         self.runtime
             .get_mut()?
@@ -368,6 +491,36 @@ impl Database {
         let _descriptor_operation = self.internal_descriptor_operation()?;
         self.ensure_writable()?;
         self.reload_consumer_registry_if_unavailable()?;
+        if self
+            .runtime
+            .get()?
+            .projection_consumers
+            .recovery
+            .contains_key(id.as_str())
+        {
+            let destination = normalize_consumer_target(projection_directory.as_ref())?;
+            let permit = self.consumer_publication_permit()?;
+            let recovery = self
+                .runtime
+                .get_mut()?
+                .projection_consumers
+                .recovery
+                .remove(id.as_str())
+                .expect("retained recovery owner");
+            if recovery.locator() != destination {
+                self.runtime
+                    .get_mut()?
+                    .projection_consumers
+                    .recovery
+                    .insert(id.as_str().into(), recovery);
+                return Err(Error::InvalidHandle);
+            }
+            return match recovery.retry(&permit, RuntimeTaskContext::default()) {
+                Ok(Some(prepared)) => self.finish_consumer_creation(id.clone(), prepared, permit),
+                Ok(None) => Err(Error::InvalidHandle),
+                Err(error) => Err(self.retain_consumer_recovery(id, *error)?),
+            };
+        }
         if !self
             .runtime
             .get()?
@@ -512,18 +665,22 @@ impl Database {
             batch.graph_delta_mut().max_operations = Some(max_projection_operations_per_batch);
             publication_failpoint(PublicationStage::BeforeCheckpoint)?;
             let permit = self.consumer_publication_permit()?;
+            let recovery_memory = permit
+                .reserve_retained_memory(
+                    hawdb_storage::consumer_allocation::CONSUMER_SELECTION_MEMORY_BOUND,
+                )
+                .map_err(|error| HawDBError::Execution(error.to_string()))?;
             let allocation = self
                 .runtime
                 .get()?
                 .store
                 .reserve_search_consumer_update(consumer.projection().stationary_receipt()?)?;
-            let mut birth = consumer.projection().prepare_successor_birth(allocation)?;
-            birth.create()?;
+            let birth = consumer.projection().prepare_successor_birth(allocation)?;
             let destination = consumer.projection().registered_locator()?.to_owned();
             let source_epoch = batch.complete_through_commit_epoch().ok_or_else(|| {
                 HawDBError::StorageIntegrity("Consumer batch has no complete source epoch".into())
             })?;
-            let mut prepared = ConsumerProjection::prepare_registered(
+            let preparation = ConsumerProjection::prepare_registered(
                 birth,
                 RegisteredConsumerPreparation {
                     locator: &destination,
@@ -531,6 +688,7 @@ impl Database {
                     permit: Arc::clone(&permit),
                     task: RuntimeTaskContext::default(),
                     limits: RegisteredConsumerLimits::default(),
+                    recovery_memory,
                     previous: Some(consumer.projection()),
                 },
                 |index| {
@@ -538,7 +696,19 @@ impl Database {
                     self.apply_search_projection_change_batch(index, batch, hydrated)
                         .map(|_| ())
                 },
-            )?;
+            );
+            let mut prepared = match preparation {
+                Ok(prepared) => prepared,
+                Err(error) => {
+                    let (error, recovery) = error.into_parts();
+                    if let Some(recovery) = recovery {
+                        consumer
+                            .projection_mut()
+                            .retain_failed_preparation(recovery)?;
+                    }
+                    return Err(error.into());
+                }
+            };
             let report = prepared.report();
             let selection = (|| -> Result<_> {
                 publication_failpoint(PublicationStage::AfterCheckpoint)?;
@@ -572,7 +742,18 @@ impl Database {
                     return Err(error.into());
                 }
             };
-            *consumer.projection_mut() = prepared.complete(selected)?;
+            match prepared.complete(selected) {
+                Ok(projection) => *consumer.projection_mut() = projection,
+                Err(error) => {
+                    let (error, recovery) = error.into_parts();
+                    if let Some(recovery) = recovery {
+                        consumer
+                            .projection_mut()
+                            .retain_failed_preparation(recovery)?;
+                    }
+                    return Err(error.into());
+                }
+            }
             let receipt = consumer.projection().receipt();
             self.acknowledge_consumer_checkpoint(consumer.id(), &receipt)?;
             self.publish_consumer_registry(&root)?;
@@ -640,6 +821,47 @@ impl Database {
         let _descriptor_operation = self.internal_descriptor_operation()?;
         self.ensure_writable()?;
         self.reload_consumer_registry_if_unavailable()?;
+        if self
+            .runtime
+            .get()?
+            .projection_consumers
+            .recovery
+            .contains_key(id.as_str())
+        {
+            let permit = self.consumer_publication_permit()?;
+            let recovery = self
+                .runtime
+                .get_mut()?
+                .projection_consumers
+                .recovery
+                .remove(id.as_str())
+                .expect("retained creation");
+            let prepared = match recovery.retry(&permit, RuntimeTaskContext::default()) {
+                Ok(prepared) => prepared,
+                Err(error) => return Err(self.retain_consumer_recovery(id, *error)?),
+            };
+            if let Some(mut prepared) = prepared {
+                let outcome = (|| {
+                    prepared
+                        .admit_selection(permit, RuntimeTaskContext::default())?
+                        .resolve_or_cancel_unattempted()
+                })();
+                if let Err(error) = outcome {
+                    self.runtime
+                        .get_mut()?
+                        .projection_consumers
+                        .recovery
+                        .insert(
+                            id.as_str().into(),
+                            RegisteredConsumerRecovery::Prepared(Box::new(prepared)),
+                        );
+                    return Err(error.into());
+                }
+            }
+            // A lost successful reply may have committed the registration.
+            // Resolve it before revocation; never interpret it as rollback.
+            self.reload_consumer_registry_if_unavailable()?;
+        }
         let root = self
             .runtime
             .get()?
@@ -840,6 +1062,7 @@ impl Database {
                 recovered.verified.insert(id.clone(), state.clone());
             }
         }
+        recovered.recovery = std::mem::take(&mut runtime.projection_consumers.recovery);
         runtime.projection_consumers = recovered;
         Ok(())
     }
@@ -915,6 +1138,7 @@ impl Database {
         id: &SearchProjectionConsumerId,
         receipt: &CheckpointReceipt,
     ) -> SearchProjectionConsumerResult<()> {
+        publication_failpoint(PublicationStage::BeforeAcknowledge)?;
         let native = self
             .runtime
             .get()?
@@ -998,6 +1222,19 @@ fn normalize_consumer_target(destination: &Path) -> Result<PathBuf> {
     Ok(parent.canonicalize()?.join(name))
 }
 
+#[cfg(test)]
+thread_local! {
+    static CREATION_LIMITS: std::cell::Cell<Option<RegisteredConsumerLimits>> = const { std::cell::Cell::new(None) };
+}
+
+fn registered_creation_limits() -> RegisteredConsumerLimits {
+    #[cfg(test)]
+    if let Some(limits) = CREATION_LIMITS.take() {
+        return limits;
+    }
+    RegisteredConsumerLimits::default()
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PublicationStage {
     BeforeReopen,
@@ -1006,6 +1243,7 @@ enum PublicationStage {
     BeforeSelector,
     AfterSelector,
     AfterSelectorBarrier,
+    BeforeAcknowledge,
     BeforeRegistry,
     AfterRegistry,
 }

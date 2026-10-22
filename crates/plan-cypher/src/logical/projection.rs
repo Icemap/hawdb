@@ -505,6 +505,28 @@ pub(super) fn plan_projection_with_columns(
             },
             "left".to_string(),
         ),
+        ScalarExpressionKind::VectorDistance {
+            metric,
+            left,
+            right,
+        } => (
+            ProjectionExpression::VectorDistance {
+                metric: *metric,
+                left: Box::new(plan_scalar_expression_with_columns(
+                    scope,
+                    column_scope,
+                    left,
+                    parameters,
+                )?),
+                right: Box::new(plan_scalar_expression_with_columns(
+                    scope,
+                    column_scope,
+                    right,
+                    parameters,
+                )?),
+            },
+            metric.function_name().to_owned(),
+        ),
         ScalarExpressionKind::Lower(expression) => (
             ProjectionExpression::Lower(Box::new(plan_scalar_expression_with_columns(
                 scope,
@@ -1075,6 +1097,25 @@ pub(super) fn plan_scalar_expression_with_columns(
                 parameters,
             )?),
             length: bind_non_negative_usize(length, parameters, "LEFT length")?,
+        }),
+        ScalarExpressionKind::VectorDistance {
+            metric,
+            left,
+            right,
+        } => Ok(ProjectionExpression::VectorDistance {
+            metric: *metric,
+            left: Box::new(plan_scalar_expression_with_columns(
+                scope,
+                column_scope,
+                left,
+                parameters,
+            )?),
+            right: Box::new(plan_scalar_expression_with_columns(
+                scope,
+                column_scope,
+                right,
+                parameters,
+            )?),
         }),
         ScalarExpressionKind::Lower(expression) => Ok(ProjectionExpression::Lower(Box::new(
             plan_scalar_expression_with_columns(scope, column_scope, expression, parameters)?,

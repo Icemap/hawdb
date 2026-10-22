@@ -20323,6 +20323,7 @@ fn value_to_external_id(value: &Value) -> String {
                 .collect::<String>()
         ),
         Value::Uuid(value) => value.to_string(),
+        Value::Vector(_) => value.to_string(),
         Value::List(values) => values
             .iter()
             .map(value_to_external_id)
@@ -21523,6 +21524,9 @@ fn relational_value_to_query_value(
             Ok(Value::Binary(value.clone()))
         }
         hawdb_storage::relational::RelationalValue::Uuid(value) => Ok(Value::Uuid(*value)),
+        hawdb_storage::relational::RelationalValue::Vector(value) => {
+            Ok(Value::Vector(value.clone()))
+        }
         hawdb_storage::relational::RelationalValue::Overflow(_) => {
             Err(HawDBError::StorageIntegrity(
                 "logical relational mutation outcome contains an overflow reference".to_string(),

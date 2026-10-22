@@ -186,6 +186,10 @@ fn hash_relational_value(hasher: &mut IntegrityHasher, value: &RelationalValue) 
             hasher.update(&[5]);
             hash_bounded_bytes(hasher, value);
         }
+        RelationalValue::Vector(value) => {
+            hasher.update(&[8]);
+            hash_bounded_bytes(hasher, value.encoded());
+        }
         RelationalValue::Uuid(value) => {
             hasher.update(&[7]);
             hasher.update(value.as_bytes());
@@ -207,6 +211,7 @@ const fn relational_scalar_type_tag(scalar_type: RelationalScalarType) -> u8 {
         RelationalScalarType::Text => 3,
         RelationalScalarType::Bytea => 4,
         RelationalScalarType::Uuid => 5,
+        RelationalScalarType::Vector(_) => 6,
     }
 }
 

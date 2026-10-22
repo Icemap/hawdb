@@ -150,6 +150,7 @@ pub enum PropertyType {
     /// Unbounded text payload. Optimizer value statistics intentionally skip it.
     Text,
     List,
+    Vector(crate::VectorDimension),
 }
 
 impl PropertyType {
@@ -162,6 +163,7 @@ impl PropertyType {
             Self::String => LogicalType::String,
             Self::Text => LogicalType::Text,
             Self::List => LogicalType::List,
+            Self::Vector(dimension) => LogicalType::Vector(dimension),
         }
     }
 }

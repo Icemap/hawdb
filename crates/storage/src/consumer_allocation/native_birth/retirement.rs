@@ -35,6 +35,9 @@ impl PendingConsumerGeneration {
     /// The caller has closed all producer readers/writers. A remaining child,
     /// unknown effect, seal attempt or publication intent retains the debt.
     pub fn retire_cleaned_unsealed(&mut self) -> Result<()> {
+        if matches!(self.phase, Phase::Retiring | Phase::Retired) {
+            return self.retire_unpublished();
+        }
         if self.phase != Phase::Recorded
             || self.candidate_seal_attempted
             || self.publication_intent_attempted

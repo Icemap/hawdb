@@ -58,10 +58,11 @@ mod discovery;
 mod governed;
 mod initial;
 pub(super) mod io;
-mod mutations;
-mod unordered;
+pub(super) mod mutations;
+pub(super) mod unordered;
 pub use unordered::{
-    SearchBaselineComparisonLimits, SearchBaselineComparisonReport, SearchMatchedBaseline,
+    SearchAdmittedConsumerDocuments, SearchBaselineComparisonLimits,
+    SearchBaselineComparisonReport, SearchComparedConsumerDocuments, SearchMatchedBaseline,
     SearchMutationInspectionInput, SearchMutationInspectionStep, SearchMutationSortStep,
     SearchMutationSortStepLimits, SearchMutationSortStepUsage, SearchOutOfCoreBaselineComparison,
     SearchOutOfCoreDeltaComparison, SearchOutOfCoreUnorderedMutationWriter,
@@ -401,11 +402,7 @@ impl SearchOutOfCoreGenerationWriter {
     ) -> Result<Self> {
         checkpoint(&task_context)?;
         validate_options(&options)?;
-        let metadata_bytes = required_descriptor_field_names().try_fold(0, |bytes, field| {
-            checked_add(bytes, checked_add(SET_ENTRY_BYTES, field.len())?)
-        })?;
-        let metadata_memory = memory.retained.reserve(metadata_bytes)?;
-        let spool_memory = memory.spool.reserve(SPOOL_BUFFER_BYTES)?;
+        let creation_memory = Self::reserve_creation_memory(&memory)?;
         let root = context_memory::OwnedPath::copy(root.as_ref(), &memory, &task_context)?;
         io::GenerationIo::new(&memory, &task_context)
             .native(&[&root], || fs::create_dir_all(&root))??;
@@ -419,8 +416,33 @@ impl SearchOutOfCoreGenerationWriter {
         io.native(&[&root], || {
             hawdb_storage::durability::sync_directory_ancestors(&root)
         })??;
-        let mut stage =
-            StageDirectory::create(staging_root.unwrap_or(&root), &memory, &task_context)?;
+        let stage = StageDirectory::create(staging_root.unwrap_or(&root), &memory, &task_context)?;
+        Self::create_in_stage(root, options, task_context, memory, stage, creation_memory)
+    }
+
+    fn reserve_creation_memory(
+        memory: &BuildMemory,
+    ) -> Result<(QueryMemoryLease, QueryMemoryLease)> {
+        let metadata_bytes = required_descriptor_field_names().try_fold(0, |bytes, field| {
+            checked_add(bytes, checked_add(SET_ENTRY_BYTES, field.len())?)
+        })?;
+        Ok((
+            memory.retained.reserve(metadata_bytes)?,
+            memory.spool.reserve(SPOOL_BUFFER_BYTES)?,
+        ))
+    }
+
+    fn create_in_stage(
+        root: context_memory::OwnedPath,
+        options: context_memory::Options,
+        task_context: RuntimeTaskContext,
+        memory: BuildMemory,
+        mut stage: StageDirectory,
+        creation_memory: (QueryMemoryLease, QueryMemoryLease),
+    ) -> Result<Self> {
+        checkpoint(&task_context)?;
+        validate_options(&options)?;
+        let (metadata_memory, spool_memory) = creation_memory;
         let disk_reservation = options
             .max_spool_bytes
             .get()
@@ -434,16 +456,22 @@ impl SearchOutOfCoreGenerationWriter {
             &memory,
             &task_context,
         )?;
-        let mut spool = BufWriter::with_capacity(
-            SPOOL_BUFFER_BYTES,
-            io::GenerationIo::new(&memory, &task_context).native(&[&spool_path], || {
-                OpenOptions::new()
-                    .create_new(true)
-                    .read(true)
-                    .write(true)
-                    .open(&spool_path)
-            })??,
-        );
+        let spool_file = match stage.scratch_directory() {
+            Some(scratch) => {
+                let _io = super::scratch_directory::io_scope(&task_context, scratch.governed())?;
+                scratch.create(&spool_path)?
+            }
+            None => {
+                io::GenerationIo::new(&memory, &task_context).native(&[&spool_path], || {
+                    OpenOptions::new()
+                        .create_new(true)
+                        .read(true)
+                        .write(true)
+                        .open(&spool_path)
+                })??
+            }
+        };
+        let mut spool = BufWriter::with_capacity(SPOOL_BUFFER_BYTES, spool_file);
         spool.write_all(SPOOL_HEADER)?;
         let metadata_fields = required_descriptor_fields();
         let metadata_field_bytes = metadata_fields.iter().map(|field| field.len() as u64).sum();

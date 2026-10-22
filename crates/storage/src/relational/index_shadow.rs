@@ -2479,12 +2479,20 @@ pub(super) fn relational_schema_digest(
     for column in &schema.columns {
         encode_bytes(&mut encoded, column.name.as_bytes())?;
         encoded.push(scalar_type_tag(column.scalar_type));
+        if let RelationalScalarType::Vector(dimension) = column.scalar_type {
+            encoded.extend_from_slice(&dimension.get().to_le_bytes());
+        }
         encoded.push(u8::from(column.nullable));
         match &column.default {
             None => encoded.push(0),
             Some(RelationalColumnDefault::Literal(value)) => {
                 encoded.push(1);
-                encode_ordered_relational_value(&mut encoded, value)?;
+                if let RelationalValue::Vector(value) = value {
+                    encoded.push(8);
+                    encode_bytes(&mut encoded, value.encoded())?;
+                } else {
+                    encode_ordered_relational_value(&mut encoded, value)?;
+                }
             }
             Some(RelationalColumnDefault::UuidV7) => encoded.push(2),
         }
@@ -2723,6 +2731,7 @@ fn scalar_type_tag(scalar_type: RelationalScalarType) -> u8 {
         RelationalScalarType::Text => 4,
         RelationalScalarType::Bytea => 5,
         RelationalScalarType::Uuid => 6,
+        RelationalScalarType::Vector(_) => 7,
     }
 }
 

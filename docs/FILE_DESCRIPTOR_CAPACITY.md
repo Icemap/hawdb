@@ -48,6 +48,10 @@ the active policy. Once the operation guard retires, later foreground work uses
 the configured policy again. Long-lived native authorities retain project
 identity without extending an expired operation reservation.
 
+Registered Consumer staging and coverage sessions retain their original project
+context and enter a fresh internal scope for each synchronous step. Idle tokens
+retain neither descriptor reservations nor execution slots.
+
 Internal maintenance must not hold foreground execution resources while waiting
 for another owner. This descriptor policy does not replace the separate CPU,
 memory, physical-I/O or checkpoint state-machine progress contracts.

@@ -54,6 +54,10 @@ does not claim to migrate every Search checkpoint writer to relative native IO.
 
 ## Host API
 
+For bounded fixed-E graph/SQL catch-up with independent complete-source content
+verification, use the [registered Consumer catch-up flow](REGISTERED_CONSUMER_CATCH_UP.md).
+Its opaque covered update enters this same native selector/receipt protocol.
+
 - `open_or_create_search_projection_consumer`: recover/reopen the exact durable
   registration or initialize a genuinely absent registration. Existing UUIDs,
   lease policy and cursor survive reopen; new options do not renew an old lease.
@@ -110,7 +114,55 @@ target; existing unpublished directories are not silently adopted or deleted.
 Ordinary initializer errors attempt cleanup through the known-created native
 scratch and retire an unsealed birth only after all producer owners close and
 only the original birth marker remains. Cleanup resource refusal preserves
-unpublished evidence. Allocation/debt storage is bounded (256 current or unresolved
+unpublished evidence and its process-local native owner. The same database
+handle retains first-creation recovery across disposable-registry refreshes;
+`create`, `open_or_create`, or explicit `open` first retries that owner with fresh
+admission. A prepared generation reuses its original registration, operation,
+epoch and initializer result. An unsealed failed build finishes native cleanup
+before a new initializer can run at the same target. Unknown children refuse
+cleanup; they are never recursively deleted. The 64-registration facade budget
+also counts first-creation recovery owners.
+
+Catch-up preparation failures retain their owner on the existing Consumer.
+`resolve_search_projection_consumer_publication` retries preparation/cleanup,
+then cancels a selector never attempted or resolves the original selection.
+Old read pins keep their immutable view throughout. Completion-check failures
+return the prepared owner instead of dropping it. An initializer panic is
+converted into an execution refusal at the private-builder boundary so cleanup
+custody cannot unwind away; no partially initialized result is published.
+Explicit unregister first cancels or resolves a cached creation and then revokes
+its durable registration. Unused metadata-only grants are revoked too; neither
+kind of pending owner can resurrect the removed registration on a later retry.
+
+These owners are process-local. A process crash still uses the original durable
+birth/intent/selector protocol; an unsealed directory with no complete recovery
+proof remains retained evidence, not an automatically adopted empty projection.
+If source E changes before first selection, the prepared operation durably
+cancels its unattempted selector. A terminal `NotSelected` outcome likewise
+settles creation and releases its process-local owner and registration slot.
+Both return `Database(Execution)` with a fresh-target/rebuild action, never
+retryable `ProjectionBusy`. The sealed generation remains immutable evidence;
+creation on a fresh target with the current initializer is explicit.
+Transient admission, cleanup or outcome uncertainty still retains the owner.
+Retries of a retained preparation use its original options and immutable
+initializer output; new arguments do not replace that operation.
+
+The initial allocation ledger uses a synchronized private candidate and atomic
+head publication, so a torn bootstrap write cannot install partial authority.
+Lost metadata-only reservation replies reuse the original UUIDs/high water,
+while refreshing a changed full lease policy before any native birth. Callers
+must serialize each Consumer key and relinquish the previous token before a
+reservation retry: there is no independent caller nonce. Native births require
+their own retained owner. File-create primitives expose
+successful exclusive creation before fallible metadata checks. Pre-effect
+native resource/I/O refusals leave the same sealed owner retryable; attempted
+effects retain outcome resolution. Descriptor targets do not refuse internal
+selection, recovery or cleanup, including with strict foreground configuration;
+all excess remains counted. See [descriptor capacity](FILE_DESCRIPTOR_CAPACITY.md). First-WAL rollback keeps the original header
+prefix and repairs only a missing suffix before truncating the partial records,
+avoiding a truncate-to-zero window.
+
+Allocation/debt storage is bounded (256 current or unresolved
 rows, 1 MiB ledger). Completion keeps each registration's initial birth and current
 selected root, compacts other completed predecessors, and unregister releases
 completed logical rows. The monotonic allocator high water never moves
@@ -128,7 +180,11 @@ Current defaults bound complete generation verification to 256 MiB, metadata to
 64 MiB. The envelope is derived from the snapshot's declared decoded length,
 encoded bytes and retained overhead; it is not an RSS measurement. Publication
 uses an admitted 64-MiB working request and one IO wave slot in the database's
-existing governor. Hosts still own initializer work and process memory policy.
+existing governor. Before allocating a birth, the facade also reserves the
+existing 8-MiB selector-metadata envelope for recovery custody. Failed unsealed
+cleanup retains that credit without an execution permit. Once a prepared
+selector owns its own funded metadata, the preparation credit is released.
+Hosts still own initializer work and process memory policy.
 
 Catch-up currently clones the completed resident documents and constructs a
 complete generation. This is not the bounded native C..E producer required by
@@ -153,8 +209,9 @@ or all MVCC work complete.
 
 Local regression fixtures include 260 actual catch-up publications while retaining
 an old read pin, typed refusal for 256 genuinely unresolved allocation rows,
-transient-reopen retry, and mid-operation cold branch refusal at a 32-FD limit
-followed by a successful higher-budget retry. The long ledger fixture suspends
+transient-reopen retry, internal cold branch publication under competing strict
+foreground descriptor capacity, and seal/intent pressure followed by an injected
+pre-selection failure and same-owner recovery. The long ledger fixture suspends
 periodic automatic checkpoint publication to isolate allocation capacity; separate
 checkpoint fixtures retain concurrency coverage.
 

@@ -109,7 +109,7 @@ impl PhysicalPlan {
                 write_identifier(output, table);
                 output.push('.');
                 write_identifier(output, property);
-                output.push_str(value_type.fingerprint_suffix());
+                output.push_str(&value_type.fingerprint_suffix());
                 output.push_str(if *nullable { ":nullable" } else { ":not_null" });
                 output.push(')');
             }

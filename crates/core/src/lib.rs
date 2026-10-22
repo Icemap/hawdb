@@ -27,6 +27,7 @@ mod shared_allocation;
 pub mod time;
 pub mod uuidv7;
 pub mod value;
+pub mod vector;
 
 pub use access_control::QueryAccessControlContext;
 pub use cancellation::{
@@ -53,7 +54,7 @@ pub use graph_rag::{
     DEFAULT_GRAPH_RAG_MAX_PROPERTIES_PER_SUBJECT, DEFAULT_GRAPH_RAG_MAX_RELATIONSHIP_TYPES,
     DEFAULT_GRAPH_RAG_MAX_ROUTES, GRAPH_RAG_SCHEMA_CONTEXT_PROTOCOL, MAX_GRAPH_RAG_QUERY_LIMIT,
 };
-pub use logical_type::LogicalType;
+pub use logical_type::{LogicalType, VectorDimension};
 pub use regex::ValidatedRegex;
 pub use schema::{
     AdvancedStatisticsFreshness, BasicGraphStatistics, Catalog, CompositeIndexDescriptor,
@@ -65,6 +66,7 @@ pub use schema::{
 pub use uuid::Uuid;
 pub use uuidv7::generate_uuidv7;
 pub use value::{Value, ValueRef};
+pub use vector::{Vector, VectorDistance, VectorRef};
 
 #[doc(hidden)]
 pub use shared_allocation::SharedAllocation;

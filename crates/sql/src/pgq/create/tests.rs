@@ -99,6 +99,32 @@ fn code(sql: &str, snapshot: &Snapshot, expected: Code) {
     assert!(sql.get(error.span.start..error.span.end).is_some());
 }
 
+#[test]
+fn vector_schema_properties_are_rejected_without_retyping_other_columns() {
+    let source = table(
+        "memories",
+        &[
+            ("id", SqlDataType::BigInt),
+            (
+                "embedding",
+                SqlDataType::Vector(hawdb_core::VectorDimension::new(3).unwrap()),
+            ),
+        ],
+    );
+    let snapshot = Snapshot(BTreeMap::from([(source.name.clone(), source)]));
+    bind(
+        "CREATE PROPERTY GRAPH g VERTEX TABLES (memories PROPERTIES (id))",
+        &snapshot,
+    )
+    .unwrap();
+    for sql in [
+        "CREATE PROPERTY GRAPH g VERTEX TABLES (memories)",
+        "CREATE PROPERTY GRAPH g VERTEX TABLES (memories PROPERTIES (embedding))",
+    ] {
+        code(sql, &snapshot, Code::UnsupportedExpression);
+    }
+}
+
 fn explicit_endpoint(edge: &str, vertex: &str) -> String {
     format!(
         "CREATE PROPERTY GRAPH g VERTEX TABLES (vertices NO PROPERTIES)

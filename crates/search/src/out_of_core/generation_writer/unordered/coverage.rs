@@ -16,6 +16,7 @@ pub struct SearchOutOfCoreDeltaComparison<'reader> {
     limits: SearchBaselineComparisonLimits,
     report: SearchBaselineComparisonReport,
     resulting_documents: usize,
+    expected_encoded_bytes: u64,
     started: bool,
     complete: bool,
     failed: bool,
@@ -79,6 +80,7 @@ impl<'reader> SearchOutOfCoreUnorderedMutationWriter<'reader> {
             limits,
             report: Default::default(),
             resulting_documents,
+            expected_encoded_bytes: 0,
             started: false,
             complete: false,
             failed: false,
@@ -285,7 +287,17 @@ impl SearchOutOfCoreDeltaComparison<'_> {
                     &mut self.writer.control,
                     self.limits,
                     &mut self.report,
-                    (&memory, &task, &path),
+                    (
+                        &memory,
+                        &task,
+                        &path,
+                        self.writer
+                            .inner
+                            .writer
+                            .stage
+                            .scratch_directory()
+                            .as_deref(),
+                    ),
                 )?;
             }
         }
@@ -293,6 +305,12 @@ impl SearchOutOfCoreDeltaComparison<'_> {
             self.mutations.pending = None;
         }
         if order != Ordering::Less {
+            if let Some(run::Entry::Upsert(record, _)) = self.expected.pending.as_ref() {
+                self.expected_encoded_bytes = self
+                    .expected_encoded_bytes
+                    .checked_add(record.encoded_bytes)
+                    .ok_or_else(unusable)?;
+            }
             self.expected.pending = None;
             self.report.compared_documents = self
                 .report
@@ -305,6 +323,24 @@ impl SearchOutOfCoreDeltaComparison<'_> {
 }
 
 impl<'reader> SearchOutOfCoreDeltaComparison<'reader> {
+    /// Retain the exact independently compared E stream for a registered full
+    /// generation. No mapper runs again and the caller cannot replace records.
+    #[doc(hidden)]
+    pub fn finish_consumer(self) -> Result<SearchComparedConsumerDocuments> {
+        if self.failed || !self.complete {
+            return Err(unusable());
+        }
+        checkpoint(self.writer.task_context())?;
+        let run = self.expected.reader.map(Reader::into_run);
+        SearchComparedConsumerDocuments::new(
+            run,
+            self.writer.control,
+            self.writer.inner.writer,
+            self.report.compared_documents,
+            self.expected_encoded_bytes,
+        )
+    }
+
     /// Restores only the original, now compared delta. Its expected selector,
     /// source epoch and admission cannot be replaced by the caller.
     pub fn finish(

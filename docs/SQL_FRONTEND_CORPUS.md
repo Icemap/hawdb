@@ -77,6 +77,11 @@ fields. Its SQL literals and generated source-contract inputs are unchanged;
 the original corpus provenance and expected outcomes remain intact. Additional
 upgrade-specific AST and SQL regressions live in `parser/compatibility_tests.rs`.
 
+The vector schema slice re-audits the `tests.rs` source pin after adding only
+`mod vector_schema;`. The audited SQL literals, corpus cases and frontend
+outcomes are unchanged. The new CREATE/ALTER type-boundary tests live separately
+in `tests/vector_schema.rs`; they do not expand the owned frontend's DDL support.
+
 The frozen inputs remain owned by
 `crates/qualification/fixtures/nowledge_content_store/`. Every named workload
 statement must appear exactly once with byte-identical SQL and dense production

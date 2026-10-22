@@ -277,3 +277,22 @@ func TestRetainedNodeReadAndCloseConcurrent(t *testing.T) {
 	db.Close()
 	wg.Wait()
 }
+
+func TestSharedVectorRetainedPayload(t *testing.T) {
+	db := nodeFixture(t, false)
+	if err := db.Exec("MATCH (n:Item) WHERE n.id = 1 SET n.embedding = $v", map[string]any{"v": map[string]any{"$vector": []float32{1, 0}}}); err != nil {
+		t.Fatal(err)
+	}
+	cursor := nodeCursor(t, db, 1)
+	node := nodeNext(t, cursor)
+	vector := nodeField(t, node, "embedding")
+	kind, err := vector.Kind()
+	if err != nil || kind != RetainedNodeVector {
+		t.Fatalf("vector kind: %v, %v", kind, err)
+	}
+	want := []byte{2, 0, 0, 0, 0, 0, 128, 63, 0, 0, 0, 0}
+	got := nodeBytes(t, vector)
+	if string(got) != string(want) {
+		t.Fatalf("vector payload: %v, want %v", got, want)
+	}
+}

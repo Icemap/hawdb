@@ -240,6 +240,7 @@ fn projection_value_to_string(value: &Value) -> String {
                 .collect::<String>()
         ),
         Value::Uuid(value) => value.to_string(),
+        Value::Vector(_) => value.to_string(),
         Value::List(values) => values
             .iter()
             .map(projection_value_to_string)

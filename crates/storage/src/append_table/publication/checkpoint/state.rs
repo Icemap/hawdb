@@ -238,7 +238,12 @@ pub(super) fn key_copy(
 fn value_copy(value: &RelationalValue, work: &CheckpointDecodeContext) -> Result<RelationalValue> {
     Ok(match value {
         RelationalValue::Text(value) => RelationalValue::Text(work.string(value)?),
-        RelationalValue::Bytea(value) => {
+        RelationalValue::Bytea(_) | RelationalValue::Vector(_) => {
+            let (value, vector) = match value {
+                RelationalValue::Bytea(bytes) => (bytes.as_slice(), false),
+                RelationalValue::Vector(value) => (value.encoded(), true),
+                _ => unreachable!(),
+            };
             work.reserve(value.len())?;
             let mut bytes = Vec::new();
             bytes
@@ -256,7 +261,11 @@ fn value_copy(value: &RelationalValue, work: &CheckpointDecodeContext) -> Result
                 bytes.extend_from_slice(chunk);
                 unit.finish();
             }
-            RelationalValue::Bytea(bytes)
+            if vector {
+                RelationalValue::Vector(crate::background::decode_vector(bytes, Some(&work.work))?)
+            } else {
+                RelationalValue::Bytea(bytes)
+            }
         }
         // All other relational variants own only fixed-width data.
         value @ (RelationalValue::Null

@@ -106,6 +106,8 @@
 
 #define HAWDB_RETAINED_MAP 10
 
+#define HAWDB_RETAINED_VECTOR 11
+
 /**
  * An open HawDB database handle. Opaque to C callers.
  */

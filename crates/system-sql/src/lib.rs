@@ -237,6 +237,7 @@ pub(crate) struct SystemTableScan {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SystemTable {
     Tables,
+    VectorColumns,
     Properties,
     Indexes,
     Constraints,
@@ -727,6 +728,7 @@ fn execute_system_table_scan<Store: SystemSqlStore>(
 ) -> Result<Vec<Row>> {
     let mut rows = match scan.table {
         SystemTable::Tables => table_rows(context.catalog),
+        SystemTable::VectorColumns => vector_column_rows(context.relational_state),
         SystemTable::Properties => property_rows(context.catalog),
         SystemTable::Indexes => index_rows(context.catalog),
         SystemTable::Constraints => constraint_rows(context.catalog),
@@ -888,6 +890,27 @@ fn information_schema_table_rows(state: &RelationalState) -> Vec<Row> {
         .collect()
 }
 
+fn vector_column_rows(state: &RelationalState) -> Vec<Row> {
+    state
+        .table_schemas()
+        .flat_map(|schema| {
+            schema.columns.iter().filter_map(move |column| {
+                let RelationalScalarType::Vector(dimension) = column.scalar_type else {
+                    return None;
+                };
+                Some(BTreeMap::from([
+                    ("table_schema".into(), Value::String("public".into())),
+                    ("table_name".into(), Value::String(schema.name.clone())),
+                    ("column_name".into(), Value::String(column.name.clone())),
+                    ("dimensions".into(), Value::Int(i64::from(dimension.get()))),
+                    ("element_type".into(), Value::String("float32".into())),
+                    ("nullable".into(), Value::Bool(column.nullable)),
+                ]))
+            })
+        })
+        .collect()
+}
+
 fn information_schema_column_rows(state: &RelationalState) -> Vec<Row> {
     state
         .table_schemas()
@@ -967,7 +990,14 @@ fn information_schema_column_rows(state: &RelationalState) -> Vec<Row> {
                         ),
                         (
                             "udt_schema".to_string(),
-                            Value::String("pg_catalog".to_string()),
+                            Value::String(
+                                if matches!(column.scalar_type, RelationalScalarType::Vector(_)) {
+                                    "public"
+                                } else {
+                                    "pg_catalog"
+                                }
+                                .to_string(),
+                            ),
                         ),
                         (
                             "udt_name".to_string(),
@@ -1071,6 +1101,15 @@ fn information_schema_type(scalar_type: RelationalScalarType) -> InformationSche
             numeric_precision_radix: None,
             numeric_scale: None,
         },
+        RelationalScalarType::Vector(_) => InformationSchemaType {
+            data_type: "USER-DEFINED",
+            udt_name: "vector",
+            character_maximum_length: None,
+            character_octet_length: None,
+            numeric_precision: None,
+            numeric_precision_radix: None,
+            numeric_scale: None,
+        },
     }
 }
 
@@ -1097,6 +1136,9 @@ fn relational_default_value(default: Option<&RelationalColumnDefault>) -> Value 
         }
         Some(RelationalColumnDefault::Literal(RelationalValue::Uuid(value))) => {
             Value::String(format!("'{value}'::uuid"))
+        }
+        Some(RelationalColumnDefault::Literal(RelationalValue::Vector(value))) => {
+            Value::String(Value::Vector(value.clone()).to_string())
         }
         Some(RelationalColumnDefault::UuidV7) => Value::String("uuidv7()".to_string()),
     }
@@ -1910,7 +1952,7 @@ const fn schema_object_state_name(state: SchemaObjectState) -> &'static str {
     }
 }
 
-const fn property_type_name(value_type: PropertyType) -> &'static str {
+fn property_type_name(value_type: PropertyType) -> std::borrow::Cow<'static, str> {
     match value_type {
         PropertyType::Any => "any",
         PropertyType::Bool => "bool",
@@ -1919,7 +1961,9 @@ const fn property_type_name(value_type: PropertyType) -> &'static str {
         PropertyType::String => "string",
         PropertyType::Text => "text",
         PropertyType::List => "list",
+        PropertyType::Vector(dimension) => return format!("vector({})", dimension.get()).into(),
     }
+    .into()
 }
 
 const fn index_kind_name(kind: IndexKind) -> &'static str {
@@ -2188,6 +2232,7 @@ fn system_table(select: &SelectStatement) -> Result<SystemTable> {
     let from = select.from_table();
     match (from.schema.as_deref(), from.name.as_str()) {
         (Some("system"), "tables") => Ok(SystemTable::Tables),
+        (Some("system"), "vector_columns") => Ok(SystemTable::VectorColumns),
         (Some("system"), "properties") => Ok(SystemTable::Properties),
         (Some("system"), "indexes") => Ok(SystemTable::Indexes),
         (Some("system"), "constraints") => Ok(SystemTable::Constraints),
@@ -2263,6 +2308,7 @@ fn validate_column(table: SystemTable, column: &SqlColumnRef) -> Result<()> {
     if let Some(qualifier) = &column.qualifier {
         let table_name = match table {
             SystemTable::Tables => "tables",
+            SystemTable::VectorColumns => "vector_columns",
             SystemTable::Properties => "properties",
             SystemTable::Indexes => "indexes",
             SystemTable::Constraints => "constraints",
@@ -2300,6 +2346,14 @@ fn validate_column(table: SystemTable, column: &SqlColumnRef) -> Result<()> {
 fn table_columns(table: SystemTable) -> &'static [&'static str] {
     match table {
         SystemTable::Tables => &["table_id", "table_name", "table_kind", "state"],
+        SystemTable::VectorColumns => &[
+            "table_schema",
+            "table_name",
+            "column_name",
+            "dimensions",
+            "element_type",
+            "nullable",
+        ],
         SystemTable::Properties => &[
             "property_id",
             "table_id",

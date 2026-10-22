@@ -1040,6 +1040,15 @@ impl RuntimeGovernor {
 }
 
 impl RuntimePermit {
+    /// Retain the originating scheduler for fresh admission after this operation
+    /// closes. A governor handle itself reserves no execution resources.
+    #[doc(hidden)]
+    pub fn governor(&self) -> RuntimeGovernor {
+        RuntimeGovernor {
+            inner: Arc::clone(&self.governor),
+        }
+    }
+
     pub fn request(&self) -> RuntimeWorkRequest {
         self.request
     }

@@ -38,10 +38,11 @@ pub(in crate::relational) fn relational_schema_digest_with_work_context(
     output.count(schema.columns.len(), "columns")?;
     for column in &schema.columns {
         output.bytes(column.name.as_bytes())?;
-        output.update(&[
-            scalar_type_tag(column.scalar_type),
-            u8::from(column.nullable),
-        ])?;
+        output.update(&[scalar_type_tag(column.scalar_type)])?;
+        if let RelationalScalarType::Vector(dimension) = column.scalar_type {
+            output.update(&dimension.get().to_le_bytes())?;
+        }
+        output.update(&[u8::from(column.nullable)])?;
         match &column.default {
             None => output.update(&[0])?,
             Some(RelationalColumnDefault::Literal(value)) => {
@@ -115,6 +116,10 @@ impl SchemaDigest<'_> {
     }
 
     fn value(&mut self, value: &RelationalValue) -> Result<(), RelationalIndexShadowError> {
+        if let RelationalValue::Vector(value) = value {
+            self.update(&[8])?;
+            return self.bytes(value.encoded());
+        }
         let variable = match value {
             RelationalValue::Text(text) => Some((4, text.as_bytes())),
             RelationalValue::Bytea(bytes) => Some((5, bytes.as_slice())),
@@ -153,6 +158,10 @@ impl SchemaDigest<'_> {
                 | RelationalValue::BigInt(_)
                 | RelationalValue::DoublePrecision(_)
                 | RelationalValue::Uuid(_) => {}
+                RelationalValue::Vector(_) => return Err(
+                    crate::relational::ordered_key::OrderedRelationalKeyError::UnsupportedVector
+                        .into(),
+                ),
                 RelationalValue::Overflow(_) => {
                     return Err(crate::relational::ordered_key::OrderedRelationalKeyError::UnsupportedOverflow.into());
                 }

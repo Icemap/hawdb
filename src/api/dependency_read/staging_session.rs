@@ -402,7 +402,7 @@ impl Database {
             .task
             .checkpoint()
             .map_err(|e| ProjectionFeedError::Source(refusal(&e.to_string())))?;
-        let mut source =
+        let source =
             self.begin_prepared_projection_feed(config.after_epoch, config.reads, config.feed)?;
         if reader.source_graph_commit_epoch() != Some(config.after_epoch) {
             return Err(ProjectionFeedError::Source(refusal(
@@ -411,14 +411,29 @@ impl Database {
         }
         config.build.source_graph_commit_epoch = Some(source.source_epoch());
         let stage = admission
-            .prepare_unordered_update(reader, config.build, config.sorting, config.task.clone())
+            .prepare_unordered_update(
+                reader,
+                std::mem::take(&mut config.build),
+                config.sorting,
+                config.task.clone(),
+            )
             .map_err(ProjectionFeedError::Source)?;
+        ProjectionStagingSession::from_source(source, stage, config, mapper)
+    }
+}
+impl<'reader> ProjectionStagingSession<'reader> {
+    pub(in crate::api) fn from_source(
+        mut source: PreparedProjectionFeed,
+        stage: SearchOutOfCoreUnorderedMutationWriter<'reader>,
+        mut config: ProjectionStagingSessionConfig,
+        mapper: ProjectionMappingFunction,
+    ) -> std::result::Result<Self, ProjectionFeedError> {
         config.task = stage.task_context().clone();
         source.set_task_context(config.task.clone());
         let memory = stage
             .reserve_session_metadata(std::mem::size_of::<ProjectionStagingSession<'reader>>())
             .map_err(ProjectionFeedError::Source)?;
-        Ok(ProjectionStagingSession {
+        Ok(Self {
             source,
             stage,
             mapper,
@@ -434,8 +449,6 @@ impl Database {
             _memory: memory,
         })
     }
-}
-impl ProjectionStagingSession<'_> {
     pub fn source_epoch(&self) -> u64 {
         self.source.source_epoch()
     }

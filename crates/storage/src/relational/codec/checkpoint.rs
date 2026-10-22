@@ -95,6 +95,7 @@ fn encode_value_with_work_context(
     let variable = match value {
         RelationalValue::Text(text) => Some((4, text.as_bytes())),
         RelationalValue::Bytea(bytes) => Some((5, bytes.as_slice())),
+        RelationalValue::Vector(value) => Some((8, value.encoded())),
         _ => None,
     };
     if let Some((tag, bytes)) = variable {

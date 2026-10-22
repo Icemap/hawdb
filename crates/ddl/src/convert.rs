@@ -31,6 +31,7 @@ pub const fn property_type_to_core(value_type: SchemaPropertyType) -> PropertyTy
         SchemaPropertyType::String => PropertyType::String,
         SchemaPropertyType::Text => PropertyType::Text,
         SchemaPropertyType::List => PropertyType::List,
+        SchemaPropertyType::Vector(dimension) => PropertyType::Vector(dimension),
     }
 }
 

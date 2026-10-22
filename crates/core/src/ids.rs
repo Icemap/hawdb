@@ -155,6 +155,7 @@ fn projected_value_allocation_bytes(value: &Value) -> usize {
     std::mem::size_of::<Value>().saturating_add(match value {
         Value::String(value) => value.len(),
         Value::Binary(value) => value.len(),
+        Value::Vector(value) => value.encoded().len(),
         Value::List(values) => values.iter().fold(32usize, |total, value| {
             total.saturating_add(projected_value_allocation_bytes(value).saturating_mul(2))
         }),

@@ -453,7 +453,9 @@ impl GraphStore {
     }
 
     /// Reserve persistent Consumer identities before native creation/callbacks.
-    /// The receipt does not authorize birth, adoption or publication.
+    /// The receipt does not authorize birth, adoption or publication. Serialize
+    /// reservation/retry per Consumer key and drop the old token before retrying;
+    /// metadata-only lost replies reuse one operation, not independent grants.
     #[doc(hidden)]
     pub fn reserve_search_consumer_allocation(
         &self,
@@ -476,6 +478,8 @@ impl GraphStore {
             .reserve(database, consumer, destination)
     }
 
+    /// Same single-caller reservation/retry contract as
+    /// `reserve_search_consumer_allocation`; supply a current lease policy.
     #[doc(hidden)]
     pub fn reserve_registered_search_consumer(
         &self,
@@ -483,6 +487,11 @@ impl GraphStore {
         destination: &Path,
         policy: crate::consumer_allocation::ConsumerLeasePolicy,
     ) -> Result<crate::consumer_allocation::ReservedConsumerAllocation> {
+        if policy.max_idle_commits == 0 || policy.expires_at_commit_epoch <= self.commit_epoch() {
+            return Err(HawDBError::Execution(
+                "Consumer reservation requires a positive idle policy and a future expiry".into(),
+            ));
+        }
         let database = self.search_projection_database_identity().ok_or_else(|| {
             HawDBError::StorageIntegrity("Consumer database identity missing".into())
         })?;

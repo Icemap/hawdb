@@ -66,6 +66,7 @@ fn equal(left: &Value, right: &Value, work: &CheckpointWorkContext) -> Result<bo
         (Value::Uuid(left), Value::Uuid(right)) => Some(left == right),
         (Value::String(_), Value::String(_))
         | (Value::Binary(_), Value::Binary(_))
+        | (Value::Vector(_), Value::Vector(_))
         | (Value::List(_), Value::List(_))
         | (Value::Map(_), Value::Map(_)) => None,
         _ => Some(false),
@@ -80,6 +81,9 @@ fn equal(left: &Value, right: &Value, work: &CheckpointWorkContext) -> Result<bo
             compare(left.as_bytes(), right.as_bytes(), work)?.is_eq()
         }
         (Value::Binary(left), Value::Binary(right)) => compare(left, right, work)?.is_eq(),
+        (Value::Vector(left), Value::Vector(right)) => {
+            compare(left.encoded(), right.encoded(), work)?.is_eq()
+        }
         (Value::List(left), Value::List(right)) => {
             if left.len() != right.len() {
                 return Ok(false);

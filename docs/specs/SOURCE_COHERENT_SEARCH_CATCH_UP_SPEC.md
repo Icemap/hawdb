@@ -4,6 +4,10 @@ Tracking: [#1043](https://github.com/nowledge-co/hawdb/issues/1043).
 This is an additive embedded-library preparation path based on main, independent
 of the stationary Consumer implementation in #1039. It does not enable Mem
 Search ACK, replace registered Consumer recovery, or close #1092/#1106.
+The [registered Consumer facade](../REGISTERED_CONSUMER_CATCH_UP.md) now connects
+this comparison to stationary publication and durable Consumer recovery. Its
+token retains the compared full-E stream, exact base receipt and source proof;
+it invokes no mapper again while constructing the registered generation.
 
 ## Source and publication boundaries
 
@@ -98,8 +102,12 @@ limits. A successful source commit then installs an explicit gap at its epoch,
 clears earlier retained changes, and makes older consumers return `BehindFloor`.
 It never emits a truncated delta. Hosts should split bulk imports when suitable,
 or finish importing and perform one complete rebuild at the final source epoch.
-A resource/I/O refusal before WAL append instead returns an error; typed FD and
+A resource/I/O refusal before WAL append instead returns an error; native FD and
 resource-budget failures preserve the handle for retry after capacity returns.
+Internal change capture and registered catch-up steps always use non-strict
+project descriptor admission, including when foreground mode is strict. This
+retains accounting without weakening preimage, memory, result or physical-I/O
+limits; see [descriptor capacity](../FILE_DESCRIPTOR_CAPACITY.md).
 Canonical, adjacency, property-spill, property-projection and descriptor readers
 classify nested resource/cancellation causes before latching physical-failure
 poison. Stable-identity I/O maps these causes to its existing admission error
@@ -135,6 +143,9 @@ this does not supply an idempotent registered-Consumer operation receipt.
 Hosts must hold their binding authority through activation. Versioned host
 binding/incarnation, durable coverage receipts, external vectors, optimized
 owner reduction, short activation and actual Mem integration remain open.
+The registered facade reuses its durable native binding/selection receipt and
+original-operation recovery; it does not persist resumable private coverage work
+or introduce an independently verifiable host mapping certificate.
 The legacy API's #1108 prefix refusal remains intact and is not routed through
 this new path automatically. Its earlier mixed-snapshot bug is historical;
 current main rejects the incoherent prefix.
@@ -159,7 +170,7 @@ preserve capture and full-rebuild equality through WAL/checkpoint reopen.
 `hawdb_mvcc_full_source` and `hawdb_mvcc_baseline_comparison` qualify enumeration,
 comparison and the independent full-rebuild reference. All belong to root CI.
 Storage/Search component tests cover 65,537-node bulk capture, oversized-preimage
-gaps, cold node/adjacency/relationship/spill FD exhaustion and retry, nested
+gaps, cold node/adjacency/relationship/spill capture under strict foreground FD pressure, nested
 resource/cancellation refusal versus physical corruption, durability barriers
 and private preparation.
 See [the test index](../TEST_INDEX.md) for execution lanes.

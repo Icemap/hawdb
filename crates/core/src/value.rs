@@ -18,7 +18,7 @@ use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use uuid::Uuid;
 
-use crate::LogicalType;
+use crate::{LogicalType, Vector, VectorRef};
 
 #[derive(Debug, Clone)]
 pub enum Value {
@@ -28,6 +28,7 @@ pub enum Value {
     Float(f64),
     String(String),
     Binary(Vec<u8>),
+    Vector(Vector),
     Uuid(Uuid),
     List(Vec<Value>),
     Map(BTreeMap<String, Value>),
@@ -46,6 +47,7 @@ pub enum ValueRef<'a> {
     Float(f64),
     String(&'a str),
     Binary(&'a [u8]),
+    Vector(VectorRef<'a>),
     Uuid(Uuid),
     List(&'a [Value]),
     Map(&'a BTreeMap<String, Value>),
@@ -76,6 +78,7 @@ impl Ord for Value {
                 (Value::Float(left), Value::Float(right)) => left.total_cmp(right),
                 (Value::String(left), Value::String(right)) => left.cmp(right),
                 (Value::Binary(left), Value::Binary(right)) => left.cmp(right),
+                (Value::Vector(left), Value::Vector(right)) => left.cmp(right),
                 (Value::Uuid(left), Value::Uuid(right)) => left.cmp(right),
                 (Value::List(left), Value::List(right)) => left.cmp(right),
                 (Value::Map(left), Value::Map(right)) => left.cmp(right),
@@ -94,6 +97,7 @@ impl Hash for Value {
             Value::Float(value) => value.to_bits().hash(state),
             Value::String(value) => value.hash(state),
             Value::Binary(value) => value.hash(state),
+            Value::Vector(value) => value.hash(state),
             Value::Uuid(value) => value.hash(state),
             Value::List(values) => values.hash(state),
             Value::Map(values) => values.hash(state),
@@ -118,6 +122,7 @@ impl Value {
             Value::Float(_) => 3,
             Value::String(_) => 4,
             Value::Binary(_) => 5,
+            Value::Vector(_) => 9,
             Value::Uuid(_) => 6,
             Value::List(_) => 7,
             Value::Map(_) => 8,
@@ -138,6 +143,7 @@ impl<'a> ValueRef<'a> {
             Self::Float(_) => Some(LogicalType::Float64),
             Self::String(_) => Some(LogicalType::String),
             Self::Binary(_) => Some(LogicalType::Binary),
+            Self::Vector(value) => Some(LogicalType::Vector(value.dimension())),
             Self::Uuid(_) => Some(LogicalType::Uuid),
             Self::List(_) => Some(LogicalType::List),
             Self::Map(_) => Some(LogicalType::Map),
@@ -208,6 +214,7 @@ impl<'a> ValueRef<'a> {
             Self::Float(value) => Value::Float(value),
             Self::String(value) => Value::String(value.to_owned()),
             Self::Binary(value) => Value::Binary(value.to_vec()),
+            Self::Vector(value) => Value::Vector(value.to_owned()),
             Self::Uuid(value) => Value::Uuid(value),
             Self::List(value) => Value::List(value.to_vec()),
             Self::Map(value) => Value::Map(value.clone()),
@@ -222,6 +229,7 @@ impl<'a> ValueRef<'a> {
             Self::Float(_) => 3,
             Self::String(_) => 4,
             Self::Binary(_) => 5,
+            Self::Vector(_) => 9,
             Self::Uuid(_) => 6,
             Self::List(_) => 7,
             Self::Map(_) => 8,
@@ -238,6 +246,7 @@ impl<'a> From<&'a Value> for ValueRef<'a> {
             Value::Float(value) => Self::Float(*value),
             Value::String(value) => Self::String(value),
             Value::Binary(value) => Self::Binary(value),
+            Value::Vector(value) => Self::Vector(value.as_ref()),
             Value::Uuid(value) => Self::Uuid(*value),
             Value::List(value) => Self::List(value),
             Value::Map(value) => Self::Map(value),
@@ -270,6 +279,7 @@ impl Ord for ValueRef<'_> {
                 (Self::Float(left), Self::Float(right)) => left.total_cmp(right),
                 (Self::String(left), Self::String(right)) => left.cmp(right),
                 (Self::Binary(left), Self::Binary(right)) => left.cmp(right),
+                (Self::Vector(left), Self::Vector(right)) => left.cmp(right),
                 (Self::Uuid(left), Self::Uuid(right)) => left.cmp(right),
                 (Self::List(left), Self::List(right)) => left.cmp(right),
                 (Self::Map(left), Self::Map(right)) => left.cmp(right),
@@ -288,6 +298,7 @@ impl Hash for ValueRef<'_> {
             Self::Float(value) => value.to_bits().hash(state),
             Self::String(value) => value.hash(state),
             Self::Binary(value) => value.hash(state),
+            Self::Vector(value) => value.hash(state),
             Self::Uuid(value) => value.hash(state),
             Self::List(value) => value.hash(state),
             Self::Map(value) => value.hash(state),
@@ -328,6 +339,10 @@ impl Display for ValueRef<'_> {
             Self::Float(value) => write!(f, "{value}"),
             Self::String(value) => write!(f, "{value}"),
             Self::Binary(value) => write_binary(f, value),
+            Self::Vector(value) => {
+                f.write_str("VECTOR")?;
+                f.debug_list().entries(value.coordinates()).finish()
+            }
             Self::Uuid(value) => write!(f, "{value}"),
             Self::List(values) => {
                 let values = values
@@ -358,6 +373,7 @@ impl Display for Value {
             Value::Float(value) => write!(f, "{value}"),
             Value::String(value) => write!(f, "{value}"),
             Value::Binary(value) => write_binary(f, value),
+            Value::Vector(value) => ValueRef::Vector(value.as_ref()).fmt(f),
             Value::Uuid(value) => write!(f, "{value}"),
             Value::List(values) => {
                 let values = values
@@ -413,11 +429,17 @@ mod tests {
             Value::Float(f64::NAN),
             Value::String("value".into()),
             Value::Binary(vec![0, 0xff]),
+            Value::Vector(Vector::new(&[0.0, -0.0]).unwrap()),
+            Value::Vector(Vector::new(&[-0.0, 0.0]).unwrap()),
+            Value::Vector(Vector::new(&[1.0]).unwrap()),
             Value::List(vec![Value::Int(2)]),
             Value::Map(BTreeMap::from([("key".into(), Value::Int(3))])),
         ];
 
         for left in &values {
+            use std::hash::BuildHasher;
+            let state = std::collections::hash_map::RandomState::new();
+            assert_eq!(state.hash_one(left), state.hash_one(left.as_ref()));
             for right in &values {
                 assert_eq!(left.cmp(right), left.as_ref().cmp(&right.as_ref()));
                 assert_eq!(left == right, left.as_ref() == *right);

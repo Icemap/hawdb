@@ -158,6 +158,18 @@ pub fn write_projection_expression(output: &mut String, expression: &ProjectionE
             output.push_str(&length.to_string());
             output.push(')');
         }
+        ProjectionExpression::VectorDistance {
+            metric,
+            left,
+            right,
+        } => {
+            output.push_str(metric.function_name());
+            output.push('(');
+            write_projection_expression(output, left);
+            output.push(',');
+            write_projection_expression(output, right);
+            output.push(')');
+        }
         ProjectionExpression::Lower(expression) => {
             output.push_str("lower(");
             write_projection_expression(output, expression);

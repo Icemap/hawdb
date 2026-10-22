@@ -528,6 +528,11 @@ fn bootstrap_internal_progress_preserves_ledger_and_original_identity() {
     );
     assert_eq!(std::fs::read(&ledger).unwrap(), evidence);
     assert_eq!(files.metrics().open, 0);
+    assert!(!std::fs::read_dir(&root).unwrap().any(|entry| entry
+        .unwrap()
+        .file_name()
+        .to_string_lossy()
+        .starts_with("consumer-bootstrap-")));
     drop(files);
     std::fs::remove_dir_all(root).unwrap();
 }

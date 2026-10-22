@@ -2868,6 +2868,9 @@ fn value_json(value: &Value) -> serde_json::Value {
             "$binary": value.iter().map(|byte| format!("{byte:02x}")).collect::<String>(),
         }),
         Value::Uuid(value) => serde_json::json!({ "$uuid": value.to_string() }),
+        Value::Vector(value) => serde_json::json!({
+            "$vector": value.as_ref().coordinates().collect::<Vec<_>>()
+        }),
         Value::List(values) => {
             serde_json::Value::Array(values.iter().map(value_json).collect::<Vec<_>>())
         }
@@ -2915,6 +2918,21 @@ fn value_from_json(value: &serde_json::Value) -> Result<Value> {
                     .map_err(|error| {
                         HawDBError::Semantic(format!("invalid $uuid value: {error}"))
                     });
+            }
+            if values.len() == 1
+                && let Some(encoded) = values.get("$vector")
+            {
+                let coordinates = encoded
+                    .as_array()
+                    .ok_or_else(|| HawDBError::Semantic("$vector must be a numeric array".into()))?
+                    .iter()
+                    .map(|value| {
+                        value.as_f64().map(|value| value as f32).ok_or_else(|| {
+                            HawDBError::Semantic("$vector must contain numbers".into())
+                        })
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                return hawdb_core::Vector::new(&coordinates).map(Value::Vector);
             }
             values
                 .iter()

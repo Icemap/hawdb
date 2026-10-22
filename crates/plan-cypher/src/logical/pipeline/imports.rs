@@ -153,6 +153,7 @@ fn native_projection_self(expression: &ProjectionExpression, needed: &mut BTreeS
         | ProjectionExpression::Left { .. }
         | ProjectionExpression::Lower(_)
         | ProjectionExpression::Case { .. }
+        | ProjectionExpression::VectorDistance { .. }
         | ProjectionExpression::Binary { .. }
         | ProjectionExpression::Not(_)
         | ProjectionExpression::IsNull { .. }

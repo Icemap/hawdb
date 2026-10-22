@@ -181,6 +181,10 @@ impl Serialize for DisplayValue<'_> {
                 value.serialize_field("type", "binary")?;
                 value.serialize_field("value", inner)?;
             }
+            ValueRef::Vector(inner) => {
+                value.serialize_field("type", "vector")?;
+                value.serialize_field("value", &inner.coordinates().collect::<Vec<_>>())?;
+            }
             ValueRef::Uuid(inner) => {
                 value.serialize_field("type", "uuid")?;
                 value.serialize_field("value", &inner.to_string())?;

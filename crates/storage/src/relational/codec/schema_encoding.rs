@@ -93,6 +93,7 @@ pub(crate) fn scalar_tag(kind: RelationalScalarType) -> u8 {
         RelationalScalarType::Text => 4,
         RelationalScalarType::Bytea => 5,
         RelationalScalarType::Uuid => 6,
+        RelationalScalarType::Vector(_) => 7,
     }
 }
 
@@ -116,11 +117,23 @@ pub(crate) fn value(sink: &mut impl Sink, item: &RelationalValue) -> Result<(), 
             sink.raw(&[5])?;
             bytes(sink, value)
         }
+        RelationalValue::Vector(value) => {
+            sink.raw(&[8])?;
+            bytes(sink, value.encoded())
+        }
         RelationalValue::Uuid(value) => {
             sink.raw(&[7])?;
             sink.raw(value.as_bytes())
         }
         RelationalValue::Overflow(reference) => {
+            if !matches!(
+                reference.scalar_type,
+                RelationalScalarType::Text | RelationalScalarType::Bytea
+            ) {
+                return Err(RelationalError::Schema(
+                    "overflow values require TEXT or BYTEA".into(),
+                ));
+            }
             sink.raw(&[6])?;
             sink.raw(reference.digest.as_bytes())?;
             sink.raw(&[scalar_tag(reference.scalar_type)])?;
@@ -143,7 +156,11 @@ pub(crate) fn schema(sink: &mut impl Sink, schema: Schema<'_>) -> Result<(), Rel
     count(sink, schema.columns.len(), "table columns")?;
     for column in schema.columns {
         bytes(sink, column.name.as_bytes())?;
-        sink.raw(&[scalar_tag(column.scalar_type), u8::from(column.nullable)])?;
+        sink.raw(&[scalar_tag(column.scalar_type)])?;
+        if let RelationalScalarType::Vector(dimension) = column.scalar_type {
+            sink.raw(&dimension.get().to_le_bytes())?;
+        }
+        sink.raw(&[u8::from(column.nullable)])?;
         match &column.default {
             None => sink.raw(&[0])?,
             Some(RelationalColumnDefault::UuidV7) => sink.raw(&[2])?,

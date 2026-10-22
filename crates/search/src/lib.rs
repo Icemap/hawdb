@@ -210,22 +210,23 @@ pub use lexical_source_policy::SearchLexicalSourcePolicy;
 pub use lexical_term_policy::SearchLexicalTermPolicy;
 pub use out_of_core::{
     GovernedSearchGenerationUpdate, GovernedSearchGenerationWriter, PreparedSearchPublication,
-    ScheduledSearchOutOfCoreSegmentCompactionReport, SearchBaselineComparisonLimits,
-    SearchBaselineComparisonReport, SearchBodyReadOptions, SearchGenerationAdmission,
-    SearchMatchedBaseline, SearchMutationInspectionInput, SearchMutationInspectionStep,
-    SearchMutationSortStep, SearchMutationSortStepLimits, SearchMutationSortStepUsage,
-    SearchOutOfCoreBaselineComparison, SearchOutOfCoreCandidate, SearchOutOfCoreConfig,
-    SearchOutOfCoreDeltaComparison, SearchOutOfCoreExecutionContext,
-    SearchOutOfCoreGenerationBuildOptions, SearchOutOfCoreGenerationBuildReport,
-    SearchOutOfCoreGenerationUpdate, SearchOutOfCoreGenerationWriter,
-    SearchOutOfCoreHydrationOutput, SearchOutOfCoreMetrics, SearchOutOfCoreMutationWriter,
-    SearchOutOfCoreOutput, SearchOutOfCorePreparedGeneration, SearchOutOfCorePreparedUpdate,
-    SearchOutOfCoreReader, SearchOutOfCoreRefreshReport, SearchOutOfCoreSegmentCompaction,
-    SearchOutOfCoreSegmentCompactionPolicy, SearchOutOfCoreSegmentCompactionReport,
-    SearchOutOfCoreSegmentCompactionStopReason, SearchOutOfCoreUnorderedMutationWriter,
-    SearchOutOfCoreUnorderedReplacementWriter, SearchQueryError, SearchQueryResult,
-    SearchRetainedOutput, SearchStagingCleanupReport, SearchTextSeedOutput, SearchTextSeedReport,
-    SearchUnorderedMutationLimits, SearchUnorderedMutationReport, SearchVerifiedBody,
+    ScheduledSearchOutOfCoreSegmentCompactionReport, SearchAdmittedConsumerDocuments,
+    SearchBaselineComparisonLimits, SearchBaselineComparisonReport, SearchBodyReadOptions,
+    SearchComparedConsumerDocuments, SearchGenerationAdmission, SearchMatchedBaseline,
+    SearchMutationInspectionInput, SearchMutationInspectionStep, SearchMutationSortStep,
+    SearchMutationSortStepLimits, SearchMutationSortStepUsage, SearchOutOfCoreBaselineComparison,
+    SearchOutOfCoreCandidate, SearchOutOfCoreConfig, SearchOutOfCoreDeltaComparison,
+    SearchOutOfCoreExecutionContext, SearchOutOfCoreGenerationBuildOptions,
+    SearchOutOfCoreGenerationBuildReport, SearchOutOfCoreGenerationUpdate,
+    SearchOutOfCoreGenerationWriter, SearchOutOfCoreHydrationOutput, SearchOutOfCoreMetrics,
+    SearchOutOfCoreMutationWriter, SearchOutOfCoreOutput, SearchOutOfCorePreparedGeneration,
+    SearchOutOfCorePreparedUpdate, SearchOutOfCoreReader, SearchOutOfCoreRefreshReport,
+    SearchOutOfCoreSegmentCompaction, SearchOutOfCoreSegmentCompactionPolicy,
+    SearchOutOfCoreSegmentCompactionReport, SearchOutOfCoreSegmentCompactionStopReason,
+    SearchOutOfCoreUnorderedMutationWriter, SearchOutOfCoreUnorderedReplacementWriter,
+    SearchQueryError, SearchQueryResult, SearchRetainedOutput, SearchStagingCleanupReport,
+    SearchTextSeedOutput, SearchTextSeedReport, SearchUnorderedMutationLimits,
+    SearchUnorderedMutationReport, SearchVerifiedBody,
 };
 pub use resident_text_seed::SearchResidentTextSeedOutput;
 // These are internal ownership seams. Hosts continue to use the embedded facade.
@@ -5185,6 +5186,7 @@ fn value_to_projection_string(value: &Value) -> String {
                 .collect::<String>()
         ),
         Value::Uuid(value) => value.to_string(),
+        Value::Vector(_) => value.to_string(),
         Value::List(values) => values
             .iter()
             .map(value_to_projection_string)
