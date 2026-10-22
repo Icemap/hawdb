@@ -151,11 +151,24 @@ fn lower_select_statement(query: &sqlparser::ast::Query) -> Result<SqlStatement>
     let projection = lower_projection(&select.projection)?;
     let distinct = lower_distinct(select.distinct.as_ref())?;
 
+    let vector_index = select
+        .from
+        .first()
+        .map(|from| vector_index::lower_source(&from.relation))
+        .transpose()?
+        .flatten();
     let (from_name, from_alias, joins) = if select.from.is_empty() {
         (None, None, Vec::new())
     } else {
         let from = &select.from[0];
-        let (from_name, from_alias) = lower_table_factor(&from.relation)?;
+        let (from_name, from_alias) = if vector_index.is_some() {
+            let TableFactor::Table { name, alias, .. } = &from.relation else {
+                unreachable!()
+            };
+            (lower_table_name(name)?, lower_table_alias(alias.as_ref())?)
+        } else {
+            lower_table_factor(&from.relation)?
+        };
         let mut joins = from
             .joins
             .iter()
@@ -179,6 +192,7 @@ fn lower_select_statement(query: &sqlparser::ast::Query) -> Result<SqlStatement>
     };
 
     let statement = SelectStatement {
+        vector_index: vector_index.map(Box::new),
         projection,
         distinct,
         from: from_name,
@@ -559,8 +573,16 @@ fn lower_group_by(group_by: &GroupByExpr) -> Result<Vec<SqlColumnRef>> {
     }
 }
 
+mod vector_index;
+
 pub(super) fn lower_table_factor(table: &TableFactor) -> Result<(SqlTableName, Option<String>)> {
-    let TableFactor::Table { name, alias, .. } = table else {
+    let TableFactor::Table {
+        name,
+        alias,
+        args: None,
+        ..
+    } = table
+    else {
         return Err(HawDBError::Semantic(
             "PostgreSQL relational SQL supports base tables only".to_string(),
         ));

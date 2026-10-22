@@ -28,6 +28,7 @@ pub mod time;
 pub mod uuidv7;
 pub mod value;
 pub mod vector;
+pub mod vector_index;
 
 pub use access_control::QueryAccessControlContext;
 pub use cancellation::{
@@ -67,6 +68,7 @@ pub use uuid::Uuid;
 pub use uuidv7::generate_uuidv7;
 pub use value::{Value, ValueRef};
 pub use vector::{Vector, VectorDistance, VectorRef};
+pub use vector_index::{VectorIndexBackend, VectorIndexDescriptor, VectorIndexTarget};
 
 #[doc(hidden)]
 pub use shared_allocation::SharedAllocation;

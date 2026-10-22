@@ -106,8 +106,37 @@ impl Drop for Fixture {
     }
 }
 
+fn run_allocation_child(test_name: &str) -> bool {
+    const CHILD: &str = "HAWDB_ADMITTED_ROOT_ALLOCATION_CHILD";
+    let test_name = test_name.strip_prefix("hawdb_search::").unwrap();
+    if std::env::var(CHILD).as_deref() == Ok(test_name) {
+        return false;
+    }
+    // A measured staging-registry node can also hold unrelated concurrent
+    // operations. Whole-heap reclamation requires an isolated process.
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", test_name, "--nocapture"])
+        .env(CHILD, test_name)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "isolated allocation qualification failed:\n{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(String::from_utf8_lossy(&output.stdout).contains("1 passed; 0 failed"));
+    true
+}
+
 #[test]
 fn private_root_constructs_full_mutation_closure_and_releases_producer_execution() {
+    if run_allocation_child(concat!(
+        module_path!(),
+        "::private_root_constructs_full_mutation_closure_and_releases_producer_execution"
+    )) {
+        return;
+    }
     let _serial = allocation::serial();
     assert_eq!(allocation::live(), 0);
     let fixture = Fixture::new();
@@ -195,6 +224,12 @@ fn admitted_root_cannot_convert_into_an_unguarded_public_reader() {
 
 #[test]
 fn root_admission_counts_incoming_analyzer_capacity_before_any_path_lookup() {
+    if run_allocation_child(concat!(
+        module_path!(),
+        "::root_admission_counts_incoming_analyzer_capacity_before_any_path_lookup"
+    )) {
+        return;
+    }
     let _serial = allocation::serial();
     assert_eq!(allocation::live(), 0);
     let fixture = Fixture::new();
@@ -247,6 +282,12 @@ fn root_admission_counts_incoming_analyzer_capacity_before_any_path_lookup() {
 
 #[test]
 fn root_preflight_refuses_checksum_valid_compact_runs_before_owned_expansion() {
+    if run_allocation_child(concat!(
+        module_path!(),
+        "::root_preflight_refuses_checksum_valid_compact_runs_before_owned_expansion"
+    )) {
+        return;
+    }
     let _serial = allocation::serial();
     assert_eq!(allocation::live(), 0);
     let fixture = Fixture::new();

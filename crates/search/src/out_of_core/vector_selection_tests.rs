@@ -364,10 +364,17 @@ fn required_rerank_preserves_checksum_budget_and_cancellation_guards() {
             None,
         ))
         .unwrap_err();
-        assert!(matches!(&error, HawDBError::Storage(_)), "{error}");
         assert!(
-            error.to_string().contains("budget") || error.to_string().contains("exceed"),
-            "{error}"
+            matches!(&error, HawDBError::ResourceBudgetExceeded(cause)
+                if cause.resource == hawdb_core::ResourceBudgetKind::MemoryBytes
+                    && cause.scope == hawdb_core::ResourceBudgetScope::Operator
+                    && cause.owner == "RaBitQ candidate scan"
+                    && cause.used == 0
+                    && cause.budget == 1
+                    && cause.requested > cause.budget
+                    && cause.budget_option
+                        == "SearchOutOfCoreConfig.max_vector_search_working_bytes"),
+            "{error:?}"
         );
 
         let cancellation = crate::RuntimeCancellationToken::new();

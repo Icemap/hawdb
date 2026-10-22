@@ -257,6 +257,7 @@ pub enum PhysicalPlan {
         vector_plan: crate::VectorPhysicalPlan,
         resource_profile: crate::VectorExecutionResourceProfile,
     },
+    VectorIndexScan(Box<crate::VectorIndexScan>),
     CreateNode {
         label: String,
         properties: BTreeMap<String, Value>,

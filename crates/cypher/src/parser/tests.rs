@@ -139,3 +139,42 @@ fn identity_898_dispatches_extended_syntax_without_reparsing_legacy_errors() {
         .to_string()
         .contains("expected identifier"));
 }
+
+#[test]
+fn vector_index_requires_unique_named_window_options() {
+    for (arguments, diagnostic) in [
+        ("'docs', $q", "requires candidates"),
+        ("'docs', $q, candidates := 8", "requires topK"),
+        ("'docs', $q, topK := 1", "requires candidates"),
+        (
+            "'docs', $q, candidates := 8, candidates := 4, topK := 1",
+            "duplicate vector index search option",
+        ),
+        (
+            "'docs', $q, candidates := 8, topK := 1, topK := 2",
+            "duplicate vector index search option",
+        ),
+        (
+            "'docs', $q, candidates := 8, topK := 1, limit := 2",
+            "unsupported vector index search option",
+        ),
+    ] {
+        let query = format!("CALL vector_index_search({arguments}) YIELD node RETURN node");
+        let error = crate::parse(&query).unwrap_err();
+        assert!(
+            matches!(&error, hawdb_core::HawDBError::Parse(message) if message.contains(diagnostic)),
+            "{query}: {error:?}"
+        );
+    }
+    for arguments in ["'docs', $q, 8, 1", "'docs', $q, candidates => 8, topK => 1"] {
+        let query = format!("CALL vector_index_search({arguments}) YIELD node RETURN node");
+        assert!(
+            matches!(crate::parse(&query), Err(hawdb_core::HawDBError::Parse(_))),
+            "{query}"
+        );
+    }
+    crate::parse(
+        "CALL vector_index_search('docs', $q, topK := 1, candidates := 8) YIELD node RETURN node",
+    )
+    .unwrap();
+}

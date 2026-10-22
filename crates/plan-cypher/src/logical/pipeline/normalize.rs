@@ -228,6 +228,7 @@ fn disjoint_native_bindings(input: &LogicalPlan, variables: &BTreeSet<&str>, dep
         LogicalPlan::NodeScan { variable, .. } => !variables.contains(variable.as_str()),
         LogicalPlan::VectorSeed { .. } | LogicalPlan::TextSeed { .. } => true,
         LogicalPlan::GraphSeed { variable, .. } => !variables.contains(variable.as_str()),
+        LogicalPlan::VectorIndexSearch(scan) => !variables.contains(scan.variable.as_str()),
         // Aggregate constructs fresh value-only bindings, including its spill
         // paths. No native entity binding survives from the input.
         LogicalPlan::Aggregate { .. } => true,

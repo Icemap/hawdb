@@ -155,11 +155,7 @@ mod tests {
                             foreign.content = format!("foreign{attempt:08x}");
                             let report = crate::snapshot_writer::write_search_snapshot(
                                 &replacement,
-                                None,
-                                None,
-                                None,
-                                None,
-                                None,
+                                Default::default(),
                                 std::iter::once(&foreign),
                             )
                             .unwrap();

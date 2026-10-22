@@ -205,6 +205,33 @@ tla_test_suite(
     tags = ["manual"],
 )
 
+_VECTOR_READ_CONTROLS = [
+    "SkipIdentityFence",
+    "SkipEpochFence",
+    "SkipSchemaFence",
+    "SkipPublicationFence",
+    "RetargetOldRead",
+]
+
+[
+    tla_check(
+        name = "HawDBVectorIndexReadDomain" + control + "_check",
+        module = "HawDBVectorIndexReadDomain.tla",
+        config = "mutants/HawDBVectorIndexReadDomain" + control + ".cfg",
+        expect = "invariant_violation",
+        tags = ["manual"],
+        timeout_seconds = 1800,
+        tlc_args = ["-cleanup", "-workers", "auto"],
+    )
+    for control in _VECTOR_READ_CONTROLS
+]
+
+tla_test_suite(
+    name = "vector_index_read_controls",
+    tests = [":HawDBVectorIndexReadDomain" + control + "_check" for control in _VECTOR_READ_CONTROLS],
+    tags = ["manual"],
+)
+
 [
     tla_check(
         name = "HawDBRelationalTableReadScope" + control + "_check",

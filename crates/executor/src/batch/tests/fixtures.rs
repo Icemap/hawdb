@@ -179,6 +179,18 @@ pub(super) fn operators() -> Vec<(PhysicalPlan, bool)> {
             true,
         ),
         (
+            PhysicalPlan::VectorIndexScan(Box::new(hawdb_plan_cypher::VectorIndexScan {
+                index: "docs".into(),
+                embedding_parameter: "q".into(),
+                candidate_limit: 2,
+                top_k: 1,
+                variable: "n".into(),
+                distance_column: "distance".into(),
+                node_visibility_predicate: None,
+            })),
+            true,
+        ),
+        (
             PhysicalPlan::GraphSeedScan {
                 query_parameter: "text".into(),
                 label: "Memory".into(),

@@ -20,6 +20,8 @@ use std::num::NonZeroU64;
 mod covered;
 mod lifecycle;
 mod recovery;
+#[cfg(feature = "vector-search")]
+mod vector_index;
 
 struct Fixture(PathBuf);
 impl Fixture {

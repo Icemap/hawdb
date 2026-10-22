@@ -76,6 +76,15 @@ pub struct RelationalReadRow {
 }
 
 impl RelationalReadRow {
+    pub(crate) fn with_vector_distance(self, ordinal: usize, distance: f64) -> Self {
+        let mut row = Arc::unwrap_or_clone(self.row);
+        row.fields.push(RelationalProjectedField {
+            ordinal,
+            value: hawdb_storage::relational::RelationalValue::DoublePrecision(distance),
+        });
+        Self { row: Arc::new(row) }
+    }
+
     pub fn as_ref(&self) -> RelationalReadRowRef<'_> {
         RelationalReadRowRef {
             row: RelationalProjectedRowView::Owned(&self.row),
@@ -378,6 +387,46 @@ impl<'a> RelationalRowRuntime<'a> {
         let fields = self.fields.scan_fields(table)?;
         let hydration_fields = self.fields.scan_hydration_fields(table)?;
         self.read_point_with_fields(table, key, fields, hydration_fields)
+    }
+
+    /// Retains admission for canonical point decoding through row consumption.
+    pub(crate) fn read_point_admitted(
+        &self,
+        table: &str,
+        key: &RelationalKey,
+    ) -> Result<(
+        Option<RelationalReadRow>,
+        hawdb_storage::relational::RelationalPointAllocation,
+    )> {
+        if self.projection.is_some() {
+            return Err(HawDBError::Semantic(
+                "admitted vector point reads require canonical row storage".into(),
+            ));
+        }
+        let fields = self.fields.scan_fields(table)?;
+        let limits = self.remaining_limits()?;
+        if self.backend.is_none() && self.state.row_entry(table, key).is_some() {
+            self.admit_memory_row()?;
+        }
+        let point = self.state.read_point_with_admission(
+            self.backend.as_ref(),
+            hawdb_storage::relational::RelationalPointReadRequest {
+                table,
+                primary_key: key,
+                fields,
+                limits,
+            },
+            &mut self.hydration.borrow_mut(),
+            self.task,
+        )?;
+        let (row, report, allocation) = point.into_parts();
+        if let Some(report) = report {
+            self.record_point(&report)?;
+        }
+        Ok((
+            row.map(|row| RelationalReadRow { row: Arc::new(row) }),
+            allocation,
+        ))
     }
 
     pub fn read_output_point(

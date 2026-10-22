@@ -59,6 +59,25 @@ fn database_workload() {
         })
     ));
 
+    #[cfg(not(feature = "vector"))]
+    assert!(matches!(
+        db.create_vector_index(
+            "unavailable",
+            &hawdb::VectorIndexField::SqlColumn {
+                table: "items".into(),
+                column: "embedding".into()
+            },
+            "unavailable-vector-index",
+            hawdb::SearchProjectionConsumerOptions::new(std::num::NonZeroU64::new(10).unwrap()),
+            Default::default(),
+        ),
+        Err(hawdb::VectorIndexBuildError::Query(
+            hawdb::HawDBError::CapabilityUnavailable {
+                capability: RuntimeCapability::VectorSearch,
+            }
+        ))
+    ));
+
     #[cfg(feature = "text")]
     {
         let mut index = index;

@@ -93,6 +93,18 @@ impl std::fmt::Debug for CandidateView {
 }
 
 impl CandidateView {
+    pub(crate) fn vector_index_query(
+        &self,
+        request: crate::VectorIndexQuery<'_>,
+        publication_generation: u64,
+        permit: &hawdb_qos::RuntimePermit,
+        task: &hawdb_core::RuntimeTaskContext,
+    ) -> SearchQueryResult<crate::VectorIndexRetainedOutput> {
+        self.0
+            .opened
+            .vector_index_query(request, publication_generation, permit, task)
+    }
+
     pub(crate) fn prepare_consumer_update(
         &self,
         permit: Arc<hawdb_qos::RuntimePermit>,
@@ -483,6 +495,8 @@ struct SearchOutOfCoreManifestBody<S = String> {
     embedding_model: Option<S>,
     embedding_version: Option<S>,
     embedding_dimension: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    vector_index_binding: Option<S>,
 }
 
 /// One immutable artifact closure selected by an out-of-core manifest.
@@ -873,6 +887,14 @@ impl<S: AsRef<str>> SearchOutOfCoreManifestBody<S> {
             return Err(HawDBError::StorageIntegrity(
                 "conflicting resident snapshot ownership states".into(),
             ));
+        }
+        if let Some(encoded) = &self.vector_index_binding {
+            let descriptor = crate::vector_index::decode(encoded.as_ref())?;
+            if self.embedding_dimension != Some(descriptor.dimension().get() as usize) {
+                return Err(HawDBError::StorageIntegrity(
+                    "vector index manifest dimension mismatch".into(),
+                ));
+            }
         }
         let mut ids = BTreeSet::new();
         let mut content_document_count = 0usize;
@@ -2093,6 +2115,15 @@ impl SearchOutOfCoreReader {
                 version: self.manifest.embedding_version.clone(),
                 dimension,
             })
+    }
+
+    /// Decode the field binding sealed into this immutable projection.
+    pub fn vector_index_descriptor(&self) -> Result<Option<hawdb_core::VectorIndexDescriptor>> {
+        self.manifest
+            .vector_index_binding
+            .as_deref()
+            .map(crate::vector_index::decode)
+            .transpose()
     }
 
     pub fn analyzer_lexicon(&self) -> &SearchAnalyzerLexicon {
@@ -3496,6 +3527,10 @@ fn open_rabitq_projection(
     }
     .map_err(vector_projection_error)?;
     let artifact_manifest = projection.manifest();
+    if let Some(encoded) = &active_manifest.vector_index_binding {
+        let definition = crate::vector_index::decode(encoded)?;
+        crate::vector_index::validate_projection(&definition, artifact_manifest)?;
+    }
     let expected_identity = hawdb_vector_projection::ProjectionIdentity {
         generation: manifest.generation,
         source_epoch: manifest.source_graph_commit_epoch,
@@ -4000,6 +4035,11 @@ fn validate_resident_snapshot_manifest(index: &SearchIndex, bytes: &[u8]) -> Res
         || manifest.source_graph_commit_epoch != index.source_graph_commit_epoch
         || manifest.import_source_graph_commit_epoch != index.import_source_graph_commit_epoch
         || manifest.embedding_dimension != index.embedding_dimension
+        || manifest.vector_index_binding
+            != index
+                .vector_index_descriptor
+                .as_ref()
+                .map(crate::vector_index::encode)
         || manifest.embedding_model.as_deref() != embedding.map(|identity| identity.model.as_str())
         || manifest.embedding_version.as_deref()
             != embedding.and_then(|identity| identity.version.as_deref())
@@ -4478,6 +4518,10 @@ fn publish_out_of_core_projection(
         embedding_dimension: embedding
             .map(|manifest| manifest.dimension)
             .or(index.embedding_dimension),
+        vector_index_binding: index
+            .vector_index_descriptor
+            .as_ref()
+            .map(crate::vector_index::encode),
     };
     let manifest_path = root.join(OUT_OF_CORE_MANIFEST_FILE);
     let tmp_path = manifest_path.with_extension(format!("tmp.{generation}"));

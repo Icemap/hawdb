@@ -16,8 +16,8 @@
 
 use super::{
     ExternalReadOperator, ExternalReadResourceContract, ExternalReadResultBudget,
-    TextSeedExecutionOutput, TextSeedExecutionRequest, VectorSeedExecutionOutput,
-    VectorSeedExecutionRequest,
+    TextSeedExecutionOutput, TextSeedExecutionRequest, VectorIndexExecutionOutput,
+    VectorIndexExecutionRequest, VectorSeedExecutionOutput, VectorSeedExecutionRequest,
 };
 use crate::binding::Binding;
 use crate::kernel::collect_bounded_operator_bindings_with_account;
@@ -44,6 +44,16 @@ pub struct SeedReadContext<'a> {
 pub type VectorSeedContext<'a> = SeedReadContext<'a>;
 
 pub trait BatchExternalRead {
+    fn execute_vector_index(
+        &self,
+        request: VectorIndexExecutionRequest<'_>,
+    ) -> Result<Box<dyn VectorIndexExecutionOutput>> {
+        request.resources.checkpoint()?;
+        Err(HawDBError::Execution(
+            "vector index search requires a bound canonical/index read domain".into(),
+        ))
+    }
+
     fn execute_text_seed(
         &self,
         request: TextSeedExecutionRequest<'_>,
@@ -73,6 +83,13 @@ impl<'a> BatchExternalReadAdapter<'a> {
 }
 
 impl BatchExternalRead for BatchExternalReadAdapter<'_> {
+    fn execute_vector_index(
+        &self,
+        request: VectorIndexExecutionRequest<'_>,
+    ) -> Result<Box<dyn VectorIndexExecutionOutput>> {
+        self.external.borrow_mut().execute_vector_index(request)
+    }
+
     fn execute_text_seed(
         &self,
         request: TextSeedExecutionRequest<'_>,

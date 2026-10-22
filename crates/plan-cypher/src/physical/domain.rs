@@ -168,6 +168,7 @@ impl PhysicalPlan {
             | PhysicalPlan::GraphAlgorithmOutput(_)
             | PhysicalPlan::VectorSeedScan { .. }
             | PhysicalPlan::GraphSeedScan { .. }
+            | PhysicalPlan::VectorIndexScan(_)
             | PhysicalPlan::TextSeedScan { .. }
             | PhysicalPlan::ThreadRepairStatsExec { .. } => {
                 PhysicalPlanDomainRef::Procedure(ProcedurePhysicalPlanRef::new(self))

@@ -53,6 +53,19 @@ pub use statement::{plan, plan_with_params};
 
 const MAX_RETRIEVER_SEEDED_GRAPH_HOPS: usize = 2;
 
+/// Shared logical/physical parameters for explicit schema-bound index access.
+/// The attached read domain resolves the index and supplies canonical nodes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VectorIndexScan {
+    pub index: String,
+    pub embedding_parameter: String,
+    pub candidate_limit: usize,
+    pub top_k: usize,
+    pub variable: String,
+    pub distance_column: String,
+    pub node_visibility_predicate: Option<Predicate>,
+}
+
 /// A mutation property resolved from one bounded `UNWIND` row.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BatchMutationValue {
@@ -172,6 +185,7 @@ pub enum LogicalPlan {
         top_k: usize,
         output_external_id: bool,
     },
+    VectorIndexSearch(Box<VectorIndexScan>),
     CreateNode {
         label: String,
         properties: BTreeMap<String, Value>,

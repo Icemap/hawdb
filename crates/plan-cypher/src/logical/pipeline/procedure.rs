@@ -1,6 +1,9 @@
 use super::*;
 use hawdb_cypher::{OrderExpression as CypherOrderExpression, ProcedureCallKind, YieldItem};
 
+mod vector_index;
+use vector_index::bind_vector_index_pipeline;
+
 pub(super) fn bind_procedure_pipeline(
     query: &QueryPipeline,
     parameters: &BTreeMap<String, Value>,
@@ -102,6 +105,9 @@ pub(super) fn bind_procedure_pipeline(
         }
         ProcedureCallKind::GraphSeedSearch(search) => {
             return bind_graph_seed_pipeline(search, yields, tail, parameters);
+        }
+        ProcedureCallKind::VectorIndexSearch(search) => {
+            return bind_vector_index_pipeline(search, yields, tail, parameters);
         }
         ProcedureCallKind::TextSearch(search) => {
             if yields.is_empty() && has_graph_read {

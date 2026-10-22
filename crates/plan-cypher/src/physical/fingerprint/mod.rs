@@ -317,6 +317,21 @@ impl PhysicalPlan {
                 }
                 output.push(')');
             }
+            PhysicalPlan::VectorIndexScan(scan) => {
+                output.push_str("VectorIndexScan(");
+                for name in [
+                    &scan.index,
+                    &scan.embedding_parameter,
+                    &scan.variable,
+                    &scan.distance_column,
+                ] {
+                    write_identifier(output, name);
+                    output.push(':');
+                }
+                output.push_str(&format!("{}:{}:", scan.candidate_limit, scan.top_k));
+                write_optional_predicate(output, scan.node_visibility_predicate.as_ref());
+                output.push(')');
+            }
             PhysicalPlan::CreateNode { label, properties } => {
                 output.push_str("CreateNode(");
                 write_identifier(output, label);

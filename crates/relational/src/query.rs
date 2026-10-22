@@ -75,6 +75,8 @@ pub(super) use crate::locator::{
 use crate::predicate::BoundStreamingPredicate;
 use crate::streaming_projection::BoundStreamingProjection;
 
+pub mod vector_index;
+
 mod access;
 #[cfg(test)]
 use access::RelationalProjectionAccessPlanning;

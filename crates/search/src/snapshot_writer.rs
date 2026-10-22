@@ -88,15 +88,52 @@ impl SearchSnapshotWriteReport {
     }
 }
 
+#[derive(Default)]
+pub(super) struct SearchSnapshotMetadata<'a> {
+    pub source_graph_commit_epoch: Option<u64>,
+    pub import_source_graph_commit_epoch: Option<u64>,
+    pub embedding_manifest: Option<&'a SearchEmbeddingManifest>,
+    pub embedding_dimension: Option<usize>,
+    pub consumer_binding: Option<&'a super::consumer::ConsumerBinding>,
+    pub vector_index_descriptor: Option<&'a hawdb_core::VectorIndexDescriptor>,
+}
+
 pub(super) fn write_search_snapshot<'a>(
     target: &Path,
-    source_graph_commit_epoch: Option<u64>,
-    import_source_graph_commit_epoch: Option<u64>,
-    embedding_manifest: Option<&SearchEmbeddingManifest>,
-    embedding_dimension: Option<usize>,
-    consumer_binding: Option<&super::consumer::ConsumerBinding>,
+    metadata: SearchSnapshotMetadata<'_>,
     documents: impl Iterator<Item = &'a SearchDocument>,
 ) -> Result<SearchSnapshotWriteReport> {
+    let task = hawdb_core::RuntimeTaskContext::default();
+    let memory = crate::build_memory::BuildMemory::new(&task)?;
+    write_search_snapshot_with_context(target, metadata, documents, &memory, &task)
+}
+
+pub(crate) fn write_search_snapshot_with_context<'a>(
+    target: &Path,
+    metadata: SearchSnapshotMetadata<'_>,
+    documents: impl Iterator<Item = &'a SearchDocument>,
+    memory: &crate::build_memory::BuildMemory,
+    task: &hawdb_core::RuntimeTaskContext,
+) -> Result<SearchSnapshotWriteReport> {
+    use crate::build_control::{checkpoint, CheckedWriter};
+    use crate::build_memory::{checked_add, checked_mul};
+    checkpoint(task)?;
+    crate::build_memory::compression::require_qualified_zstd("workspace admission")?;
+    let _workspace = memory
+        .retained
+        .reserve(crate::build_memory::compression::COMPRESSION_WORKSPACE_BYTES)?;
+    let _metadata = memory.spool.reserve(checked_add(
+        64 * 1024,
+        checked_mul(target.as_os_str().as_encoded_bytes().len(), 16)?,
+    )?)?;
+    let SearchSnapshotMetadata {
+        source_graph_commit_epoch,
+        import_source_graph_commit_epoch,
+        embedding_manifest,
+        embedding_dimension,
+        consumer_binding,
+        vector_index_descriptor,
+    } = metadata;
     let compressed_path = target.with_extension("hawdb.zstd.tmp");
     let mut compressed_guard = TemporaryFile::new(compressed_path.clone());
     let compressed_file = OpenOptions::new()
@@ -150,6 +187,19 @@ pub(super) fn write_search_snapshot<'a>(
             line.as_bytes(),
         )?;
     }
+    if let Some(descriptor) = vector_index_descriptor {
+        let line = format!(
+            "vector_index_binding\t{}\n",
+            crate::vector_index::encode(descriptor)
+        );
+        write_body_chunk(
+            &mut encoder,
+            &mut body_checksum,
+            &mut uncompressed_checksum,
+            &mut uncompressed_bytes,
+            line.as_bytes(),
+        )?;
+    }
     if let Some(manifest) = embedding_manifest {
         let line = format!(
             "embedding_manifest\t{}\t{}\t{}\n",
@@ -179,6 +229,11 @@ pub(super) fn write_search_snapshot<'a>(
     let mut document_count = 0usize;
     let mut vector_document_count = 0usize;
     for document in documents {
+        checkpoint(task)?;
+        let _record_memory = memory.input.reserve(checked_add(
+            4096,
+            checked_mul(crate::build_memory::document_bytes(document)?, 24)?,
+        )?)?;
         let record = encode_search_document_line(document);
         peak_record_bytes = peak_record_bytes.max(record.len() as u64);
         write_body_chunk(
@@ -188,6 +243,7 @@ pub(super) fn write_search_snapshot<'a>(
             &mut uncompressed_bytes,
             record.as_bytes(),
         )?;
+        checkpoint(task)?;
         document_count = document_count.saturating_add(1);
         vector_document_count =
             vector_document_count.saturating_add(usize::from(document.embedding.is_some()));
@@ -226,7 +282,17 @@ pub(super) fn write_search_snapshot<'a>(
                 .map_err(|error| HawDBError::StorageIntegrity(error.to_string()))?,
         };
         output.write_all(header.as_bytes())?;
-        let copied = std::io::copy(&mut compressed_file, &mut output)?;
+        let mut copied = 0u64;
+        let mut buffer = [0u8; 8192];
+        loop {
+            checkpoint(task)?;
+            let read = std::io::Read::read(&mut compressed_file, &mut buffer)?;
+            if read == 0 {
+                break;
+            }
+            CheckedWriter::new(&mut output, Some(task)).write_all(&buffer[..read])?;
+            copied += read as u64;
+        }
         if copied != compressed_bytes {
             return Err(HawDBError::Storage(format!(
                 "search checkpoint copied {copied} compressed bytes, expected {compressed_bytes}"
@@ -242,6 +308,7 @@ pub(super) fn write_search_snapshot<'a>(
     drop(compressed_file);
     fs::remove_file(&compressed_path)?;
     compressed_guard.disarm();
+    checkpoint(task)?;
     durable_replace_file(&temporary, target)?;
     target_guard.disarm();
 
@@ -397,11 +464,13 @@ mod tests {
         };
         let report = write_search_snapshot(
             &target,
-            Some(11),
-            Some(7),
-            Some(&manifest),
-            Some(2),
-            None,
+            SearchSnapshotMetadata {
+                source_graph_commit_epoch: Some(11),
+                import_source_graph_commit_epoch: Some(7),
+                embedding_manifest: Some(&manifest),
+                embedding_dimension: Some(2),
+                ..Default::default()
+            },
             documents.iter(),
         )
         .unwrap();

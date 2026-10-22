@@ -220,6 +220,11 @@ pub use api::{
     RetainedQueryBatch, RetainedQueryCursor, RetainedQueryError, RetainedQueryOptions,
     RetainedQueryProfile, RetainedQueryStatus,
 };
+pub use api::{
+    VectorIndexBuildError, VectorIndexBuildOptions, VectorIndexField, VectorIndexLanguageBudget,
+    VectorIndexLanguageReport, VectorIndexReadError, VectorIndexReadTransaction,
+    VectorIndexSqlReport, VectorIndexSqlRequest,
+};
 pub use background_maintenance_evidence::nowledge_background_maintenance_evidence_json;
 pub use blackbox::{
     blackbox_readiness_from_manifest_json, blackbox_report, blackbox_report_json,
@@ -333,6 +338,7 @@ pub use hawdb_core::{
     DEFAULT_GRAPH_RAG_MAX_ROUTES, GRAPH_RAG_SCHEMA_CONTEXT_PROTOCOL, MAX_GRAPH_RAG_QUERY_LIMIT,
 };
 pub use hawdb_core::{LogicalType, Vector, VectorDimension, VectorDistance, VectorRef};
+pub use hawdb_core::{VectorIndexBackend, VectorIndexDescriptor, VectorIndexTarget};
 pub use hawdb_executor::numeric::retained::{
     NumericBufferIdentity as RetainedBufferIdentity,
     NumericBufferProvenance as RetainedBufferProvenance,

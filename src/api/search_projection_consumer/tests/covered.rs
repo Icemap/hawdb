@@ -24,7 +24,7 @@ fn children(path: &std::path::Path) -> std::collections::BTreeSet<std::ffi::OsSt
         .map(|entry| entry.unwrap().file_name())
         .collect()
 }
-fn config() -> ProjectionConsumerCatchUpConfig {
+pub(super) fn config() -> ProjectionConsumerCatchUpConfig {
     ProjectionConsumerCatchUpConfig {
         reads: PreparedReadLimits {
             dependency_entries: nz(64),

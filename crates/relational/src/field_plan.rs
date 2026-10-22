@@ -89,6 +89,12 @@ pub struct RelationalFieldPlan {
 }
 
 impl RelationalFieldPlan {
+    pub(crate) fn all_columns(table: &str, count: usize) -> Self {
+        let fields: Arc<[usize]> = (0..count).collect::<Vec<_>>().into();
+        let one = BTreeMap::from([(table.to_owned(), fields)]);
+        Self::new(one.clone(), one.clone(), one)
+    }
+
     pub(crate) fn apply_access_coverage(
         &self,
         access: &mut hawdb_optimizer::RelationalAccessPathDescriptor,

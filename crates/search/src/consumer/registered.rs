@@ -226,6 +226,11 @@ impl ConsumerProjection {
                 scratch_directory,
                 reserved_binding.clone(),
                 epoch,
+                ProducerControls {
+                    permit: Arc::clone(&permit),
+                    task: task.clone(),
+                    generation_bytes: limits.generation_bytes,
+                },
                 initialize,
             )?;
             if !producer
@@ -780,18 +785,25 @@ fn load_compatibility_snapshot(publication: &SearchProjectionPublishLease) -> Re
     Ok(index)
 }
 
+struct ProducerControls {
+    permit: Arc<RuntimePermit>,
+    task: RuntimeTaskContext,
+    generation_bytes: NonZeroU64,
+}
+
 fn initialize_producer<F>(
     label: &Path,
     directory: &SourceDirectory,
     binding: ConsumerBinding,
     epoch: u64,
+    controls: ProducerControls,
     initialize: F,
 ) -> Result<ConsumerProjection>
 where
     F: FnOnce(&mut SearchIndex) -> Result<()>,
 {
     let context = directory.operation_context();
-    let task = RuntimeTaskContext::default();
+    let task = controls.permit.bind_task_context(controls.task);
     let memory = BuildMemory::new(&task)?;
     let lease = SearchProjectionPublishLease::acquire_captured(
         directory.duplicate(&context)?,
@@ -844,7 +856,41 @@ where
         pending_mutation: true,
         stationary: None,
     };
-    context.with_component_context(label, || producer.checkpoint_inner(false))??;
+    context.with_component_context(label, || {
+        if producer.index.vector_index_descriptor.is_some() {
+            let snapshot = crate::SearchOutOfCoreGenerationWriter::write_consumer(
+                &producer.index,
+                producer.authority.publication(),
+                task,
+                controls.generation_bytes,
+                controls.permit,
+            )?;
+            *producer
+                .index
+                .consumer_receipt
+                .lock()
+                .unwrap_or_else(|error| error.into_inner()) = Some(CheckpointReceipt {
+                binding: producer
+                    .index
+                    .consumer_binding
+                    .as_ref()
+                    .expect("bound producer")
+                    .clone(),
+                source_epoch: epoch,
+                encoded_len: snapshot.encoded_len,
+                sha256: snapshot.encoded_sha256.to_string(),
+            });
+            *producer
+                .index
+                .durable_source_graph_commit_epoch
+                .lock()
+                .unwrap_or_else(|error| error.into_inner()) = Some(epoch);
+            producer.pending_mutation = false;
+            Ok(producer.receipt())
+        } else {
+            producer.checkpoint_inner(false)
+        }
+    })??;
     if !producer
         .authority
         .publication()

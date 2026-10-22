@@ -59,6 +59,7 @@ pub enum PhysicalPlanKind {
     VectorSeedScan,
     TextSeedScan,
     GraphSeedScan,
+    VectorIndexScan,
     CreateNode,
     UnwindMutationExec,
     MergeNode,
@@ -164,6 +165,7 @@ impl PhysicalPlanKind {
             PhysicalPlanKind::VectorSeedScan,
             PhysicalPlanKind::TextSeedScan,
             PhysicalPlanKind::GraphSeedScan,
+            PhysicalPlanKind::VectorIndexScan,
             PhysicalPlanKind::CreateNode,
             PhysicalPlanKind::UnwindMutationExec,
             PhysicalPlanKind::MergeNode,
@@ -247,6 +249,7 @@ impl PhysicalPlanKind {
             PhysicalPlanKind::VectorSeedScan => "VectorSeedScan",
             PhysicalPlanKind::TextSeedScan => "TextSeedScan",
             PhysicalPlanKind::GraphSeedScan => "GraphSeedScan",
+            PhysicalPlanKind::VectorIndexScan => "VectorIndexScan",
             PhysicalPlanKind::CreateNode => "CreateNode",
             PhysicalPlanKind::UnwindMutationExec => "UnwindMutationExec",
             PhysicalPlanKind::MergeNode => "MergeNode",
@@ -383,6 +386,7 @@ impl PhysicalPlanKind {
             | PhysicalPlanKind::VectorSeedScan
             | PhysicalPlanKind::TextSeedScan
             | PhysicalPlanKind::GraphSeedScan
+            | PhysicalPlanKind::VectorIndexScan
             | PhysicalPlanKind::ThreadRepairStatsExec => PhysicalPlanClass::Procedure,
         }
     }

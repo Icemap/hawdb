@@ -168,12 +168,55 @@ impl VectorDistance {
     }
 
     pub fn distance(self, left: VectorRef<'_>, right: VectorRef<'_>) -> Result<f64> {
+        self.distance_with_work(left, right, || Ok(()))
+    }
+
+    /// Cooperatively scores canonical values without copying their payloads.
+    pub fn distance_with_work(
+        self,
+        left: VectorRef<'_>,
+        right: VectorRef<'_>,
+        checkpoint: impl FnMut() -> Result<()>,
+    ) -> Result<f64> {
         if left.dimension != right.dimension {
             return Err(invalid("distance dimensions must match"));
         }
+        self.distance_coordinates(left.coordinates(), right.coordinates(), checkpoint)
+    }
+
+    /// Scores admitted raw projection vectors with the same mathematical
+    /// contract as SQL/Cypher, without creating canonical payload copies.
+    pub fn distance_slices_with_work(
+        self,
+        left: &[f32],
+        right: &[f32],
+        checkpoint: impl FnMut() -> Result<()>,
+    ) -> Result<f64> {
+        if left.len() != right.len() {
+            return Err(invalid("distance dimensions must match"));
+        }
+        if left.is_empty() || u32::try_from(left.len()).is_err() {
+            return Err(invalid("dimension must be a positive u32"));
+        }
+        self.distance_coordinates(left.iter().copied(), right.iter().copied(), checkpoint)
+    }
+
+    fn distance_coordinates(
+        self,
+        left: impl Iterator<Item = f32>,
+        right: impl Iterator<Item = f32>,
+        mut checkpoint: impl FnMut() -> Result<()>,
+    ) -> Result<f64> {
         let (mut dot, mut left_norm, mut right_norm, mut squared) =
             (0.0f64, 0.0f64, 0.0f64, 0.0f64);
-        for (left, right) in left.coordinates().zip(right.coordinates()) {
+        for (index, (left, right)) in left.zip(right).enumerate() {
+            // Read at most 64 KiB across both operands between checkpoints.
+            if index % (64 * 1024 / (2 * std::mem::size_of::<f32>())) == 0 {
+                checkpoint()?;
+            }
+            if !left.is_finite() || !right.is_finite() {
+                return Err(invalid("coordinates must be finite"));
+            }
             let (left, right) = (f64::from(left), f64::from(right));
             match self {
                 Self::Euclidean => squared += (left - right).powi(2),
@@ -184,6 +227,7 @@ impl VectorDistance {
                 }
             }
         }
+        checkpoint()?;
         match self {
             Self::Euclidean => Ok(squared.sqrt()),
             Self::Cosine if left_norm == 0.0 || right_norm == 0.0 => {
@@ -213,6 +257,57 @@ fn invalid(reason: &str) -> HawDBError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn projection_distance_preserves_signed_cosine_and_canonical_parity() {
+        let query = [1.0, 0.0];
+        let values = [[1.0, 0.0], [0.0, 1.0], [-0.6, 0.8], [-1.0, 0.0]];
+        for metric in [VectorDistance::Cosine, VectorDistance::Euclidean] {
+            for coordinates in values {
+                let canonical = metric
+                    .distance(
+                        Vector::new(&query).unwrap().as_ref(),
+                        Vector::new(&coordinates).unwrap().as_ref(),
+                    )
+                    .unwrap();
+                let projection = metric
+                    .distance_slices_with_work(&query, &coordinates, || Ok(()))
+                    .unwrap();
+                assert_eq!(projection.to_bits(), canonical.to_bits());
+            }
+        }
+        let distance = |coordinates: &[f32]| {
+            VectorDistance::Cosine
+                .distance_slices_with_work(&query, coordinates, || Ok(()))
+                .unwrap()
+        };
+        assert!(distance(&values[2]) > 1.0);
+        assert!(distance(&values[2]) < distance(&values[3]));
+        assert_eq!(distance(&values[3]), 2.0);
+        for coordinates in [&[][..], &[0.0][..], &[f32::NAN, 0.0][..], &[0.0, 0.0][..]] {
+            assert!(VectorDistance::Cosine
+                .distance_slices_with_work(&query, coordinates, || Ok(()))
+                .is_err());
+        }
+    }
+
+    #[test]
+    fn projection_distance_preserves_cooperative_failure() {
+        let coordinates = vec![1.0; 20_000];
+        let mut checkpoints = 0;
+        let error = VectorDistance::Cosine
+            .distance_slices_with_work(&coordinates, &coordinates, || {
+                checkpoints += 1;
+                if checkpoints == 2 {
+                    Err(HawDBError::ProjectionBusy)
+                } else {
+                    Ok(())
+                }
+            })
+            .unwrap_err();
+        assert!(matches!(error, HawDBError::ProjectionBusy));
+        assert_eq!(checkpoints, 2);
+    }
 
     #[test]
     fn vector_encoding_rejects_malformed_and_nonfinite_payloads() {

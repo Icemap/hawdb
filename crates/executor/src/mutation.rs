@@ -548,6 +548,7 @@ pub fn mutation_command(plan: &PhysicalPlan) -> Result<Option<GraphMutation>> {
         | PhysicalPlan::ProjectGraph { .. }
         | PhysicalPlan::GraphAlgorithm { .. }
         | PhysicalPlan::GraphAlgorithmOutput(_)
+        | PhysicalPlan::VectorIndexScan(_)
         | PhysicalPlan::VectorSeedScan { .. }
         | PhysicalPlan::GraphSeedScan { .. }
         | PhysicalPlan::TextSeedScan { .. }

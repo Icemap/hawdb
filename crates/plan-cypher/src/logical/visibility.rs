@@ -115,6 +115,14 @@ pub fn apply_node_visibility_predicates(
             alias,
             input: Box::new(apply_node_visibility_predicates(*input, predicate_for)),
         },
+        LogicalPlan::VectorIndexSearch(mut scan) => {
+            let visibility = predicate_for(&scan.variable);
+            scan.node_visibility_predicate = Some(match scan.node_visibility_predicate {
+                Some(existing) => Predicate::And(vec![existing, visibility]),
+                None => visibility,
+            });
+            LogicalPlan::VectorIndexSearch(scan)
+        }
         LogicalPlan::GraphSeed {
             query_parameter,
             label,

@@ -1,0 +1,142 @@
+// Copyright 2026 Nowledge
+// Licensed under the Apache License, Version 2.0.
+
+use super::*;
+use hawdb_core::{RuntimeIoWaveController, RuntimeIoWaveError, RuntimeIoWavePermit};
+use hawdb_qos::{
+    IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeMemorySnapshot,
+    RuntimeResourceBudget, RuntimeResourceSnapshot, RuntimeWorkPriority, RuntimeWorkRequest,
+};
+use std::sync::{mpsc, Arc};
+
+#[derive(Debug, PartialEq, Eq)]
+enum Event {
+    Acquiring,
+    Finished,
+}
+
+#[derive(Debug)]
+struct ObservedIo {
+    task: RuntimeTaskContext,
+    events: mpsc::Sender<Event>,
+}
+impl RuntimeIoWaveController for ObservedIo {
+    fn try_acquire(
+        &self,
+        _: NonZeroUsize,
+        _: &RuntimeTaskContext,
+    ) -> std::result::Result<Option<Box<dyn RuntimeIoWavePermit>>, RuntimeIoWaveError> {
+        panic!("producer uses a cancellable synchronous wave");
+    }
+    fn acquire(
+        &self,
+        slots: NonZeroUsize,
+        _: &RuntimeTaskContext,
+    ) -> std::result::Result<Box<dyn RuntimeIoWavePermit>, RuntimeIoWaveError> {
+        self.events.send(Event::Acquiring).unwrap();
+        Ok(self.task.acquire_io_wave(slots)?.expect("governed wave"))
+    }
+}
+
+#[test]
+fn vector_index_producer_waits_for_original_io_wave_before_writing_and_can_cancel() {
+    let root = super::super::tests::test_dir("vector-consumer-io");
+    std::fs::create_dir_all(&root).unwrap();
+    let publication = super::super::super::SearchProjectionPublishLease::acquire(&root).unwrap();
+    let governor = RuntimeGovernor::new(
+        RuntimeGovernorConfig {
+            memory_budget_bytes: Some(256 << 20),
+            background_task_limit: Some(NonZeroUsize::new(2).unwrap()),
+            ..RuntimeGovernorConfig::shared_host()
+        },
+        RuntimeResourceSnapshot::from_parts(
+            RuntimeResourceBudget::from_limits(NonZeroUsize::new(4).unwrap(), None, None),
+            RuntimeMemorySnapshot::from_limits(Some(1 << 30), Some(1 << 30), None, None, None),
+        ),
+        IoConcurrencyBudget::new(2, 1),
+    );
+    let blocker = governor
+        .try_admit(
+            RuntimeWorkRequest::io(RuntimeWorkPriority::Background, 0, 0).with_io_wave_slots(1),
+        )
+        .unwrap();
+    let blocker_task = blocker.bind_task_context(Default::default());
+    let held_wave = blocker_task.acquire_io_wave(NonZeroUsize::MIN).unwrap();
+    let permit = Arc::new(
+        governor
+            .try_admit(RuntimeWorkRequest::background_maintenance(64 << 20).with_io_wave_slots(1))
+            .unwrap(),
+    );
+    let task = permit.bind_task_context(Default::default());
+    let cancellation = task.cancellation().clone();
+    let (events, receiver) = mpsc::channel();
+    let task = task.clone().with_io_wave_controller(Arc::new(ObservedIo {
+        task,
+        events: events.clone(),
+    }));
+    let mut index = SearchIndex::in_memory();
+    index
+        .bind_vector_index(
+            hawdb_core::VectorIndexDescriptor::new(
+                "docs".into(),
+                hawdb_core::VectorIndexTarget::Relational {
+                    table: "docs".into(),
+                    column: "embedding".into(),
+                    column_ordinal: 1,
+                },
+                hawdb_core::VectorDimension::new(2).unwrap(),
+                hawdb_core::VectorDistance::Cosine,
+                hawdb_core::VectorIndexBackend::RaBitQ {
+                    bit_width: 4,
+                    segment_rows: 64,
+                    transform_seed: 42,
+                },
+                [7; 32],
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    index.path = Some(root.clone());
+    index.source_graph_commit_epoch = Some(1);
+    let worker_permit = Arc::clone(&permit);
+    let worker = std::thread::spawn(move || {
+        let result = SearchOutOfCoreGenerationWriter::write_consumer(
+            &index,
+            &publication,
+            task,
+            NonZeroU64::new(256 << 20).unwrap(),
+            worker_permit,
+        );
+        events.send(Event::Finished).unwrap();
+        (index, publication, result)
+    });
+    let event = receiver.recv_timeout(std::time::Duration::from_secs(30));
+    // Cancellation and join happen before asserting, including the unfixed path.
+    let untouched = !root.join(crate::SEARCH_SNAPSHOT_FILE).exists();
+    cancellation.cancel();
+    let (index, publication, result) = worker.join().unwrap();
+    assert_eq!(event.unwrap(), Event::Acquiring);
+    assert!(
+        untouched,
+        "producer wrote while the original I/O slot was occupied"
+    );
+    assert!(result.is_err());
+    assert_eq!(governor.snapshot().active_background_io_slots, 1);
+    drop(held_wave);
+    drop(blocker_task);
+    drop(blocker);
+    SearchOutOfCoreGenerationWriter::write_consumer(
+        &index,
+        &publication,
+        permit.bind_task_context(Default::default()),
+        NonZeroU64::new(256 << 20).unwrap(),
+        Arc::clone(&permit),
+    )
+    .unwrap();
+    assert!(root.join(crate::SEARCH_SNAPSHOT_FILE).exists());
+    assert_eq!(governor.snapshot().active_background_io_slots, 0);
+    drop(publication);
+    drop(index);
+    drop(permit);
+    std::fs::remove_dir_all(root).unwrap();
+}

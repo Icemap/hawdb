@@ -934,7 +934,8 @@ fn required_runtime_capability(
             };
             Some(match &procedure.kind {
                 cypher::ProcedureCallKind::GraphSeedSearch(_) => return None,
-                cypher::ProcedureCallKind::VectorSearch(_) => {
+                cypher::ProcedureCallKind::VectorSearch(_)
+                | cypher::ProcedureCallKind::VectorIndexSearch(_) => {
                     hawdb_core::RuntimeCapability::VectorSearch
                 }
                 cypher::ProcedureCallKind::TextSearch(_) => {
@@ -1039,7 +1040,8 @@ pub(super) fn statement_uses_plan_cache(statement: &cypher::Statement) -> bool {
                         cypher::ProcedureCallKind::GraphAlgorithm { options, .. } => {
                             determinism::graph_options_are_deterministic(options)
                         }
-                        cypher::ProcedureCallKind::VectorSearch(_)
+                        cypher::ProcedureCallKind::VectorIndexSearch(_)
+                        | cypher::ProcedureCallKind::VectorSearch(_)
                         | cypher::ProcedureCallKind::TextSearch(_)
                         | cypher::ProcedureCallKind::GraphSeedSearch(_)
                         | cypher::ProcedureCallKind::ProjectGraph { .. } => false,
@@ -1456,11 +1458,13 @@ mod tests {
                 .borrow_mut()
                 .invalidate();
             let query = "MATCH (n:Item) WHERE n.id = $id RETURN n.id AS id, n.score AS score";
-            let reads = |db: &mut crate::Database| {
+            let reads = |db: &mut crate::Database, unused_score_bias: i64| {
                 let before = db.plan_cache_stats().unwrap();
                 for id in 0..100 {
-                    // The unused score parameter deliberately retains 100 exact variants.
-                    let output = db.query_with_params(query, &parameters(id)).unwrap();
+                    // Vary the unused binding independently of canonical row values.
+                    let mut bindings = parameters(id);
+                    bindings.insert("score".into(), Value::Int(id * 3 + unused_score_bias));
+                    let output = db.query_with_params(query, &bindings).unwrap();
                     assert_eq!(output.rows.len(), 1);
                     assert_eq!(output.rows[0].get("id"), Some(&Value::Int(id)));
                     assert_eq!(output.rows[0].get("score"), Some(&Value::Int(id * 3)));
@@ -1468,8 +1472,8 @@ mod tests {
                 let after = db.plan_cache_stats().unwrap();
                 (after.hits - before.hits, after.misses - before.misses)
             };
-            assert_eq!(reads(&mut db), (0, 100));
-            assert_eq!(reads(&mut db), (100, 0));
+            assert_eq!(reads(&mut db, 0), (99, 1));
+            assert_eq!(reads(&mut db, 0), (100, 0));
             let generation = db
                 .runtime
                 .get()
@@ -1495,8 +1499,8 @@ mod tests {
                     > generation,
                 "the diagnostic must publish a new advanced-statistics snapshot"
             );
-            assert_eq!(reads(&mut db), (100, 0));
-            assert_eq!(reads(&mut db), (100, 0));
+            assert_eq!(reads(&mut db, 1_000), (100, 0));
+            assert_eq!(reads(&mut db, 2_000), (100, 0));
         }
     }
 

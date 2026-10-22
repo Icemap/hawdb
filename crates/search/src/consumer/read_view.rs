@@ -175,6 +175,48 @@ impl ConsumerReadSlot {
 }
 
 impl ConsumerReadPin {
+    /// Canonical source identity captured by the immutable publication receipt.
+    /// It is independent of a pathname and survives later source publication.
+    pub fn source_database_uuid(&self) -> Uuid {
+        self.version.reservation.database_uuid
+    }
+
+    pub fn source_branch_uuid(&self) -> Uuid {
+        self.version.reservation.source_branch
+    }
+
+    /// Native Consumer generation, distinct from the artifact-local counter
+    /// that may restart inside a freshly built immutable directory.
+    pub fn publication_generation(&self) -> u64 {
+        self.version.reservation.generation.get()
+    }
+
+    /// Internal index execution; the facade additionally resolves the field and
+    /// validates source epoch before composing canonical query operators.
+    pub fn query_vector_index(
+        &self,
+        permit: &RuntimePermit,
+        task: RuntimeTaskContext,
+        request: crate::VectorIndexQuery<'_>,
+    ) -> crate::SearchQueryResult<crate::VectorIndexRetainedOutput> {
+        if !self.version.reader.shares_governor_with(permit) {
+            return Err(HawDBError::Execution(
+                "vector query permit belongs to another governor".into(),
+            )
+            .into());
+        }
+        if task.has_resource_controllers() {
+            return Err(invalid("vector query task already has a resource controller").into());
+        }
+        let task = permit.bind_task_context(task);
+        self.version.reader.vector_index_query(
+            request,
+            self.publication_generation(),
+            permit,
+            &task,
+        )
+    }
+
     pub fn report(&self) -> ConsumerCandidateViewReport {
         self.version.report
     }

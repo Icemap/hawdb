@@ -124,8 +124,16 @@ impl<'a> Frame<'a> {
         query: QueryContext<'a>,
         permit: &hawdb_qos::RuntimePermit,
     ) -> SearchQueryResult<Self> {
+        Self::with_view_bytes(query, permit, size_of::<SearchRetainedOutput>())
+    }
+
+    pub(super) fn with_view_bytes(
+        query: QueryContext<'a>,
+        permit: &hawdb_qos::RuntimePermit,
+        view_bytes: usize,
+    ) -> SearchQueryResult<Self> {
         query.checkpoint()?;
-        let view = size_of::<SearchRetainedOutput>() as u64;
+        let view = view_bytes as u64;
         let overhead = RuntimeRetainedResult::owner_overhead_bytes()
             .checked_add(RuntimeRetainedResult::handle_overhead_bytes())
             .and_then(|n| n.checked_add(view))
@@ -133,7 +141,15 @@ impl<'a> Frame<'a> {
         let requested = overhead
             .checked_add(ACCOUNT_METADATA_BYTES as u64)
             .ok_or(RuntimeRetainedResultError::SizeOverflow)?;
-        let grant = permit.request().result_bytes;
+        let grant =
+            query
+                .task
+                .memory_reservation()
+                .map_or(permit.request().result_bytes, |reservation| {
+                    reservation
+                        .result_bytes()
+                        .min(permit.request().result_bytes)
+                });
         if grant < requested {
             return Err(RuntimeRetainedResultError::Capacity {
                 resource: RuntimeRetainedResultResource::QueryBytes,
@@ -204,6 +220,33 @@ impl<'a> Frame<'a> {
         }
         self.query.checkpoint()?;
         Ok(result)
+    }
+
+    #[cfg(feature = "vector-search")]
+    pub(super) fn finish_vector_index(
+        self,
+        hits: Vec<crate::VectorIndexHit>,
+        report: crate::VectorIndexQueryReport,
+        metrics: SearchOutOfCoreMetrics,
+    ) -> Result<crate::VectorIndexRetainedOutput> {
+        let (memory, poisoned) = match self.memory.into_inner() {
+            Ok(memory) => (memory, false),
+            Err(error) => (error.into_inner(), true),
+        };
+        let output = crate::VectorIndexRetainedOutput {
+            hits,
+            report,
+            metrics,
+            _memory: memory,
+            runtime: self.runtime,
+        };
+        if poisoned {
+            return Err(HawDBError::Execution(
+                "vector result memory lock poisoned".into(),
+            ));
+        }
+        self.query.checkpoint()?;
+        Ok(output)
     }
 }
 

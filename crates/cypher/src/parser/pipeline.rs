@@ -116,6 +116,9 @@ impl Parser<'_> {
         let name = self.parse_ident()?;
         self.expect_char('(')?;
         let kind = match name.to_ascii_lowercase().as_str() {
+            "vector_index_search" => {
+                ProcedureCallKind::VectorIndexSearch(self.parse_vector_index_search_arguments()?)
+            }
             "vector_search" => {
                 ProcedureCallKind::VectorSearch(self.parse_vector_search_arguments()?)
             }

@@ -147,6 +147,11 @@ impl PhysicalPlan {
             PhysicalPlan::GraphSeedScan { query_parameter, label, variable, score_column, top_k, node_visibility_predicate } => format!(
                 "{pad}GraphSeedScan query=${query_parameter} label={label:?} node={variable} score={score_column} candidate_top_k={top_k} canonical_visibility={node_visibility_predicate:?}"
             ),
+            PhysicalPlan::VectorIndexScan(scan) => format!(
+                "{pad}VectorIndexScan index={:?} embedding=${} candidates={} top_k={} metric=cosine candidate_policy=approximate rerank=exact filter_position=after_window node={} distance={} canonical_visibility={:?}",
+                scan.index, scan.embedding_parameter, scan.candidate_limit, scan.top_k,
+                scan.variable, scan.distance_column, scan.node_visibility_predicate,
+            ),
             PhysicalPlan::TextSeedScan { query_parameter, top_k, output_external_id, metadata_filters, resource_profile } => format!(
                 "{pad}TextSeedScan query=${query_parameter} top_k={top_k} output_external_id={output_external_id} metadata_filter_fields={:?} priority={} max_parallelism={} max_working_memory_bytes={:?}",
                 metadata_filters.keys().collect::<Vec<_>>(), resource_profile.priority,
