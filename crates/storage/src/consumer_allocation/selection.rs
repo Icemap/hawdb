@@ -236,10 +236,10 @@ impl PreparedConsumerSelection {
         if !matches!(outcome, ConsumerSelectionResolution::NotSelected) {
             return Err(invalid("unattempted Consumer selector became selected"));
         }
-        self.control
-            .discard_unselected(&self.project.file_descriptors().io_context())?;
+        // Keep this terminal fact even if private-name cleanup fails. Other
+        // operations may now compact its completed ledger row before retry.
         self.phase = Phase::NotSelected;
-        Ok(())
+        self.discard_not_selected_control()
     }
 
     pub fn reserve_attempt_descriptors(&self) -> Result<DescriptorReservation> {
@@ -289,7 +289,10 @@ impl PreparedConsumerSelection {
     pub fn resolve(&mut self) -> Result<ConsumerSelectionResolution> {
         match self.phase {
             Phase::Prepared => return Err(invalid("Consumer selection was never attempted")),
-            Phase::NotSelected => return Ok(ConsumerSelectionResolution::NotSelected),
+            Phase::NotSelected => {
+                self.discard_not_selected_control()?;
+                return Ok(ConsumerSelectionResolution::NotSelected);
+            }
             Phase::Published => {
                 return Ok(ConsumerSelectionResolution::Published(Box::new(
                     ConsumerSelectionReceipt {
@@ -305,17 +308,22 @@ impl PreparedConsumerSelection {
             &self.previous,
             ExpectedOutcome::Either,
         )?;
-        if matches!(outcome, ConsumerSelectionResolution::NotSelected)
-            && !self.control.selection_attempted()
-        {
-            self.control
-                .discard_unselected(&self.project.file_descriptors().io_context())?;
-        }
         self.phase = match outcome {
             ConsumerSelectionResolution::Published(_) => Phase::Published,
             ConsumerSelectionResolution::NotSelected => Phase::NotSelected,
         };
+        if self.phase == Phase::NotSelected {
+            self.discard_not_selected_control()?;
+        }
         Ok(outcome)
+    }
+
+    fn discard_not_selected_control(&mut self) -> Result<()> {
+        if !self.control.selection_attempted() {
+            self.control
+                .discard_unselected(&self.project.file_descriptors().io_context())?;
+        }
+        Ok(())
     }
 }
 

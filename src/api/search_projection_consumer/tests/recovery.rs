@@ -620,3 +620,121 @@ fn registered_stationary_unavailable_registry_cannot_bypass_recovery_capacity() 
         .unwrap();
     db.require_consumer_capacity::<1>(true).unwrap();
 }
+
+#[cfg(feature = "test-support")]
+#[test]
+fn registered_stationary_terminal_cleanup_retries_after_completed_row_is_compacted() {
+    let fixture = Fixture::new();
+    let root = fixture.0.join("database");
+    let mut db = fixture.database();
+    append(&mut db, 1);
+    let path = fixture.0.join("terminal-cleanup");
+    PUBLICATION_FAILURE.set(Some((PublicationStage::BeforeSelector, false)));
+    assert!(db
+        .create_search_projection_consumer(id("terminal-cleanup"), &path, options(100), initialize)
+        .is_err());
+    append(&mut db, 2);
+    let saved = Rc::new(RefCell::new(None));
+    let replaced = Rc::clone(&saved);
+    let observed_root = root.clone();
+    let result = fs::SourceDirectory::observe_control_renames(
+        move || {
+            if replaced.borrow().is_some()
+                || !ledger(&observed_root)["pending"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|row| row["publication_intent"]["not_selected"] == true)
+            {
+                return;
+            }
+            let selector = std::fs::read_dir(&observed_root)
+                .unwrap()
+                .map(|entry| entry.unwrap().path())
+                .find(|path| {
+                    path.file_name()
+                        .unwrap()
+                        .to_string_lossy()
+                        .starts_with("consumer-selector-")
+                })
+                .unwrap();
+            let backup = observed_root.join("saved-terminal-control");
+            std::fs::rename(&selector, &backup).unwrap();
+            std::fs::write(&selector, b"foreign evidence").unwrap();
+            *replaced.borrow_mut() = Some((selector, backup));
+        },
+        || {
+            db.open_or_create_search_projection_consumer(
+                id("terminal-cleanup"),
+                &path,
+                options(100),
+                |_, _| panic!("retained initializer"),
+            )
+        },
+    )
+    .unwrap();
+    assert!(result.is_err());
+    assert_eq!(
+        db.runtime
+            .get()
+            .unwrap()
+            .projection_consumers
+            .recovery
+            .len(),
+        1
+    );
+    let other = db
+        .runtime
+        .get()
+        .unwrap()
+        .store
+        .reserve_registered_search_consumer(
+            "compact-completed",
+            &fixture.0.join("other"),
+            hawdb_storage::consumer_allocation::ConsumerLeasePolicy {
+                max_idle_commits: 100,
+                expires_at_commit_epoch: 100,
+            },
+        )
+        .unwrap();
+    drop(other);
+    assert!(!ledger(&root)["pending"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|row| row["consumer_id"] == "terminal-cleanup"));
+    let (selector, backup) = saved
+        .borrow_mut()
+        .take()
+        .expect("cleanup boundary must execute");
+    assert_eq!(std::fs::read(&selector).unwrap(), b"foreign evidence");
+    // Only this fixture authorizes undoing its own namespace replacement.
+    std::fs::remove_file(&selector).unwrap();
+    std::fs::rename(backup, &selector).unwrap();
+    let error = db
+        .open_or_create_search_projection_consumer(
+            id("terminal-cleanup"),
+            &path,
+            options(100),
+            |_, _| panic!("retained initializer"),
+        )
+        .unwrap_err();
+    assert!(
+        matches!(error, Error::Database(HawDBError::Execution(message)) if message.contains("settled"))
+    );
+    assert!(!selector.exists());
+    assert!(db
+        .runtime
+        .get()
+        .unwrap()
+        .projection_consumers
+        .recovery
+        .is_empty());
+    db.create_consumer_with_capacity::<1, _>(
+        id("terminal-cleanup"),
+        &fixture.0.join("fresh-terminal"),
+        options(100),
+        initialize,
+    )
+    .unwrap();
+}
