@@ -106,14 +106,6 @@ pub mod bounded_read_evidence {
     }
 }
 
-/// Compatibility facade for storage crash-recovery evidence contracts.
-pub mod crash_recovery_evidence {
-    pub use hawdb_evidence::{
-        StorageCrashCaseEvidence, StorageCrashPoint, StorageCrashRecoveryEvidence,
-        STORAGE_CRASH_RECOVERY_EVIDENCE_PROTOCOL,
-    };
-}
-
 /// Compatibility facade for `hawdb-cypher`.
 pub mod cypher {
     pub use hawdb_cypher::*;
@@ -251,14 +243,6 @@ pub mod previous_wrapper_preflight {
             );
         }
     }
-}
-
-/// Compatibility facade for production qualification evidence contracts.
-pub mod production_evidence {
-    pub use hawdb_evidence::{
-        ProductionEvidenceBinding, ProductionQualificationIdentity,
-        PRODUCTION_QUALIFICATION_POLICY_VERSION,
-    };
 }
 
 /// Compatibility facade for `hawdb-qos`.
