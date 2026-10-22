@@ -157,6 +157,7 @@ fn nz(value: usize) -> NonZeroUsize {
 
 fn seed(window: usize) -> PhysicalPlan {
     PhysicalPlan::TextSeedScan {
+        complete: false,
         query_parameter: "text".into(),
         top_k: window,
         output_external_id: true,
@@ -4266,4 +4267,257 @@ fn source_memory_cold_union_shares_one_retained_allowance() {
             assert_eq!(ledger.snapshot().used_bytes, 0);
         }
     }
+}
+
+#[test]
+fn complete_text_growth_refuses_before_allocating_replacement_slots() {
+    use hawdb_executor::{ExternalReadResultBudget, QueryMemoryClass, TextSeedExecutionRow};
+    let row_bytes = std::mem::size_of::<TextSeedExecutionRow>();
+    for succeeds in [false, true] {
+        let bytes = NonZeroUsize::new(6 * row_bytes + if succeeds { 3 } else { 2 }).unwrap();
+        let ledger = QueryMemoryLedger::new(bytes);
+        let account = ledger.account(
+            QueryMemoryClass::ExternalRead,
+            "complete growth oracle",
+            bytes,
+        );
+        let mut output = TextSeedExecutionOutput::new_complete(
+            &account,
+            ExternalReadResultBudget {
+                max_rows: 1_000_000,
+                max_memory_bytes: bytes,
+            },
+        )
+        .unwrap();
+        output.push("a", None, 3.0).unwrap();
+        output.push("b", None, 2.0).unwrap();
+        let window = AllocationWindow::start(4 * row_bytes);
+        let result = output.push("c", None, 1.0);
+        let replacements = window.allocations();
+        drop(window);
+        assert_eq!(replacements, usize::from(succeeds));
+        if succeeds {
+            result.unwrap();
+            assert_eq!(output.finish_complete().unwrap().rows().len(), 3);
+        } else {
+            assert!(matches!(result, Err(HawDBError::ResourceBudgetExceeded(_))));
+            assert!(output.finish_complete().is_err());
+        }
+        assert_eq!(ledger.snapshot().used_bytes, 0);
+    }
+}
+
+#[test]
+fn grouped_evidence_admits_id_copies_before_allocation_and_keeps_output_owned() {
+    use hawdb_plan_cypher::{AggregateFunction, AggregateTarget, Aggregation};
+    for succeeds in [false, true] {
+        let id_bytes = (1 << 20) + 137;
+        let mut source = DirectProjectionSource(Some(vec![Binding::values(BTreeMap::from([
+            ("g".into(), Value::String("group".into())),
+            ("doc".into(), Value::String("x".repeat(id_bytes))),
+            ("score".into(), Value::Float(1.0)),
+        ]))]));
+        let memory = ExecutionMemoryConfig {
+            query_memory_bytes: NonZeroUsize::new(16 << 20).unwrap(),
+            blocking_operator_bytes: NonZeroUsize::new(if succeeds { 4 << 20 } else { 8192 })
+                .unwrap(),
+            batch_payload_bytes: NonZeroUsize::new(32 << 10).unwrap(),
+            ..Default::default()
+        };
+        let ledger = QueryMemoryLedger::new(memory.query_memory_bytes);
+        let catalog = Catalog::default();
+        let observer = QueryExecutionObserver::default();
+        let group_keys = [Projection {
+            expression: ProjectionExpression::Column("g".into()),
+            name: "g".into(),
+        }];
+        let items = [Aggregation {
+            function: AggregateFunction::Collect,
+            target: AggregateTarget::Ranked {
+                document_id: "doc".into(),
+                score: "score".into(),
+                limit: 1,
+            },
+            distinct: false,
+            name: "evidence".into(),
+        }];
+        let window = AllocationWindow::start(id_bytes);
+        let mut delivered = 0;
+        let result = hawdb_executor::blocking::stream_aggregate_batches(
+            &PhysicalPlan::EmptyExec,
+            &group_keys,
+            &items,
+            &mut source,
+            BatchExecutionContext {
+                catalog: &catalog,
+                memory: &memory,
+                memory_ledger: &ledger,
+                task_context: None,
+                observer: &observer,
+            },
+            ExecutionLimit::unlimited(),
+            &mut |rows| {
+                delivered += rows.len();
+                let Value::List(values) = &rows[0].values["evidence"] else {
+                    panic!("missing evidence");
+                };
+                let Value::String(id) = &values[0] else {
+                    panic!("missing ID");
+                };
+                assert_eq!(id.len(), id_bytes);
+                assert!(
+                    ledger.snapshot().used_bytes >= 2 * id_bytes,
+                    "output lost its original admission"
+                );
+                Ok(BatchControl::Continue)
+            },
+        );
+        let copies = window.allocations();
+        drop(window);
+        assert_eq!(copies, if succeeds { 2 } else { 0 });
+        assert_eq!(delivered, usize::from(succeeds));
+        if succeeds {
+            assert_eq!(result.unwrap(), BatchControl::Continue);
+        } else {
+            assert!(matches!(result, Err(HawDBError::ResourceBudgetExceeded(_))));
+        }
+        assert_eq!(ledger.snapshot().used_bytes, 0);
+    }
+}
+
+#[test]
+fn grouped_evidence_checks_final_callback_cancellation_and_preserves_consumer_errors() {
+    use hawdb_plan_cypher::{AggregateFunction, AggregateTarget, Aggregation};
+    for consumer_error in [false, true] {
+        let mut source = DirectProjectionSource(Some(vec![Binding::values(BTreeMap::from([
+            ("doc".into(), Value::String("a".into())),
+            ("score".into(), Value::Float(1.0)),
+        ]))]));
+        let memory = ExecutionMemoryConfig::default();
+        let ledger = QueryMemoryLedger::new(memory.query_memory_bytes);
+        let catalog = Catalog::default();
+        let observer = QueryExecutionObserver::default();
+        let task = RuntimeTaskContext::default();
+        let items = [Aggregation {
+            function: AggregateFunction::Collect,
+            target: AggregateTarget::Ranked {
+                document_id: "doc".into(),
+                score: "score".into(),
+                limit: 1,
+            },
+            distinct: false,
+            name: "evidence".into(),
+        }];
+        let mut delivered = 0;
+        let result = hawdb_executor::blocking::stream_aggregate_batches(
+            &PhysicalPlan::EmptyExec,
+            &[],
+            &items,
+            &mut source,
+            BatchExecutionContext {
+                catalog: &catalog,
+                memory: &memory,
+                memory_ledger: &ledger,
+                task_context: Some(&task),
+                observer: &observer,
+            },
+            ExecutionLimit::unlimited(),
+            &mut |rows| {
+                delivered += rows.len();
+                task.cancellation().cancel();
+                if consumer_error {
+                    Err(HawDBError::Execution("consumer sentinel".into()))
+                } else {
+                    Ok(BatchControl::Continue)
+                }
+            },
+        );
+        assert_eq!(delivered, 1);
+        assert!(
+            matches!(result, Err(HawDBError::Execution(message)) if if consumer_error { message == "consumer sentinel" } else { message.contains("cancel") })
+        );
+        assert_eq!(ledger.snapshot().used_bytes, 0);
+    }
+}
+
+#[test]
+fn grouped_evidence_reuses_a_wide_scalar_group_key_without_recopying_it() {
+    use hawdb_plan_cypher::{AggregateFunction, AggregateTarget, Aggregation};
+    let key_bytes = (1 << 20) + 137;
+    let mut source = DirectProjectionSource(Some(
+        (0..8)
+            .map(|score| {
+                Binding::values(BTreeMap::from([
+                    ("g".into(), Value::String("g".repeat(key_bytes))),
+                    ("doc".into(), Value::String(format!("document-{score}"))),
+                    ("score".into(), Value::Float(f64::from(score))),
+                ]))
+            })
+            .collect(),
+    ));
+    let memory = ExecutionMemoryConfig {
+        query_memory_bytes: NonZeroUsize::new(16 << 20).unwrap(),
+        blocking_operator_bytes: NonZeroUsize::new(4 << 20).unwrap(),
+        batch_payload_bytes: NonZeroUsize::new(32 << 10).unwrap(),
+        ..Default::default()
+    };
+    let ledger = QueryMemoryLedger::new(memory.query_memory_bytes);
+    let catalog = Catalog::default();
+    let observer = QueryExecutionObserver::default();
+    let group_keys = [Projection {
+        expression: ProjectionExpression::Column("g".into()),
+        name: "g".into(),
+    }];
+    let items = [Aggregation {
+        function: AggregateFunction::Collect,
+        target: AggregateTarget::Ranked {
+            document_id: "doc".into(),
+            score: "score".into(),
+            limit: 2,
+        },
+        distinct: false,
+        name: "evidence".into(),
+    }];
+    let window = AllocationWindow::start(key_bytes);
+    let mut delivered = 0;
+    hawdb_executor::blocking::stream_aggregate_batches(
+        &PhysicalPlan::EmptyExec,
+        &group_keys,
+        &items,
+        &mut source,
+        BatchExecutionContext {
+            catalog: &catalog,
+            memory: &memory,
+            memory_ledger: &ledger,
+            task_context: None,
+            observer: &observer,
+        },
+        ExecutionLimit::unlimited(),
+        &mut |rows| {
+            delivered += rows.len();
+            let Value::String(key) = &rows[0].values["g"] else {
+                panic!("missing key")
+            };
+            assert_eq!(key.len(), key_bytes);
+            assert_eq!(
+                rows[0].values["evidence"],
+                Value::List(vec![
+                    Value::String("document-7".into()),
+                    Value::String("document-6".into())
+                ])
+            );
+            assert!(ledger.snapshot().used_bytes >= key_bytes);
+            Ok(BatchControl::Continue)
+        },
+    )
+    .unwrap();
+    let copies = window.allocations();
+    drop(window);
+    assert_eq!(copies, 1, "only the first group key needs an owned copy");
+    assert_eq!(delivered, 1);
+    assert_eq!(ledger.snapshot().used_bytes, 0);
+    let reports = observer.into_reports();
+    assert_eq!(reports.grouped_evidence.len(), 1);
+    assert_eq!(reports.grouped_evidence[0].borrowed_group_key_rows, 7);
+    assert_eq!(reports.grouped_evidence[0].input_rows, 8);
 }

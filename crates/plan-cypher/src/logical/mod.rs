@@ -177,6 +177,7 @@ pub enum LogicalPlan {
     TextSeed {
         query_parameter: String,
         top_k: usize,
+        complete: bool,
         output_external_id: bool,
     },
     VectorSeed {
@@ -608,9 +609,20 @@ pub enum AggregateFunction {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AggregateTarget {
+    Ranked {
+        document_id: String,
+        score: String,
+        limit: usize,
+    },
     Column(String),
-    ColumnProperty { column: String, property: String },
+    ColumnProperty {
+        column: String,
+        property: String,
+    },
     All,
     Variable(String),
-    Property { variable: String, property: String },
+    Property {
+        variable: String,
+        property: String,
+    },
 }

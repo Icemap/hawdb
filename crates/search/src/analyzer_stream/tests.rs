@@ -54,3 +54,41 @@ fn admitted_tokenizer_throttles_deadline_checks() {
     );
     assert_eq!(memory.ledger.snapshot().used_bytes, 0);
 }
+
+#[test]
+fn admitted_field_tokens_match_canonical_phrase_and_identifier_occurrences() {
+    let budget = std::num::NonZeroUsize::new(1 << 20).unwrap();
+    let ledger = hawdb_executor::QueryMemoryLedger::new(budget);
+    let account = ledger.account(
+        hawdb_executor::QueryMemoryClass::ExternalRead,
+        "field tokens",
+        budget,
+    );
+    let analyzer = SearchAnalyzerLexicon::default();
+    for text in [
+        "graph graph graph graph graph",
+        "Graph-memory graph memory Graph-memory",
+        "alpha_beta alpha_beta alpha beta",
+        "\u{4e2d}\u{56fd} \u{4e2d}\u{56fd} graph graph",
+        "a1 a1 a1",
+        "",
+    ] {
+        let expected = collect_token_list(text, &analyzer);
+        let mut actual = Vec::new();
+        visit_admitted_field_token_list(
+            text,
+            &analyzer,
+            Control {
+                memory: Some(crate::analyzer_memory::Memory::Query(&account)),
+                ..Default::default()
+            },
+            |term| {
+                actual.push(term.as_str().to_owned());
+                Ok(())
+            },
+        )
+        .unwrap();
+        assert_eq!(actual, expected, "{text}");
+        assert_eq!(ledger.snapshot().used_bytes, 0);
+    }
+}

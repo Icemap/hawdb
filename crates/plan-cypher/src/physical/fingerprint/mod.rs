@@ -275,11 +275,12 @@ impl PhysicalPlan {
             PhysicalPlan::TextSeedScan {
                 query_parameter,
                 top_k,
+                complete,
                 output_external_id,
                 metadata_filters,
                 resource_profile,
             } => {
-                output.push_str(&format!("TextSeedScan(query=${query_parameter},top_k={top_k},external_id={output_external_id},metadata_filters={metadata_filters:?},resources={resource_profile:?})"));
+                output.push_str(&format!("TextSeedScan(query=${query_parameter},top_k={top_k},complete={complete},external_id={output_external_id},metadata_filters={metadata_filters:?},resources={resource_profile:?})"));
             }
             PhysicalPlan::VectorSeedScan {
                 embedding_parameter,

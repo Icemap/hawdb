@@ -203,6 +203,7 @@ pub(super) fn operators() -> Vec<(PhysicalPlan, bool)> {
         ),
         (
             PhysicalPlan::TextSeedScan {
+                complete: false,
                 query_parameter: String::new(),
                 top_k: 0,
                 output_external_id: false,

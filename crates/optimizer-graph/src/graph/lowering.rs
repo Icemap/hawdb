@@ -544,9 +544,14 @@ fn attach_seed_metadata_filter(
 
 fn attach_metadata_filter_to_seed(plan: &mut PhysicalPlan, field: &str, value: String) -> bool {
     if let PhysicalPlan::TextSeedScan {
-        metadata_filters, ..
+        metadata_filters,
+        complete,
+        ..
     } = plan
     {
+        if *complete {
+            return false;
+        }
         if metadata_filters
             .get(field)
             .is_some_and(|existing| existing != &value)
@@ -623,7 +628,9 @@ fn seed_window(plan: &PhysicalPlan) -> Option<(&'static str, usize)> {
         PhysicalPlan::VectorSeedScan { vector_plan, .. } => {
             vector_plan_top_k(vector_plan).map(|window| ("vector", window))
         }
-        PhysicalPlan::TextSeedScan { top_k, .. } => Some(("text", *top_k)),
+        PhysicalPlan::TextSeedScan {
+            top_k, complete, ..
+        } => Some((if *complete { "complete_text" } else { "text" }, *top_k)),
         PhysicalPlan::GraphSeedScan { top_k, .. } => Some(("graph", *top_k)),
         PhysicalPlan::VectorIndexScan(scan) => Some(("vector_index", scan.top_k)),
         PhysicalPlan::NodeColumnLookupExec { input, .. }
@@ -1011,18 +1018,29 @@ fn lower_logical(
             group_keys,
             items,
             input,
-        } => PhysicalPlan::AggregateExec {
-            group_keys: group_keys.clone(),
-            items: items.clone(),
-            input: Box::new(children.lower(
+        } => {
+            let input = children.lower(
                 input,
                 0,
                 catalog,
                 optimizer_context,
                 decisions,
                 stage_events,
-            )),
-        },
+            );
+            let input = if items
+                .iter()
+                .any(|item| matches!(item.target, AggregateTarget::Ranked { .. }))
+            {
+                finalize_required_node_properties(input, decisions, stage_events)
+            } else {
+                input
+            };
+            PhysicalPlan::AggregateExec {
+                group_keys: group_keys.clone(),
+                items: items.clone(),
+                input: Box::new(input),
+            }
+        }
         LogicalPlan::Distinct { input } => PhysicalPlan::DistinctExec {
             input: Box::new(children.lower(
                 input,
@@ -1127,6 +1145,7 @@ fn select_node_count_fast_path(
             AggregateTarget::All => !item.distinct,
             AggregateTarget::Variable(target) => target == variable,
             AggregateTarget::Property { .. }
+            | AggregateTarget::Ranked { .. }
             | AggregateTarget::Column(_)
             | AggregateTarget::ColumnProperty { .. } => false,
         };
@@ -1200,6 +1219,7 @@ fn select_relationship_count_fast_path(
             AggregateTarget::All => true,
             AggregateTarget::Variable(target) => rel_variable.as_ref() == Some(target),
             AggregateTarget::Property { .. }
+            | AggregateTarget::Ranked { .. }
             | AggregateTarget::Column(_)
             | AggregateTarget::ColumnProperty { .. } => false,
         };

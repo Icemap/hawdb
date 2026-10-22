@@ -1588,6 +1588,7 @@ impl LexicalProjectionReader {
         self.score_accounted(
             query_terms,
             ScoringInputs {
+                complete_candidate_limit: None,
                 delta,
                 max_term_bytes,
                 retained_score_limit,
@@ -1616,6 +1617,7 @@ impl LexicalProjectionReader {
         mut allowed: impl FnMut(&str) -> Result<bool>,
     ) -> Result<AccountedQueryReport> {
         let ScoringInputs {
+            complete_candidate_limit,
             delta,
             max_term_bytes,
             retained_score_limit,
@@ -1775,7 +1777,8 @@ impl LexicalProjectionReader {
             retained_score_limit,
             self.config.max_query_score_entries.get(),
             context,
-        )?;
+        )?
+        .with_complete_candidate_limit(complete_candidate_limit);
         let mut streams = Vec::new();
         let mut stream_idf = Vec::new();
         let mut candidate_postings = 0u64;
@@ -2206,6 +2209,7 @@ pub(super) struct ScoreCollector<'a> {
     storage: ScoreStorage,
     matching_count: usize,
     max_entries: usize,
+    complete_candidate_limit: Option<usize>,
     context: Option<QueryContext<'a>>,
     memory: Option<QueryMemoryLease>,
 }
@@ -2250,9 +2254,15 @@ impl<'a> ScoreCollector<'a> {
             },
             matching_count: 0,
             max_entries,
+            complete_candidate_limit: None,
             context,
             memory,
         })
+    }
+
+    fn with_complete_candidate_limit(mut self, limit: Option<usize>) -> Self {
+        self.complete_candidate_limit = limit;
+        self
     }
 
     pub(super) fn push(&mut self, id: &str, score: f64) -> Result<()> {
@@ -2261,15 +2271,33 @@ impl<'a> ScoreCollector<'a> {
         let memory = &mut self.memory;
         match &mut self.storage {
             ScoreStorage::Full(scores) => {
-                if scores.len() >= self.max_entries {
-                    return Err(HawDBError::Storage(format!(
-                        "lexical query matched more than {} documents; provide a rank window or narrow the candidate set",
-                        self.max_entries
-                    )));
-                }
                 if let Some(value) = scores.get_mut(id) {
                     *value = score;
                     return Ok(());
+                }
+                if self
+                    .complete_candidate_limit
+                    .is_some_and(|limit| scores.len() >= limit)
+                {
+                    return Err(crate::resident_text_seed::complete_candidate_budget_error(
+                        self.complete_candidate_limit
+                            .expect("complete ceiling was checked"),
+                        scores.len().saturating_add(1),
+                    ));
+                }
+                if scores.len() >= self.max_entries {
+                    return Err(hawdb_core::ResourceBudgetError {
+                        resource: hawdb_core::ResourceBudgetKind::MetadataEntries,
+                        scope: hawdb_core::ResourceBudgetScope::Operator,
+                        owner: "lexical score entries".into(),
+                        memory_class: None,
+                        requested: 1,
+                        used: scores.len() as u64,
+                        budget: self.max_entries as u64,
+                        budget_option: "LexicalProjectionConfig.max_query_score_entries",
+                        message: "exhaustive lexical scores exceed their entry budget".into(),
+                    }
+                    .into());
                 }
                 if let Some(memory) = memory {
                     memory.grow(checked_add(id.len(), MAP_ENTRY_BYTES)?)?;
@@ -3569,6 +3597,22 @@ fn checksum(bytes: &[u8]) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn complete_score_ceiling_counts_distinct_entries_before_allocation() {
+        let mut scores = ScoreCollector::new(None, 1, None)
+            .unwrap()
+            .with_complete_candidate_limit(Some(1));
+        scores.push("a", 1.0).unwrap();
+        scores.push("a", 2.0).unwrap();
+        assert!(matches!(scores.push("b", 3.0),
+            Err(HawDBError::ResourceBudgetExceeded(cause)) if cause.budget_option == "text_search.maxCandidates"));
+        let ScoreStorage::Full(values) = &scores.storage else {
+            panic!()
+        };
+        assert_eq!(values.len(), 1);
+        assert_eq!(values["a"], 2.0);
+    }
 
     #[test]
     fn corpus_retractions_match_rebuilding_every_subset() {

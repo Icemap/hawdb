@@ -69,12 +69,14 @@ pub(super) fn lower(
         LogicalPlan::TextSeed {
             query_parameter,
             top_k,
+            complete,
             output_external_id,
         } => {
             let hints = optimizer_context.resource_hints();
             Some(PhysicalPlan::TextSeedScan {
                 query_parameter: query_parameter.clone(),
                 top_k: *top_k,
+                complete: *complete,
                 output_external_id: *output_external_id,
                 metadata_filters: Default::default(),
                 resource_profile: hawdb_plan_cypher::VectorExecutionResourceProfile {

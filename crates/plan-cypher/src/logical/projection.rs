@@ -243,6 +243,17 @@ impl PlannedReturns {
     }
 
     pub(super) fn into_logical(self, input: LogicalPlan) -> LogicalPlan {
+        let ranked = match &self {
+            Self::Aggregations { items, .. } | Self::AggregateProjection { items, .. } => items
+                .iter()
+                .any(|item| matches!(item.target, AggregateTarget::Ranked { .. })),
+            Self::Projections(_) => false,
+        };
+        let input = if ranked {
+            super::pipeline::normalize_ranked_input(input)
+        } else {
+            input
+        };
         match self {
             PlannedReturns::Projections(items) => LogicalPlan::Project {
                 items,
@@ -349,7 +360,12 @@ pub(super) fn plan_return_items_with_columns(
                     )?);
                 }
                 ReturnExpressionKind::Aggregate(_) => {
-                    aggregations.push(plan_aggregation_with_columns(scope, column_scope, item)?);
+                    aggregations.push(plan_aggregation_with_columns(
+                        scope,
+                        column_scope,
+                        item,
+                        parameters,
+                    )?);
                 }
             }
         }
@@ -838,12 +854,67 @@ pub(super) fn plan_aggregation_with_columns(
     scope: &BTreeSet<String>,
     columns: &BTreeSet<String>,
     item: &ReturnItem,
+    parameters: &BTreeMap<String, Value>,
 ) -> Result<Aggregation> {
     let aggregate = match &item.expression.kind {
         ReturnExpressionKind::Aggregate(aggregate) => aggregate,
         _ => return plan_aggregation(scope, item),
     };
+    let direct = match aggregate {
+        AggregateExpression::MaxVariable { variable } => {
+            if !columns.contains(variable) {
+                return Err(HawDBError::Semantic(
+                    "MAX without a property requires a scalar column".into(),
+                ));
+            }
+            Some((
+                AggregateFunction::Max,
+                AggregateTarget::Column(variable.clone()),
+            ))
+        }
+        AggregateExpression::CollectTop {
+            document_id,
+            score,
+            limit,
+        } => {
+            if !columns.contains(document_id) || !columns.contains(score) {
+                return Err(HawDBError::Semantic(
+                    "collect_top requires document ID and score scalar columns".into(),
+                ));
+            }
+            let limit = bind_non_negative_usize(limit, parameters, "collect_top evidence limit")?;
+            if limit == 0 {
+                return Err(HawDBError::Semantic(
+                    "collect_top evidence limit must be positive".into(),
+                ));
+            }
+            Some((
+                AggregateFunction::Collect,
+                AggregateTarget::Ranked {
+                    document_id: document_id.clone(),
+                    score: score.clone(),
+                    limit,
+                },
+            ))
+        }
+        _ => None,
+    };
+    if let Some((function, target)) = direct {
+        let name = item
+            .alias
+            .clone()
+            .unwrap_or_else(|| default_aggregation_name(function, &target, false));
+        return Ok(Aggregation {
+            function,
+            target,
+            distinct: false,
+            name,
+        });
+    }
     let variable = match aggregate {
+        AggregateExpression::MaxVariable { .. } | AggregateExpression::CollectTop { .. } => {
+            unreachable!("scalar aggregates bound above")
+        }
         AggregateExpression::CountAll => return plan_aggregation(scope, item),
         AggregateExpression::CountVariable { variable, .. }
         | AggregateExpression::CollectVariable { variable, .. }
@@ -881,6 +952,11 @@ pub(super) fn plan_aggregation(scope: &BTreeSet<String>, item: &ReturnItem) -> R
         ));
     };
     let (function, target, distinct) = match value {
+        AggregateExpression::MaxVariable { .. } | AggregateExpression::CollectTop { .. } => {
+            return Err(HawDBError::Semantic(
+                "scalar aggregate requires column-aware binding".into(),
+            ));
+        }
         AggregateExpression::CountAll => (AggregateFunction::Count, AggregateTarget::All, false),
         AggregateExpression::CountVariable { variable, distinct } => {
             if !scope.contains(variable) {
@@ -1298,6 +1374,13 @@ pub(super) fn default_aggregation_name(
     distinct: bool,
 ) -> String {
     match target {
+        AggregateTarget::Ranked {
+            document_id,
+            score,
+            limit,
+        } => {
+            return format!("collect_top({document_id}, {score}, {limit})");
+        }
         AggregateTarget::Column(column) => {
             return default_aggregation_name(
                 function,
@@ -1342,9 +1425,8 @@ pub(super) fn default_aggregation_name(
         (AggregateFunction::Max, AggregateTarget::Property { variable, property }) => {
             format!("max({variable}.{property})")
         }
-        (AggregateFunction::Max, AggregateTarget::All | AggregateTarget::Variable(_)) => {
-            "max(?)".to_string()
-        }
+        (AggregateFunction::Max, AggregateTarget::Variable(variable)) => format!("max({variable})"),
+        (AggregateFunction::Max, AggregateTarget::All) => "max(?)".into(),
         (AggregateFunction::Avg, AggregateTarget::Property { variable, property }) => {
             format!("avg({variable}.{property})")
         }
@@ -1366,7 +1448,12 @@ pub(super) fn default_aggregation_name(
             format!("collect({variable}.{property})")
         }
         (AggregateFunction::Collect, AggregateTarget::All) => "collect(*)".to_string(),
-        (_, AggregateTarget::Column(_) | AggregateTarget::ColumnProperty { .. }) => {
+        (
+            _,
+            AggregateTarget::Ranked { .. }
+            | AggregateTarget::Column(_)
+            | AggregateTarget::ColumnProperty { .. },
+        ) => {
             unreachable!("columns normalized before naming")
         }
     }

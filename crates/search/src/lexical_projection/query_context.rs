@@ -50,6 +50,7 @@ pub(crate) struct ScoringInputs<'a> {
     pub delta: &'a LexicalMiniDelta,
     pub max_term_bytes: NonZeroU64,
     pub retained_score_limit: Option<usize>,
+    pub complete_candidate_limit: Option<usize>,
     pub global_statistics: Option<&'a LexicalCorpusStatistics>,
     pub prune_blocks: bool,
     pub context: Option<QueryContext<'a>>,

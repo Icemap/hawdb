@@ -210,6 +210,7 @@ impl SearchOutOfCoreReader {
                 segment.lexical_projection.score_terms_accounted(
                     terms,
                     ScoringInputs {
+                        complete_candidate_limit: None,
                         delta: &crate::lexical_projection::LexicalMiniDelta::default(),
                         max_term_bytes: self.lexical_term_policy.max_term_bytes(),
                         retained_score_limit: retained_limit,

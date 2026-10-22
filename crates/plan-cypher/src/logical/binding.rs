@@ -130,15 +130,44 @@ pub(super) fn bind_text_seed(
             "text search query must be a string parameter".into(),
         ));
     }
-    let top_k = search
-        .top_k
+    let complete = search
+        .complete
         .as_ref()
-        .map(|value| bind_non_negative_usize(value, parameters, "topK"))
+        .map(|value| match bind_value(value, parameters)? {
+            Value::Bool(complete) => Ok(complete),
+            _ => Err(HawDBError::Semantic(
+                "text search complete must be a Boolean".into(),
+            )),
+        })
         .transpose()?
-        .unwrap_or(10);
+        .unwrap_or(false);
+    if complete && search.top_k.is_some() {
+        return Err(HawDBError::Semantic(
+            "complete text search cannot specify topK or limit".into(),
+        ));
+    }
+    if !complete && search.max_candidates.is_some() {
+        return Err(HawDBError::Semantic(
+            "maxCandidates requires complete text search".into(),
+        ));
+    }
+    let top_k = if complete {
+        let value = search.max_candidates.as_ref().ok_or_else(|| {
+            HawDBError::Semantic("complete text search requires maxCandidates".into())
+        })?;
+        bind_non_negative_usize(value, parameters, "maxCandidates")?
+    } else {
+        search
+            .top_k
+            .as_ref()
+            .map(|value| bind_non_negative_usize(value, parameters, "topK"))
+            .transpose()?
+            .unwrap_or(10)
+    };
     Ok(LogicalPlan::TextSeed {
         query_parameter: query_parameter.clone(),
         top_k,
+        complete,
         output_external_id,
     })
 }

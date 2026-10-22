@@ -100,6 +100,7 @@ pub use morsel::{
     MorselIter, MorselOrdinal, MorselOutput, MorselStreamControl, MorselStreamReport,
     MorselStreamResources, PipelineId, SequentialMorselScheduler, SharedPoolMorselScheduler,
 };
+mod retrieval_report;
 pub use profile::{
     BlockingOperatorMemoryReport, OperatorCardinalityProfile, PipelineMemoryReport,
     ProfiledQueryRows, ProfiledQueryStream, QueryRow, QueryRowRef, QueryRows, QueryRowsBuilder,
@@ -107,6 +108,9 @@ pub use profile::{
     RowRef, RowRefIter,
 };
 pub use read_output::{BoundedReadQueryOutput, QueryStreamOptions, QueryStreamReport};
+pub use retrieval_report::{
+    GroupedEvidenceExecutionReport, TextSeedExecutionReport, TextSeedSourceReport,
+};
 pub use spill::SpillPoolSnapshot;
 pub use vector::{
     execute_vector_plan, VectorCandidate, VectorCandidateBatch, VectorCandidateScanMetrics,

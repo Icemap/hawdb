@@ -306,3 +306,11 @@ harness = false
 [[bench]]
 name = "mixed_point_growth"
 harness = false
+
+[[bench]]
+name = "grouped_evidence"
+harness = false
+
+[[bench]]
+name = "grouped_evidence_native"
+harness = false

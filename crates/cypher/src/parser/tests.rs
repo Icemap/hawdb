@@ -178,3 +178,20 @@ fn vector_index_requires_unique_named_window_options() {
     )
     .unwrap();
 }
+
+#[test]
+fn complete_text_search_requires_unique_named_options() {
+    crate::parse("CALL text_search($q, complete := true, maxCandidates := $cap) YIELD id, score RETURN id, score").unwrap();
+    for options in [
+        "complete := true, complete := false",
+        "maxCandidates := 1, maxCandidates := 2",
+        "topK := 1, limit := 2",
+        "maxCandidate := 1",
+    ] {
+        let query = format!("CALL text_search($q, {options}) YIELD id RETURN id");
+        assert!(
+            matches!(crate::parse(&query), Err(hawdb_core::HawDBError::Parse(_))),
+            "{query}"
+        );
+    }
+}

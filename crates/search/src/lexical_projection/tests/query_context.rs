@@ -153,6 +153,7 @@ fn inputs<'a>(
     retained_score_limit: Option<usize>,
 ) -> ScoringInputs<'a> {
     ScoringInputs {
+        complete_candidate_limit: None,
         delta,
         max_term_bytes: reader.config.max_term_bytes,
         retained_score_limit,

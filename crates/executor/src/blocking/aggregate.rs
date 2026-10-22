@@ -333,6 +333,9 @@ fn aggregate_property_value(target: &AggregateTarget, binding: &Binding) -> Opti
 
 fn aggregate_input(item: &Aggregation, catalog: &Catalog, binding: &Binding) -> AggregateInput {
     match &item.target {
+        AggregateTarget::Ranked { .. } => {
+            unreachable!("ranked aggregation has its own admitted execution path")
+        }
         AggregateTarget::Column(column) => binding
             .values
             .get(column)
@@ -533,6 +536,7 @@ struct GroupMergeEntry {
 
 mod compact;
 mod partial;
+mod ranked;
 
 use compact::{decode_compact_group_binding, encode_compact_group_binding};
 use partial::{partial_aggregation_is_mergeable, stream_partial_aggregate_batches};
@@ -582,6 +586,20 @@ pub fn stream_aggregate_batches(
     execution_limit: ExecutionLimit,
     emit: &mut dyn FnMut(BindingBatch) -> Result<BatchControl>,
 ) -> Result<BatchControl> {
+    if items
+        .iter()
+        .any(|item| matches!(item.target, AggregateTarget::Ranked { .. }))
+    {
+        return ranked::stream(
+            input,
+            group_keys,
+            items,
+            source,
+            context,
+            execution_limit,
+            emit,
+        );
+    }
     let primary_account = context.memory_ledger.account(
         QueryMemoryClass::BlockingState,
         "AggregateExec",

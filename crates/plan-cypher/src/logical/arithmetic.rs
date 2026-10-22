@@ -86,8 +86,12 @@ impl ComposedReturnBinder<'_> {
                     expression: expression.clone(),
                     alias: None,
                 });
-                let mut aggregation =
-                    plan_aggregation_with_columns(self.scope, self.columns, &item)?;
+                let mut aggregation = plan_aggregation_with_columns(
+                    self.scope,
+                    self.columns,
+                    &item,
+                    self.parameters,
+                )?;
                 let name = aggregation.name.clone();
                 // Internal columns cannot collide with Cypher identifiers or public aliases.
                 aggregation.name = format!("\0aggregate.{}", self.aggregations.len());

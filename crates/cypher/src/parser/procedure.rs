@@ -244,6 +244,8 @@ impl Parser<'_> {
     pub(super) fn parse_text_search_arguments(&mut self) -> Result<TextSearch> {
         let query = self.parse_value()?;
         let mut top_k = None;
+        let mut complete = None;
+        let mut max_candidates = None;
         loop {
             self.skip_ws();
             if self.consume_char(')') {
@@ -252,15 +254,23 @@ impl Parser<'_> {
             self.expect_char(',')?;
             let name = self.parse_ident()?;
             self.expect_token(":=")?;
-            if !name.eq_ignore_ascii_case("topK") && !name.eq_ignore_ascii_case("limit") {
-                return Err(self.error("unsupported text search option"));
+            let slot = match name.to_ascii_lowercase().as_str() {
+                "topk" | "limit" => &mut top_k,
+                "complete" => &mut complete,
+                "maxcandidates" => &mut max_candidates,
+                _ => return Err(self.error("unsupported text search option")),
+            };
+            if slot.is_some() {
+                return Err(self.error("duplicate text search option"));
             }
-            if top_k.is_some() {
-                return Err(self.error("duplicate text search topK option"));
-            }
-            top_k = Some(self.parse_value()?);
+            *slot = Some(self.parse_value()?);
         }
-        Ok(TextSearch { query, top_k })
+        Ok(TextSearch {
+            query,
+            top_k,
+            complete,
+            max_candidates,
+        })
     }
 
     fn parse_text_search(

@@ -16,7 +16,9 @@ use super::*;
 
 pub struct TextSeedScanSpec<'a> {
     pub query_parameter: &'a str,
+    pub operator_id: Option<hawdb_plan_cypher::PhysicalOperatorId>,
     pub top_k: usize,
+    pub complete: bool,
     pub output_external_id: bool,
     pub metadata_filters: &'a BTreeMap<String, String>,
     pub resource_profile: hawdb_plan_cypher::VectorExecutionResourceProfile,
@@ -29,10 +31,13 @@ impl TextSeedScanSpec<'_> {
         execution_limit: ExecutionLimit,
         emit: &mut dyn FnMut(BindingBatch) -> Result<BatchControl>,
     ) -> Result<BatchControl> {
-        let max_rows = self
-            .top_k
-            .min(execution_limit.output_rows.unwrap_or(usize::MAX));
-        if max_rows == 0 {
+        let max_rows = if self.complete {
+            self.top_k
+        } else {
+            self.top_k
+                .min(execution_limit.output_rows.unwrap_or(usize::MAX))
+        };
+        if !self.complete && max_rows == 0 {
             return emit_owned_binding_batches(Vec::new(), context.memory.batch_rows.get(), emit);
         }
         let Some(Value::String(query_text)) = context.parameters.get(self.query_parameter) else {
@@ -81,17 +86,46 @@ impl TextSeedScanSpec<'_> {
             resources.result.max_memory_bytes,
         );
         resources.checkpoint()?;
-        let output = context
-            .external
-            .execute_text_seed(TextSeedExecutionRequest {
-                query_text,
-                metadata_filters: self.metadata_filters,
-                resources,
-                working_account: &working,
-                result_account: &result,
-            })?;
+        let request = TextSeedExecutionRequest {
+            query_text,
+            metadata_filters: self.metadata_filters,
+            resources,
+            working_account: &working,
+            result_account: &result,
+        };
+        context
+            .observer
+            .record_text_seed_execution(crate::TextSeedExecutionReport {
+                operator_id: self.operator_id,
+                complete_requested: self.complete,
+                executed: true,
+                candidate_limit: max_rows,
+                ..Default::default()
+            });
+        let output = if self.complete {
+            context.external.execute_complete_text_seed(request)
+        } else {
+            context.external.execute_text_seed(request)
+        }?;
         resources.checkpoint()?;
         output.validate(&result, resources.result)?;
+        if self.complete && !output.is_complete() {
+            return Err(HawDBError::Execution(
+                "complete text provider did not attest source exhaustion".into(),
+            ));
+        }
+        context
+            .observer
+            .record_text_seed_execution(crate::TextSeedExecutionReport {
+                operator_id: self.operator_id,
+                complete_requested: self.complete,
+                executed: true,
+                source_exhausted: output.is_complete(),
+                candidate_limit: max_rows,
+                candidate_count: output.rows().len(),
+                retained_result_bytes: output.retained_bytes(),
+                source: output.source_report(),
+            });
         let binding_account = context.memory_ledger.account(
             QueryMemoryClass::BlockingState,
             "TextSeedScan",
@@ -99,7 +133,11 @@ impl TextSeedScanSpec<'_> {
         );
         let mut reservation = binding_account.reserve(0)?;
         let mut bindings = Vec::new();
-        for row in output.rows() {
+        for row in output
+            .rows()
+            .iter()
+            .take(execution_limit.output_rows.unwrap_or(usize::MAX))
+        {
             resources.checkpoint()?;
             // One small value map plus its keys, row/Vec replacement overlap and
             // private score/hop annotations. The payload strings are additional.
@@ -107,6 +145,14 @@ impl TextSeedScanSpec<'_> {
                 .checked_add(row.id.len())
                 .and_then(|n| n.checked_add(row.external_id.as_ref().map_or(0, String::len)))
                 .ok_or_else(|| HawDBError::Execution("text seed binding size overflow".into()))?;
+            if self.complete && !bindings.is_empty() && !binding_account.can_reserve(bytes) {
+                let control = emit(std::mem::take(&mut bindings))?;
+                resources.checkpoint()?;
+                reservation.shrink(reservation.bytes());
+                if control == BatchControl::Stop {
+                    return Ok(control);
+                }
+            }
             reservation.grow(bytes)?;
             let mut values = BTreeMap::from([
                 ("id".into(), Value::String(row.id.clone())),
@@ -128,6 +174,21 @@ impl TextSeedScanSpec<'_> {
                 nodes: BTreeMap::new(),
                 relationships: BTreeMap::new(),
             });
+            if self.complete && bindings.len() == context.memory.batch_rows.get() {
+                let control = emit(std::mem::take(&mut bindings))?;
+                resources.checkpoint()?;
+                reservation.shrink(reservation.bytes());
+                if control == BatchControl::Stop {
+                    return Ok(control);
+                }
+            }
+        }
+        if self.complete {
+            resources.checkpoint()?;
+            let control =
+                emit_owned_binding_batches(bindings, context.memory.batch_rows.get(), emit)?;
+            resources.checkpoint()?;
+            return Ok(control);
         }
         drop(output);
         drop(result);
@@ -141,6 +202,62 @@ impl TextSeedScanSpec<'_> {
 mod tests {
     use super::*;
     use std::cell::Cell;
+
+    #[test]
+    fn complete_text_seed_refuses_a_window_only_provider_before_reading() {
+        struct WindowOnly(Cell<usize>);
+        impl BatchExternalRead for WindowOnly {
+            fn execute_vector_seed(
+                &self,
+                _: VectorSeedExecutionRequest<'_>,
+            ) -> Result<VectorSeedExecutionOutput> {
+                unreachable!()
+            }
+            fn execute_text_seed(
+                &self,
+                request: TextSeedExecutionRequest<'_>,
+            ) -> Result<TextSeedExecutionOutput> {
+                self.0.set(self.0.get() + 1);
+                TextSeedExecutionOutput::new(request.result_account, request.resources.result)
+            }
+        }
+        let source = WindowOnly(Cell::new(0));
+        let memory = ExecutionMemoryConfig::default();
+        let ledger = QueryMemoryLedger::new(memory.query_memory_bytes);
+        let parameters = BTreeMap::from([("q".into(), Value::String("graph".into()))]);
+        let filters = BTreeMap::new();
+        let observer = QueryExecutionObserver::default();
+        let result = TextSeedScanSpec {
+            operator_id: None,
+            query_parameter: "q",
+            top_k: 10,
+            complete: true,
+            output_external_id: false,
+            metadata_filters: &filters,
+            resource_profile: hawdb_plan_cypher::VectorExecutionResourceProfile {
+                priority: 1,
+                max_parallelism: 1,
+                max_working_memory_bytes: Some(1 << 20),
+            },
+        }
+        .stream(
+            VectorSeedContext {
+                parameters: &parameters,
+                external: &source,
+                memory: &memory,
+                memory_ledger: &ledger,
+                task_context: None,
+                observer: &observer,
+            },
+            ExecutionLimit::unlimited(),
+            &mut |_| panic!("window-only source cannot attest exhaustion"),
+        );
+        assert!(
+            matches!(result, Err(HawDBError::Execution(message)) if message.contains("source-exhaustion"))
+        );
+        assert_eq!(source.0.get(), 0);
+        assert_eq!(ledger.snapshot().used_bytes, 0);
+    }
 
     #[test]
     fn text_seed_emission_capacity_fits_the_shared_root_and_releases_on_every_terminal() {
@@ -185,7 +302,7 @@ mod tests {
                 calls: Cell::new(0),
             };
             let mut emitted = 0;
-            let result = TextSeedScanSpec { query_parameter: "text", top_k: window, output_external_id: true, metadata_filters: &filters, resource_profile: hawdb_plan_cypher::VectorExecutionResourceProfile { priority: 1, max_parallelism: 1, max_working_memory_bytes: Some(16 * 1024) } }
+            let result = TextSeedScanSpec { operator_id: None, query_parameter: "text", top_k: window, complete: false, output_external_id: true, metadata_filters: &filters, resource_profile: hawdb_plan_cypher::VectorExecutionResourceProfile { priority: 1, max_parallelism: 1, max_working_memory_bytes: Some(16 * 1024) } }
                 .stream(VectorSeedContext { parameters: &parameters, external: &source, memory: &memory, memory_ledger: &ledger, task_context: None, observer: &observer }, ExecutionLimit::unlimited(), &mut |batch| {
                     emitted += batch.len();
                     let actual_slots = batch.capacity().checked_mul(std::mem::size_of::<Binding>()).unwrap();

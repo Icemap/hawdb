@@ -54,6 +54,16 @@ pub trait BatchExternalRead {
         ))
     }
 
+    fn execute_complete_text_seed(
+        &self,
+        request: TextSeedExecutionRequest<'_>,
+    ) -> Result<TextSeedExecutionOutput> {
+        request.resources.checkpoint()?;
+        Err(HawDBError::Execution(
+            "complete text search requires a provider with source-exhaustion support".into(),
+        ))
+    }
+
     fn execute_text_seed(
         &self,
         request: TextSeedExecutionRequest<'_>,
@@ -88,6 +98,15 @@ impl BatchExternalRead for BatchExternalReadAdapter<'_> {
         request: VectorIndexExecutionRequest<'_>,
     ) -> Result<Box<dyn VectorIndexExecutionOutput>> {
         self.external.borrow_mut().execute_vector_index(request)
+    }
+
+    fn execute_complete_text_seed(
+        &self,
+        request: TextSeedExecutionRequest<'_>,
+    ) -> Result<TextSeedExecutionOutput> {
+        self.external
+            .borrow_mut()
+            .execute_complete_text_seed(request)
     }
 
     fn execute_text_seed(

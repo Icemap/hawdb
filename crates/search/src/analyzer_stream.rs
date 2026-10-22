@@ -115,6 +115,27 @@ pub(crate) fn visit_admitted_token_list(
     })
 }
 
+/// Emit one field's canonical token sequence without materializing it. Phrase
+/// aliases deduplicate against all preceding terms in the field, while ordinary
+/// identifier occurrences keep their frequency. The retained markers are admitted.
+pub(crate) fn visit_admitted_field_token_list(
+    text: &str,
+    analyzer: &SearchAnalyzerLexicon,
+    control: Control<'_>,
+    mut emit: impl FnMut(Term) -> Result<()>,
+) -> Result<()> {
+    let mut field_terms = Dedup::new();
+    visit_admitted_token_list(text, analyzer, control, |term, occurrence| {
+        let first = field_terms
+            .insert(Text::Owned(term.clone()), control)?
+            .is_some();
+        if first || occurrence == TokenOccurrence::Repeated {
+            emit(term)?;
+        }
+        Ok(())
+    })
+}
+
 pub(super) fn collect_token_list(text: &str, analyzer: &SearchAnalyzerLexicon) -> Vec<String> {
     let mut tokens = TokenSequence::default();
     {

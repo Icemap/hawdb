@@ -1012,6 +1012,8 @@ pub struct ReadExecutionProfile<TScanPruningReport> {
     pub scan_pruning_reports: Vec<TScanPruningReport>,
     pub vector_execution_reports: Vec<crate::VectorExecutionReport>,
     pub graph_expansion_reports: Vec<crate::GraphExpansionExecutionReport>,
+    pub text_seed_execution_reports: Vec<crate::TextSeedExecutionReport>,
+    pub grouped_evidence_reports: Vec<crate::GroupedEvidenceExecutionReport>,
     pub blocking_operator_memory_reports: Vec<BlockingOperatorMemoryReport>,
     pub pipeline_memory_report: PipelineMemoryReport,
 }
@@ -1149,6 +1151,8 @@ mod tests {
             scan_pruning_reports: Vec::new(),
             vector_execution_reports: Vec::new(),
             graph_expansion_reports: Vec::new(),
+            text_seed_execution_reports: Vec::new(),
+            grouped_evidence_reports: Vec::new(),
             blocking_operator_memory_reports: Vec::new(),
             pipeline_memory_report: PipelineMemoryReport::default(),
         };

@@ -144,6 +144,8 @@ pub struct GraphSeedSearch {
 pub struct TextSearch {
     pub query: ValueExpression,
     pub top_k: Option<ValueExpression>,
+    pub complete: Option<ValueExpression>,
+    pub max_candidates: Option<ValueExpression>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -531,6 +533,14 @@ pub enum ArithmeticOp {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AggregateExpression {
     CountAll,
+    MaxVariable {
+        variable: String,
+    },
+    CollectTop {
+        document_id: String,
+        score: String,
+        limit: ValueExpression,
+    },
     CountVariable {
         variable: String,
         distinct: bool,

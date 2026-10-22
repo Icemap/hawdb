@@ -22,6 +22,117 @@ use hawdb_core::Value;
 use hawdb_storage::scan::{ScanPruningReport, ScanPruningStrategy};
 use std::collections::BTreeMap;
 
+pub fn text_seed_source_report_value(report: &crate::TextSeedSourceReport) -> Value {
+    Value::Map(BTreeMap::from([
+        ("generation".into(), optional_u64_value(report.generation)),
+        (
+            "source_commit_epoch".into(),
+            optional_u64_value(report.source_commit_epoch),
+        ),
+        (
+            "corpus_documents".into(),
+            report
+                .corpus_documents
+                .map(usize_value)
+                .unwrap_or(Value::Null),
+        ),
+        (
+            "matching_documents".into(),
+            report
+                .matching_documents
+                .map(usize_value)
+                .unwrap_or(Value::Null),
+        ),
+        (
+            "postings_visited".into(),
+            optional_u64_value(report.postings_visited),
+        ),
+        ("bytes_read".into(), optional_u64_value(report.bytes_read)),
+        (
+            "document_bytes_read".into(),
+            optional_u64_value(report.document_bytes_read),
+        ),
+    ]))
+}
+
+pub fn text_seed_execution_report_value(report: &crate::TextSeedExecutionReport) -> Value {
+    Value::Map(BTreeMap::from([
+        ("status".into(), Value::String(report.status().into())),
+        (
+            "operator_id".into(),
+            report
+                .operator_id
+                .map(|id| usize_value(id.ordinal()))
+                .unwrap_or(Value::Null),
+        ),
+        (
+            "complete_requested".into(),
+            Value::Bool(report.complete_requested),
+        ),
+        ("executed".into(), Value::Bool(report.executed)),
+        (
+            "source_exhausted".into(),
+            Value::Bool(report.source_exhausted),
+        ),
+        (
+            "candidate_limit".into(),
+            usize_value(report.candidate_limit),
+        ),
+        (
+            "candidate_count".into(),
+            usize_value(report.candidate_count),
+        ),
+        (
+            "retained_result_bytes".into(),
+            usize_value(report.retained_result_bytes),
+        ),
+        (
+            "source".into(),
+            report
+                .source
+                .as_ref()
+                .map(text_seed_source_report_value)
+                .unwrap_or(Value::Null),
+        ),
+    ]))
+}
+
+pub fn grouped_evidence_report_value(report: &crate::GroupedEvidenceExecutionReport) -> Value {
+    Value::Map(BTreeMap::from([
+        (
+            "operator_id".into(),
+            report
+                .operator_id
+                .map(|id| usize_value(id.ordinal()))
+                .unwrap_or(Value::Null),
+        ),
+        ("executed".into(), Value::Bool(report.executed)),
+        (
+            "input_exhausted".into(),
+            Value::Bool(report.input_exhausted),
+        ),
+        ("input_rows".into(), usize_value(report.input_rows)),
+        (
+            "borrowed_group_key_rows".into(),
+            usize_value(report.borrowed_group_key_rows),
+        ),
+        (
+            "groups_considered".into(),
+            usize_value(report.groups_considered),
+        ),
+        (
+            "retained_evidence".into(),
+            usize_value(report.retained_evidence),
+        ),
+        ("output_groups".into(), usize_value(report.output_groups)),
+        (
+            "peak_state_bytes".into(),
+            usize_value(report.peak_state_bytes),
+        ),
+        ("spilled_bytes".into(), u64_value(report.spilled_bytes)),
+    ]))
+}
+
 pub fn blocking_operator_memory_report_value(report: &BlockingOperatorMemoryReport) -> Value {
     Value::Map(BTreeMap::from([
         (

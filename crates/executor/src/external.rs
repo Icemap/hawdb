@@ -129,6 +129,16 @@ pub trait ExternalReadOperator {
         ))
     }
 
+    fn execute_complete_text_seed(
+        &mut self,
+        request: TextSeedExecutionRequest<'_>,
+    ) -> Result<TextSeedExecutionOutput> {
+        request.resources.checkpoint()?;
+        Err(HawDBError::Execution(
+            "complete text search requires a provider with source-exhaustion support".into(),
+        ))
+    }
+
     fn execute_text_seed(
         &mut self,
         request: TextSeedExecutionRequest<'_>,

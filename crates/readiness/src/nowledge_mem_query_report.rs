@@ -20,8 +20,8 @@
 use crate::bounded_read_evidence::NowledgeMemGraphMode;
 use hawdb_cypher::Statement;
 use hawdb_executor::{
-    GraphExpansionExecutionReport, PipelineMemoryReport, QueryOutput, ReadExecutionProfile,
-    VectorExecutionReport,
+    GraphExpansionExecutionReport, GroupedEvidenceExecutionReport, PipelineMemoryReport,
+    QueryOutput, ReadExecutionProfile, TextSeedExecutionReport, VectorExecutionReport,
 };
 use hawdb_plan_cache::PlanCacheLookup;
 use hawdb_storage::scan::{ScanPruningReport, ScanPruningStrategy};
@@ -114,6 +114,8 @@ pub struct NowledgeMemQueryReport {
     pub scan_pruning_reports: Vec<ScanPruningReport>,
     pub vector_execution_reports: Vec<VectorExecutionReport>,
     pub graph_expansion_reports: Vec<GraphExpansionExecutionReport>,
+    pub text_seed_execution_reports: Vec<TextSeedExecutionReport>,
+    pub grouped_evidence_reports: Vec<GroupedEvidenceExecutionReport>,
     pub pipeline_memory_report: Option<PipelineMemoryReport>,
     pub output_row_shape: NowledgeMemQueryOutputRowShape,
     pub api_behavior: NowledgeMemQueryApiBehavior,
@@ -155,6 +157,8 @@ impl NowledgeMemQueryReport {
             "vector_execution_reports": self.vector_execution_reports.iter().map(vector_execution_report_json).collect::<Vec<_>>(),
             "graph_expansion_report_count": self.graph_expansion_reports.len(),
             "graph_expansion_reports": self.graph_expansion_reports.iter().map(graph_expansion_report_json).collect::<Vec<_>>(),
+            "text_seed_execution_reports": self.text_seed_execution_reports.iter().map(text_seed_execution_report_json).collect::<Vec<_>>(),
+            "grouped_evidence_reports": self.grouped_evidence_reports.iter().map(grouped_evidence_report_json).collect::<Vec<_>>(),
             "pipeline_memory_report": self.pipeline_memory_report.as_ref().map(pipeline_memory_report_json),
             "output_row_shape": self.output_row_shape.json(),
             "api_behavior": self.api_behavior.json(),
@@ -303,12 +307,54 @@ pub fn nowledge_mem_query_report(input: NowledgeMemQueryReportInput<'_>) -> Nowl
             .execution_profile
             .map(|profile| profile.graph_expansion_reports.clone())
             .unwrap_or_default(),
+        text_seed_execution_reports: input
+            .execution_profile
+            .map(|profile| profile.text_seed_execution_reports.clone())
+            .unwrap_or_default(),
+        grouped_evidence_reports: input
+            .execution_profile
+            .map(|profile| profile.grouped_evidence_reports.clone())
+            .unwrap_or_default(),
         pipeline_memory_report: input
             .execution_profile
             .map(|profile| profile.pipeline_memory_report.clone()),
         output_row_shape: NowledgeMemQueryOutputRowShape::from_output(input.output),
         api_behavior: NowledgeMemQueryApiBehavior::from_statement(input.statement),
     }
+}
+
+fn text_seed_execution_report_json(report: &TextSeedExecutionReport) -> serde_json::Value {
+    serde_json::json!({
+        "operator_id": report.operator_id .map(|id| id.ordinal()),
+        "complete_requested": report.complete_requested,
+        "executed": report.executed,
+        "source_exhausted": report.source_exhausted,
+        "candidate_limit": report.candidate_limit,
+        "candidate_count": report.candidate_count,
+        "retained_result_bytes": report.retained_result_bytes,
+        "status": report.status(),
+        "source": report.source.as_ref().map(|source| serde_json::json!({
+            "generation": source.generation, "source_commit_epoch": source.source_commit_epoch,
+            "corpus_documents": source.corpus_documents, "matching_documents": source.matching_documents,
+            "postings_visited": source.postings_visited, "bytes_read": source.bytes_read,
+            "document_bytes_read": source.document_bytes_read,
+        })),
+    })
+}
+
+fn grouped_evidence_report_json(report: &GroupedEvidenceExecutionReport) -> serde_json::Value {
+    serde_json::json!({
+        "operator_id": report.operator_id .map(|id| id.ordinal()),
+        "executed": report.executed,
+        "input_exhausted": report.input_exhausted,
+        "input_rows": report.input_rows,
+        "borrowed_group_key_rows": report.borrowed_group_key_rows,
+        "groups_considered": report.groups_considered,
+        "retained_evidence": report.retained_evidence,
+        "output_groups": report.output_groups,
+        "peak_state_bytes": report.peak_state_bytes,
+        "spilled_bytes": report.spilled_bytes,
+    })
 }
 
 fn vector_execution_report_json(report: &VectorExecutionReport) -> serde_json::Value {
@@ -485,6 +531,8 @@ mod tests {
             scan_pruning_reports: Vec::new(),
             vector_execution_reports: Vec::new(),
             graph_expansion_reports: Vec::new(),
+            text_seed_execution_reports: Vec::new(),
+            grouped_evidence_reports: Vec::new(),
             pipeline_memory_report: None,
             output_row_shape: NowledgeMemQueryOutputRowShape {
                 row_count: 1,
@@ -530,6 +578,8 @@ mod tests {
                 "vector_execution_reports": [],
                 "graph_expansion_report_count": 0,
                 "graph_expansion_reports": [],
+                "text_seed_execution_reports": [],
+                "grouped_evidence_reports": [],
                 "pipeline_memory_report": null,
                 "output_row_shape": {"row_count": 1, "column_count": 1, "columns": ["memory"]},
                 "api_behavior": {

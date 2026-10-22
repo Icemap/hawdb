@@ -54,10 +54,29 @@ impl Parser<'_> {
         } else if self.consume_aggregate_function_name("MAX") {
             self.expect_char('(')?;
             let variable = self.parse_ident()?;
-            self.expect_char('.')?;
-            let property = self.parse_ident()?;
+            let aggregate = if self.consume_char('.') {
+                AggregateExpression::MaxProperty {
+                    variable,
+                    property: self.parse_ident()?,
+                }
+            } else {
+                AggregateExpression::MaxVariable { variable }
+            };
             self.expect_char(')')?;
-            ReturnExpressionKind::Aggregate(AggregateExpression::MaxProperty { variable, property })
+            ReturnExpressionKind::Aggregate(aggregate)
+        } else if self.consume_aggregate_function_name("COLLECT_TOP") {
+            self.expect_char('(')?;
+            let document_id = self.parse_ident()?;
+            self.expect_char(',')?;
+            let score = self.parse_ident()?;
+            self.expect_char(',')?;
+            let limit = self.parse_value()?;
+            self.expect_char(')')?;
+            ReturnExpressionKind::Aggregate(AggregateExpression::CollectTop {
+                document_id,
+                score,
+                limit,
+            })
         } else if self.consume_aggregate_function_name("AVG") {
             self.expect_char('(')?;
             let variable = self.parse_ident()?;
