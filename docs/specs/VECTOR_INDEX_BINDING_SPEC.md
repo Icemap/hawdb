@@ -240,8 +240,9 @@ including a rebuild at the same source epoch.
 Mapping charges every visited metadata record to the eligibility work scope,
 including rejected records. For a non-empty eligible domain, `max_work` /
 `maxWork` must budget for canonical collection plus the index's metadata size.
-Mapping is O(index metadata) per query in this delivery, so a small eligible
-set over a large index can exhaust the work limit during mapping alone.
+Each non-empty query visits the full index metadata in this delivery, so a
+small eligible set over a large index can exhaust the work limit during mapping
+alone.
 
 Existing index memory, file-descriptor, I/O and
 spill admission remains separate from that work counter. The mapping proof and
