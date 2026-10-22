@@ -135,12 +135,11 @@ fuzz-help:
 		'  FUZZ_OPTIMIZER_ARGS="..." FUZZ_STORAGE_ARGS="..." FUZZ_APPEND_ARGS="..." FUZZ_PARSER_ARGS="..."'
 
 # PostgreSQL SQL compatibility; the DSN stays in the caller's environment.
-PYTHON ?= python3
 PG_REGRESS_ARGS ?=
 
 .PHONY: pg-regress pg-regress-list
 pg-regress:
-	$(PYTHON) tests/pg-regress/src/runner.py $(PG_REGRESS_ARGS)
+	cargo run --locked --manifest-path tests/pg-regress/Cargo.toml -- $(PG_REGRESS_ARGS)
 
 pg-regress-list:
-	$(PYTHON) tests/pg-regress/src/runner.py --list $(PG_REGRESS_ARGS)
+	cargo run --locked --manifest-path tests/pg-regress/Cargo.toml -- --list $(PG_REGRESS_ARGS)
