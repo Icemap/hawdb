@@ -36,6 +36,10 @@ fn namespace_probes_isolate_exhausted_projects_and_preserve_alias_accounting() {
     std::fs::create_dir(&second_parent).unwrap();
     let first_alias = first_parent.join("..");
     let second_alias = second_parent.join("..");
+    let missing = second.root.join("missing");
+    // Initialize native error-message resources outside the measured engine
+    // path. Windows may retain process-owned state on the first formatted error.
+    drop(std::fs::canonicalize(&missing).unwrap_err().to_string());
     let before = first.project.metrics();
     let native_before = super::native_descriptor_count();
     for _ in 0..16 {
@@ -53,10 +57,11 @@ fn namespace_probes_isolate_exhausted_projects_and_preserve_alias_accounting() {
                 FileDescriptorError::ConfigurationConflict { .. }
             ))
         ));
-        assert!(ProjectFileDescriptors::acquire_existing(&second.root.join("missing"), 1).is_err());
+        assert!(ProjectFileDescriptors::acquire_existing(&missing, 1).is_err());
         assert_eq!(first.project.metrics().open, before.open);
         assert_eq!(first.project.metrics().reserved, before.reserved);
         assert_eq!(first.project.metrics().high_water, before.high_water);
+        assert_eq!(super::native_descriptor_count(), native_before);
     }
     assert_eq!(super::native_descriptor_count(), native_before);
     let probes = super::super::NAMESPACE_PROBES.metrics();
