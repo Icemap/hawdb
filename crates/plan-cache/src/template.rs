@@ -101,13 +101,20 @@ pub fn parameterize_logical_plan(
         let marker = parameter_marker(name, value, &[]);
         let mut candidate_parameters = parameters.clone();
         candidate_parameters.insert(name.clone(), marker.clone());
-        let is_safe = planner::plan_with_params(statement, &candidate_parameters)
-            .ok()
-            .is_some_and(|mut candidate| {
-                marker_use_in_logical_plan(&candidate, name) == MarkerUse::Safe
-                    && bind_logical_plan(&mut candidate, parameters).is_ok()
-                    && candidate == actual
-            });
+        let candidate = planner::plan_with_params(statement, &candidate_parameters).ok();
+        if candidate.as_ref().is_some_and(|candidate| {
+            marker_use_in_logical_plan(candidate, name) == MarkerUse::None && candidate == &actual
+        }) {
+            // Prove all omissions together below. Absence from one marked plan
+            // alone does not establish that removing the binding is harmless.
+            template_parameters.remove(name);
+            continue;
+        }
+        let is_safe = candidate.is_some_and(|mut candidate| {
+            marker_use_in_logical_plan(&candidate, name) == MarkerUse::Safe
+                && bind_logical_plan(&mut candidate, parameters).is_ok()
+                && candidate == actual
+        });
         if is_safe {
             template_parameters.insert(name.clone(), marker);
             cache_values.insert(
@@ -120,19 +127,22 @@ pub fn parameterize_logical_plan(
         }
     }
 
-    let logical = if slot_count == 0 {
+    let logical = if slot_count == 0 && template_parameters.len() == parameters.len() {
         actual.clone()
     } else {
-        let candidate = planner::plan_with_params(statement, &template_parameters)?;
-        let all_slots_are_safe = cache_values.iter().all(|(name, cached)| {
-            !matches!(cached, ParameterCacheValue::Slot(_))
-                || marker_use_in_logical_plan(&candidate, name) == MarkerUse::Safe
-        });
-        let mut rebound = candidate.clone();
-        if all_slots_are_safe
-            && bind_logical_plan(&mut rebound, parameters).is_ok()
-            && rebound == actual
-        {
+        let candidate = planner::plan_with_params(statement, &template_parameters)
+            .ok()
+            .filter(|candidate| {
+                let all_slots_are_safe = cache_values.iter().all(|(name, cached)| {
+                    !matches!(cached, ParameterCacheValue::Slot(_))
+                        || marker_use_in_logical_plan(candidate, name) == MarkerUse::Safe
+                });
+                let mut rebound = candidate.clone();
+                all_slots_are_safe
+                    && bind_logical_plan(&mut rebound, parameters).is_ok()
+                    && rebound == actual
+            });
+        if let Some(candidate) = candidate {
             candidate
         } else {
             cache_values = parameters
@@ -1178,6 +1188,57 @@ mod tests {
             true
         )
         .is_err());
+    }
+
+    #[test]
+    fn unused_bindings_share_a_template_without_hiding_exact_parameters() {
+        let statement =
+            cypher::parse("MATCH (n:Item) WHERE n.id = $id RETURN n.id AS id LIMIT $limit")
+                .unwrap();
+        let first = BTreeMap::from([
+            ("id".into(), Value::Int(1)),
+            ("limit".into(), Value::Int(3)),
+            ("score".into(), Value::String("unused".into())),
+        ]);
+        let mut second = first.clone();
+        second.insert("id".into(), Value::Int(2));
+        second.insert("score".into(), Value::List(vec![Value::Int(9)]));
+        let first_plan = parameterize_logical_plan(&statement, &first).unwrap();
+        let second_plan = parameterize_logical_plan(&statement, &second).unwrap();
+        assert_eq!(first_plan.cache_key(), second_plan.cache_key());
+        assert!(!first_plan.cache_key.values.contains_key("score"));
+        assert_eq!(first_plan.exact_variant_count(), 1);
+        assert_eq!(first_plan.slot_count(), 1);
+        second.remove("score");
+        assert_eq!(
+            first_plan.cache_key(),
+            parameterize_logical_plan(&statement, &second)
+                .unwrap()
+                .cache_key()
+        );
+        second.insert("limit".into(), Value::Int(4));
+        assert_ne!(
+            first_plan.cache_key(),
+            parameterize_logical_plan(&statement, &second)
+                .unwrap()
+                .cache_key()
+        );
+        second.remove("id");
+        assert!(parameterize_logical_plan(&statement, &second).is_err());
+    }
+
+    #[test]
+    fn unused_only_bindings_leave_no_slots_and_preserve_literal_values() {
+        let statement = cypher::parse("MATCH (n:Item) WHERE n.id = 1 RETURN n.id").unwrap();
+        let empty = parameterize_logical_plan(&statement, &BTreeMap::new()).unwrap();
+        let extra = parameterize_logical_plan(
+            &statement,
+            &BTreeMap::from([("unused".into(), Value::String("payload".into()))]),
+        )
+        .unwrap();
+        assert_eq!(empty, extra);
+        assert_eq!(extra.slot_count(), 0);
+        assert_eq!(extra.exact_variant_count(), 0);
     }
 
     #[test]

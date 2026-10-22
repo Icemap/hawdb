@@ -1162,6 +1162,53 @@ mod tests {
     }
 
     #[test]
+    fn point_statistics_reuse_rotating_bindings_across_bound_diagnostics() {
+        let mut db = crate::Database::new();
+        db.query("CREATE INDEX ON :Item(id)").unwrap();
+        for id in 0..32 {
+            db.query_with_params(
+                "CREATE (:Item {id: $id, score: $score})",
+                &BTreeMap::from([
+                    ("id".into(), Value::Int(id)),
+                    ("score".into(), Value::Int(id * 3)),
+                ]),
+            )
+            .unwrap();
+        }
+        let query = "MATCH (n:Item) WHERE n.id = $id RETURN n.id AS id, n.score AS score";
+        let parameters = |id| {
+            BTreeMap::from([
+                ("id".into(), Value::Int(id)),
+                ("score".into(), Value::Int(id * 3)),
+            ])
+        };
+        let before = db.plan_cache_stats().unwrap();
+        for id in 0..16 {
+            let output = db.query_with_params(query, &parameters(id)).unwrap();
+            assert_eq!(output.rows.len(), 1);
+            assert_eq!(output.rows[0].get("id"), Some(&Value::Int(id)));
+            assert_eq!(output.rows[0].get("score"), Some(&Value::Int(id * 3)));
+        }
+        let warm = db.plan_cache_stats().unwrap();
+        assert_eq!(warm.misses - before.misses, 1);
+        assert_eq!(warm.hits - before.hits, 15);
+        db.explain_query_with_params(query, &parameters(31))
+            .unwrap();
+        db.explain_analyze_query_with_params(query, &parameters(31))
+            .unwrap();
+        let before = db.plan_cache_stats().unwrap();
+        for id in 16..32 {
+            let output = db.query_with_params(query, &parameters(id)).unwrap();
+            assert_eq!(output.rows.len(), 1);
+            assert_eq!(output.rows[0].get("id"), Some(&Value::Int(id)));
+            assert_eq!(output.rows[0].get("score"), Some(&Value::Int(id * 3)));
+        }
+        let after = db.plan_cache_stats().unwrap();
+        assert_eq!(after.misses - before.misses, 0);
+        assert_eq!(after.hits - before.hits, 16);
+    }
+
+    #[test]
     fn point_statistics_avoid_full_publication_for_a_cold_indexed_read() {
         let mut db = crate::Database::new();
         for statement in [

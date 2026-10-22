@@ -76,6 +76,19 @@ vector_only, background_only, text_vector, text_background and vector_background
 
 ## CI benchmark smoke owners
 
+The local-only `mixed_point_growth` probe additionally separates plain EXPLAIN,
+EXPLAIN ANALYZE, no diagnostic, and their original combined sequence. Full and
+minimal parameter maps isolate unused binding variants, with database-cache
+counters for both timed phases. See `bindings/benchmarks/README.md`; these
+manual controls do not enter CI or qualify latency on a contended host.
+
+Plan-cache component regressions also cover omission of irrelevant bindings,
+exact pagination variants and missing required parameters. The existing root
+`plan_cache` family verifies rotating point values and unused bindings across
+bound EXPLAIN/ANALYZE, including cache hit/miss counts and returned values.
+Both remain in their ordinary existing crate/root CI owners; they are not
+additional benchmark or fuzz jobs.
+
 `//:hawdb_linux_ci_smoke_tests` includes correctness/protocol checks and
 benchmark evidence. The following benchmark groups remain `exclusive`, so
 Bazel executes them sequentially after ordinary tests in the invocation.

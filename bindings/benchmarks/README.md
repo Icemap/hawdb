@@ -279,10 +279,24 @@ The default `stable` mode repeats the initially warmed parameter. Optional
 it does not qualify prolonged reuse of the initially warmed small-table plan.
 
 ```console
-bazel build -c opt //:hawdb_bench_mixed_point_growth
+bazel build --config=release //:hawdb_bench_mixed_point_growth
 bazel-bin/hawdb_bench_mixed_point_growth 1000 - raw stable
 bazel-bin/hawdb_bench_mixed_point_growth 1000 - admitted stable
+bazel-bin/hawdb_bench_mixed_point_growth 1000 - raw rotating none full
+bazel-bin/hawdb_bench_mixed_point_growth 1000 - raw rotating explain minimal
+bazel-bin/hawdb_bench_mixed_point_growth 1000 - raw rotating analyze minimal
 ```
+
+The optional diagnostic mode is `none`, `explain`, `analyze`, or `both`
+(default, preserving the original sequence). The optional binding mode is
+`full` (default, preserving the unused `score` binding) or `minimal` (bind only
+the point query's `id`). Inserts always retain both original fields. These
+controls separate diagnostic publication from parameter-cache variants; they
+do not themselves establish which mechanism explains a historical regression.
+Output includes database-cache hits/misses for both timed phases, diagnostic
+hits/misses, and post-diagnostic evictions. A `none` run performs no additional
+diagnostic between the timed phases. The initial four-row diagnostic and
+warmup are unchanged. Missing diagnostic reports are emitted as JSON null.
 
 The probe accepts 9 through 10,000 rows and a new file path or `-` for memory.
 Point input construction and verification are outside each query timer; growth
@@ -316,3 +330,6 @@ uses the embedded Rust facade; it does not qualify Arrow, source-to-host reuse,
 whole-query memory, cross-language performance or the full performance gate.
 The [completed cold/warm control](RUST_ORDINARY_RESULTS.md#same-generation-source-capacity-creation-control)
 preserves every raw result and hash separately from ordinary query timing.
+
+The [mixed-growth cache diagnosis](POINT_CACHE_RESULTS.md) records phase
+lookup counts and their limits for the unused-binding cache change (#1001).
