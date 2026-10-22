@@ -4,6 +4,13 @@
 use super::*;
 
 fn setup_consumer(cold: bool) -> (Root, Database, SearchProjectionConsumer) {
+    setup_consumer_with_governor(cold, None)
+}
+
+fn setup_consumer_with_governor(
+    cold: bool,
+    governor: Option<RuntimeGovernor>,
+) -> (Root, Database, SearchProjectionConsumer) {
     let root = Root::new();
     let path = root.0.join("graph");
     let mut db = Database::open(&path).unwrap();
@@ -25,6 +32,9 @@ fn setup_consumer(cold: bool) -> (Root, Database, SearchProjectionConsumer) {
             },
         )
         .unwrap();
+    }
+    if let Some(governor) = governor {
+        db.set_runtime_governor(governor);
     }
     let consumer = db
         .create_search_projection_consumer(
@@ -326,10 +336,28 @@ fn registered_consumer_post_e_source_conflict_preserves_receipt_and_retries() {
 
 #[test]
 fn registered_consumer_competing_candidate_and_foreign_registration_cannot_publish() {
-    let (root, mut db, mut consumer) = setup_consumer(false);
+    // This scenario retains two independent background operations: first an
+    // update plus another Consumer creation, then two competing update tokens.
+    // Pin their admission so host CPU detection cannot refuse the second task
+    // before the registration and stale-base checks are exercised.
+    let governor = RuntimeGovernor::new(
+        RuntimeGovernorConfig {
+            background_task_limit: Some(nz(2)),
+            memory_budget_bytes: Some(256 << 20),
+            ..RuntimeGovernorConfig::shared_host()
+        },
+        RuntimeResourceSnapshot::from_parts(
+            RuntimeResourceBudget::from_limits(nz(2), None, None),
+            RuntimeMemorySnapshot::from_limits(Some(1 << 30), Some(1 << 30), None, None, None),
+        ),
+        IoConcurrencyBudget::new(2, 1),
+    );
+    governor.pin_resources();
+    let (root, mut db, mut consumer) = setup_consumer_with_governor(false, Some(governor.clone()));
     let before = consumer.projection().receipt();
     db.query("MATCH (n:Memory) SET n.value=2").unwrap();
     let stale = consumer_covered(consumer_stage(&mut db, &consumer));
+    assert_eq!(governor.snapshot().active_background_tasks, 1);
     let mut other = db
         .create_search_projection_consumer(
             SearchProjectionConsumerId::new("other-v1").unwrap(),
@@ -351,6 +379,7 @@ fn registered_consumer_competing_candidate_and_foreign_registration_cannot_publi
     receipt_unchanged(&db, &consumer, &before);
     let first = consumer_covered(consumer_stage(&mut db, &consumer));
     let stale = consumer_covered(consumer_stage(&mut db, &consumer));
+    assert_eq!(governor.snapshot().active_background_tasks, 2);
     db.publish_search_projection_consumer_covered_update(
         &mut consumer,
         first,
@@ -369,6 +398,7 @@ fn registered_consumer_competing_candidate_and_foreign_registration_cannot_publi
         ))
     ));
     receipt_unchanged(&db, &consumer, &selected);
+    assert_eq!(governor.snapshot().active_background_tasks, 0);
 }
 
 #[test]
