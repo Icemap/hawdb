@@ -85,6 +85,7 @@ pub use concurrent::{BoundedExecutor, SharedExecutorPool, SharedExecutorPoolErro
 pub use external::{
     ExternalReadOperator, ExternalReadResourceContract, ExternalReadResultBudget,
     TextSeedExecutionOutput, TextSeedExecutionRequest, TextSeedExecutionRow,
+    VectorIndexExecutionOutput, VectorIndexExecutionRequest, VectorIndexExecutionRow,
     VectorSeedExecutionOutput, VectorSeedExecutionRequest, VectorSeedExecutionRow,
 };
 pub use graph::{GraphExpansionExecutionReport, GraphExpansionTruncationReason};

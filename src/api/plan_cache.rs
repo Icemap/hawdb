@@ -934,7 +934,8 @@ fn required_runtime_capability(
             };
             Some(match &procedure.kind {
                 cypher::ProcedureCallKind::GraphSeedSearch(_) => return None,
-                cypher::ProcedureCallKind::VectorSearch(_) => {
+                cypher::ProcedureCallKind::VectorSearch(_)
+                | cypher::ProcedureCallKind::VectorIndexSearch(_) => {
                     hawdb_core::RuntimeCapability::VectorSearch
                 }
                 cypher::ProcedureCallKind::TextSearch(_) => {
@@ -1039,7 +1040,8 @@ pub(super) fn statement_uses_plan_cache(statement: &cypher::Statement) -> bool {
                         cypher::ProcedureCallKind::GraphAlgorithm { options, .. } => {
                             determinism::graph_options_are_deterministic(options)
                         }
-                        cypher::ProcedureCallKind::VectorSearch(_)
+                        cypher::ProcedureCallKind::VectorIndexSearch(_)
+                        | cypher::ProcedureCallKind::VectorSearch(_)
                         | cypher::ProcedureCallKind::TextSearch(_)
                         | cypher::ProcedureCallKind::GraphSeedSearch(_)
                         | cypher::ProcedureCallKind::ProjectGraph { .. } => false,

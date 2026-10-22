@@ -110,6 +110,10 @@ mod snapshot_writer;
 #[path = "../tests/support/live_allocation.rs"]
 mod test_allocation;
 mod vector_execution;
+mod vector_index;
+pub use vector_index::{
+    VectorIndexHit, VectorIndexQuery, VectorIndexQueryReport, VectorIndexRetainedOutput,
+};
 
 use document_encoding::encode_search_document_line;
 
@@ -1440,6 +1444,7 @@ pub struct SearchProjectionDeltaReport {
 #[derive(Debug)]
 pub struct SearchIndex {
     documents: BTreeMap<String, SearchDocument>,
+    vector_index_descriptor: Option<hawdb_core::VectorIndexDescriptor>,
     consumer_binding: Option<consumer::ConsumerBinding>,
     consumer_binding_valid: bool,
     consumer_owner: std::sync::Weak<consumer::MutationOwner>,
@@ -1670,6 +1675,9 @@ impl SearchIndex {
                 &identity,
             ) {
                 Ok(projection) => {
+                    if let Some(binding) = &self.vector_index_descriptor {
+                        vector_index::validate_projection(binding, projection.manifest())?;
+                    }
                     *self
                         .rabitq_projection
                         .lock()
@@ -1819,6 +1827,11 @@ impl SearchIndex {
     pub fn upsert(&mut self, document: SearchDocument) -> Result<()> {
         let _consumer_mutation = self.require_owned_mutation_or_unregistered()?;
         if let Some(embedding) = &document.embedding {
+            vector_index::validate_embedding(
+                self.vector_index_descriptor.as_ref(),
+                embedding,
+                || Ok(()),
+            )?;
             self.validate_or_set_dimension(embedding.len())?;
         }
         self.record_lexical_upsert(&document);
@@ -1862,6 +1875,11 @@ impl SearchIndex {
                 continue;
             };
             let dimension = embedding.len();
+            vector_index::validate_embedding(
+                self.vector_index_descriptor.as_ref(),
+                embedding,
+                || Ok(()),
+            )?;
             if let Some(manifest) = &self.embedding_manifest
                 && manifest.dimension != dimension
             {
@@ -2591,11 +2609,14 @@ impl SearchIndex {
             let snapshot_path = path.join(SEARCH_SNAPSHOT_FILE);
             let snapshot = write_search_snapshot(
                 &snapshot_path,
-                self.source_graph_commit_epoch,
-                self.import_source_graph_commit_epoch,
-                self.embedding_manifest.as_ref(),
-                self.embedding_dimension,
-                self.consumer_binding.as_ref(),
+                snapshot_writer::SearchSnapshotMetadata {
+                    source_graph_commit_epoch: self.source_graph_commit_epoch,
+                    import_source_graph_commit_epoch: self.import_source_graph_commit_epoch,
+                    embedding_manifest: self.embedding_manifest.as_ref(),
+                    embedding_dimension: self.embedding_dimension,
+                    consumer_binding: self.consumer_binding.as_ref(),
+                    vector_index_descriptor: self.vector_index_descriptor.as_ref(),
+                },
                 self.documents.values(),
             )?;
             let generation =
@@ -4023,6 +4044,14 @@ impl SearchIndex {
             }
             let fields = line.split('\t').collect::<Vec<_>>();
             match fields.as_slice() {
+                ["vector_index_binding", encoded] => {
+                    if self.vector_index_descriptor.is_some() || !self.documents.is_empty() {
+                        return Err(HawDBError::StorageIntegrity(
+                            "duplicate or misplaced vector index binding".into(),
+                        ));
+                    }
+                    self.restore_vector_index(vector_index::decode(encoded)?);
+                }
                 ["projection_consumer_binding", database, projection, id, registration, checkpoint] =>
                 {
                     if body.lines().nth(1) != Some(line) {
@@ -4089,6 +4118,11 @@ impl SearchIndex {
                 ["doc", raw_id, raw_title, raw_content, raw_embedding, raw_metadata] => {
                     let embedding = decode_embedding(raw_embedding)?;
                     if let Some(embedding) = &embedding {
+                        vector_index::validate_embedding(
+                            self.vector_index_descriptor.as_ref(),
+                            embedding,
+                            || Ok(()),
+                        )?;
                         self.validate_or_set_dimension(embedding.len())?;
                     }
                     let document = SearchDocument {
@@ -4107,6 +4141,17 @@ impl SearchIndex {
                     )));
                 }
             }
+        }
+        if self
+            .vector_index_descriptor
+            .as_ref()
+            .is_some_and(|binding| {
+                self.embedding_dimension != Some(binding.dimension().get() as usize)
+            })
+        {
+            return Err(HawDBError::StorageIntegrity(
+                "vector index snapshot dimension mismatch".into(),
+            ));
         }
         if self.consumer_binding.is_some()
             && (self.source_graph_commit_epoch.is_none()
@@ -4239,6 +4284,7 @@ impl Default for SearchIndex {
             _project_files: None,
             embedding_dimension: None,
             embedding_manifest: None,
+            vector_index_descriptor: None,
             import_source_graph_commit_epoch: None,
             source_graph_commit_epoch: None,
             durable_source_graph_commit_epoch: Mutex::new(None),

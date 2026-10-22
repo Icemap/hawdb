@@ -21,10 +21,7 @@ use hawdb_executor::QueryMemoryLease;
 use hawdb_integrity::Crc32cHasher;
 use std::io::{self, Write};
 
-// Pinned zstd 1.5.7, level 3, one worker, no dictionary/LDM/sequence producer.
-// Two conservative native workspace allowances plus zstd 0.13.3's 32 KiB
-// Rust writer buffer. Requalify this envelope when upgrading either dependency.
-pub(super) const COMPRESSION_WORKSPACE_BYTES: usize = 8 * 1024 * 1024 + 32 * 1024;
+use crate::build_memory::compression::COMPRESSION_WORKSPACE_BYTES;
 const HEADER_CAPACITY: usize = 512;
 const _: () = assert!(SEARCH_COMPRESSION_LEVEL == 3);
 

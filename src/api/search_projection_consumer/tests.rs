@@ -18,6 +18,8 @@ use std::any::TypeId;
 use std::num::NonZeroU64;
 
 mod lifecycle;
+#[cfg(feature = "vector-search")]
+mod vector_index;
 
 struct Fixture(PathBuf);
 impl Fixture {

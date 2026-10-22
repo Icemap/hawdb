@@ -72,6 +72,7 @@ mod procedures;
 mod scan;
 mod scans;
 mod transforms;
+mod vector_index;
 
 use blocking::*;
 use dispatch::{unsupported_batch_operator, BatchDispatch, BatchExecution, BatchSupport};
@@ -769,6 +770,11 @@ fn dispatch_batch_operator<D: BatchDispatch>(plan: &PhysicalPlan, dispatch: D) -
                 emit,
             )
         }),
+        PhysicalPlan::VectorIndexScan(scan) => {
+            dispatch.supported(|context, execution_limit, emit| {
+                vector_index::stream(scan, context, execution_limit, emit)
+            })
+        }
         PhysicalPlan::GraphSeedScan {
             query_parameter,
             label,

@@ -124,7 +124,16 @@ pub struct SqlExplainStatement {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SqlVectorIndexSearch {
+    pub index: SqlValue,
+    pub embedding: SqlValue,
+    pub candidates: SqlValue,
+    pub top_k: SqlValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SelectStatement {
+    pub vector_index: Option<Box<SqlVectorIndexSearch>>,
     pub projection: Vec<SelectProjection>,
     pub distinct: bool,
     /// `None` for a FROM-less SELECT (e.g. `SELECT version();`): the

@@ -89,6 +89,12 @@ pub use automatic_checkpoint::AutomaticCheckpointReport;
 mod branch_lifecycle;
 mod canonical_snapshot;
 mod concurrent;
+mod vector_index;
+pub use vector_index::{
+    VectorIndexBuildError, VectorIndexBuildOptions, VectorIndexField, VectorIndexLanguageBudget,
+    VectorIndexLanguageReport, VectorIndexReadError, VectorIndexReadTransaction,
+    VectorIndexSqlReport, VectorIndexSqlRequest,
+};
 mod transaction_read_dependencies;
 pub use transaction_read_dependencies::{
     TransactionIsolation, TransactionReadDependencyLimits, TransactionReadDependencyUsage,

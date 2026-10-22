@@ -346,6 +346,26 @@ pub(super) fn hydrate_projected_row_fields(
     budget: &mut RelationalHydrationBudget,
     task_context: Option<&hawdb_core::RuntimeTaskContext>,
 ) -> Result<(), RelationalError> {
+    hydrate_projected_row_fields_with_allocations(
+        state,
+        table,
+        row,
+        required_fields,
+        budget,
+        task_context,
+        None,
+    )
+}
+
+pub(super) fn hydrate_projected_row_fields_with_allocations(
+    state: &RelationalState,
+    table: &str,
+    row: &mut RelationalProjectedRow,
+    required_fields: Option<&[usize]>,
+    budget: &mut RelationalHydrationBudget,
+    task_context: Option<&hawdb_core::RuntimeTaskContext>,
+    allocations: Option<&crate::background::CheckpointDecodeContext>,
+) -> Result<(), RelationalError> {
     if !row
         .fields
         .iter()
@@ -428,9 +448,14 @@ pub(super) fn hydrate_projected_row_fields(
             hydrated_row = true;
         }
         runtime_checkpoint(task_context)?;
-        let envelope = segment.read()?;
-        field.value =
-            decode_overflow_envelope(reference, &envelope, &mut staged_budget, task_context)?;
+        let envelope = segment.read_with_work_context(allocations.map(|context| &context.work))?;
+        field.value = envelope::decode_overflow_envelope_with_allocations(
+            reference,
+            &envelope,
+            &mut staged_budget,
+            task_context,
+            allocations,
+        )?;
     }
     *budget = staged_budget;
     Ok(())

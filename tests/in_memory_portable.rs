@@ -708,3 +708,28 @@ fn consumed_retained_node_snapshot_keeps_old_data_and_task_bound_after_database_
     assert!(matches!(view.field("text").unwrap(),
         Some(RetainedNodeField::Value(Value::String(text))) if text == "original"));
 }
+
+#[cfg(not(feature = "vector-search"))]
+#[test]
+fn schema_bound_vector_index_refuses_unavailable_native_backend() {
+    use hawdb::{HawDBError, RuntimeCapability, VectorIndexBuildError, VectorIndexField};
+    let mut db = Database::new();
+    let error = db
+        .create_vector_index(
+            "unavailable",
+            &VectorIndexField::SqlColumn {
+                table: "items".into(),
+                column: "embedding".into(),
+            },
+            "unavailable-vector-index",
+            hawdb::SearchProjectionConsumerOptions::new(std::num::NonZeroU64::new(10).unwrap()),
+            Default::default(),
+        )
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        VectorIndexBuildError::Query(HawDBError::CapabilityUnavailable {
+            capability: RuntimeCapability::VectorSearch,
+        })
+    ));
+}

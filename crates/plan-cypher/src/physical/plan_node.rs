@@ -48,6 +48,7 @@ impl PhysicalPlan {
             }
             PhysicalPlan::VectorSeedScan { .. } => PhysicalPlanKind::VectorSeedScan,
             PhysicalPlan::GraphSeedScan { .. } => PhysicalPlanKind::GraphSeedScan,
+            PhysicalPlan::VectorIndexScan(_) => PhysicalPlanKind::VectorIndexScan,
             PhysicalPlan::TextSeedScan { .. } => PhysicalPlanKind::TextSeedScan,
             PhysicalPlan::CreateNode { .. } => PhysicalPlanKind::CreateNode,
             PhysicalPlan::UnwindMutation { .. } => PhysicalPlanKind::UnwindMutationExec,
@@ -172,6 +173,7 @@ impl PhysicalPlan {
             | PhysicalPlan::GraphAlgorithmOutput(_)
             | PhysicalPlan::VectorSeedScan { .. }
             | PhysicalPlan::GraphSeedScan { .. }
+            | PhysicalPlan::VectorIndexScan(_)
             | PhysicalPlan::TextSeedScan { .. }
             | PhysicalPlan::CreateNode { .. }
             | PhysicalPlan::UnwindMutation { .. }

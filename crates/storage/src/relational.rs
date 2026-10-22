@@ -33,7 +33,12 @@ mod index_shadow;
 pub(crate) use index_shadow::{
     IndexReadAdmission, IndexReadCharge, IndexReadObserver, IndexReadPreflightError,
 };
+mod admitted_point;
 mod ordered_key;
+#[doc(hidden)]
+pub use admitted_point::{
+    RelationalAdmittedPoint, RelationalPointAllocation, RelationalPointReadRequest,
+};
 pub(crate) mod overflow;
 mod recovery;
 mod row_page;

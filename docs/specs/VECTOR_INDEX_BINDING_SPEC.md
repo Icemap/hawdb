@@ -1,0 +1,177 @@
+# Schema-bound vector indexes
+
+Implementation tracked by https://github.com/nowledge-co/hawdb/issues/1157.
+This document records the phase-one contract; delivery remains incomplete until
+the query, persistence and resource acceptance tests listed below pass.
+
+## Scope and ownership
+
+SQL vector columns and Cypher node properties share one `VectorIndexDescriptor`.
+The descriptor binds an index name, a resolved target, its declared
+`VectorDimension`, metric, algorithm settings and canonical schema digest.
+Relational targets use the normalized table name and column ordinal because the
+relational schema has no independent persisted column identifier. Node targets
+retain their `TableId` and `PropertyId`. Names remain diagnostic/resolution data;
+the full resolved binding must match before a source is admitted.
+
+The initial backend is RaBitQ with cosine distance. L2 remains an exact query
+expression; an L2 RaBitQ definition is refused. Only one field is indexed. NULL
+fields are omitted. Non-NULL cosine vectors must have a nonzero norm; a build
+must fail rather than silently exclude an invalid non-NULL value.
+
+The embedded facade resolves schema and captures data under the existing pinned
+source snapshot. Index maintenance reuses registered Consumer publication and
+reopen. It does not introduce a second directory selector, recovery ledger,
+standalone ANN registry, or host graph scan. Per-operation resource policy is
+not part of the persistent algorithm definition.
+
+## Query semantics
+
+An index query is explicit: bounded approximate candidates followed by exact
+cosine-distance reranking. Both language frontends must lower to that same
+contract. Ordinary filtered distance queries remain exact and cannot be
+silently rewritten to approximate index access.
+
+Canonical vectors and raw projection vectors use the same core distance
+implementation. The result is `1 - cosine_similarity` in [0, 2], including
+negative similarities. Legacy search relevance remains positive-only and
+unchanged. Neither clipped relevance nor quantized estimates may substitute for
+the reported exact distance. Stable identity breaks equal-distance ties.
+
+The candidate budget and final k are separate. Results are exact only within
+the generated candidate set. An exhausted candidate window does not establish
+global exact recall. Residual query predicates apply after that explicit window;
+graph-aware eligibility before candidate generation is a separate delivery
+related to https://github.com/nowledge-co/hawdb/issues/1119.
+
+## Language entrypoints
+
+The bound `VectorIndexReadTransaction` supplies the index and canonical snapshot
+for both languages. `query_cypher_streaming` accepts an ordinary `QueryRequest`;
+`query_sql_streaming` accepts a `VectorIndexSqlRequest`. Both require a fresh
+same-governor permit and an explicit `VectorIndexLanguageBudget`: the index
+sub-budget is deducted before the canonical query receives its allowance.
+The source name in the query must match the bound descriptor.
+
+```cypher
+CALL vector_index_search('documents', $embedding, candidates := 100, topK := 20)
+YIELD node AS document, distance
+WITH document, distance WHERE document.active = true
+RETURN document.id AS id, distance
+ORDER BY distance, id
+```
+
+```sql
+SELECT document.id, distance
+FROM vector_index_search('documents', $1, candidates => 100, top_k => 20) AS document
+WHERE document.active = true
+ORDER BY distance, document.id
+LIMIT 10;
+```
+
+The embedding must be a canonical typed vector parameter. Both explicit limits
+are required, with `0 < top_k <= candidates`. Filtering cannot refill the
+already selected top-k window. Cypher binds real canonical nodes and can use
+ordinary graph traversal afterward. SQL decodes complete canonical primary keys,
+including composite keys, and uses snapshot row point reads. It does not create
+a temporary copy of the canonical table or run a host-side join/filter.
+
+The first SQL operator supports one source with ordinary WHERE, projection,
+ORDER BY, LIMIT and OFFSET. Joins, grouping, DISTINCT and locking clauses are
+refused. The table function reserves the `distance` column, so a source table
+already declaring that name is refused. Ordinary SQL/Cypher entrypoints do not
+implicitly attach an index. SQL streaming currently accepts SELECT only; the
+Cypher physical plan exposes its approximate window and post-window filtering
+in EXPLAIN. Broader SQL plan integration remains subject to explicit qualification.
+
+Language reports retain the kernel's actual backend, window, candidate/rerank
+counts, source epoch and native generation. Cypher reports may omit the index
+report if execution never reaches the operator. These observations do not establish ANN recall, process RSS bounds or production
+Mem acceptance. Native producer work remains bounded by the existing generation
+writer and its component limits.
+
+## Identity and lifecycle refinement
+
+A definition is not serving authority. The existing Consumer supplies source
+database/branch identity, incarnation, operation, source epoch, immutable
+generation, artifact closure and the publication receipt. The definition must
+be sealed inside that closure; an independent sidecar cannot authorize it.
+
+The lifecycle refines the existing Consumer protocol:
+
+1. Resolve and validate the definition under the captured schema.
+2. Build a complete private projection from the same pinned source epoch.
+3. Seal definition and artifacts before source-fence validation and selection.
+4. Publish using the existing durable selector; propagate uncertain outcomes.
+5. Reopen only the registered closure and verify its definition and receipt.
+6. Retained pins continue reading their immutable generation. A new canonical
+   snapshot must not be joined to an older index as if the index were current.
+
+Source epochs and publication generations are independent: a full rebuild may
+select a new generation at the same source epoch. Acknowledgement first verifies
+the complete native selected receipt, then refreshes the cached receipt while
+rejecting source-epoch regression; cached checkpoint bytes are not a second
+publication authority.
+
+Source writes make a current-source binding stale until explicit qualified
+maintenance publishes its successor. Rebuilds and deletes must not reuse old
+ordinal mappings. Existing Consumer generation custody, source fencing,
+uncertain-publication resolution and pin reclamation remain authoritative.
+Any additional state transition requires a refinement/model update before it
+is enabled; merely adding descriptor bytes does not replace those proofs.
+
+The vector facade refines these existing transitions without adding a selector:
+
+| Operation | Existing authority | Vector-specific precondition/result |
+| --- | --- | --- |
+| Bind read | Completed Consumer pin | Database UUID, branch UUID, source epoch and resolved schema all match the retained canonical snapshot |
+| Begin rebuild | `reserve_search_consumer_update` and successor birth | Rebuild the same target, dimension and algorithm from a complete new source snapshot |
+| Prepare | `prepare_registered` | A fresh complete source mapping replaces all documents, including deletions and NULL transitions |
+| Select | Existing source fence and stationary selector | Reject a source change after capture; acknowledge only the native completed receipt |
+| Uncertain selection | Existing pending-publication custody | Retain the candidate and resolve through the ordinary Consumer recovery entrypoint |
+| Old read | Existing immutable pin | Keep both the old canonical snapshot and its matching generation; hold no execution slot while idle |
+
+The generic Mem document catch-up mapper is not the maintenance mapping for a
+schema-bound vector index. The facade refuses that combination. A full vector
+rebuild may refresh the schema digest after an unrelated schema change, but a
+changed target identity, dimension or algorithm requires a new definition.
+
+Recovery preserves the existing project-authority boundary: a canonical read
+transaction retained from a closed database can defer reopening an uncertain
+publication with `BranchBusy`. That refusal retains pending evidence and the old
+read remains usable. Releasing that transaction allows the ordinary recovery
+entrypoint to resolve the selected generation; no vector-specific bypass is used.
+
+## Resource ownership
+
+A registered vector producer retains its source envelope through publication.
+Its compatibility snapshot admits compression and encoding scratch before use;
+its private artifacts use the existing generation writer under the original
+Consumer publication lease, including the original governor admission. This
+private producer cannot advance a previously selected root. It is installed and
+selected only by the existing Consumer protocol.
+
+Canonical SQL point reads admit key/field/overflow decoding before copying and
+retain the allocation owner through projection. The storage allocation controller
+composes the query ledger with the original governor controller. Candidate and
+canonical execution have disjoint sub-budgets; original vectors are reranked by
+the shared distance implementation. A narrow grant fails before callback delivery
+and does not change the selected index or poison the canonical read view.
+
+## Acceptance evidence
+
+Required end-to-end cases cover both SQL and node-property sources: create,
+build, explicit query, close, reopen, update/delete and successor publication.
+SQL and Cypher must agree on distance and deterministic ties, including opposite
+vectors. Test NULL, zero vectors, invalid dimensions, unsupported metrics,
+schema/source mismatches, retained old pins, resource boundaries and
+cancellation. Feature-disabled builds refuse unavailable index execution.
+
+Build, candidate selection, raw hydration, result retention and decoding must
+be admitted before allocation. Budget exhaustion is an error, not successful
+truncation. Query evidence identifies backend, candidate budget/count, exact
+rerank count, source epoch and generation; it does not claim filtered ANN or
+production Mem acceptance.
+
+Mem App schema/import migration, runtime activation, the graph-eligibility
+planner, and FreshDiskANN evaluation remain subsequent roadmap phases.

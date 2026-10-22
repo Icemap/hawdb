@@ -397,6 +397,7 @@ impl GroupExpr {
             | LogicalPlan::VectorSeed { .. }
             | LogicalPlan::TextSeed { .. }
             | LogicalPlan::GraphSeed { .. }
+            | LogicalPlan::VectorIndexSearch(_)
             | LogicalPlan::CreateNode { .. }
             | LogicalPlan::UnwindMutation { .. }
             | LogicalPlan::MergeNode { .. }
@@ -624,6 +625,7 @@ fn seed_window(plan: &PhysicalPlan) -> Option<(&'static str, usize)> {
         }
         PhysicalPlan::TextSeedScan { top_k, .. } => Some(("text", *top_k)),
         PhysicalPlan::GraphSeedScan { top_k, .. } => Some(("graph", *top_k)),
+        PhysicalPlan::VectorIndexScan(scan) => Some(("vector_index", scan.top_k)),
         PhysicalPlan::NodeColumnLookupExec { input, .. }
         | PhysicalPlan::AdjacencyExpandExec { input, .. }
         | PhysicalPlan::AdjacencyExistsExec { input, .. }
@@ -696,6 +698,7 @@ fn logical_group_count(logical: &LogicalPlan) -> usize {
         | LogicalPlan::VectorSeed { .. }
         | LogicalPlan::TextSeed { .. }
         | LogicalPlan::GraphSeed { .. }
+        | LogicalPlan::VectorIndexSearch(_)
         | LogicalPlan::CreateNode { .. }
         | LogicalPlan::UnwindMutation { .. }
         | LogicalPlan::MergeNode { .. }

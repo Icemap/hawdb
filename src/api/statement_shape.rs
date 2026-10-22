@@ -42,6 +42,7 @@ pub(super) fn pipeline_statement_kind(query: &QueryPipeline) -> &'static str {
                     "vector_graph_search"
                 }
                 ProcedureCallKind::VectorSearch(_) => "vector_search",
+                ProcedureCallKind::VectorIndexSearch(_) => "vector_index_search",
                 ProcedureCallKind::TextSearch(_)
                     if query
                         .clauses

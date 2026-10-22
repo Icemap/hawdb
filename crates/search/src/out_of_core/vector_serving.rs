@@ -37,8 +37,21 @@ enum RabitqScanError {
 
 #[cfg(feature = "vector-search")]
 impl RabitqScanError {
-    fn budget(message: String) -> Self {
-        Self::Budget(HawDBError::Storage(message))
+    fn budget(required: u64, available: u64, message: String) -> Self {
+        Self::Budget(
+            hawdb_core::ResourceBudgetError {
+                resource: hawdb_core::ResourceBudgetKind::MemoryBytes,
+                scope: hawdb_core::ResourceBudgetScope::Operator,
+                owner: "RaBitQ candidate scan".into(),
+                memory_class: None,
+                requested: required,
+                used: 0,
+                budget: available,
+                budget_option: "SearchOutOfCoreConfig.max_vector_search_working_bytes",
+                message,
+            }
+            .into(),
+        )
     }
 
     fn into_error(self) -> HawDBError {
@@ -49,9 +62,10 @@ impl RabitqScanError {
 
     fn projection(error: hawdb_vector_projection::ProjectionError) -> Self {
         match error {
-            hawdb_vector_projection::ProjectionError::ResourceBudgetExceeded { .. } => {
-                Self::Budget(vector_projection_error(error))
-            }
+            hawdb_vector_projection::ProjectionError::ResourceBudgetExceeded {
+                required,
+                available,
+            } => Self::budget(required as u64, available as u64, error.to_string()),
             _ => match vector_projection_error(error) {
                 error @ HawDBError::FileDescriptors(_) => Self::Budget(error),
                 error => Self::Failure(error),
@@ -129,6 +143,7 @@ struct BoundedLayeredProjectionHits {
     heap: BinaryHeap<Reverse<LayeredProjectionHit>>,
     logical_id_bytes: usize,
     max_logical_id_bytes: usize,
+    id_memory: Option<QueryMemoryLease>,
 }
 
 #[cfg(feature = "vector-search")]
@@ -139,6 +154,7 @@ impl BoundedLayeredProjectionHits {
             heap: BinaryHeap::with_capacity(limit),
             logical_id_bytes: 0,
             max_logical_id_bytes,
+            id_memory: None,
         }
     }
 
@@ -166,26 +182,43 @@ impl BoundedLayeredProjectionHits {
             })?;
         if required > self.max_logical_id_bytes {
             return Err(RabitqScanError::budget(
+                required as u64,
+                self.max_logical_id_bytes as u64,
                 "search RaBitQ logical candidate IDs exceed the working budget".into(),
             ));
         }
+        let incoming_bytes = candidate.logical_id.as_ref().map_or(0, String::capacity);
+        if let Some(memory) = &mut self.id_memory {
+            memory.grow(incoming_bytes)?;
+        }
         if self.heap.len() == self.limit {
             self.heap.pop();
+            if let Some(memory) = &mut self.id_memory {
+                memory.shrink(evicted_bytes);
+            }
         }
         self.heap.push(Reverse(candidate));
         self.logical_id_bytes = required;
         Ok(())
     }
 
-    fn finish(self) -> Vec<LayeredProjectionHit> {
+    fn finish(self) -> (Vec<LayeredProjectionHit>, Option<QueryMemoryLease>) {
         let mut hits = self
             .heap
             .into_iter()
             .map(|Reverse(hit)| hit)
             .collect::<Vec<_>>();
         hits.sort_by(|left, right| right.cmp(left));
-        hits
+        (hits, self.id_memory)
     }
+}
+
+#[cfg(feature = "vector-search")]
+#[derive(Clone, Copy)]
+pub(super) struct RerankPolicy<'a> {
+    pub(super) candidate_limit: usize,
+    pub(super) distance: Option<hawdb_core::VectorDistance>,
+    pub(super) query: Option<QueryContext<'a>>,
 }
 
 #[derive(Debug)]
@@ -248,6 +281,53 @@ pub(super) struct ScanOptions<'a> {
 }
 
 impl SearchOutOfCoreReader {
+    #[cfg(feature = "vector-search")]
+    pub(super) fn scan_index_distances(
+        &self,
+        request: crate::VectorIndexQuery<'_>,
+        candidates: &CandidateSet<'_>,
+        query: QueryContext<'_>,
+        metrics: &mut SearchOutOfCoreMetrics,
+    ) -> Result<VectorScoreScan> {
+        if self.segments.iter().all(|artifact| {
+            artifact
+                .layout
+                .segments
+                .iter()
+                .all(|segment| segment.vectors.entry_count == 0)
+        }) {
+            return Ok(VectorScoreScan::default());
+        }
+        let working_bytes = self
+            .config
+            .max_vector_search_working_bytes
+            .get()
+            .min(query.memory.available_bytes());
+        self.scan_rabitq_vector_scores(
+            request.embedding,
+            candidates,
+            Some(request.top_k.get()),
+            crate::VectorSearchExecutionOptions::bounded(
+                NonZeroUsize::new(
+                    self.config
+                        .max_vector_search_parallelism
+                        .get()
+                        .min(query.task.admitted_parallelism().get()),
+                )
+                .expect("nonzero parallelism"),
+                working_bytes,
+                Some(query.task),
+            ),
+            metrics,
+            RerankPolicy {
+                candidate_limit: request.candidate_limit.get(),
+                distance: Some(request.descriptor.distance()),
+                query: Some(query),
+            },
+        )
+        .map_err(RabitqScanError::into_error)
+    }
+
     pub(super) fn scan_vector_scores(
         &self,
         query_embedding: &[f32],
@@ -281,6 +361,11 @@ impl SearchOutOfCoreReader {
                         retained_limit,
                         vector_execution_options,
                         metrics,
+                        RerankPolicy {
+                            candidate_limit: self.config.max_vector_candidates.get(),
+                            distance: None,
+                            query: options.query,
+                        },
                     ) {
                         Ok(scan) => return Ok(scan),
                         Err(RabitqScanError::Failure(error)) => return Err(error),
@@ -338,6 +423,11 @@ impl SearchOutOfCoreReader {
                             retained_limit,
                             vector_execution_options,
                             metrics,
+                            RerankPolicy {
+                                candidate_limit: self.config.max_vector_candidates.get(),
+                                distance: None,
+                                query: options.query,
+                            },
                         )
                         .map_err(RabitqScanError::into_error);
                 }
@@ -475,18 +565,38 @@ impl SearchOutOfCoreReader {
         retained_limit: Option<usize>,
         vector_execution_options: super::VectorSearchExecutionOptions<'_>,
         metrics: &mut SearchOutOfCoreMetrics,
+        policy: RerankPolicy<'_>,
     ) -> RabitqResult<VectorScoreScan> {
         self.require_compatible_rabitq_projections()?;
         let task_context = vector_execution_options.task_context;
         checkpoint_vector_task(task_context)?;
         let minimum_candidates = retained_limit.unwrap_or(1).max(1);
         if minimum_candidates > self.config.max_vector_candidates.get() {
-            return Err(RabitqScanError::budget(format!(
-                "search vector rank window requires {minimum_candidates} candidates, exceeding {}",
-                self.config.max_vector_candidates
-            )));
+            return Err(RabitqScanError::Budget(
+                hawdb_core::ResourceBudgetError {
+                    resource: hawdb_core::ResourceBudgetKind::MetadataEntries,
+                    scope: hawdb_core::ResourceBudgetScope::Operator,
+                    owner: "RaBitQ candidate window".into(),
+                    memory_class: None,
+                    requested: minimum_candidates as u64,
+                    used: 0,
+                    budget: self.config.max_vector_candidates.get() as u64,
+                    budget_option: "SearchOutOfCoreConfig.max_vector_candidates",
+                    message: "vector rank window exceeds the candidate limit".into(),
+                }
+                .into(),
+            ));
         }
-        let candidate_limit = self.config.max_vector_candidates.get();
+        let candidate_limit = policy.candidate_limit;
+        if candidate_limit < minimum_candidates
+            || candidate_limit > self.config.max_vector_candidates.get()
+        {
+            return Err(HawDBError::Semantic(
+                "vector candidate limit must cover top-k and fit the configured candidate limit"
+                    .into(),
+            )
+            .into());
+        }
         let total_working_bytes = self
             .config
             .max_vector_search_working_bytes
@@ -496,14 +606,22 @@ impl SearchOutOfCoreReader {
         // retained. Sorting the heap also transiently materializes a second
         // layered vector, so reserve both representations before dispatch.
         let selected_candidate_bytes = candidate_working_bytes(candidate_limit)?;
+        let _candidate_memory = policy
+            .query
+            .map(|query| query.memory.reserve(selected_candidate_bytes))
+            .transpose()?;
         let scan_working_bytes = total_working_bytes
             .checked_sub(selected_candidate_bytes)
             .ok_or_else(|| {
-                RabitqScanError::budget(format!(
+                RabitqScanError::budget(selected_candidate_bytes as u64, total_working_bytes as u64, format!(
                     "search RaBitQ retained candidates require {selected_candidate_bytes} bytes, exceeding {total_working_bytes}"
                 ))
             })?;
         let mut selected = BoundedLayeredProjectionHits::new(candidate_limit, scan_working_bytes);
+        selected.id_memory = policy
+            .query
+            .map(|query| query.memory.reserve(0))
+            .transpose()?;
         let mut vector_document_count = 0usize;
         let mut generated_candidate_count = 0usize;
         let mut candidate_scan_worker_count = 0usize;
@@ -533,8 +651,18 @@ impl SearchOutOfCoreReader {
                 })?;
             let allowlist_required = candidate_set.vector_allowlist_working_bytes(layer)?;
             if allowlist_required > layer_working_bytes as u64 {
-                return Err(RabitqScanError::budget(format!("search vector candidate allowlist and block require {allowlist_required} bytes, exceeding {layer_working_bytes}")));
+                return Err(RabitqScanError::budget(allowlist_required, layer_working_bytes as u64, format!("search vector candidate allowlist and block require {allowlist_required} bytes, exceeding {layer_working_bytes}")));
             }
+            let _allowlist_memory = policy
+                .query
+                .map(|query| {
+                    query
+                        .memory
+                        .reserve(usize::try_from(allowlist_required).map_err(|_| {
+                            HawDBError::Execution("vector allowlist admission overflows".into())
+                        })?)
+                })
+                .transpose()?;
             let allowlist = candidate_set.vector_ordinals_for_layer(
                 layer,
                 layer_working_bytes as u64,
@@ -547,12 +675,17 @@ impl SearchOutOfCoreReader {
             let projection_working_bytes = layer_working_bytes
                 .checked_sub(allowlist_bytes)
                 .ok_or_else(|| {
-                    RabitqScanError::budget(format!(
+                    RabitqScanError::budget(allowlist_bytes as u64, layer_working_bytes as u64, format!(
                         "search vector layer {layer} allowlist requires {allowlist_bytes} bytes, exceeding {scan_working_bytes}"
                     ))
                 })?;
+            let projection_working_bytes = policy.query.map_or(projection_working_bytes, |query| {
+                projection_working_bytes.min(query.memory.available_bytes())
+            });
             if projection_working_bytes == 0 {
                 return Err(RabitqScanError::budget(
+                    1,
+                    0,
                     "search RaBitQ scan has no remaining working budget".into(),
                 ));
             }
@@ -574,6 +707,10 @@ impl SearchOutOfCoreReader {
             if let Some(task_context) = task_context {
                 search_options = search_options.with_task_context(task_context);
             }
+            let projection_memory = policy
+                .query
+                .map(|query| query.memory.reserve(projection_working_bytes))
+                .transpose()?;
             let output = projection
                 .search(
                     query_embedding,
@@ -581,6 +718,9 @@ impl SearchOutOfCoreReader {
                     search_options,
                 )
                 .map_err(RabitqScanError::projection)?;
+            // Returned hits are covered by the separately retained candidate
+            // envelope; scratch is released before metadata/raw hydration.
+            drop(projection_memory);
             let projection_report = output.report;
             metrics.rabitq_payload_bytes_read = metrics
                 .rabitq_payload_bytes_read
@@ -633,18 +773,20 @@ impl SearchOutOfCoreReader {
                     &mut selected,
                     task_context,
                     metrics,
+                    policy.query,
                 )?;
                 candidate_scan_admitted_working_bytes =
                     candidate_scan_admitted_working_bytes.max(selected.logical_id_bytes);
             }
         }
 
-        let mut selected = selected.finish();
+        let (mut selected, selected_id_memory) = selected.finish();
         // Logical IDs were needed at the approximate top-k boundary. Release
         // them before raw rerank, whose own collector retains document IDs.
         for hit in &mut selected {
             hit.logical_id.take();
         }
+        drop(selected_id_memory);
         selected.sort_by(|left, right| {
             left.layer
                 .cmp(&right.layer)
@@ -660,9 +802,10 @@ impl SearchOutOfCoreReader {
             .into());
         }
 
-        let mut collector = BoundedScoreCollector::new(
+        let mut collector = BoundedScoreCollector::with_context(
             retained_limit,
             admitted_score_entries(self.config.max_score_entries.get(), scan_working_bytes),
+            policy.query,
         )?;
         let mut raw_segment_scan_count = 0usize;
         let mut reranked_candidate_count = 0usize;
@@ -696,6 +839,42 @@ impl SearchOutOfCoreReader {
                 }
                 raw_segment_scan_count = raw_segment_scan_count.saturating_add(1);
                 let selected_segment = &selected_layer[start_index..end_index];
+                if let Some(query) = policy.query {
+                    let mut ordinal = layout.vector_ordinal_base;
+                    let mut vector_bytes = 0u64;
+                    self.visit_query_vector_segment(
+                        artifact,
+                        segment,
+                        metrics,
+                        query,
+                        |document| {
+                            let selected = selected_segment
+                                .binary_search_by_key(&ordinal, |candidate| candidate.ordinal)
+                                .is_ok();
+                            ordinal = ordinal.checked_add(1).ok_or_else(|| {
+                                HawDBError::StorageIntegrity("vector ordinal overflow".into())
+                            })?;
+                            if selected {
+                                reranked_candidate_count += 1;
+                                vector_bytes = vector_bytes.saturating_add(
+                                    (document.embedding.len() as u64).saturating_mul(4),
+                                );
+                                if let Some(score) = rerank_score(
+                                    query_embedding,
+                                    &document.embedding,
+                                    policy.distance,
+                                    || query.checkpoint(),
+                                )? {
+                                    collector.push_borrowed(&document.id, score)?;
+                                }
+                            }
+                            Ok(())
+                        },
+                    )?;
+                    metrics.vector_bytes_read =
+                        metrics.vector_bytes_read.saturating_add(vector_bytes);
+                    continue;
+                }
                 let documents = if selected_segment.len() == layout.vectors.entry_count {
                     // Unique ordinals within this range cover the whole segment.
                     self.read_vector_segment(artifact, segment, metrics)?
@@ -718,9 +897,12 @@ impl SearchOutOfCoreReader {
                             .saturating_mul(std::mem::size_of::<f32>() as u64),
                     );
                     reranked_candidate_count = reranked_candidate_count.saturating_add(1);
-                    if let Some(score) = cosine_similarity(query_embedding, &document.embedding)
-                        && score > 0.0
-                    {
+                    if let Some(score) = rerank_score(
+                        query_embedding,
+                        &document.embedding,
+                        policy.distance,
+                        || checkpoint_vector_task(task_context),
+                    )? {
                         collector.push(document.id, score)?;
                     }
                 }
@@ -770,6 +952,7 @@ impl SearchOutOfCoreReader {
         selected: &mut BoundedLayeredProjectionHits,
         task_context: Option<&crate::RuntimeTaskContext>,
         metrics: &mut SearchOutOfCoreMetrics,
+        query: Option<QueryContext<'_>>,
     ) -> RabitqResult<()> {
         hits.sort_by_key(|hit| hit.id);
         if hits.windows(2).any(|pair| pair[0].id == pair[1].id) {
@@ -800,12 +983,12 @@ impl SearchOutOfCoreReader {
                 continue;
             }
             let candidates = &hits[start_index..end_index];
-            for document in self.read_metadata_segment(artifact, segment, metrics)? {
+            let mut visit = |document: &super::SearchMetadataDocument| -> Result<()> {
                 let Some(ordinal) = document.vector_ordinal else {
-                    continue;
+                    return Ok(());
                 };
                 let Ok(index) = candidates.binary_search_by_key(&ordinal, |hit| hit.id) else {
-                    continue;
+                    return Ok(());
                 };
                 if previous.is_some_and(|prior| prior >= ordinal)
                     || !self
@@ -814,17 +997,29 @@ impl SearchOutOfCoreReader {
                 {
                     return Err(HawDBError::Storage(
                         "search RaBitQ candidate mapping is duplicated, unordered or hidden".into(),
-                    )
-                    .into());
+                    ));
                 }
                 previous = Some(ordinal);
                 mapped += 1;
-                selected.push(LayeredProjectionHit {
-                    layer,
-                    ordinal,
-                    score: candidates[index].score,
-                    logical_id: Some(document.id),
-                })?;
+                let _copy_memory = query
+                    .map(|query| query.memory.reserve(document.id.len()))
+                    .transpose()?;
+                selected
+                    .push(LayeredProjectionHit {
+                        layer,
+                        ordinal,
+                        score: candidates[index].score,
+                        logical_id: Some(document.id.clone()),
+                    })
+                    .map_err(RabitqScanError::into_error)?;
+                Ok(())
+            };
+            if let Some(query) = query {
+                self.visit_query_metadata_segment(artifact, segment, metrics, query, visit)?;
+            } else {
+                for document in self.read_metadata_segment(artifact, segment, metrics)? {
+                    visit(&document)?;
+                }
             }
         }
         if mapped != hits.len() {
@@ -862,6 +1057,23 @@ impl SearchOutOfCoreReader {
     }
 }
 
+#[cfg(feature = "vector-search")]
+fn rerank_score(
+    query: &[f32],
+    embedding: &[f32],
+    distance: Option<hawdb_core::VectorDistance>,
+    checkpoint: impl FnMut() -> Result<()>,
+) -> Result<Option<f64>> {
+    if let Some(distance) = distance {
+        // The shared collector maximizes scores. Only this internal value is
+        // negated; the indexed-distance result exposes the mathematical distance.
+        return distance
+            .distance_slices_with_work(query, embedding, checkpoint)
+            .map(|distance| Some(-distance));
+    }
+    Ok(cosine_similarity(query, embedding).filter(|score| *score > 0.0))
+}
+
 fn checkpoint_vector_task(task_context: Option<&crate::RuntimeTaskContext>) -> Result<()> {
     task_context.map_or(Ok(()), |task_context| {
         task_context
@@ -891,7 +1103,8 @@ mod tests {
                 required: 2,
                 available: 1,
             }),
-            RabitqScanError::Budget(_)
+            RabitqScanError::Budget(crate::HawDBError::ResourceBudgetExceeded(error))
+                if error.requested == 2 && error.used == 0 && error.budget == 1
         ));
         for resource in [
             hawdb_core::error::FileDescriptorError::BudgetExceeded {
@@ -944,7 +1157,7 @@ mod tests {
         })
         .unwrap();
 
-        let hits = hits.finish();
+        let (hits, _) = hits.finish();
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].layer, 1);
         assert_eq!(hits[0].ordinal, 0);
@@ -965,7 +1178,7 @@ mod tests {
         assert!(hits.push(candidate(2, "long", 2.0)).is_err());
         assert_eq!(hits.logical_id_bytes, 1);
         hits.push(candidate(2, "long", 0.0)).unwrap();
-        let result = hits.finish();
+        let (result, _) = hits.finish();
         assert_eq!(result[0].logical_id.as_deref(), Some("a"));
     }
 }

@@ -24,6 +24,8 @@ use hawdb_storage::file_descriptors::ProjectFileDescriptors;
 use hawdb_storage::immutable_object::{ObjectKind, ObjectReference};
 use std::mem::size_of;
 
+mod vector_index;
+
 pub(super) struct OpenContext<'a, 'execution> {
     pub(super) root: &'a Path,
     // Incoming host-owned buffers are moved, not cloned. Their actual capacity

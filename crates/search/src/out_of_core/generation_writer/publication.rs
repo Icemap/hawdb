@@ -71,6 +71,7 @@ pub(super) struct PublishGenerationInput<'a> {
     pub(super) source_graph_commit_epoch: Option<u64>,
     pub(super) import_source_graph_commit_epoch: Option<u64>,
     pub(super) embedding_manifest: Option<&'a SearchEmbeddingManifest>,
+    pub(super) vector_index_descriptor: Option<&'a hawdb_core::VectorIndexDescriptor>,
     pub(super) embedding_dimension: Option<usize>,
     pub(super) layout: &'a SearchOutOfCoreLayoutBody,
     pub(super) lexical_artifact_name: &'a str,
@@ -587,6 +588,16 @@ pub(super) fn install_generation(
         }
         _ => None,
     };
+    // The canonical bytes, retained hex and temporary validation decode must
+    // all be admitted before the bound definition is encoded into the manifest.
+    let _vector_binding_memory = input
+        .vector_index_descriptor
+        .map(|_| {
+            memory
+                .spool
+                .reserve(hawdb_core::vector_index::MAX_VECTOR_INDEX_DESCRIPTOR_BYTES * 4)
+        })
+        .transpose()?;
     let manifest = SearchOutOfCoreManifestBody {
         format: OUT_OF_CORE_FORMAT.to_string(),
         generation,
@@ -608,6 +619,9 @@ pub(super) fn install_generation(
             .embedding_manifest
             .map(|manifest| manifest.dimension)
             .or(input.embedding_dimension),
+        vector_index_binding: input
+            .vector_index_descriptor
+            .map(crate::vector_index::encode),
     };
     let _validation = memory.spool.reserve(3 * 128)?;
     manifest.validate_names()?;

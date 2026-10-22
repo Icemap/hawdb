@@ -52,6 +52,7 @@ use std::path::PathBuf;
 mod artifact_name;
 mod artifacts;
 mod compaction;
+mod consumer;
 mod context_memory;
 mod delta;
 mod discovery;
@@ -145,6 +146,7 @@ pub struct SearchOutOfCoreGenerationBuildOptions {
     pub source_graph_commit_epoch: Option<u64>,
     pub import_source_graph_commit_epoch: Option<u64>,
     pub embedding_manifest: Option<SearchEmbeddingManifest>,
+    pub vector_index_descriptor: Option<hawdb_core::VectorIndexDescriptor>,
     pub analyzer_lexicon: SearchAnalyzerLexicon,
     pub cleanup_options: SearchProjectionCleanupOptions,
 }
@@ -180,6 +182,7 @@ impl Default for SearchOutOfCoreGenerationBuildOptions {
             source_graph_commit_epoch: None,
             import_source_graph_commit_epoch: None,
             embedding_manifest: None,
+            vector_index_descriptor: None,
             analyzer_lexicon: SearchAnalyzerLexicon::default(),
             cleanup_options: SearchProjectionCleanupOptions::default(),
         }
@@ -458,7 +461,13 @@ impl SearchOutOfCoreGenerationWriter {
         let embedding_dimension = options
             .embedding_manifest
             .as_ref()
-            .map(|manifest| manifest.dimension);
+            .map(|manifest| manifest.dimension)
+            .or_else(|| {
+                options
+                    .vector_index_descriptor
+                    .as_ref()
+                    .map(|binding| binding.dimension().get() as usize)
+            });
         Ok(Self {
             root,
             spool_path,
@@ -895,6 +904,7 @@ impl SearchOutOfCoreGenerationWriter {
                 source_graph_commit_epoch: self.options.source_graph_commit_epoch,
                 import_source_graph_commit_epoch: self.options.import_source_graph_commit_epoch,
                 embedding_manifest: self.options.embedding_manifest.as_ref(),
+                vector_index_descriptor: self.options.vector_index_descriptor.as_ref(),
                 embedding_dimension: self.embedding_dimension,
                 layout: &segment_output.layout,
                 lexical_artifact_name: &lexical_artifact_name,
@@ -1108,6 +1118,13 @@ impl SearchOutOfCoreGenerationWriter {
                 "search generation exceeds the admitted {} documents",
                 self.options.max_documents
             )));
+        }
+        if let Some(embedding) = document.embedding {
+            crate::vector_index::validate_embedding(
+                self.options.vector_index_descriptor.as_ref(),
+                embedding,
+                || crate::build_control::checkpoint(&self.task_context),
+            )?;
         }
         let next_dimension = validate_embedding(
             document,
@@ -1398,6 +1415,34 @@ fn rabitq_error(error: hawdb_vector_projection::ProjectionError) -> HawDBError {
 }
 
 fn validate_options(options: &SearchOutOfCoreGenerationBuildOptions) -> Result<()> {
+    if let Some(binding) = &options.vector_index_descriptor {
+        crate::compiled_capabilities::effective_runtime_capabilities(Default::default())
+            .require(hawdb_core::RuntimeCapability::VectorSearch)?;
+        let hawdb_core::VectorIndexBackend::RaBitQ {
+            bit_width,
+            segment_rows,
+            transform_seed,
+        } = binding.backend();
+        #[cfg(feature = "vector-search")]
+        if bit_width != options.rabitq_bit_width.bits() {
+            return Err(HawDBError::Semantic(
+                "vector index bit width differs from its definition".into(),
+            ));
+        }
+        #[cfg(not(feature = "vector-search"))]
+        let _ = bit_width;
+        if segment_rows as usize != options.rabitq_segment_rows.get()
+            || transform_seed != options.rabitq_transform_seed
+            || options
+                .embedding_manifest
+                .as_ref()
+                .is_some_and(|manifest| manifest.dimension != binding.dimension().get() as usize)
+        {
+            return Err(HawDBError::Semantic(
+                "vector index build options differ from its definition".into(),
+            ));
+        }
+    }
     SearchLexicalSourcePolicy::new(options.lexical_max_document_source_bytes)?;
     if options.max_record_bytes.get() > options.max_segment_uncompressed_bytes.get() {
         return Err(HawDBError::Storage(

@@ -96,6 +96,7 @@ STORAGE_MODELS = [
     "HawDBTransactionConcurrency",
     "HawDBTransactionIndexOverlay",
     "HawDBValidatedResultDelivery",
+    "HawDBVectorIndexReadDomain",
     "HawDBVerifiedRowPageCache",
     "HawDBVersionHistoryBudget",
     "HawDBVersionedProjectionPublication",

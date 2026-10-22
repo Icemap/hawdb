@@ -108,6 +108,14 @@ pub(super) fn open(
     let projection = FileProjection::open_admitted_file(file, &path, admission)
         .map_err(vector_projection_error)?;
     let artifact = projection.manifest();
+    if let Some(encoded) = &active.vector_index_binding {
+        let _definition_memory = admission
+            .memory
+            .spool
+            .reserve(hawdb_core::vector_index::MAX_VECTOR_INDEX_DESCRIPTOR_BYTES * 2)?;
+        let definition = crate::vector_index::decode(encoded)?;
+        crate::vector_index::validate_projection(&definition, artifact)?;
+    }
     if artifact.identity.generation != manifest.generation
         || artifact.identity.source_epoch != manifest.source_graph_commit_epoch
         || artifact.identity.embedding_model.as_deref() != active.embedding_model.as_deref()

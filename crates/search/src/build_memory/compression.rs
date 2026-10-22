@@ -16,6 +16,10 @@
 
 use crate::{HawDBError, Result};
 
+// Pinned zstd 1.5.7, level 3, one worker, no dictionary/LDM/sequence producer.
+// Includes native workspace and the Rust writer staging buffer.
+pub(crate) const COMPRESSION_WORKSPACE_BYTES: usize = 8 * 1024 * 1024 + 32 * 1024;
+
 const QUALIFIED_ZSTD_VERSION: u32 = 10507;
 const _: () = assert!(
     zstd::zstd_safe::zstd_sys::ZSTD_VERSION_NUMBER == QUALIFIED_ZSTD_VERSION,

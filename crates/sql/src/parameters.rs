@@ -137,6 +137,16 @@ fn collect_column_default_parameter(default: &SqlColumnDefault, positions: &mut 
 }
 
 fn collect_select_parameters(select: &SelectStatement, positions: &mut BTreeSet<usize>) {
+    if let Some(search) = &select.vector_index {
+        for value in [
+            &search.index,
+            &search.embedding,
+            &search.candidates,
+            &search.top_k,
+        ] {
+            collect_value_parameter(value, positions);
+        }
+    }
     for projection in &select.projection {
         if let SelectProjection::Expression { expression, .. } = projection {
             collect_expression_parameters(expression, positions);

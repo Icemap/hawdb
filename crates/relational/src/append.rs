@@ -313,6 +313,10 @@ pub fn compile_prepared_append_select_sql(
     let SqlStatement::Select(select) = &prepared.statement else {
         return Ok(None);
     };
+
+    if select.vector_index.is_some() {
+        return Ok(None);
+    }
     if select.from.is_none() {
         return Ok(None);
     }
@@ -352,6 +356,10 @@ pub fn compile_prepared_append_explain_sql(
     let SqlStatement::Select(select) = explain.statement.as_ref() else {
         return Ok(None);
     };
+
+    if select.vector_index.is_some() {
+        return Ok(None);
+    }
     if select.from.is_none() {
         return Ok(None);
     }

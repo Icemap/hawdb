@@ -27,6 +27,23 @@ impl Parser<'_> {
         let procedure = self.parse_ident()?;
         self.expect_char('(')?;
         let lower = procedure.to_ascii_lowercase();
+        if lower == "vector_index_search" {
+            let search = self.parse_vector_index_search_arguments()?;
+            let procedure = self.source_node(
+                ProcedureCallKind::VectorIndexSearch(search),
+                procedure_start,
+            );
+            let yields = self.parse_procedure_yields()?;
+            let call = self.source_node(ClauseKind::Call { procedure, yields }, call_start);
+            let mut clauses = vec![call];
+            self.skip_ws();
+            if self.peek_char().is_some_and(|ch| ch != ';') {
+                clauses.extend(self.parse_public_query_pipeline()?.kind.clauses);
+            }
+            return Ok(Statement::Pipeline(Box::new(
+                self.source_node(QueryPipelineKind { clauses }, call_start),
+            )));
+        }
         if lower == "vector_search" {
             return self.parse_vector_search(call_start, procedure_start);
         }
@@ -286,6 +303,39 @@ impl Parser<'_> {
             }
         }
         Ok(VectorSearch { embedding, top_k })
+    }
+
+    pub(super) fn parse_vector_index_search_arguments(&mut self) -> Result<VectorIndexSearch> {
+        let index = self.parse_value()?;
+        self.expect_char(',')?;
+        let embedding = self.parse_value()?;
+        let mut candidates = None;
+        let mut top_k = None;
+        loop {
+            self.skip_ws();
+            if self.consume_char(')') {
+                break;
+            }
+            self.expect_char(',')?;
+            let name = self.parse_ident()?;
+            self.expect_token(":=")?;
+            let slot = match name.to_ascii_lowercase().as_str() {
+                "candidates" => &mut candidates,
+                "topk" => &mut top_k,
+                _ => return Err(self.error("unsupported vector index search option")),
+            };
+            if slot.is_some() {
+                return Err(self.error("duplicate vector index search option"));
+            }
+            *slot = Some(self.parse_value()?);
+        }
+        Ok(VectorIndexSearch {
+            index,
+            embedding,
+            candidates: candidates
+                .ok_or_else(|| self.error("vector index search requires candidates"))?,
+            top_k: top_k.ok_or_else(|| self.error("vector index search requires topK"))?,
+        })
     }
 
     fn parse_vector_search(

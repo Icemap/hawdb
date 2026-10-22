@@ -152,6 +152,15 @@ pub struct VectorSearch {
     pub top_k: Option<ValueExpression>,
 }
 
+/// An explicit approximate index window, separate from legacy relevance search.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VectorIndexSearch {
+    pub index: ValueExpression,
+    pub embedding: ValueExpression,
+    pub candidates: ValueExpression,
+    pub top_k: ValueExpression,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GraphAlgorithmKind {
     PageRank,

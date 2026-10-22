@@ -20,12 +20,16 @@ pub mod seed;
 use crate::VectorExecutionReport;
 
 mod text;
+mod vector_index;
 use hawdb_core::{HawDBError, Result, RuntimeTaskContext};
 use hawdb_plan_cypher::VectorPhysicalPlan;
 use std::collections::BTreeMap;
 use std::mem::size_of;
 use std::num::NonZeroUsize;
 pub use text::{TextSeedExecutionOutput, TextSeedExecutionRequest, TextSeedExecutionRow};
+pub use vector_index::{
+    VectorIndexExecutionOutput, VectorIndexExecutionRequest, VectorIndexExecutionRow,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ExternalReadResultBudget {
@@ -115,6 +119,16 @@ impl VectorSeedExecutionOutput {
 }
 
 pub trait ExternalReadOperator {
+    fn execute_vector_index(
+        &mut self,
+        request: VectorIndexExecutionRequest<'_>,
+    ) -> Result<Box<dyn VectorIndexExecutionOutput>> {
+        request.resources.checkpoint()?;
+        Err(HawDBError::Execution(
+            "vector index search requires a bound canonical/index read domain".into(),
+        ))
+    }
+
     fn execute_text_seed(
         &mut self,
         request: TextSeedExecutionRequest<'_>,

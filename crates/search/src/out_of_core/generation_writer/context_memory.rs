@@ -109,6 +109,60 @@ impl Options {
                 "search generation update analyzer does not match the active generation".into(),
             ));
         }
+        if reader.manifest.vector_index_binding.is_some()
+            || self.value.vector_index_descriptor.is_some()
+        {
+            // Definition changes require a new full build. Generic delta/compaction
+            // must retain the binding even when the caller supplies no override.
+            self._memory
+                .grow(hawdb_core::vector_index::MAX_VECTOR_INDEX_DESCRIPTOR_BYTES * 2)?;
+            let expected_binding = reader
+                .manifest
+                .vector_index_binding
+                .as_deref()
+                .map(crate::vector_index::decode)
+                .transpose()?;
+            if self.value.vector_index_descriptor.is_some()
+                && self.value.vector_index_descriptor != expected_binding
+            {
+                return Err(HawDBError::StorageIntegrity(
+                    "vector index definition differs from the active generation".into(),
+                ));
+            }
+            let previous_bytes = self
+                .value
+                .vector_index_descriptor
+                .as_ref()
+                .map_or(0, hawdb_core::VectorIndexDescriptor::retained_bytes);
+            let retained_bytes = expected_binding
+                .as_ref()
+                .map_or(0, hawdb_core::VectorIndexDescriptor::retained_bytes);
+            if let Some(binding) = &expected_binding {
+                let hawdb_core::VectorIndexBackend::RaBitQ {
+                    bit_width,
+                    segment_rows,
+                    transform_seed,
+                } = binding.backend();
+                #[cfg(feature = "vector-search")]
+                {
+                    self.value.rabitq_bit_width = match bit_width {
+                        1 => hawdb_vector_projection::RaBitQBitWidth::One,
+                        4 => hawdb_vector_projection::RaBitQBitWidth::Four,
+                        _ => unreachable!("validated vector index backend"),
+                    };
+                }
+                #[cfg(not(feature = "vector-search"))]
+                let _ = bit_width;
+                self.value.rabitq_segment_rows = std::num::NonZeroUsize::new(segment_rows as usize)
+                    .expect("validated vector index segment size");
+                self.value.rabitq_transform_seed = transform_seed;
+            }
+            self.value.vector_index_descriptor = expected_binding;
+            self._memory.shrink(
+                hawdb_core::vector_index::MAX_VECTOR_INDEX_DESCRIPTOR_BYTES * 2 + previous_bytes
+                    - retained_bytes,
+            );
+        }
         let old = self
             .value
             .embedding_manifest
@@ -187,6 +241,9 @@ fn options_bytes(
                 identity.version.as_ref().map_or(0, String::capacity),
             )?,
         )?;
+    }
+    if let Some(descriptor) = &value.vector_index_descriptor {
+        bytes = add(bytes, descriptor.retained_bytes())?;
     }
     Ok(bytes)
 }

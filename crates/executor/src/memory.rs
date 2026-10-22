@@ -324,6 +324,11 @@ fn peak_execution_memory_shape(
             .fixed_operator_bytes
             .saturating_add(SOURCE_SEGMENT_SCAN_MAX_WAVE_BYTES);
     }
+    if matches!(plan, PhysicalPlan::VectorIndexScan(_)) {
+        shape.external_read_bytes = shape
+            .external_read_bytes
+            .saturating_add(usize_to_u64(memory.blocking_operator_bytes.get()).saturating_mul(2));
+    }
     if let PhysicalPlan::VectorSeedScan {
         resource_profile, ..
     }
@@ -369,6 +374,7 @@ fn retains_blocking_state(plan: &PhysicalPlan) -> bool {
         plan,
         PhysicalPlan::GraphAlgorithm { .. }
             | PhysicalPlan::GraphAlgorithmOutput(_)
+            | PhysicalPlan::VectorIndexScan(_)
             | PhysicalPlan::VectorSeedScan { .. }
             | PhysicalPlan::GraphSeedScan { .. }
             | PhysicalPlan::TextSeedScan { .. }

@@ -129,6 +129,11 @@ pub(super) fn prepare_relational_select_with_snapshot(
     resources: RelationalQueryResourceContext<'_>,
     initial_stage_timings: RelationalSqlStageTimings,
 ) -> Result<(PreparedRelationalSelect, RelationalQueryPlanningSnapshot)> {
+    if select.vector_index.is_some() {
+        return Err(HawDBError::Semantic(
+            "vector index SQL requires a bound canonical/index read domain".into(),
+        ));
+    }
     let limits = resources.limits;
     let join_planning = resources.join_planning;
     let prepare_started = Instant::now();

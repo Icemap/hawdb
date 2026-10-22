@@ -191,6 +191,38 @@ impl Database {
     where
         F: FnOnce(&mut DatabaseReadTransaction, &mut SearchIndex) -> Result<()>,
     {
+        self.create_consumer_with_initializer::<CAPACITY, _>(
+            id,
+            destination,
+            options,
+            RuntimeTaskContext::default(),
+            |snapshot, index, _permit| initialize(snapshot, index),
+        )
+    }
+
+    pub(super) fn create_consumer_with_initializer<const CAPACITY: usize, F>(
+        &mut self,
+        id: SearchProjectionConsumerId,
+        destination: &Path,
+        options: SearchProjectionConsumerOptions,
+        task: RuntimeTaskContext,
+        initialize: F,
+    ) -> SearchProjectionConsumerResult<SearchProjectionConsumer>
+    where
+        F: FnOnce(
+            &mut DatabaseReadTransaction,
+            &mut SearchIndex,
+            &hawdb_qos::RuntimePermit,
+        ) -> Result<()>,
+    {
+        if task.has_resource_controllers() {
+            return Err(HawDBError::Execution(
+                "Consumer initialization task already has a resource controller".into(),
+            )
+            .into());
+        }
+        task.checkpoint()
+            .map_err(|reason| HawDBError::Execution(reason.to_string()))?;
         let root = self.consumer_writable_root()?;
         self.ensure_runtime_capability(hawdb_core::RuntimeCapability::SearchProjectionPublication)?;
         self.reload_consumer_registry_if_unavailable()?;
@@ -286,7 +318,7 @@ impl Database {
         let registration_uuid = allocation.registration_uuid();
         let mut birth = allocation.prepare_initial_generation(parent)?;
         birth.create()?;
-        let mut snapshot = self.begin_read_transaction()?;
+        let mut snapshot = self.begin_read_transaction_with_context(&task)?;
         let epoch = snapshot.commit_epoch();
         let prepared = ConsumerProjection::prepare_registered(
             birth,
@@ -294,11 +326,11 @@ impl Database {
                 locator: destination,
                 epoch,
                 permit: Arc::clone(&permit),
-                task: RuntimeTaskContext::default(),
+                task: task.clone(),
                 limits: RegisteredConsumerLimits::default(),
                 previous: None,
             },
-            |index| initialize(&mut snapshot, index),
+            |index| initialize(&mut snapshot, index, &permit),
         );
         drop(snapshot);
         let mut prepared = prepared?;
@@ -316,8 +348,7 @@ impl Database {
                 report.source_epoch,
                 report.metadata_reference,
             )?;
-            let mut attempt =
-                prepared.admit_selection(Arc::clone(&permit), RuntimeTaskContext::default())?;
+            let mut attempt = prepared.admit_selection(Arc::clone(&permit), task.clone())?;
             publication_failpoint(PublicationStage::BeforeSelector)?;
             let pending = attempt.select()?;
             drop(runtime);
@@ -468,6 +499,12 @@ impl Database {
             &SearchProjectionChangeBatch,
         ) -> Result<SearchProjectionRelationalDelta>,
     {
+        if consumer.search_index()?.vector_index_descriptor().is_some() {
+            return Err(HawDBError::Semantic(
+                "schema-bound vector indexes require rebuild_vector_index maintenance".into(),
+            )
+            .into());
+        }
         let root = self.consumer_writable_root()?;
         self.reload_consumer_registry_if_unavailable()?;
         self.validate_consumer_receipt(consumer)?;
@@ -519,7 +556,7 @@ impl Database {
             let source_epoch = batch.complete_through_commit_epoch().ok_or_else(|| {
                 HawDBError::StorageIntegrity("Consumer batch has no complete source epoch".into())
             })?;
-            let mut prepared = ConsumerProjection::prepare_registered(
+            let prepared = ConsumerProjection::prepare_registered(
                 birth,
                 RegisteredConsumerPreparation {
                     locator: &destination,
@@ -535,48 +572,13 @@ impl Database {
                         .map(|_| ())
                 },
             )?;
-            let report = prepared.report();
-            let selection = (|| -> Result<_> {
-                publication_failpoint(PublicationStage::AfterCheckpoint)?;
-                self.runtime.get_mut()?.store.synchronize_source_prefix()?;
-                let runtime = self.runtime.get()?;
-                super::require_search_projection_source_epoch(
-                    Some(report.source_epoch),
-                    runtime.store.commit_epoch(),
-                )?;
-                runtime.store.verify_search_consumer_candidate_source(
-                    prepared.reservation_binding()?,
-                    report.source_epoch,
-                    report.metadata_reference,
-                )?;
-                let mut attempt =
-                    prepared.admit_selection(Arc::clone(&permit), RuntimeTaskContext::default())?;
-                publication_failpoint(PublicationStage::BeforeSelector)?;
-                let pending = attempt.select()?;
-                drop(runtime);
-                publication_failpoint(PublicationStage::AfterSelector)?;
-                let receipt = pending.finish()?;
-                publication_failpoint(PublicationStage::AfterSelectorBarrier)?;
-                Ok(receipt)
-            })();
-            let selected = match selection {
-                Ok(receipt) => receipt,
-                Err(error) => {
-                    consumer
-                        .projection_mut()
-                        .retain_pending_publication(prepared)?;
-                    return Err(error.into());
-                }
-            };
-            *consumer.projection_mut() = prepared.complete(selected)?;
-            let receipt = consumer.projection().receipt();
-            self.acknowledge_consumer_checkpoint(consumer.id(), &receipt)?;
-            self.publish_consumer_registry(&root)?;
-            self.runtime
-                .get_mut()?
-                .projection_consumers
-                .verified
-                .insert(consumer.id().as_str().into(), State::Active);
+            self.finish_consumer_successor(
+                consumer,
+                prepared,
+                &permit,
+                RuntimeTaskContext::default(),
+                &root,
+            )?;
             applied_batch_count = applied_batch_count.saturating_add(1);
             applied_operation_count = applied_operation_count.saturating_add(operation_count);
         }
@@ -594,6 +596,112 @@ impl Database {
             },
             consumer: self.search_projection_consumer_status(consumer.id())?,
         })
+    }
+
+    /// Complete replacement uses the same allocation, selection and uncertain
+    /// outcome custody as incremental maintenance. It never updates in place.
+    pub(super) fn rebuild_consumer_with_initializer<F>(
+        &mut self,
+        consumer: &mut SearchProjectionConsumer,
+        task: RuntimeTaskContext,
+        initialize: F,
+    ) -> SearchProjectionConsumerResult<()>
+    where
+        F: FnOnce(
+            &mut DatabaseReadTransaction,
+            &mut SearchIndex,
+            &hawdb_qos::RuntimePermit,
+            &SearchIndex,
+        ) -> Result<()>,
+    {
+        if task.has_resource_controllers() {
+            return Err(HawDBError::Execution(
+                "Consumer rebuild task already has a resource controller".into(),
+            )
+            .into());
+        }
+        task.checkpoint()
+            .map_err(|reason| HawDBError::Execution(reason.to_string()))?;
+        let root = self.consumer_writable_root()?;
+        self.reload_consumer_registry_if_unavailable()?;
+        self.validate_consumer_receipt(consumer)?;
+        let permit = self.consumer_publication_permit()?;
+        let allocation = self
+            .runtime
+            .get()?
+            .store
+            .reserve_search_consumer_update(consumer.projection().stationary_receipt()?)?;
+        let mut birth = consumer.projection().prepare_successor_birth(allocation)?;
+        birth.create()?;
+        let mut snapshot = self.begin_read_transaction_with_context(&task)?;
+        let destination = consumer.projection().registered_locator()?.to_owned();
+        publication_failpoint(PublicationStage::BeforeCheckpoint)?;
+        let prepared = ConsumerProjection::prepare_registered(
+            birth,
+            RegisteredConsumerPreparation {
+                locator: &destination,
+                epoch: snapshot.commit_epoch(),
+                permit: Arc::clone(&permit),
+                task: task.clone(),
+                limits: RegisteredConsumerLimits::default(),
+                previous: Some(consumer.projection()),
+            },
+            |index| initialize(&mut snapshot, index, &permit, consumer.search_index()?),
+        );
+        drop(snapshot);
+        self.finish_consumer_successor(consumer, prepared?, &permit, task, &root)
+    }
+
+    fn finish_consumer_successor(
+        &mut self,
+        consumer: &mut SearchProjectionConsumer,
+        mut prepared: hawdb_search::consumer::PreparedRegisteredConsumer,
+        permit: &Arc<hawdb_qos::RuntimePermit>,
+        task: RuntimeTaskContext,
+        root: &Path,
+    ) -> SearchProjectionConsumerResult<()> {
+        let report = prepared.report();
+        let selection = (|| -> Result<_> {
+            publication_failpoint(PublicationStage::AfterCheckpoint)?;
+            self.runtime.get_mut()?.store.synchronize_source_prefix()?;
+            let runtime = self.runtime.get()?;
+            super::require_search_projection_source_epoch(
+                Some(report.source_epoch),
+                runtime.store.commit_epoch(),
+            )?;
+            runtime.store.verify_search_consumer_candidate_source(
+                prepared.reservation_binding()?,
+                report.source_epoch,
+                report.metadata_reference,
+            )?;
+            let mut attempt = prepared.admit_selection(Arc::clone(permit), task)?;
+            publication_failpoint(PublicationStage::BeforeSelector)?;
+            let pending = attempt.select()?;
+            drop(runtime);
+            publication_failpoint(PublicationStage::AfterSelector)?;
+            let receipt = pending.finish()?;
+            publication_failpoint(PublicationStage::AfterSelectorBarrier)?;
+            Ok(receipt)
+        })();
+        let selected = match selection {
+            Ok(receipt) => receipt,
+            Err(error) => {
+                consumer
+                    .projection_mut()
+                    .retain_pending_publication(prepared)?;
+                return Err(error.into());
+            }
+        };
+        *consumer.projection_mut() = prepared.complete(selected)?;
+        let receipt = consumer.projection().receipt();
+        self.acknowledge_consumer_checkpoint(consumer.id(), &receipt)?;
+        self.publish_consumer_registry(root)?;
+        self.runtime
+            .get_mut()?
+            .projection_consumers
+            .verified
+            .insert(consumer.id().as_str().into(), State::Active);
+        Ok(())
     }
 
     pub fn renew_search_projection_consumer(
@@ -948,13 +1056,12 @@ impl Database {
             || receipt.binding.projection_uuid.to_string() != record.projection_uuid
             || receipt.source_epoch > epoch
             || receipt.source_epoch < record.durable_complete_through_epoch
-            || (receipt.source_epoch == record.durable_complete_through_epoch
-                && (receipt.binding.checkpoint_uuid.to_string() != record.checkpoint_uuid
-                    || receipt.encoded_len != record.snapshot_encoded_len
-                    || receipt.sha256 != record.snapshot_sha256))
         {
             return Err(Error::RebuildRequired(Reason::CheckpointMismatch));
         }
+        // The complete native receipt above is the publication authority. A
+        // full rebuild can select a new generation at the same source epoch;
+        // cached checkpoint bytes must not reject that verified successor.
         record.checkpoint_uuid = receipt.binding.checkpoint_uuid.to_string();
         record.durable_complete_through_epoch = receipt.source_epoch;
         record.snapshot_encoded_len = receipt.encoded_len;
