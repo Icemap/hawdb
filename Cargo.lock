@@ -334,7 +334,7 @@ dependencies = [
 
 [[package]]
 name = "hawdb"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "chrono",
  "getrandom",
@@ -382,14 +382,14 @@ dependencies = [
 
 [[package]]
 name = "hawdb-analytics"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "hawdb-core",
 ]
 
 [[package]]
 name = "hawdb-artifact"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "hawdb-core",
  "hawdb-executor",
@@ -398,7 +398,7 @@ dependencies = [
 
 [[package]]
 name = "hawdb-bootstrap"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "hawdb-core",
  "hawdb-integrity",
@@ -409,15 +409,15 @@ dependencies = [
 
 [[package]]
 name = "hawdb-cascades"
-version = "0.11.0"
+version = "0.12.0"
 
 [[package]]
 name = "hawdb-cgroup"
-version = "0.11.0"
+version = "0.12.0"
 
 [[package]]
 name = "hawdb-compat"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "hawdb-analytics",
  "hawdb-core",
@@ -430,7 +430,7 @@ dependencies = [
 
 [[package]]
 name = "hawdb-core"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "getrandom",
  "regex",
@@ -440,7 +440,7 @@ dependencies = [
 
 [[package]]
 name = "hawdb-cypher"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "hawdb-core",
  "hawdb-ddl",
@@ -449,14 +449,14 @@ dependencies = [
 
 [[package]]
 name = "hawdb-ddl"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "hawdb-core",
 ]
 
 [[package]]
 name = "hawdb-evidence"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "hawdb-core",
  "hawdb-integrity",
@@ -466,7 +466,7 @@ dependencies = [
 
 [[package]]
 name = "hawdb-executor"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "fs2",
  "hawdb-analytics",
@@ -481,7 +481,7 @@ dependencies = [
 
 [[package]]
 name = "hawdb-explain"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "hawdb-core",
  "hawdb-executor",
@@ -495,14 +495,14 @@ dependencies = [
 
 [[package]]
 name = "hawdb-expression"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "hawdb-core",
 ]
 
 [[package]]
 name = "hawdb-fuzz-contracts"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "hawdb-core",
  "serde_json",
@@ -510,7 +510,7 @@ dependencies = [
 
 [[package]]
 name = "hawdb-integrity"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "crc32c",
  "sha2",
@@ -518,7 +518,7 @@ dependencies = [
 
 [[package]]
 name = "hawdb-nowledge-contracts"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "hawdb-core",
  "hawdb-qos",
@@ -530,7 +530,7 @@ dependencies = [
 
 [[package]]
 name = "hawdb-optimizer"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "hawdb-cascades",
  "hawdb-optimizer-graph",
@@ -541,7 +541,7 @@ dependencies = [
 
 [[package]]
 name = "hawdb-optimizer-graph"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "hawdb-cascades",
  "hawdb-core",
@@ -554,7 +554,7 @@ dependencies = [
 
 [[package]]
 name = "hawdb-optimizer-predicate"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "hawdb-cascades",
  "serde_json",
@@ -562,7 +562,7 @@ dependencies = [
 
 [[package]]
 name = "hawdb-optimizer-relational"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "hawdb-cascades",
  "hawdb-core",
@@ -571,7 +571,7 @@ dependencies = [
 
 [[package]]
 name = "hawdb-optimizer-vector"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "hawdb-cascades",
  "hawdb-plan-core",
@@ -579,7 +579,7 @@ dependencies = [
 
 [[package]]
 name = "hawdb-plan-cache"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "hawdb-core",
  "hawdb-cypher",
@@ -590,11 +590,11 @@ dependencies = [
 
 [[package]]
 name = "hawdb-plan-core"
-version = "0.11.0"
+version = "0.12.0"
 
 [[package]]
 name = "hawdb-plan-cypher"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "hawdb-core",
  "hawdb-cypher",
@@ -606,7 +606,7 @@ dependencies = [
 
 [[package]]
 name = "hawdb-qos"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "hawdb-cgroup",
  "hawdb-core",
@@ -618,7 +618,7 @@ dependencies = [
 
 [[package]]
 name = "hawdb-qualification"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "hawdb",
  "hawdb-query",
@@ -630,14 +630,14 @@ dependencies = [
 
 [[package]]
 name = "hawdb-query"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "sha2",
 ]
 
 [[package]]
 name = "hawdb-query-policy"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "hawdb-core",
  "hawdb-cypher",
@@ -647,7 +647,7 @@ dependencies = [
 
 [[package]]
 name = "hawdb-readiness"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "hawdb-core",
  "hawdb-cypher",
@@ -665,7 +665,7 @@ dependencies = [
 
 [[package]]
 name = "hawdb-relational"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "hawdb-core",
  "hawdb-executor",
@@ -678,7 +678,7 @@ dependencies = [
 
 [[package]]
 name = "hawdb-resource-profile"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "hawdb-core",
  "hawdb-evidence",
@@ -689,14 +689,14 @@ dependencies = [
 
 [[package]]
 name = "hawdb-route-ownership"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "serde_json",
 ]
 
 [[package]]
 name = "hawdb-runtime-tokio"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "hawdb-core",
  "hawdb-qos",
@@ -706,7 +706,7 @@ dependencies = [
 
 [[package]]
 name = "hawdb-search"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "bitpacking",
  "chrono",
@@ -734,7 +734,7 @@ dependencies = [
 
 [[package]]
 name = "hawdb-sql"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "caseless",
  "hawdb-core",
@@ -750,11 +750,11 @@ dependencies = [
 
 [[package]]
 name = "hawdb-sql-syntax"
-version = "0.11.0"
+version = "0.12.0"
 
 [[package]]
 name = "hawdb-storage"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "chrono",
  "fs2",
@@ -775,7 +775,7 @@ dependencies = [
 
 [[package]]
 name = "hawdb-system-sql"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "hawdb-core",
  "hawdb-executor",
@@ -789,7 +789,7 @@ dependencies = [
 
 [[package]]
 name = "hawdb-telemetry"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "hawdb-qos",
  "opentelemetry",
@@ -797,7 +797,7 @@ dependencies = [
 
 [[package]]
 name = "hawdb-vector-projection"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "crc32fast",
  "hawdb-core",
