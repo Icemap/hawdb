@@ -427,7 +427,7 @@ fn registered_consumer_cancelled_work_never_advances_and_reopen_can_retry() {
                     ProjectionSourceDurability::RequireKnownDurable,
                 ),
                 Err(ProjectionConsumerCatchUpError::Stopped(
-                    hawdb_core::RuntimeCancellationReason::Cancelled
+                    hawdb::RuntimeCancellationReason::Cancelled
                 ))
             ));
         } else {
