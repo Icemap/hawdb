@@ -1,0 +1,5 @@
+# Serial groups; raw and adapted fixtures remain distinct.
+test: boolean
+test: int8
+test: isolation
+test: adapted

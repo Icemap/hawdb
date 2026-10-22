@@ -1,0 +1,18 @@
+[package]
+name = "hawdb-pg-regress"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.97.1"
+publish = false
+autolib = false
+
+[workspace]
+
+[[bin]]
+name = "hawdb-pg-regress-worker"
+path = "src/main.rs"
+
+[dependencies]
+hawdb = { path = "../..", default-features = false }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

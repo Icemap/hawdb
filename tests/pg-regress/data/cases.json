@@ -1,0 +1,2253 @@
+{
+  "format_version": 1,
+  "postgres_version": 180000,
+  "postgres_commit": "3d6a828938a5fa0444275d3d2f67b64ec3199eb7",
+  "sources": [
+    {
+      "file": "data/expected/boolean.out",
+      "upstream": "src/test/regress/expected/boolean.out",
+      "sha256": "d26265fe1695de91e102b575dd88806078568f2c42b39fc9bd2defb472250307"
+    },
+    {
+      "file": "data/expected/int8.out",
+      "upstream": "src/test/regress/expected/int8.out",
+      "sha256": "df6fdbe14be3a951d596886c4bf673c749e0f76f0abfa343216b077480c481b8"
+    },
+    {
+      "file": "data/isolation/multiple-row-versions.spec",
+      "upstream": "src/test/isolation/specs/multiple-row-versions.spec",
+      "sha256": "bff2b7826a261204508c77cd7b01f50185869950e3594a549bf29410449a122b"
+    },
+    {
+      "file": "data/isolation/read-only-anomaly.spec",
+      "upstream": "src/test/isolation/specs/read-only-anomaly.spec",
+      "sha256": "870ed274ea7c8d7a666daf91d2554033c643259ac39fd7fedc9e6bad8758e94f"
+    },
+    {
+      "file": "data/isolation/simple-write-skew.spec",
+      "upstream": "src/test/isolation/specs/simple-write-skew.spec",
+      "sha256": "18d600585db44e4720c078da68bc19cce8a98ecfd03691063bfb48c2188dfa25"
+    },
+    {
+      "file": "data/sql/boolean.sql",
+      "upstream": "src/test/regress/sql/boolean.sql",
+      "sha256": "d87b3e67963421c4a3867c6dbdda83ad209a412515a6a0e304b60b38aff59a9b"
+    },
+    {
+      "file": "data/sql/int8.sql",
+      "upstream": "src/test/regress/sql/int8.sql",
+      "sha256": "ae41ceec3cfb31f8cae17cc95a5ebae595288315a55d2444c9e2b55cec980bd4"
+    },
+    {
+      "file": "data/sql/test_setup.sql",
+      "upstream": "src/test/regress/sql/test_setup.sql",
+      "sha256": "1c5e005b488f306c41a349a55c768fe22a2882f0955ae8ae46d26d5baadcf7c3"
+    },
+    {
+      "file": "POSTGRESQL-LICENSE",
+      "upstream": "COPYRIGHT",
+      "sha256": "5ed3ce5c9373dff7f98b1fae7a6c7ccd98df7d734d46d24c1bcebf1240be8307"
+    }
+  ],
+  "cases": [
+    {
+      "id": "boolean/scalar-0",
+      "group": "boolean",
+      "steps": [
+        {
+          "sql": "SELECT 1 AS one;",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 8,
+            "last_line": 8
+          }
+        }
+      ]
+    },
+    {
+      "id": "boolean/scalar-1",
+      "group": "boolean",
+      "steps": [
+        {
+          "sql": "SELECT true AS true;",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 15,
+            "last_line": 15
+          }
+        }
+      ]
+    },
+    {
+      "id": "boolean/scalar-2",
+      "group": "boolean",
+      "steps": [
+        {
+          "sql": "SELECT false AS false;",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 17,
+            "last_line": 17
+          }
+        }
+      ]
+    },
+    {
+      "id": "boolean/truth-table",
+      "group": "boolean",
+      "steps": [
+        {
+          "sql": "CREATE TABLE BOOLTBL3 (d text, b bool, o int);",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 212,
+            "last_line": 212
+          }
+        },
+        {
+          "sql": "INSERT INTO BOOLTBL3 (d, b, o) VALUES ('true', true, 1);",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 213,
+            "last_line": 213
+          }
+        },
+        {
+          "sql": "INSERT INTO BOOLTBL3 (d, b, o) VALUES ('false', false, 2);",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 214,
+            "last_line": 214
+          }
+        },
+        {
+          "sql": "INSERT INTO BOOLTBL3 (d, b, o) VALUES ('null', null, 3);",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 215,
+            "last_line": 215
+          }
+        },
+        {
+          "sql": "SELECT\n    d,\n    b IS TRUE AS istrue,\n    b IS NOT TRUE AS isnottrue,\n    b IS FALSE AS isfalse,\n    b IS NOT FALSE AS isnotfalse,\n    b IS UNKNOWN AS isunknown,\n    b IS NOT UNKNOWN AS isnotunknown\nFROM booltbl3 ORDER BY o;",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 217,
+            "last_line": 225
+          },
+          "ordered": true
+        }
+      ]
+    },
+    {
+      "id": "boolean/null-logic-0",
+      "group": "boolean",
+      "steps": [
+        {
+          "sql": "CREATE TABLE booltbl4(isfalse bool, istrue bool, isnul bool);",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 231,
+            "last_line": 231
+          }
+        },
+        {
+          "sql": "INSERT INTO booltbl4 VALUES (false, true, null);",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 232,
+            "last_line": 232
+          }
+        },
+        {
+          "sql": "SELECT istrue AND isnul AND istrue FROM booltbl4;",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 237,
+            "last_line": 237
+          },
+          "compare_column_names": false,
+          "adaptation": "Unnamed expression labels are frontend-specific; compare cells by ordinal."
+        }
+      ]
+    },
+    {
+      "id": "boolean/null-logic-1",
+      "group": "boolean",
+      "steps": [
+        {
+          "sql": "CREATE TABLE booltbl4(isfalse bool, istrue bool, isnul bool);",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 231,
+            "last_line": 231
+          }
+        },
+        {
+          "sql": "INSERT INTO booltbl4 VALUES (false, true, null);",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 232,
+            "last_line": 232
+          }
+        },
+        {
+          "sql": "SELECT istrue AND istrue AND isnul FROM booltbl4;",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 238,
+            "last_line": 238
+          },
+          "compare_column_names": false,
+          "adaptation": "Unnamed expression labels are frontend-specific; compare cells by ordinal."
+        }
+      ]
+    },
+    {
+      "id": "boolean/null-logic-2",
+      "group": "boolean",
+      "steps": [
+        {
+          "sql": "CREATE TABLE booltbl4(isfalse bool, istrue bool, isnul bool);",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 231,
+            "last_line": 231
+          }
+        },
+        {
+          "sql": "INSERT INTO booltbl4 VALUES (false, true, null);",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 232,
+            "last_line": 232
+          }
+        },
+        {
+          "sql": "SELECT isnul AND istrue AND istrue FROM booltbl4;",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 239,
+            "last_line": 239
+          },
+          "compare_column_names": false,
+          "adaptation": "Unnamed expression labels are frontend-specific; compare cells by ordinal."
+        }
+      ]
+    },
+    {
+      "id": "boolean/null-logic-3",
+      "group": "boolean",
+      "steps": [
+        {
+          "sql": "CREATE TABLE booltbl4(isfalse bool, istrue bool, isnul bool);",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 231,
+            "last_line": 231
+          }
+        },
+        {
+          "sql": "INSERT INTO booltbl4 VALUES (false, true, null);",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 232,
+            "last_line": 232
+          }
+        },
+        {
+          "sql": "SELECT isfalse AND isnul AND istrue FROM booltbl4;",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 240,
+            "last_line": 240
+          },
+          "compare_column_names": false,
+          "adaptation": "Unnamed expression labels are frontend-specific; compare cells by ordinal."
+        }
+      ]
+    },
+    {
+      "id": "boolean/null-logic-4",
+      "group": "boolean",
+      "steps": [
+        {
+          "sql": "CREATE TABLE booltbl4(isfalse bool, istrue bool, isnul bool);",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 231,
+            "last_line": 231
+          }
+        },
+        {
+          "sql": "INSERT INTO booltbl4 VALUES (false, true, null);",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 232,
+            "last_line": 232
+          }
+        },
+        {
+          "sql": "SELECT istrue AND isfalse AND isnul FROM booltbl4;",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 241,
+            "last_line": 241
+          },
+          "compare_column_names": false,
+          "adaptation": "Unnamed expression labels are frontend-specific; compare cells by ordinal."
+        }
+      ]
+    },
+    {
+      "id": "boolean/null-logic-5",
+      "group": "boolean",
+      "steps": [
+        {
+          "sql": "CREATE TABLE booltbl4(isfalse bool, istrue bool, isnul bool);",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 231,
+            "last_line": 231
+          }
+        },
+        {
+          "sql": "INSERT INTO booltbl4 VALUES (false, true, null);",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 232,
+            "last_line": 232
+          }
+        },
+        {
+          "sql": "SELECT isnul AND istrue AND isfalse FROM booltbl4;",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 242,
+            "last_line": 242
+          },
+          "compare_column_names": false,
+          "adaptation": "Unnamed expression labels are frontend-specific; compare cells by ordinal."
+        }
+      ]
+    },
+    {
+      "id": "boolean/null-logic-6",
+      "group": "boolean",
+      "steps": [
+        {
+          "sql": "CREATE TABLE booltbl4(isfalse bool, istrue bool, isnul bool);",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 231,
+            "last_line": 231
+          }
+        },
+        {
+          "sql": "INSERT INTO booltbl4 VALUES (false, true, null);",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 232,
+            "last_line": 232
+          }
+        },
+        {
+          "sql": "SELECT isfalse OR isnul OR isfalse FROM booltbl4;",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 246,
+            "last_line": 246
+          },
+          "compare_column_names": false,
+          "adaptation": "Unnamed expression labels are frontend-specific; compare cells by ordinal."
+        }
+      ]
+    },
+    {
+      "id": "boolean/null-logic-7",
+      "group": "boolean",
+      "steps": [
+        {
+          "sql": "CREATE TABLE booltbl4(isfalse bool, istrue bool, isnul bool);",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 231,
+            "last_line": 231
+          }
+        },
+        {
+          "sql": "INSERT INTO booltbl4 VALUES (false, true, null);",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 232,
+            "last_line": 232
+          }
+        },
+        {
+          "sql": "SELECT isfalse OR isfalse OR isnul FROM booltbl4;",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 247,
+            "last_line": 247
+          },
+          "compare_column_names": false,
+          "adaptation": "Unnamed expression labels are frontend-specific; compare cells by ordinal."
+        }
+      ]
+    },
+    {
+      "id": "boolean/null-logic-8",
+      "group": "boolean",
+      "steps": [
+        {
+          "sql": "CREATE TABLE booltbl4(isfalse bool, istrue bool, isnul bool);",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 231,
+            "last_line": 231
+          }
+        },
+        {
+          "sql": "INSERT INTO booltbl4 VALUES (false, true, null);",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 232,
+            "last_line": 232
+          }
+        },
+        {
+          "sql": "SELECT isnul OR isfalse OR isfalse FROM booltbl4;",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 248,
+            "last_line": 248
+          },
+          "compare_column_names": false,
+          "adaptation": "Unnamed expression labels are frontend-specific; compare cells by ordinal."
+        }
+      ]
+    },
+    {
+      "id": "boolean/null-logic-9",
+      "group": "boolean",
+      "steps": [
+        {
+          "sql": "CREATE TABLE booltbl4(isfalse bool, istrue bool, isnul bool);",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 231,
+            "last_line": 231
+          }
+        },
+        {
+          "sql": "INSERT INTO booltbl4 VALUES (false, true, null);",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 232,
+            "last_line": 232
+          }
+        },
+        {
+          "sql": "SELECT isfalse OR isnul OR istrue FROM booltbl4;",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 249,
+            "last_line": 249
+          },
+          "compare_column_names": false,
+          "adaptation": "Unnamed expression labels are frontend-specific; compare cells by ordinal."
+        }
+      ]
+    },
+    {
+      "id": "boolean/null-logic-10",
+      "group": "boolean",
+      "steps": [
+        {
+          "sql": "CREATE TABLE booltbl4(isfalse bool, istrue bool, isnul bool);",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 231,
+            "last_line": 231
+          }
+        },
+        {
+          "sql": "INSERT INTO booltbl4 VALUES (false, true, null);",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 232,
+            "last_line": 232
+          }
+        },
+        {
+          "sql": "SELECT istrue OR isfalse OR isnul FROM booltbl4;",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 250,
+            "last_line": 250
+          },
+          "compare_column_names": false,
+          "adaptation": "Unnamed expression labels are frontend-specific; compare cells by ordinal."
+        }
+      ]
+    },
+    {
+      "id": "boolean/null-logic-11",
+      "group": "boolean",
+      "steps": [
+        {
+          "sql": "CREATE TABLE booltbl4(isfalse bool, istrue bool, isnul bool);",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 231,
+            "last_line": 231
+          }
+        },
+        {
+          "sql": "INSERT INTO booltbl4 VALUES (false, true, null);",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 232,
+            "last_line": 232
+          }
+        },
+        {
+          "sql": "SELECT isnul OR istrue OR isfalse FROM booltbl4;",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 251,
+            "last_line": 251
+          },
+          "compare_column_names": false,
+          "adaptation": "Unnamed expression labels are frontend-specific; compare cells by ordinal."
+        }
+      ]
+    },
+    {
+      "id": "boolean/duplicate-multiplicity",
+      "group": "boolean",
+      "steps": [
+        {
+          "sql": "CREATE TABLE BOOLTBL1 (f1 bool);",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 99,
+            "last_line": 99
+          }
+        },
+        {
+          "sql": "INSERT INTO BOOLTBL1 (f1) VALUES (bool 't');",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 101,
+            "last_line": 101
+          }
+        },
+        {
+          "sql": "INSERT INTO BOOLTBL1 (f1) VALUES (bool 'True');",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 103,
+            "last_line": 103
+          }
+        },
+        {
+          "sql": "INSERT INTO BOOLTBL1 (f1) VALUES (bool 'true');",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 105,
+            "last_line": 105
+          }
+        },
+        {
+          "sql": "SELECT BOOLTBL1.* FROM BOOLTBL1;",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 109,
+            "last_line": 109
+          }
+        }
+      ]
+    },
+    {
+      "id": "int8/comparison-0",
+      "group": "int8",
+      "steps": [
+        {
+          "sql": "CREATE TABLE INT8_TBL(q1 int8, q2 int8);",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 77,
+            "last_line": 77
+          }
+        },
+        {
+          "sql": "INSERT INTO INT8_TBL VALUES\n  ('  123   ','  456'),\n  ('123   ','4567890123456789'),\n  ('4567890123456789','123'),\n  (+4567890123456789,'4567890123456789'),\n  ('+4567890123456789','-4567890123456789');",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 79,
+            "last_line": 84
+          }
+        },
+        {
+          "sql": "SELECT * FROM INT8_TBL WHERE q2 = 4567890123456789;",
+          "source": {
+            "file": "data/sql/int8.sql",
+            "first_line": 26,
+            "last_line": 26
+          }
+        }
+      ]
+    },
+    {
+      "id": "int8/comparison-1",
+      "group": "int8",
+      "steps": [
+        {
+          "sql": "CREATE TABLE INT8_TBL(q1 int8, q2 int8);",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 77,
+            "last_line": 77
+          }
+        },
+        {
+          "sql": "INSERT INTO INT8_TBL VALUES\n  ('  123   ','  456'),\n  ('123   ','4567890123456789'),\n  ('4567890123456789','123'),\n  (+4567890123456789,'4567890123456789'),\n  ('+4567890123456789','-4567890123456789');",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 79,
+            "last_line": 84
+          }
+        },
+        {
+          "sql": "SELECT * FROM INT8_TBL WHERE q2 <> 4567890123456789;",
+          "source": {
+            "file": "data/sql/int8.sql",
+            "first_line": 27,
+            "last_line": 27
+          }
+        }
+      ]
+    },
+    {
+      "id": "int8/comparison-2",
+      "group": "int8",
+      "steps": [
+        {
+          "sql": "CREATE TABLE INT8_TBL(q1 int8, q2 int8);",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 77,
+            "last_line": 77
+          }
+        },
+        {
+          "sql": "INSERT INTO INT8_TBL VALUES\n  ('  123   ','  456'),\n  ('123   ','4567890123456789'),\n  ('4567890123456789','123'),\n  (+4567890123456789,'4567890123456789'),\n  ('+4567890123456789','-4567890123456789');",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 79,
+            "last_line": 84
+          }
+        },
+        {
+          "sql": "SELECT * FROM INT8_TBL WHERE q2 < 4567890123456789;",
+          "source": {
+            "file": "data/sql/int8.sql",
+            "first_line": 28,
+            "last_line": 28
+          }
+        }
+      ]
+    },
+    {
+      "id": "int8/comparison-3",
+      "group": "int8",
+      "steps": [
+        {
+          "sql": "CREATE TABLE INT8_TBL(q1 int8, q2 int8);",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 77,
+            "last_line": 77
+          }
+        },
+        {
+          "sql": "INSERT INTO INT8_TBL VALUES\n  ('  123   ','  456'),\n  ('123   ','4567890123456789'),\n  ('4567890123456789','123'),\n  (+4567890123456789,'4567890123456789'),\n  ('+4567890123456789','-4567890123456789');",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 79,
+            "last_line": 84
+          }
+        },
+        {
+          "sql": "SELECT * FROM INT8_TBL WHERE q2 > 4567890123456789;",
+          "source": {
+            "file": "data/sql/int8.sql",
+            "first_line": 29,
+            "last_line": 29
+          }
+        }
+      ]
+    },
+    {
+      "id": "int8/comparison-4",
+      "group": "int8",
+      "steps": [
+        {
+          "sql": "CREATE TABLE INT8_TBL(q1 int8, q2 int8);",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 77,
+            "last_line": 77
+          }
+        },
+        {
+          "sql": "INSERT INTO INT8_TBL VALUES\n  ('  123   ','  456'),\n  ('123   ','4567890123456789'),\n  ('4567890123456789','123'),\n  (+4567890123456789,'4567890123456789'),\n  ('+4567890123456789','-4567890123456789');",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 79,
+            "last_line": 84
+          }
+        },
+        {
+          "sql": "SELECT * FROM INT8_TBL WHERE q2 <= 4567890123456789;",
+          "source": {
+            "file": "data/sql/int8.sql",
+            "first_line": 30,
+            "last_line": 30
+          }
+        }
+      ]
+    },
+    {
+      "id": "int8/comparison-5",
+      "group": "int8",
+      "steps": [
+        {
+          "sql": "CREATE TABLE INT8_TBL(q1 int8, q2 int8);",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 77,
+            "last_line": 77
+          }
+        },
+        {
+          "sql": "INSERT INTO INT8_TBL VALUES\n  ('  123   ','  456'),\n  ('123   ','4567890123456789'),\n  ('4567890123456789','123'),\n  (+4567890123456789,'4567890123456789'),\n  ('+4567890123456789','-4567890123456789');",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 79,
+            "last_line": 84
+          }
+        },
+        {
+          "sql": "SELECT * FROM INT8_TBL WHERE q2 >= 4567890123456789;",
+          "source": {
+            "file": "data/sql/int8.sql",
+            "first_line": 31,
+            "last_line": 31
+          }
+        }
+      ]
+    },
+    {
+      "id": "int8/comparison-6",
+      "group": "int8",
+      "steps": [
+        {
+          "sql": "CREATE TABLE INT8_TBL(q1 int8, q2 int8);",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 77,
+            "last_line": 77
+          }
+        },
+        {
+          "sql": "INSERT INTO INT8_TBL VALUES\n  ('  123   ','  456'),\n  ('123   ','4567890123456789'),\n  ('4567890123456789','123'),\n  (+4567890123456789,'4567890123456789'),\n  ('+4567890123456789','-4567890123456789');",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 79,
+            "last_line": 84
+          }
+        },
+        {
+          "sql": "SELECT * FROM INT8_TBL WHERE q2 = 456;",
+          "source": {
+            "file": "data/sql/int8.sql",
+            "first_line": 34,
+            "last_line": 34
+          }
+        }
+      ]
+    },
+    {
+      "id": "int8/comparison-7",
+      "group": "int8",
+      "steps": [
+        {
+          "sql": "CREATE TABLE INT8_TBL(q1 int8, q2 int8);",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 77,
+            "last_line": 77
+          }
+        },
+        {
+          "sql": "INSERT INTO INT8_TBL VALUES\n  ('  123   ','  456'),\n  ('123   ','4567890123456789'),\n  ('4567890123456789','123'),\n  (+4567890123456789,'4567890123456789'),\n  ('+4567890123456789','-4567890123456789');",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 79,
+            "last_line": 84
+          }
+        },
+        {
+          "sql": "SELECT * FROM INT8_TBL WHERE q2 <> 456;",
+          "source": {
+            "file": "data/sql/int8.sql",
+            "first_line": 35,
+            "last_line": 35
+          }
+        }
+      ]
+    },
+    {
+      "id": "int8/comparison-8",
+      "group": "int8",
+      "steps": [
+        {
+          "sql": "CREATE TABLE INT8_TBL(q1 int8, q2 int8);",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 77,
+            "last_line": 77
+          }
+        },
+        {
+          "sql": "INSERT INTO INT8_TBL VALUES\n  ('  123   ','  456'),\n  ('123   ','4567890123456789'),\n  ('4567890123456789','123'),\n  (+4567890123456789,'4567890123456789'),\n  ('+4567890123456789','-4567890123456789');",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 79,
+            "last_line": 84
+          }
+        },
+        {
+          "sql": "SELECT * FROM INT8_TBL WHERE q2 < 456;",
+          "source": {
+            "file": "data/sql/int8.sql",
+            "first_line": 36,
+            "last_line": 36
+          }
+        }
+      ]
+    },
+    {
+      "id": "int8/comparison-9",
+      "group": "int8",
+      "steps": [
+        {
+          "sql": "CREATE TABLE INT8_TBL(q1 int8, q2 int8);",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 77,
+            "last_line": 77
+          }
+        },
+        {
+          "sql": "INSERT INTO INT8_TBL VALUES\n  ('  123   ','  456'),\n  ('123   ','4567890123456789'),\n  ('4567890123456789','123'),\n  (+4567890123456789,'4567890123456789'),\n  ('+4567890123456789','-4567890123456789');",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 79,
+            "last_line": 84
+          }
+        },
+        {
+          "sql": "SELECT * FROM INT8_TBL WHERE q2 > 456;",
+          "source": {
+            "file": "data/sql/int8.sql",
+            "first_line": 37,
+            "last_line": 37
+          }
+        }
+      ]
+    },
+    {
+      "id": "int8/comparison-10",
+      "group": "int8",
+      "steps": [
+        {
+          "sql": "CREATE TABLE INT8_TBL(q1 int8, q2 int8);",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 77,
+            "last_line": 77
+          }
+        },
+        {
+          "sql": "INSERT INTO INT8_TBL VALUES\n  ('  123   ','  456'),\n  ('123   ','4567890123456789'),\n  ('4567890123456789','123'),\n  (+4567890123456789,'4567890123456789'),\n  ('+4567890123456789','-4567890123456789');",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 79,
+            "last_line": 84
+          }
+        },
+        {
+          "sql": "SELECT * FROM INT8_TBL WHERE q2 <= 456;",
+          "source": {
+            "file": "data/sql/int8.sql",
+            "first_line": 38,
+            "last_line": 38
+          }
+        }
+      ]
+    },
+    {
+      "id": "int8/comparison-11",
+      "group": "int8",
+      "steps": [
+        {
+          "sql": "CREATE TABLE INT8_TBL(q1 int8, q2 int8);",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 77,
+            "last_line": 77
+          }
+        },
+        {
+          "sql": "INSERT INTO INT8_TBL VALUES\n  ('  123   ','  456'),\n  ('123   ','4567890123456789'),\n  ('4567890123456789','123'),\n  (+4567890123456789,'4567890123456789'),\n  ('+4567890123456789','-4567890123456789');",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 79,
+            "last_line": 84
+          }
+        },
+        {
+          "sql": "SELECT * FROM INT8_TBL WHERE q2 >= 456;",
+          "source": {
+            "file": "data/sql/int8.sql",
+            "first_line": 39,
+            "last_line": 39
+          }
+        }
+      ]
+    },
+    {
+      "id": "int8/comparison-12",
+      "group": "int8",
+      "steps": [
+        {
+          "sql": "CREATE TABLE INT8_TBL(q1 int8, q2 int8);",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 77,
+            "last_line": 77
+          }
+        },
+        {
+          "sql": "INSERT INTO INT8_TBL VALUES\n  ('  123   ','  456'),\n  ('123   ','4567890123456789'),\n  ('4567890123456789','123'),\n  (+4567890123456789,'4567890123456789'),\n  ('+4567890123456789','-4567890123456789');",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 79,
+            "last_line": 84
+          }
+        },
+        {
+          "sql": "SELECT * FROM INT8_TBL WHERE 123 = q1;",
+          "source": {
+            "file": "data/sql/int8.sql",
+            "first_line": 42,
+            "last_line": 42
+          }
+        }
+      ]
+    },
+    {
+      "id": "int8/comparison-13",
+      "group": "int8",
+      "steps": [
+        {
+          "sql": "CREATE TABLE INT8_TBL(q1 int8, q2 int8);",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 77,
+            "last_line": 77
+          }
+        },
+        {
+          "sql": "INSERT INTO INT8_TBL VALUES\n  ('  123   ','  456'),\n  ('123   ','4567890123456789'),\n  ('4567890123456789','123'),\n  (+4567890123456789,'4567890123456789'),\n  ('+4567890123456789','-4567890123456789');",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 79,
+            "last_line": 84
+          }
+        },
+        {
+          "sql": "SELECT * FROM INT8_TBL WHERE 123 <> q1;",
+          "source": {
+            "file": "data/sql/int8.sql",
+            "first_line": 43,
+            "last_line": 43
+          }
+        }
+      ]
+    },
+    {
+      "id": "int8/comparison-14",
+      "group": "int8",
+      "steps": [
+        {
+          "sql": "CREATE TABLE INT8_TBL(q1 int8, q2 int8);",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 77,
+            "last_line": 77
+          }
+        },
+        {
+          "sql": "INSERT INTO INT8_TBL VALUES\n  ('  123   ','  456'),\n  ('123   ','4567890123456789'),\n  ('4567890123456789','123'),\n  (+4567890123456789,'4567890123456789'),\n  ('+4567890123456789','-4567890123456789');",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 79,
+            "last_line": 84
+          }
+        },
+        {
+          "sql": "SELECT * FROM INT8_TBL WHERE 123 < q1;",
+          "source": {
+            "file": "data/sql/int8.sql",
+            "first_line": 44,
+            "last_line": 44
+          }
+        }
+      ]
+    },
+    {
+      "id": "int8/comparison-15",
+      "group": "int8",
+      "steps": [
+        {
+          "sql": "CREATE TABLE INT8_TBL(q1 int8, q2 int8);",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 77,
+            "last_line": 77
+          }
+        },
+        {
+          "sql": "INSERT INTO INT8_TBL VALUES\n  ('  123   ','  456'),\n  ('123   ','4567890123456789'),\n  ('4567890123456789','123'),\n  (+4567890123456789,'4567890123456789'),\n  ('+4567890123456789','-4567890123456789');",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 79,
+            "last_line": 84
+          }
+        },
+        {
+          "sql": "SELECT * FROM INT8_TBL WHERE 123 > q1;",
+          "source": {
+            "file": "data/sql/int8.sql",
+            "first_line": 45,
+            "last_line": 45
+          }
+        }
+      ]
+    },
+    {
+      "id": "int8/comparison-16",
+      "group": "int8",
+      "steps": [
+        {
+          "sql": "CREATE TABLE INT8_TBL(q1 int8, q2 int8);",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 77,
+            "last_line": 77
+          }
+        },
+        {
+          "sql": "INSERT INTO INT8_TBL VALUES\n  ('  123   ','  456'),\n  ('123   ','4567890123456789'),\n  ('4567890123456789','123'),\n  (+4567890123456789,'4567890123456789'),\n  ('+4567890123456789','-4567890123456789');",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 79,
+            "last_line": 84
+          }
+        },
+        {
+          "sql": "SELECT * FROM INT8_TBL WHERE 123 <= q1;",
+          "source": {
+            "file": "data/sql/int8.sql",
+            "first_line": 46,
+            "last_line": 46
+          }
+        }
+      ]
+    },
+    {
+      "id": "int8/comparison-17",
+      "group": "int8",
+      "steps": [
+        {
+          "sql": "CREATE TABLE INT8_TBL(q1 int8, q2 int8);",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 77,
+            "last_line": 77
+          }
+        },
+        {
+          "sql": "INSERT INTO INT8_TBL VALUES\n  ('  123   ','  456'),\n  ('123   ','4567890123456789'),\n  ('4567890123456789','123'),\n  (+4567890123456789,'4567890123456789'),\n  ('+4567890123456789','-4567890123456789');",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 79,
+            "last_line": 84
+          }
+        },
+        {
+          "sql": "SELECT * FROM INT8_TBL WHERE 123 >= q1;",
+          "source": {
+            "file": "data/sql/int8.sql",
+            "first_line": 47,
+            "last_line": 47
+          }
+        }
+      ]
+    },
+    {
+      "id": "isolation/simple-write-skew/rwx1-c1-rwx2-c2",
+      "group": "isolation",
+      "steps": [
+        {
+          "sql": "CREATE TABLE test (i int PRIMARY KEY, t text);",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 13,
+            "last_line": 13
+          }
+        },
+        {
+          "sql": "INSERT INTO test VALUES (5, 'apple'), (7, 'pear'), (11, 'banana');",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 14,
+            "last_line": 14
+          }
+        },
+        {
+          "sql": "BEGIN ISOLATION LEVEL SERIALIZABLE;",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 23,
+            "last_line": 23
+          },
+          "session": "s1",
+          "action": "begin",
+          "isolation": "serializable"
+        },
+        {
+          "sql": "BEGIN ISOLATION LEVEL SERIALIZABLE;",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 23,
+            "last_line": 23
+          },
+          "session": "s2",
+          "action": "begin",
+          "isolation": "serializable"
+        },
+        {
+          "sql": "UPDATE test SET t = 'apple' WHERE t = 'pear';",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 24,
+            "last_line": 24
+          },
+          "session": "s1"
+        },
+        {
+          "sql": "COMMIT;",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 25,
+            "last_line": 25
+          },
+          "session": "s1",
+          "action": "commit"
+        },
+        {
+          "sql": "UPDATE test SET t = 'pear' WHERE t = 'apple'",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 29,
+            "last_line": 29
+          },
+          "session": "s2"
+        },
+        {
+          "sql": "COMMIT;",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 25,
+            "last_line": 25
+          },
+          "session": "s2",
+          "action": "commit"
+        }
+      ]
+    },
+    {
+      "id": "isolation/simple-write-skew/rwx2-c2-rwx1-c1",
+      "group": "isolation",
+      "steps": [
+        {
+          "sql": "CREATE TABLE test (i int PRIMARY KEY, t text);",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 13,
+            "last_line": 13
+          }
+        },
+        {
+          "sql": "INSERT INTO test VALUES (5, 'apple'), (7, 'pear'), (11, 'banana');",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 14,
+            "last_line": 14
+          }
+        },
+        {
+          "sql": "BEGIN ISOLATION LEVEL SERIALIZABLE;",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 23,
+            "last_line": 23
+          },
+          "session": "s1",
+          "action": "begin",
+          "isolation": "serializable"
+        },
+        {
+          "sql": "BEGIN ISOLATION LEVEL SERIALIZABLE;",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 23,
+            "last_line": 23
+          },
+          "session": "s2",
+          "action": "begin",
+          "isolation": "serializable"
+        },
+        {
+          "sql": "UPDATE test SET t = 'pear' WHERE t = 'apple'",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 29,
+            "last_line": 29
+          },
+          "session": "s2"
+        },
+        {
+          "sql": "COMMIT;",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 25,
+            "last_line": 25
+          },
+          "session": "s2",
+          "action": "commit"
+        },
+        {
+          "sql": "UPDATE test SET t = 'apple' WHERE t = 'pear';",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 24,
+            "last_line": 24
+          },
+          "session": "s1"
+        },
+        {
+          "sql": "COMMIT;",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 25,
+            "last_line": 25
+          },
+          "session": "s1",
+          "action": "commit"
+        }
+      ]
+    },
+    {
+      "id": "isolation/simple-write-skew/rwx1-rwx2-c1-c2",
+      "group": "isolation",
+      "steps": [
+        {
+          "sql": "CREATE TABLE test (i int PRIMARY KEY, t text);",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 13,
+            "last_line": 13
+          }
+        },
+        {
+          "sql": "INSERT INTO test VALUES (5, 'apple'), (7, 'pear'), (11, 'banana');",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 14,
+            "last_line": 14
+          }
+        },
+        {
+          "sql": "BEGIN ISOLATION LEVEL SERIALIZABLE;",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 23,
+            "last_line": 23
+          },
+          "session": "s1",
+          "action": "begin",
+          "isolation": "serializable"
+        },
+        {
+          "sql": "BEGIN ISOLATION LEVEL SERIALIZABLE;",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 23,
+            "last_line": 23
+          },
+          "session": "s2",
+          "action": "begin",
+          "isolation": "serializable"
+        },
+        {
+          "sql": "UPDATE test SET t = 'apple' WHERE t = 'pear';",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 24,
+            "last_line": 24
+          },
+          "session": "s1"
+        },
+        {
+          "sql": "UPDATE test SET t = 'pear' WHERE t = 'apple'",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 29,
+            "last_line": 29
+          },
+          "session": "s2"
+        },
+        {
+          "sql": "COMMIT;",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 25,
+            "last_line": 25
+          },
+          "session": "s1",
+          "action": "commit"
+        },
+        {
+          "sql": "COMMIT;",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 25,
+            "last_line": 25
+          },
+          "session": "s2",
+          "action": "commit"
+        }
+      ]
+    },
+    {
+      "id": "isolation/simple-write-skew/rwx2-rwx1-c2-c1",
+      "group": "isolation",
+      "steps": [
+        {
+          "sql": "CREATE TABLE test (i int PRIMARY KEY, t text);",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 13,
+            "last_line": 13
+          }
+        },
+        {
+          "sql": "INSERT INTO test VALUES (5, 'apple'), (7, 'pear'), (11, 'banana');",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 14,
+            "last_line": 14
+          }
+        },
+        {
+          "sql": "BEGIN ISOLATION LEVEL SERIALIZABLE;",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 23,
+            "last_line": 23
+          },
+          "session": "s1",
+          "action": "begin",
+          "isolation": "serializable"
+        },
+        {
+          "sql": "BEGIN ISOLATION LEVEL SERIALIZABLE;",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 23,
+            "last_line": 23
+          },
+          "session": "s2",
+          "action": "begin",
+          "isolation": "serializable"
+        },
+        {
+          "sql": "UPDATE test SET t = 'pear' WHERE t = 'apple'",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 29,
+            "last_line": 29
+          },
+          "session": "s2"
+        },
+        {
+          "sql": "UPDATE test SET t = 'apple' WHERE t = 'pear';",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 24,
+            "last_line": 24
+          },
+          "session": "s1"
+        },
+        {
+          "sql": "COMMIT;",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 25,
+            "last_line": 25
+          },
+          "session": "s2",
+          "action": "commit"
+        },
+        {
+          "sql": "COMMIT;",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 25,
+            "last_line": 25
+          },
+          "session": "s1",
+          "action": "commit"
+        }
+      ]
+    },
+    {
+      "id": "boolean/input-errors",
+      "group": "boolean",
+      "unsupported": "Negative SQL cases require a reviewed PostgreSQL SQLSTATE to typed HawDB error mapping.",
+      "steps": []
+    },
+    {
+      "id": "isolation/lock-waits",
+      "group": "isolation",
+      "unsupported": "Blocking isolation steps need an asynchronous wait-aware scheduler; this runner executes steps serially.",
+      "steps": []
+    },
+    {
+      "id": "isolation/read-only-anomaly",
+      "group": "isolation",
+      "unsupported": "Upstream DECIMAL setup and numeric result decoding are outside this first slice.",
+      "steps": []
+    },
+    {
+      "id": "isolation/multiple-row-versions",
+      "group": "isolation",
+      "unsupported": "Upstream storage options, generate_series and million-row fixture are outside the bounded first slice.",
+      "steps": []
+    },
+    {
+      "id": "adapted/isolation/simple-write-skew/rwx1-c1-rwx2-c2",
+      "group": "adapted",
+      "steps": [
+        {
+          "sql": "CREATE TABLE test (i int PRIMARY KEY, t text);",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 13,
+            "last_line": 13
+          },
+          "execute_sql": "CREATE TABLE test (i BIGINT PRIMARY KEY, t text);",
+          "adaptation": "Fixture DDL only: map upstream int to the common BIGINT domain; values 5, 7 and 11 are unchanged. This is not native INT alias coverage."
+        },
+        {
+          "sql": "INSERT INTO test VALUES (5, 'apple'), (7, 'pear'), (11, 'banana');",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 14,
+            "last_line": 14
+          },
+          "execute_sql": "INSERT INTO test (i, t) VALUES (5, 'apple'), (7, 'pear'), (11, 'banana');",
+          "adaptation": "Fixture INSERT only: spell out the existing i,t target columns; inserted rows are unchanged."
+        },
+        {
+          "sql": "BEGIN ISOLATION LEVEL SERIALIZABLE;",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 23,
+            "last_line": 23
+          },
+          "session": "s1",
+          "action": "begin",
+          "isolation": "serializable"
+        },
+        {
+          "sql": "BEGIN ISOLATION LEVEL SERIALIZABLE;",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 23,
+            "last_line": 23
+          },
+          "session": "s2",
+          "action": "begin",
+          "isolation": "serializable"
+        },
+        {
+          "sql": "UPDATE test SET t = 'apple' WHERE t = 'pear';",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 24,
+            "last_line": 24
+          },
+          "session": "s1"
+        },
+        {
+          "sql": "COMMIT;",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 25,
+            "last_line": 25
+          },
+          "session": "s1",
+          "action": "commit"
+        },
+        {
+          "sql": "UPDATE test SET t = 'pear' WHERE t = 'apple'",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 29,
+            "last_line": 29
+          },
+          "session": "s2"
+        },
+        {
+          "sql": "COMMIT;",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 25,
+            "last_line": 25
+          },
+          "session": "s2",
+          "action": "commit"
+        }
+      ]
+    },
+    {
+      "id": "adapted/isolation/simple-write-skew/rwx2-c2-rwx1-c1",
+      "group": "adapted",
+      "steps": [
+        {
+          "sql": "CREATE TABLE test (i int PRIMARY KEY, t text);",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 13,
+            "last_line": 13
+          },
+          "execute_sql": "CREATE TABLE test (i BIGINT PRIMARY KEY, t text);",
+          "adaptation": "Fixture DDL only: map upstream int to the common BIGINT domain; values 5, 7 and 11 are unchanged. This is not native INT alias coverage."
+        },
+        {
+          "sql": "INSERT INTO test VALUES (5, 'apple'), (7, 'pear'), (11, 'banana');",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 14,
+            "last_line": 14
+          },
+          "execute_sql": "INSERT INTO test (i, t) VALUES (5, 'apple'), (7, 'pear'), (11, 'banana');",
+          "adaptation": "Fixture INSERT only: spell out the existing i,t target columns; inserted rows are unchanged."
+        },
+        {
+          "sql": "BEGIN ISOLATION LEVEL SERIALIZABLE;",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 23,
+            "last_line": 23
+          },
+          "session": "s1",
+          "action": "begin",
+          "isolation": "serializable"
+        },
+        {
+          "sql": "BEGIN ISOLATION LEVEL SERIALIZABLE;",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 23,
+            "last_line": 23
+          },
+          "session": "s2",
+          "action": "begin",
+          "isolation": "serializable"
+        },
+        {
+          "sql": "UPDATE test SET t = 'pear' WHERE t = 'apple'",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 29,
+            "last_line": 29
+          },
+          "session": "s2"
+        },
+        {
+          "sql": "COMMIT;",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 25,
+            "last_line": 25
+          },
+          "session": "s2",
+          "action": "commit"
+        },
+        {
+          "sql": "UPDATE test SET t = 'apple' WHERE t = 'pear';",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 24,
+            "last_line": 24
+          },
+          "session": "s1"
+        },
+        {
+          "sql": "COMMIT;",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 25,
+            "last_line": 25
+          },
+          "session": "s1",
+          "action": "commit"
+        }
+      ]
+    },
+    {
+      "id": "adapted/isolation/simple-write-skew/rwx1-rwx2-c1-c2",
+      "group": "adapted",
+      "steps": [
+        {
+          "sql": "CREATE TABLE test (i int PRIMARY KEY, t text);",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 13,
+            "last_line": 13
+          },
+          "execute_sql": "CREATE TABLE test (i BIGINT PRIMARY KEY, t text);",
+          "adaptation": "Fixture DDL only: map upstream int to the common BIGINT domain; values 5, 7 and 11 are unchanged. This is not native INT alias coverage."
+        },
+        {
+          "sql": "INSERT INTO test VALUES (5, 'apple'), (7, 'pear'), (11, 'banana');",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 14,
+            "last_line": 14
+          },
+          "execute_sql": "INSERT INTO test (i, t) VALUES (5, 'apple'), (7, 'pear'), (11, 'banana');",
+          "adaptation": "Fixture INSERT only: spell out the existing i,t target columns; inserted rows are unchanged."
+        },
+        {
+          "sql": "BEGIN ISOLATION LEVEL SERIALIZABLE;",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 23,
+            "last_line": 23
+          },
+          "session": "s1",
+          "action": "begin",
+          "isolation": "serializable"
+        },
+        {
+          "sql": "BEGIN ISOLATION LEVEL SERIALIZABLE;",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 23,
+            "last_line": 23
+          },
+          "session": "s2",
+          "action": "begin",
+          "isolation": "serializable"
+        },
+        {
+          "sql": "UPDATE test SET t = 'apple' WHERE t = 'pear';",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 24,
+            "last_line": 24
+          },
+          "session": "s1"
+        },
+        {
+          "sql": "UPDATE test SET t = 'pear' WHERE t = 'apple'",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 29,
+            "last_line": 29
+          },
+          "session": "s2"
+        },
+        {
+          "sql": "COMMIT;",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 25,
+            "last_line": 25
+          },
+          "session": "s1",
+          "action": "commit"
+        },
+        {
+          "sql": "COMMIT;",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 25,
+            "last_line": 25
+          },
+          "session": "s2",
+          "action": "commit",
+          "expected_error": {
+            "pg_sqlstate": "40001",
+            "hawdb_kind": "serialization_failure"
+          }
+        }
+      ]
+    },
+    {
+      "id": "adapted/isolation/simple-write-skew/rwx2-rwx1-c2-c1",
+      "group": "adapted",
+      "steps": [
+        {
+          "sql": "CREATE TABLE test (i int PRIMARY KEY, t text);",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 13,
+            "last_line": 13
+          },
+          "execute_sql": "CREATE TABLE test (i BIGINT PRIMARY KEY, t text);",
+          "adaptation": "Fixture DDL only: map upstream int to the common BIGINT domain; values 5, 7 and 11 are unchanged. This is not native INT alias coverage."
+        },
+        {
+          "sql": "INSERT INTO test VALUES (5, 'apple'), (7, 'pear'), (11, 'banana');",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 14,
+            "last_line": 14
+          },
+          "execute_sql": "INSERT INTO test (i, t) VALUES (5, 'apple'), (7, 'pear'), (11, 'banana');",
+          "adaptation": "Fixture INSERT only: spell out the existing i,t target columns; inserted rows are unchanged."
+        },
+        {
+          "sql": "BEGIN ISOLATION LEVEL SERIALIZABLE;",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 23,
+            "last_line": 23
+          },
+          "session": "s1",
+          "action": "begin",
+          "isolation": "serializable"
+        },
+        {
+          "sql": "BEGIN ISOLATION LEVEL SERIALIZABLE;",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 23,
+            "last_line": 23
+          },
+          "session": "s2",
+          "action": "begin",
+          "isolation": "serializable"
+        },
+        {
+          "sql": "UPDATE test SET t = 'pear' WHERE t = 'apple'",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 29,
+            "last_line": 29
+          },
+          "session": "s2"
+        },
+        {
+          "sql": "UPDATE test SET t = 'apple' WHERE t = 'pear';",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 24,
+            "last_line": 24
+          },
+          "session": "s1"
+        },
+        {
+          "sql": "COMMIT;",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 25,
+            "last_line": 25
+          },
+          "session": "s2",
+          "action": "commit"
+        },
+        {
+          "sql": "COMMIT;",
+          "source": {
+            "file": "data/isolation/simple-write-skew.spec",
+            "first_line": 25,
+            "last_line": 25
+          },
+          "session": "s1",
+          "action": "commit",
+          "expected_error": {
+            "pg_sqlstate": "40001",
+            "hawdb_kind": "serialization_failure"
+          }
+        }
+      ]
+    },
+    {
+      "id": "adapted/isolation/read-only-anomaly",
+      "group": "adapted",
+      "steps": [
+        {
+          "sql": "CREATE TABLE bank_account (id TEXT PRIMARY KEY, balance DECIMAL NOT NULL);",
+          "source": {
+            "file": "data/isolation/read-only-anomaly.spec",
+            "first_line": 11,
+            "last_line": 11
+          },
+          "execute_sql": "CREATE TABLE bank_account (id TEXT PRIMARY KEY, balance BIGINT NOT NULL);",
+          "adaptation": "Fixture DDL only: represent the integer balances 0, 20 and -11 in common BIGINT; this is not decimal type coverage."
+        },
+        {
+          "sql": "INSERT INTO bank_account (id, balance) VALUES ('X', 0), ('Y', 0);",
+          "source": {
+            "file": "data/isolation/read-only-anomaly.spec",
+            "first_line": 12,
+            "last_line": 12
+          }
+        },
+        {
+          "sql": "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ;",
+          "source": {
+            "file": "data/isolation/read-only-anomaly.spec",
+            "first_line": 21,
+            "last_line": 21
+          },
+          "session": "s1",
+          "action": "begin",
+          "isolation": "repeatable_read"
+        },
+        {
+          "sql": "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ;",
+          "source": {
+            "file": "data/isolation/read-only-anomaly.spec",
+            "first_line": 21,
+            "last_line": 21
+          },
+          "session": "s2",
+          "action": "begin",
+          "isolation": "repeatable_read"
+        },
+        {
+          "sql": "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ;",
+          "source": {
+            "file": "data/isolation/read-only-anomaly.spec",
+            "first_line": 21,
+            "last_line": 21
+          },
+          "session": "s3",
+          "action": "begin",
+          "isolation": "repeatable_read"
+        },
+        {
+          "sql": "SELECT balance FROM bank_account WHERE id = 'X';",
+          "source": {
+            "file": "data/isolation/read-only-anomaly.spec",
+            "first_line": 28,
+            "last_line": 28
+          },
+          "session": "s2"
+        },
+        {
+          "sql": "SELECT balance FROM bank_account WHERE id = 'Y';",
+          "source": {
+            "file": "data/isolation/read-only-anomaly.spec",
+            "first_line": 22,
+            "last_line": 22
+          },
+          "session": "s2"
+        },
+        {
+          "sql": "SELECT balance FROM bank_account WHERE id = 'Y';",
+          "source": {
+            "file": "data/isolation/read-only-anomaly.spec",
+            "first_line": 22,
+            "last_line": 22
+          },
+          "session": "s1"
+        },
+        {
+          "sql": "UPDATE bank_account SET balance = 20 WHERE id = 'Y';",
+          "source": {
+            "file": "data/isolation/read-only-anomaly.spec",
+            "first_line": 23,
+            "last_line": 23
+          },
+          "session": "s1"
+        },
+        {
+          "sql": "COMMIT;",
+          "source": {
+            "file": "data/isolation/read-only-anomaly.spec",
+            "first_line": 24,
+            "last_line": 24
+          },
+          "session": "s1",
+          "action": "commit"
+        },
+        {
+          "sql": "SELECT id, balance FROM bank_account WHERE id IN ('X', 'Y') ORDER BY id;",
+          "source": {
+            "file": "data/isolation/read-only-anomaly.spec",
+            "first_line": 35,
+            "last_line": 35
+          },
+          "session": "s3",
+          "ordered": true
+        },
+        {
+          "sql": "UPDATE bank_account SET balance = -11 WHERE id = 'X';",
+          "source": {
+            "file": "data/isolation/read-only-anomaly.spec",
+            "first_line": 30,
+            "last_line": 30
+          },
+          "session": "s2"
+        },
+        {
+          "sql": "COMMIT;",
+          "source": {
+            "file": "data/isolation/read-only-anomaly.spec",
+            "first_line": 24,
+            "last_line": 24
+          },
+          "session": "s2",
+          "action": "commit"
+        },
+        {
+          "sql": "COMMIT;",
+          "source": {
+            "file": "data/isolation/read-only-anomaly.spec",
+            "first_line": 24,
+            "last_line": 24
+          },
+          "session": "s3",
+          "action": "commit"
+        }
+      ]
+    },
+    {
+      "id": "boolean/literal-expression-0",
+      "group": "boolean",
+      "steps": [
+        {
+          "sql": "SELECT bool 't' AS true;",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 19,
+            "last_line": 19
+          }
+        }
+      ]
+    },
+    {
+      "id": "boolean/literal-expression-1",
+      "group": "boolean",
+      "steps": [
+        {
+          "sql": "SELECT bool '   f           ' AS false;",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 21,
+            "last_line": 21
+          }
+        }
+      ]
+    },
+    {
+      "id": "boolean/literal-expression-2",
+      "group": "boolean",
+      "steps": [
+        {
+          "sql": "SELECT bool 'true' AS true;",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 23,
+            "last_line": 23
+          }
+        }
+      ]
+    },
+    {
+      "id": "boolean/literal-expression-3",
+      "group": "boolean",
+      "steps": [
+        {
+          "sql": "SELECT bool 'false' AS false;",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 27,
+            "last_line": 27
+          }
+        }
+      ]
+    },
+    {
+      "id": "boolean/literal-expression-4",
+      "group": "boolean",
+      "steps": [
+        {
+          "sql": "SELECT bool 'y' AS true;",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 31,
+            "last_line": 31
+          }
+        }
+      ]
+    },
+    {
+      "id": "boolean/literal-expression-5",
+      "group": "boolean",
+      "steps": [
+        {
+          "sql": "SELECT bool 'yes' AS true;",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 33,
+            "last_line": 33
+          }
+        }
+      ]
+    },
+    {
+      "id": "boolean/literal-expression-6",
+      "group": "boolean",
+      "steps": [
+        {
+          "sql": "SELECT bool 'n' AS false;",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 37,
+            "last_line": 37
+          }
+        }
+      ]
+    },
+    {
+      "id": "boolean/literal-expression-7",
+      "group": "boolean",
+      "steps": [
+        {
+          "sql": "SELECT bool 'no' AS false;",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 39,
+            "last_line": 39
+          }
+        }
+      ]
+    },
+    {
+      "id": "boolean/literal-expression-8",
+      "group": "boolean",
+      "steps": [
+        {
+          "sql": "SELECT bool 'on' AS true;",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 43,
+            "last_line": 43
+          }
+        }
+      ]
+    },
+    {
+      "id": "boolean/literal-expression-9",
+      "group": "boolean",
+      "steps": [
+        {
+          "sql": "SELECT bool 'off' AS false;",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 45,
+            "last_line": 45
+          }
+        }
+      ]
+    },
+    {
+      "id": "boolean/literal-expression-10",
+      "group": "boolean",
+      "steps": [
+        {
+          "sql": "SELECT bool 'of' AS false;",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 47,
+            "last_line": 47
+          }
+        }
+      ]
+    },
+    {
+      "id": "boolean/literal-expression-11",
+      "group": "boolean",
+      "steps": [
+        {
+          "sql": "SELECT bool '1' AS true;",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 55,
+            "last_line": 55
+          }
+        }
+      ]
+    },
+    {
+      "id": "boolean/literal-expression-12",
+      "group": "boolean",
+      "steps": [
+        {
+          "sql": "SELECT bool '0' AS false;",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 59,
+            "last_line": 59
+          }
+        }
+      ]
+    },
+    {
+      "id": "boolean/literal-expression-13",
+      "group": "boolean",
+      "steps": [
+        {
+          "sql": "SELECT bool 't' or bool 'f' AS true;",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 72,
+            "last_line": 72
+          }
+        }
+      ]
+    },
+    {
+      "id": "boolean/literal-expression-14",
+      "group": "boolean",
+      "steps": [
+        {
+          "sql": "SELECT bool 't' and bool 'f' AS false;",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 74,
+            "last_line": 74
+          }
+        }
+      ]
+    },
+    {
+      "id": "boolean/literal-expression-15",
+      "group": "boolean",
+      "steps": [
+        {
+          "sql": "SELECT bool 't' = bool 'f' AS false;",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 78,
+            "last_line": 78
+          }
+        }
+      ]
+    },
+    {
+      "id": "boolean/literal-expression-16",
+      "group": "boolean",
+      "steps": [
+        {
+          "sql": "SELECT bool 't' <> bool 'f' AS true;",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 80,
+            "last_line": 80
+          }
+        }
+      ]
+    },
+    {
+      "id": "boolean/literal-expression-17",
+      "group": "boolean",
+      "steps": [
+        {
+          "sql": "SELECT bool 't' > bool 'f' AS true;",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 82,
+            "last_line": 82
+          }
+        }
+      ]
+    },
+    {
+      "id": "boolean/literal-expression-18",
+      "group": "boolean",
+      "steps": [
+        {
+          "sql": "SELECT bool 't' >= bool 'f' AS true;",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 84,
+            "last_line": 84
+          }
+        }
+      ]
+    },
+    {
+      "id": "boolean/literal-expression-19",
+      "group": "boolean",
+      "steps": [
+        {
+          "sql": "SELECT bool 'f' < bool 't' AS true;",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 86,
+            "last_line": 86
+          }
+        }
+      ]
+    },
+    {
+      "id": "boolean/literal-expression-20",
+      "group": "boolean",
+      "steps": [
+        {
+          "sql": "SELECT bool 'f' <= bool 't' AS true;",
+          "source": {
+            "file": "data/sql/boolean.sql",
+            "first_line": 88,
+            "last_line": 88
+          }
+        }
+      ]
+    }
+  ]
+}
