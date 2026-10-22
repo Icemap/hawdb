@@ -13,6 +13,8 @@ use std::num::{NonZeroU64, NonZeroUsize};
 mod baseline;
 mod coverage;
 pub use coverage::SearchOutOfCoreDeltaComparison;
+mod consumer;
+pub use consumer::{SearchAdmittedConsumerDocuments, SearchComparedConsumerDocuments};
 pub(super) mod replacement;
 pub use baseline::{
     SearchBaselineComparisonLimits, SearchBaselineComparisonReport, SearchMatchedBaseline,
@@ -149,7 +151,7 @@ impl SearchOutOfCoreGenerationWriter {
     }
 }
 
-pub(super) fn from_inner<'a>(
+pub(in crate::out_of_core) fn from_inner<'a>(
     inner: SearchOutOfCoreMutationWriter<'a>,
     limits: SearchUnorderedMutationLimits,
     max_id_bytes: usize,

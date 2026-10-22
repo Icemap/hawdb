@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use crate::build_control::{checkpoint, CheckedWriter};
-#[cfg(test)]
 use crate::build_memory::AdmittedDocument;
 use crate::build_memory::{BuildMemory, SPOOL_BUFFER_BYTES};
 #[cfg(test)]

@@ -50,7 +50,10 @@ pub(super) fn admit(
     }
     // Each scalar leaf may coexist with its evaluated relational value, output
     // value and sort-key copy. Map/slot/name overhead is included per occurrence.
-    account.reserve(bytes.saturating_mul(4))
+    let scratch = select.selection.as_ref().map_or(Ok(0), |predicate| {
+        predicate_scratch_bytes(predicate, row, parameters)
+    })?;
+    account.reserve(bytes.saturating_mul(4).saturating_add(scratch))
 }
 
 fn expression_bytes(
@@ -89,4 +92,74 @@ fn expression_bytes(
         }
     });
     bytes
+}
+
+fn predicate_scratch_bytes(
+    predicate: &SqlExpression,
+    row: &BoundRow<'_>,
+    parameters: &[Value],
+) -> Result<usize> {
+    let mut bytes = Ok(0usize);
+    predicate.visit(&mut |expression| {
+        let Ok(total) = &mut bytes else {
+            return;
+        };
+        if let ExprKind::Like {
+            left,
+            pattern,
+            escape,
+            case_insensitive,
+            ..
+        } = &expression.kind
+        {
+            let scratch = (|| {
+                let (Some(value), Some(pattern)) = (
+                    text_operand(left, row, parameters)?,
+                    text_operand(pattern, row, parameters)?,
+                ) else {
+                    return Ok(0);
+                };
+                // An invalid layout also fails in the matcher before any buffer
+                // allocation. Leave its diagnostic to actual predicate evaluation
+                // so a short-circuited branch cannot introduce an earlier error.
+                Ok(
+                    hawdb_sql::sql_like_scratch_bytes(value, pattern, *escape, *case_insensitive)
+                        .unwrap_or(0),
+                )
+            })();
+            match scratch {
+                Ok(scratch) => *total = total.saturating_add(scratch),
+                Err(error) => bytes = Err(error),
+            }
+        }
+    });
+    bytes
+}
+
+// Borrow matcher inputs without invoking scalar evaluation or cloning a parameter.
+// NULL has no matcher workspace; unsupported operands retain evaluator diagnostics.
+fn text_operand<'a>(
+    expression: &'a SqlExpression,
+    row: &'a BoundRow<'_>,
+    parameters: &'a [Value],
+) -> Result<Option<&'a str>> {
+    match &expression.kind {
+        ExprKind::Column(column) => Ok(match resolve_column(row, column)? {
+            RelationalValue::Text(value) => Some(value.as_str()),
+            _ => None,
+        }),
+        ExprKind::Value(value) => {
+            let value = match value {
+                SqlValue::Literal(value) => Some(value),
+                SqlValue::Parameter(position) => position
+                    .checked_sub(1)
+                    .and_then(|index| parameters.get(index)),
+            };
+            Ok(match value {
+                Some(Value::String(value)) => Some(value.as_str()),
+                _ => None,
+            })
+        }
+        _ => Ok(None),
+    }
 }

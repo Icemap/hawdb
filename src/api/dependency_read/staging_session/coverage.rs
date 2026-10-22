@@ -135,6 +135,29 @@ impl<'reader> ProjectionStagingSession<'reader> {
     }
 }
 impl ProjectionCoverageSession<'_> {
+    pub(in crate::api) fn finish_consumer(
+        self,
+    ) -> std::result::Result<
+        (
+            PreparedReadDependencies,
+            crate::search::SearchComparedConsumerDocuments,
+        ),
+        ProjectionFeedError,
+    > {
+        if self.failed {
+            return Err(ProjectionFeedError::Failed);
+        }
+        if !self.ended || !self.complete {
+            return Err(ProjectionFeedError::Incomplete);
+        }
+        let dependencies = self.source.finish()?;
+        let documents = self
+            .comparison
+            .finish_consumer()
+            .map_err(ProjectionFeedError::Source)?;
+        Ok((dependencies, documents))
+    }
+
     pub fn source_epoch(&self) -> u64 {
         self.source.source_epoch()
     }

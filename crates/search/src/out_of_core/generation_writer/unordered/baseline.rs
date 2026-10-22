@@ -119,6 +119,7 @@ impl SearchOutOfCoreBaselineComparison<'_> {
         )?;
         let report = &mut self.report;
         let caps = self.limits;
+        let scratch = self.writer.inner.writer.stage.scratch_directory();
         let result = self.writer.inspect_reduced_next(limits, |input| {
             let Some(entry) = input.entry else {
                 if report.compared_documents != base.document_count() {
@@ -139,7 +140,7 @@ impl SearchOutOfCoreBaselineComparison<'_> {
                 input.control,
                 caps,
                 report,
-                (&memory, &task, &path),
+                (&memory, &task, &path, scratch.as_deref()),
             )?;
             report.compared_documents = report
                 .compared_documents
@@ -188,9 +189,10 @@ pub(super) fn compare_record(
         &BuildMemory,
         &RuntimeTaskContext,
         &crate::build_memory::path::OwnedPath,
+        Option<&crate::out_of_core::ScratchDirectory>,
     ),
 ) -> Result<()> {
-    let (memory, task, path) = environment;
+    let (memory, task, path, scratch) = environment;
     reserve_lookup(report, caps)?;
     report.reserved_compressed_bytes = reserve(
         report.reserved_compressed_bytes,
@@ -214,14 +216,22 @@ pub(super) fn compare_record(
             "baseline segment exceeds comparison admission".into(),
         ));
     }
-    let file = io::GenerationIo::new(memory, task).native(&[path], || {
-        OpenOptions::new()
-            .create(true)
-            .truncate(true)
-            .read(true)
-            .write(true)
-            .open(&**path)
-    })??;
+    let file = if let Some(scratch) = scratch {
+        let _io = crate::out_of_core::scratch_directory::io_scope(task, scratch.governed())?;
+        scratch.create(path)?
+    } else {
+        io::GenerationIo::new(memory, task).native(&[path], || {
+            OpenOptions::new()
+                .create(true)
+                .truncate(true)
+                .read(true)
+                .write(true)
+                .open(&**path)
+        })??
+    };
+    let source_io = scratch
+        .map(|scratch| crate::out_of_core::scratch_directory::io_scope(task, scratch.governed()))
+        .transpose()?;
     let actual = Source::capture(
         &base.segments[route.artifact_index],
         route.segment,
@@ -236,10 +246,16 @@ pub(super) fn compare_record(
         memory,
         task,
     )?;
+    drop(source_io);
     control.read(expected.encoded_bytes)?;
     expected.require_source(&actual, memory, task)?;
     drop(actual);
-    io::GenerationIo::new(memory, task).native(&[path], || fs::remove_file(&**path))??;
+    if let Some(scratch) = scratch {
+        let _io = crate::out_of_core::scratch_directory::io_scope(task, scratch.governed())?;
+        scratch.remove(path)?;
+    } else {
+        io::GenerationIo::new(memory, task).native(&[path], || fs::remove_file(&**path))??;
+    }
     Ok(())
 }
 

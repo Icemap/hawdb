@@ -134,7 +134,7 @@ The vector facade refines these existing transitions without adding a selector:
 | Old read | Existing immutable pin | Keep both the old canonical snapshot and its matching generation; hold no execution slot while idle |
 
 The generic Mem document catch-up mapper is not the maintenance mapping for a
-schema-bound vector index. The facade refuses that combination. A full vector
+schema-bound vector index. The facade refuses that combination through both legacy and covered catch-up entrypoints. A full vector
 rebuild may refresh the schema digest after an unrelated schema change, but a
 changed target identity, dimension or algorithm requires a new definition.
 
@@ -162,6 +162,12 @@ composes the query ledger with the original governor controller. Candidate and
 canonical execution have disjoint sub-budgets; original vectors are reranked by
 the shared distance implementation. Every projection, expression input and sort-key occurrence is admitted before
 copying, including repeated wide columns and the empty-input binding probe.
+LIKE/ILIKE scratch is admitted separately using the shared matcher's layout:
+token slots, one folded-literal buffer, and original Unicode characters. Layout
+and execution use the same escape/folding rules and preallocate those buffers;
+matching has no growing temporary literal string. Repeated `%` tokens compact,
+while alternating `%_` patterns retain their full admitted token cost. Invalid
+patterns retain evaluator diagnostics, including short-circuit and NULL behavior.
 A narrow grant fails before callback delivery
 and does not change the selected index or poison the canonical read view.
 
@@ -186,7 +192,7 @@ owned by `//crates/search:hawdb_search_tests` and applicable existing feature
 variants in the crates lane. The canonical point allocation guard belongs to
 `//crates/relational:hawdb_relational_tests`. Fixtures use isolated UUID paths,
 at most five vectors for semantic cases, and a 256-KiB synthetic text value for
-allocation boundaries. The I/O test uses a channel to observe the acquisition
+allocation boundaries, including alternating LIKE tokens and Unicode/escape controls. The I/O test uses a channel to observe the acquisition
 boundary and cancellation to release a saturated wait; its receive timeout is
 a failure ceiling, not a timing assertion. No new CI job, serialization gate or
 heavy benchmark is added.

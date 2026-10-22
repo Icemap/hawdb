@@ -600,7 +600,7 @@ impl Database {
             .map_err(ProjectionPublicationError::Storage)
     }
 
-    fn validate_prepared_projection_source(
+    pub(super) fn validate_prepared_projection_source(
         &mut self,
         dependencies: &PreparedReadDependencies,
         staged: u64,

@@ -97,6 +97,13 @@ pub struct ConsumerReadPin {
 }
 
 impl ConsumerReadSlot {
+    pub(super) fn completed_view(&self) -> Result<crate::out_of_core::CandidateView> {
+        match &self.0.lock()?.view {
+            View::Ready(Some(version)) => Ok(version.reader.clone()),
+            _ => Err(HawDBError::ProjectionBusy),
+        }
+    }
+
     pub(super) fn empty(
         reservation: ConsumerCandidateReservation,
         permit: &RuntimePermit,

@@ -1017,6 +1017,28 @@ fn captured_wal_append_resize_refuses_at_the_original_descriptor_cap_and_retries
 }
 
 #[test]
+fn captured_wal_first_rollback_repairs_each_partial_header_without_zero_truncation() {
+    let header = crate::wal::frame::encode_binary_wal_header(1, 0);
+    for prefix in 0..=header.len() {
+        let fixture = Fixture::new(8);
+        let context = fixture.project.io_context();
+        let path = fixture.root.join("wal.1.hawdb");
+        fs::write(&path, &header[..prefix]).unwrap();
+        let directory = fixture.capture(&fixture.root);
+        let mut file = directory
+            .open_wal_append_child(&context, "wal.1.hawdb")
+            .unwrap();
+        assert_eq!(
+            file.rollback_wal_append(0, &header).unwrap(),
+            header.len() as u64
+        );
+        assert_eq!(fs::read(&path).unwrap(), header);
+        file.write_all(b"next transaction").unwrap();
+        assert_eq!(&fs::read(&path).unwrap()[..header.len()], header);
+    }
+}
+
+#[test]
 fn captured_file_binding_uses_original_root_and_rejects_replacement() {
     let fixture = Fixture::new(16);
     let root = fixture.root.join("native");

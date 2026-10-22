@@ -798,3 +798,36 @@ fn clear_select_source_spans(select: &mut crate::SelectStatement) {
             .expect("infallible source reset");
     }
 }
+
+#[test]
+fn like_layout_preserves_folding_boundaries_and_compacts_wildcards() {
+    let escape = SqlLikeEscape::Character('!');
+    for (value, pattern, expected) in [
+        ("ß", "ss", true),
+        ("ß", "s", false),
+        ("s", "ß", false),
+        ("İ", "i\u{307}", true),
+        ("İ", "i", false),
+        ("ﬃ", "FFI", true),
+        ("ﬃ", "FF_", false),
+        ("Straße_ﬃ", "%STRASSE!_FFI", true),
+        ("Straße%ﬃ", "%STRASSE!%FFI", true),
+        ("ßİﬃ", "___", true),
+        ("ßİﬃ", "______", false),
+    ] {
+        assert_eq!(
+            super::sql_like_matches(value, pattern, escape, true).unwrap(),
+            expected,
+            "{value:?} ILIKE {pattern:?}"
+        );
+    }
+    let folded = "ﬃ".repeat(4096);
+    let expanded = "FFI".repeat(4096);
+    assert!(super::sql_like_matches(&folded, &expanded, escape, true).unwrap());
+    assert!(super::sql_like_matches(&expanded, &folded, escape, true).unwrap());
+    assert_eq!(
+        super::sql_like_scratch_bytes("x", &"%".repeat(256 << 10), escape, false).unwrap(),
+        super::sql_like_scratch_bytes("x", "%", escape, false).unwrap()
+    );
+    assert!(super::sql_like_scratch_bytes("x", "x!", escape, false).is_err());
+}

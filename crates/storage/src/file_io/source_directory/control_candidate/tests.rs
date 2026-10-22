@@ -226,6 +226,7 @@ fn descriptor_denial_before_create_and_before_rename_preserves_all_entries() {
                 "{error:?}"
             );
             assert!(!candidate.is_complete());
+            assert!(!candidate.selection_attempted());
             assert!(candidate.write_all(b"late").is_err());
             assert!(candidate.replace_head(&context, "retry.hawdb").is_err());
             drop(candidate);
@@ -239,6 +240,55 @@ fn descriptor_denial_before_create_and_before_rename_preserves_all_entries() {
         drop(directory);
         assert_eq!(project.metrics().open, 0);
     }
+}
+
+#[test]
+fn preselection_descriptor_refusal_retries_the_same_sealed_control() {
+    let fixture = Fixture::new();
+    let project = ProjectFileDescriptors::acquire(&fixture.0, 4).unwrap();
+    let context = project.io_context();
+    let directory = SourceDirectory::capture(&fixture.0, &context).unwrap();
+    let mut candidate = directory
+        .create_control_candidate(&context, "next.candidate")
+        .unwrap();
+    candidate.write_all(b"original operation").unwrap();
+    candidate.seal().unwrap();
+    let first = directory.open_child(&context, "next.candidate").unwrap();
+    let second = directory.open_child(&context, "next.candidate").unwrap();
+    assert!(candidate.replace_head(&context, "selector.hawdb").is_err());
+    assert!(!candidate.selection_attempted());
+    assert!(!fixture.0.join("selector.hawdb").exists());
+    drop((first, second));
+    candidate.replace_head(&context, "selector.hawdb").unwrap();
+    assert_eq!(
+        read(&directory, &context, "selector.hawdb"),
+        b"original operation"
+    );
+    assert!(candidate.discard_unselected(&context).is_err());
+}
+
+#[test]
+fn unselected_control_cleanup_refuses_a_replacement_entry() {
+    let fixture = Fixture::new();
+    let project = ProjectFileDescriptors::acquire(&fixture.0, 8).unwrap();
+    let context = project.io_context();
+    let directory = SourceDirectory::capture(&fixture.0, &context).unwrap();
+    let mut candidate = directory
+        .create_control_candidate(&context, "private.candidate")
+        .unwrap();
+    candidate.write_all(b"owned").unwrap();
+    fs::rename(
+        fixture.0.join("private.candidate"),
+        fixture.0.join("original"),
+    )
+    .unwrap();
+    fs::write(fixture.0.join("private.candidate"), b"foreign").unwrap();
+    assert!(candidate.discard_unselected(&context).is_err());
+    assert_eq!(
+        fs::read(fixture.0.join("private.candidate")).unwrap(),
+        b"foreign"
+    );
+    assert_eq!(fs::read(fixture.0.join("original")).unwrap(), b"owned");
 }
 
 #[test]

@@ -1102,3 +1102,158 @@ fn vector_index_sql_admits_empty_projection_literals_and_parameters_before_copy(
         }
     }
 }
+
+#[test]
+fn vector_index_sql_admits_like_matcher_scratch_before_evaluation() {
+    use crate::{
+        QueryStreamOptions, VectorIndexLanguageBudget, VectorIndexReadError, VectorIndexSqlRequest,
+    };
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    db.query_sql("CREATE TABLE vectors (id BIGINT PRIMARY KEY, embedding VECTOR(2), body TEXT)")
+        .unwrap();
+    let embedding = Value::Vector(Vector::new(&[1.0, 0.0]).unwrap());
+    db.query_sql_with_params(
+        "INSERT INTO vectors (id, embedding, body) VALUES (1, $1, $2)",
+        &[embedding.clone(), Value::String("Straße_ﬃ".into())],
+    )
+    .unwrap();
+    let consumer = db
+        .create_vector_index(
+            "rows",
+            &sql_field(),
+            fixture.0.join("index"),
+            registration(),
+            Default::default(),
+        )
+        .unwrap();
+    let permit = db
+        .search_projection_consumer_read_permit(
+            RuntimeWorkRequest::foreground_query(128 << 20, 4 << 20).with_io_wave_slots(1),
+        )
+        .unwrap();
+    let read = db
+        .begin_read_transaction()
+        .unwrap()
+        .bind_vector_index(&consumer, &permit)
+        .unwrap();
+    for (operator, suffix) in [
+        ("LIKE", ""),
+        ("LIKE", "Straße!_ﬃ"),
+        ("ILIKE", "STRASSE!_FFI"),
+    ] {
+        let pattern = format!("{}{suffix}", "%_".repeat(128 << 10));
+        let parameters = [embedding.clone(), Value::String(pattern)];
+        let sql = format!("SELECT id FROM vector_index_search('rows', $1, candidates => 8, top_k => 1) WHERE body {operator} $2 ESCAPE '!'");
+        for (canonical, succeeds) in [(2 << 20, false), (64 << 20, true)] {
+            let mut ids = Vec::new();
+            let result = read.query_sql_streaming(
+                &permit,
+                VectorIndexLanguageBudget {
+                    index_working_bytes: NonZeroUsize::new(32 << 20).unwrap(),
+                    index_result_bytes: NonZeroUsize::new(1 << 20).unwrap(),
+                },
+                VectorIndexSqlRequest {
+                    sql: &sql,
+                    parameters: &parameters,
+                    output_limits: QueryStreamOptions::default(),
+                    task: RuntimeTaskContext::default().with_memory_reservation(
+                        RuntimeMemoryReservation::new((32 << 20) + canonical, 4 << 20),
+                    ),
+                },
+                |row| {
+                    ids.push(row["id"].clone());
+                    Ok(())
+                },
+            );
+            if succeeds {
+                assert_eq!(result.unwrap().output_rows, 0);
+                assert!(ids.is_empty());
+            } else {
+                assert!(ids.is_empty(), "unadmitted matcher must not deliver");
+                assert!(
+                    matches!(
+                        result,
+                        Err(VectorIndexReadError::Query(
+                            HawDBError::ResourceBudgetExceeded(_)
+                        ))
+                    ),
+                    "{result:?}"
+                );
+            }
+        }
+        let mut ids = Vec::new();
+        let compact = [embedding.clone(), Value::String(format!("%{suffix}"))];
+        read.query_sql_streaming(
+            &permit,
+            VectorIndexLanguageBudget {
+                index_working_bytes: NonZeroUsize::new(32 << 20).unwrap(),
+                index_result_bytes: NonZeroUsize::new(1 << 20).unwrap(),
+            },
+            VectorIndexSqlRequest {
+                sql: &sql,
+                parameters: &compact,
+                output_limits: QueryStreamOptions::default(),
+                task: RuntimeTaskContext::default(),
+            },
+            |row| {
+                ids.push(row["id"].clone());
+                Ok(())
+            },
+        )
+        .unwrap();
+        assert_eq!(ids, [Value::Int(1)]);
+    }
+
+    for (predicate, pattern, expected_rows) in [
+        (
+            "id = 2 AND body LIKE $2 ESCAPE '!'",
+            Value::String("dangling!".into()),
+            Some(0),
+        ),
+        (
+            "id = 1 OR body LIKE $2 ESCAPE '!'",
+            Value::String("dangling!".into()),
+            Some(1),
+        ),
+        (
+            "id = 1 AND body LIKE $2 ESCAPE '!'",
+            Value::String("dangling!".into()),
+            None,
+        ),
+        ("body LIKE $2 ESCAPE '!'", Value::Null, Some(0)),
+    ] {
+        let sql = format!("SELECT id FROM vector_index_search('rows', $1, candidates => 8, top_k => 1) WHERE {predicate}");
+        let parameters = [embedding.clone(), pattern];
+        let mut delivered = 0;
+        let result = read.query_sql_streaming(
+            &permit,
+            VectorIndexLanguageBudget {
+                index_working_bytes: NonZeroUsize::new(32 << 20).unwrap(),
+                index_result_bytes: NonZeroUsize::new(1 << 20).unwrap(),
+            },
+            VectorIndexSqlRequest {
+                sql: &sql,
+                parameters: &parameters,
+                output_limits: QueryStreamOptions::default(),
+                task: RuntimeTaskContext::default(),
+            },
+            |_| {
+                delivered += 1;
+                Ok(())
+            },
+        );
+        match expected_rows {
+            Some(rows) => {
+                assert_eq!(result.unwrap().output_rows, rows);
+                assert_eq!(delivered, rows);
+            }
+            None => {
+                assert_eq!(delivered, 0);
+                assert!(
+                    matches!(result, Err(VectorIndexReadError::Query(HawDBError::Semantic(message))) if message.contains("ends with its escape"))
+                );
+            }
+        }
+    }
+}

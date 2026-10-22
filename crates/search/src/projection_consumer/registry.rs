@@ -59,6 +59,9 @@ struct Envelope {
 
 #[derive(Debug, Default)]
 pub struct ConsumerRegistry {
+    /// Process-local original custody; refreshing the durable cache must not
+    /// discard an unfinished preparation or cleanup operation.
+    pub recovery: BTreeMap<String, crate::consumer::RegisteredConsumerRecovery>,
     pub records: BTreeMap<String, Record>,
     pub verified: BTreeMap<String, SearchProjectionConsumerState>,
     pub database_uuid: Option<Uuid>,

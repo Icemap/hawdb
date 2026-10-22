@@ -105,6 +105,18 @@ impl CandidateView {
             .vector_index_query(request, publication_generation, permit, task)
     }
 
+    pub(crate) fn prepare_consumer_update(
+        &self,
+        permit: Arc<hawdb_qos::RuntimePermit>,
+        options: SearchOutOfCoreGenerationBuildOptions,
+        limits: SearchUnorderedMutationLimits,
+        task: hawdb_core::RuntimeTaskContext,
+    ) -> Result<SearchOutOfCoreUnorderedMutationWriter<'_>> {
+        self.0
+            .opened
+            .prepare_consumer_update(permit, options, limits, task)
+    }
+
     pub(crate) fn shares_governor_with(&self, permit: &hawdb_qos::RuntimePermit) -> bool {
         self.0._memory.shares_governor_with(permit) && self.0.opened.shares_governor_with(permit)
     }
@@ -231,8 +243,9 @@ mod vector_selection_tests;
 mod vector_serving;
 pub use generation_writer::{
     GovernedSearchGenerationUpdate, GovernedSearchGenerationWriter, PreparedSearchPublication,
-    ScheduledSearchOutOfCoreSegmentCompactionReport, SearchBaselineComparisonLimits,
-    SearchBaselineComparisonReport, SearchGenerationAdmission, SearchMatchedBaseline,
+    ScheduledSearchOutOfCoreSegmentCompactionReport, SearchAdmittedConsumerDocuments,
+    SearchBaselineComparisonLimits, SearchBaselineComparisonReport,
+    SearchComparedConsumerDocuments, SearchGenerationAdmission, SearchMatchedBaseline,
     SearchMutationInspectionInput, SearchMutationInspectionStep, SearchMutationSortStep,
     SearchMutationSortStepLimits, SearchMutationSortStepUsage, SearchOutOfCoreBaselineComparison,
     SearchOutOfCoreDeltaComparison, SearchOutOfCoreGenerationBuildOptions,

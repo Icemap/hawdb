@@ -186,10 +186,16 @@ pub(super) fn prepare(
             validate(&ledger)?;
             let bytes = encode(&ledger)?;
             let name = format!("consumer-selector-{}.tmp", hawdb_core::generate_uuidv7()?);
-            *preparation_attempted = true;
             let mut control = allocation._project.create_owned_control_candidate(&name)?;
-            control.write_all(&bytes)?;
-            control.seal()?;
+            let prepared = (|| {
+                control.write_all(&bytes)?;
+                control.seal()
+            })();
+            if let Err(error) = prepared {
+                let _ = control.discard_unselected(context);
+                return Err(error.into());
+            }
+            *preparation_attempted = true;
             Ok(PreparedConsumerSelection {
                 control,
                 expected,
@@ -230,8 +236,10 @@ impl PreparedConsumerSelection {
         if !matches!(outcome, ConsumerSelectionResolution::NotSelected) {
             return Err(invalid("unattempted Consumer selector became selected"));
         }
+        // Keep this terminal fact even if private-name cleanup fails. Other
+        // operations may now compact its completed ledger row before retry.
         self.phase = Phase::NotSelected;
-        Ok(())
+        self.discard_not_selected_control()
     }
 
     pub fn reserve_attempt_descriptors(&self) -> Result<DescriptorReservation> {
@@ -259,7 +267,7 @@ impl PreparedConsumerSelection {
         let control = project.with_locked_catalog(|root, context, _catalog| {
             if !root.matches_child_file(context, LEDGER_FILE, expected)? {
                 *phase = Phase::Rejected;
-                return Err(invalid("Consumer selector preparation became stale"));
+                return Err(HawDBError::ProjectionBusy);
             }
             // Revoke before native code, including errors and unwinding.
             *phase = Phase::Attempted;
@@ -281,7 +289,10 @@ impl PreparedConsumerSelection {
     pub fn resolve(&mut self) -> Result<ConsumerSelectionResolution> {
         match self.phase {
             Phase::Prepared => return Err(invalid("Consumer selection was never attempted")),
-            Phase::NotSelected => return Ok(ConsumerSelectionResolution::NotSelected),
+            Phase::NotSelected => {
+                self.discard_not_selected_control()?;
+                return Ok(ConsumerSelectionResolution::NotSelected);
+            }
             Phase::Published => {
                 return Ok(ConsumerSelectionResolution::Published(Box::new(
                     ConsumerSelectionReceipt {
@@ -301,7 +312,18 @@ impl PreparedConsumerSelection {
             ConsumerSelectionResolution::Published(_) => Phase::Published,
             ConsumerSelectionResolution::NotSelected => Phase::NotSelected,
         };
+        if self.phase == Phase::NotSelected {
+            self.discard_not_selected_control()?;
+        }
         Ok(outcome)
+    }
+
+    fn discard_not_selected_control(&mut self) -> Result<()> {
+        if !self.control.selection_attempted() {
+            self.control
+                .discard_unselected(&self.project.file_descriptors().io_context())?;
+        }
+        Ok(())
     }
 }
 
@@ -386,10 +408,7 @@ pub(super) fn complete_outcome(
             validate(&ledger)?;
             let bytes = encode(&ledger)?;
             let name = format!("consumer-receipt-{}.tmp", hawdb_core::generate_uuidv7()?);
-            let mut candidate = root.create_control_candidate(context, &name)?;
-            candidate.write_all(&bytes)?;
-            candidate.seal()?;
-            candidate.replace_head(context, LEDGER_FILE)?;
+            publish_ledger(root, context, &name, &bytes, &mut false)?;
         } else {
             // A complete image with a lost barrier still needs real barriers.
             let file = root.open_mutable_child(context, LEDGER_FILE, false)?;

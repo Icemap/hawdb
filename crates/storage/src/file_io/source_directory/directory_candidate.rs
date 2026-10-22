@@ -45,6 +45,10 @@ impl CapturedDirectoryCandidate {
         self.state == State::Created
     }
 
+    pub fn creation_unattempted(&self) -> bool {
+        self.state == State::Fresh
+    }
+
     pub fn removal_completed(&self) -> bool {
         self.state == State::Removed
     }

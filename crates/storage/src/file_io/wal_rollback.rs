@@ -17,6 +17,9 @@
 use super::*;
 
 impl File {
+    // The caller supplies the header from the same failed first append. Its
+    // existing prefix must be unchanged: legacy append handles may be write-only
+    // and cannot verify arbitrary preexisting bytes without new read authority.
     pub(crate) fn rollback_wal_append(
         &self,
         committed_bytes: u64,
@@ -34,17 +37,22 @@ impl File {
                 "WAL lost previously appended bytes before rollback",
             ));
         }
-        rollback.set_len(committed_bytes)?;
         let restored_bytes = if committed_bytes == 0 {
-            // Missing headers remain corruption during ordinary recovery.
-            // Restore the valid empty-generation baseline through the original
-            // append object instead of unlinking or reopening its saved name.
-            let mut writer = self;
-            writer.write_all(empty_header)?;
-            empty_header.len() as u64
+            // First append writes its header before any records. Keep that
+            // prefix instead of temporarily truncating an existing WAL to zero.
+            // If the first write stopped inside the header, append only its
+            // missing suffix through the original append-only object.
+            let length = empty_header.len() as u64;
+            let present = rollback.metadata()?.len();
+            if present < length {
+                let mut writer = self;
+                writer.write_all(&empty_header[present as usize..])?;
+            }
+            length
         } else {
             committed_bytes
         };
+        rollback.set_len(restored_bytes)?;
         rollback.sync_all()?;
         Ok(restored_bytes)
     }

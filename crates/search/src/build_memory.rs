@@ -44,7 +44,6 @@ pub(crate) mod shared;
 
 #[derive(Debug, Clone)]
 pub(crate) struct BuildMemory {
-    #[cfg(test)]
     pub(crate) ledger: QueryMemoryLedger,
     pub(crate) input: QueryMemoryAccount,
     pub(crate) spool: QueryMemoryAccount,
@@ -78,7 +77,6 @@ impl BuildMemory {
         let spool = ledger.account(QueryMemoryClass::SpillStaging, "search build spool", limit);
         let retained = ledger.account(QueryMemoryClass::BlockingState, "search build state", limit);
         Ok(Self {
-            #[cfg(test)]
             ledger,
             input,
             spool,

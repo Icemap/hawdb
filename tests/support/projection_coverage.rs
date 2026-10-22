@@ -6,6 +6,9 @@ use hawdb::store::GraphReadDependencyError;
 use hawdb_storage::version::VersionKey;
 use std::num::NonZeroU64;
 
+#[path = "registered_consumer_coverage.rs"]
+mod registered_consumer;
+
 fn caps() -> ProjectionCoverageConfig {
     ProjectionCoverageConfig {
         feed: config(0).feed,

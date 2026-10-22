@@ -307,3 +307,93 @@ fn vector_index_rebuild_recovers_uncertain_selection_without_retargeting_old_rea
         assert_eq!(result.hits()[0].distance, 2.0);
     }
 }
+
+#[test]
+fn vector_index_refuses_generic_covered_catch_up_before_mapping_or_allocation() {
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    let (consumer, _) = initialize_bound_index(&mut db, &fixture.0.join("projection"));
+    let before = super::recovery::ledger(&fixture.0.join("database"));
+    let receipt = consumer.projection().receipt();
+    let result = db.begin_search_projection_consumer_catch_up(
+        &consumer,
+        super::covered::config(),
+        |_, _, _| panic!("generic mapping cannot replace a schema-bound definition"),
+    );
+    assert!(matches!(
+        result,
+        Err(ProjectionConsumerCatchUpError::Consumer(Error::Database(
+            HawDBError::Semantic(_)
+        )))
+    ));
+    assert_eq!(consumer.projection().receipt(), receipt);
+    assert_eq!(super::recovery::ledger(&fixture.0.join("database")), before);
+}
+
+#[test]
+fn vector_index_creation_recovers_original_prepared_definition() {
+    for stage in [
+        PublicationStage::AfterCheckpoint,
+        PublicationStage::AfterSelector,
+    ] {
+        let fixture = Fixture::new();
+        let mut db = fixture.database();
+        db.query_sql("CREATE TABLE vectors (id BIGINT PRIMARY KEY, embedding VECTOR(2))")
+            .unwrap();
+        db.query_sql_with_params(
+            "INSERT INTO vectors (id, embedding) VALUES (1, $1)",
+            &[hawdb_core::Value::Vector(
+                hawdb_core::Vector::new(&[-1.0, 0.0]).unwrap(),
+            )],
+        )
+        .unwrap();
+        let path = fixture.0.join("projection");
+        let field = VectorIndexField::SqlColumn {
+            table: "vectors".into(),
+            column: "embedding".into(),
+        };
+        PUBLICATION_FAILURE.set(Some((stage, false)));
+        assert!(db
+            .create_vector_index(
+                "recover-vector",
+                &field,
+                &path,
+                options(100),
+                Default::default()
+            )
+            .is_err());
+        let before = super::recovery::ledger(&fixture.0.join("database"));
+        let consumer = db
+            .create_vector_index(
+                "recover-vector",
+                &field,
+                &path,
+                options(100),
+                Default::default(),
+            )
+            .unwrap();
+        let after = super::recovery::ledger(&fixture.0.join("database"));
+        assert_eq!(before["high_water"], after["high_water"]);
+        assert_eq!(
+            before["pending"][0]["operation"],
+            after["pending"][0]["operation"]
+        );
+        let admission = permit(&mut db, 64 << 20, 1 << 20);
+        let read = db
+            .begin_read_transaction()
+            .unwrap()
+            .bind_vector_index(&consumer, &admission)
+            .unwrap();
+        let result = read
+            .query_candidates(
+                &admission,
+                Default::default(),
+                &[1.0, 0.0],
+                NonZeroUsize::new(8).unwrap(),
+                NonZeroUsize::MIN,
+            )
+            .unwrap();
+        assert_eq!(result.hits().len(), 1);
+        assert_eq!(result.hits()[0].distance, 2.0);
+    }
+}

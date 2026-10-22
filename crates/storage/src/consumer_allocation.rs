@@ -448,10 +448,7 @@ impl ConsumerAllocationSource {
                 .ok_or_else(|| invalid("Consumer expiry overflow"))?;
             let bytes = encode(&ledger)?;
             let name = format!("consumer-renew-{}.tmp", hawdb_core::generate_uuidv7()?);
-            let mut candidate = root.create_control_candidate(context, &name)?;
-            candidate.write_all(&bytes)?;
-            candidate.seal()?;
-            candidate.replace_head(context, LEDGER_FILE)?;
+            publish_ledger(root, context, &name, &bytes, &mut false)?;
             Ok(())
         })
     }
@@ -481,6 +478,14 @@ impl ConsumerAllocationSource {
             }
             // Revoke the completed logical registration without erasing its
             // immutable birth or reusing any allocation identity.
+            // A Reserved row has never authorized mkdir. Revoke these pending
+            // grants too, so a later retry cannot resurrect an old registration.
+            ledger.pending.retain(|row| {
+                !(row.branch_id == branch
+                    && row.database_uuid == database
+                    && row.consumer_id == consumer
+                    && row.native_birth == NativeBirth::Reserved)
+            });
             for row in &mut ledger.pending {
                 if row.branch_id == branch
                     && row.database_uuid == database
@@ -501,10 +506,7 @@ impl ConsumerAllocationSource {
             validate(&ledger)?;
             let bytes = encode(&ledger)?;
             let name = format!("consumer-unregister-{}.tmp", hawdb_core::generate_uuidv7()?);
-            let mut candidate = root.create_control_candidate(context, &name)?;
-            candidate.write_all(&bytes)?;
-            candidate.seal()?;
-            candidate.replace_head(context, LEDGER_FILE)?;
+            publish_ledger(root, context, &name, &bytes, &mut false)?;
             Ok(())
         })
     }
@@ -593,6 +595,11 @@ fn check_source_custody(
 }
 
 /// Kernel-created reservation, never a native birth/adoption/deletion token.
+///
+/// The caller must serialize each (source branch, database, Consumer ID) and
+/// relinquish any previous returned token before retrying a lost reservation
+/// response. There is no caller nonce: a retry reuses the same metadata-only
+/// operation, not an independent grant for a second concurrent native creator.
 #[doc(hidden)]
 #[derive(Debug)]
 pub struct ReservedConsumerAllocation {
@@ -1026,10 +1033,11 @@ pub(crate) fn bootstrap(
                 policies: Vec::new(),
             };
             let bytes = encode(&ledger)?;
-            let mut file = root.create_child_new(context, LEDGER_FILE)?;
-            file.write_all(&bytes)?;
-            file.sync_all()?;
-            root.sync(context)?;
+            // A torn private candidate cannot become the authoritative ledger.
+            // Catalog exclusion serializes bootstrap; a lost rename response is
+            // resolved by the existing-ledger branch above on the next open.
+            let name = format!("consumer-bootstrap-{}.tmp", hawdb_core::generate_uuidv7()?);
+            publish_ledger(root, context, &name, &bytes, &mut false)?;
             Ok(proposed)
         }
         Err(error) if error.kind() == io::ErrorKind::NotFound => {
@@ -1037,6 +1045,36 @@ pub(crate) fn bootstrap(
         }
         Err(error) => Err(error.into()),
     }
+}
+
+/// Publish one ledger image with exact pre-effect/uncertain-effect distinction.
+/// A caller retaining a birth can resolve an attempted replacement on retry;
+/// failures before native selection do not revoke that retry authority.
+fn publish_ledger(
+    root: &SourceDirectory,
+    context: &FileOpenContext,
+    name: &str,
+    bytes: &[u8],
+    attempted: &mut bool,
+) -> Result<()> {
+    // Keep cleanup and completion capacity inside this publication operation;
+    // a competing owner must not strand a new private control on FD refusal.
+    let files = crate::file_descriptors::ProjectFileDescriptors::from_open_context(context);
+    let _descriptors = files.reserve_admission(2)?;
+    let context = &root.operation_context();
+    let mut candidate = root.create_control_candidate(context, name)?;
+    let result = (|| {
+        candidate.write_all(bytes)?;
+        candidate.seal()?;
+        candidate.replace_head(context, LEDGER_FILE)
+    })();
+    *attempted = candidate.selection_attempted();
+    if result.is_err() && !*attempted {
+        // Cleanup failure retains a private, unselected candidate. It never
+        // turns a proven pre-effect refusal into uncertain ledger publication.
+        let _ = candidate.discard_unselected(context);
+    }
+    result.map_err(Into::into)
 }
 
 pub(crate) fn reserve(
@@ -1063,7 +1101,7 @@ pub(crate) fn reserve(
         None => hawdb_core::generate_uuidv7()?,
     };
     let checkpoint = hawdb_core::generate_uuidv7()?;
-    let operation = project.with_locked_catalog(|root, context, catalog| {
+    let reservation = project.with_locked_catalog(|root, context, catalog| {
         let mut ledger = check_source(project, &owner, branch, root, context, &catalog)?;
         compact_completed(&mut ledger, None);
         let key = (branch.as_uuid().to_string(), database.to_string(), consumer);
@@ -1084,6 +1122,44 @@ pub(crate) fn reserve(
                     .is_some_and(PublicationIntent::pending)
         }) {
             return Err(HawDBError::ProjectionBusy);
+        }
+        // A lost reservation reply can only reuse a metadata-only row. Native
+        // births and seals require their original owner/recovery protocol.
+        if let Some(index) = ledger.pending.iter().rposition(|row| {
+            row.branch_id == key.0
+                && row.database_uuid == key.1
+                && row.consumer_id == consumer
+                && row.target_locator == locator
+                && row.native_birth == NativeBirth::Reserved
+                && row.candidate_seal.is_none()
+                && row.publication_intent.is_none()
+                && previous.is_none_or(|receipt| row.operation > receipt.selected.operation)
+                && (previous.is_some() || row.target_incarnation == row.operation - 2)
+                && row.registration_uuid
+                    == previous.map_or(row.registration_uuid.as_str(), |receipt| {
+                        receipt.selected.registration_uuid.as_str()
+                    })
+        }) {
+            if previous.is_none() && ledger.pending[index].lease != policy {
+                if ledger.pending[index].lease.is_some() != policy.is_some()
+                    || policy.is_some_and(|lease| lease.max_idle_commits == 0)
+                {
+                    return Err(HawDBError::Execution(
+                        "Consumer reservation retry has an incompatible lease policy".into(),
+                    ));
+                }
+                // Only a metadata-only reservation can be refreshed. Its UUIDs
+                // and high water remain stable, while a current caller policy
+                // must not inherit an already-expired first-attempt lease.
+                ledger.pending[index].lease = policy;
+                let bytes = encode(&ledger)?;
+                let name = format!("consumer-allocation-{}.tmp", hawdb_core::generate_uuidv7()?);
+                publish_ledger(root, context, &name, &bytes, &mut false)?;
+            }
+            let file = root.open_mutable_child(context, LEDGER_FILE, false)?;
+            file.sync_all()?;
+            root.sync(context)?;
+            return Ok(ledger.pending[index].clone());
         }
         if ledger.pending.len() >= MAX_PENDING {
             return Err(pending_capacity_exhausted(ledger.pending.len()));
@@ -1127,12 +1203,11 @@ pub(crate) fn reserve(
         validate(&ledger)?;
         let bytes = encode(&ledger)?;
         let name = format!("consumer-allocation-{}.tmp", hawdb_core::generate_uuidv7()?);
-        let mut candidate = root.create_control_candidate(context, &name)?;
-        candidate.write_all(&bytes)?;
-        candidate.seal()?;
-        candidate.replace_head(context, LEDGER_FILE)?;
-        Ok(operation)
+        let reservation = ledger.pending.last().expect("new reservation").clone();
+        publish_ledger(root, context, &name, &bytes, &mut false)?;
+        Ok(reservation)
     })?;
+    let operation = reservation.operation;
     Ok(ReservedConsumerAllocation {
         domain: project.allocation_identity().project_id(),
         incarnation: TargetIncarnation(
@@ -1140,9 +1215,10 @@ pub(crate) fn reserve(
         ),
         generation: ImmutableGeneration(operation - 1),
         operation: OperationIdentity(operation),
-        registration,
-        projection,
-        checkpoint,
+        registration: Uuid::parse_str(&reservation.registration_uuid)
+            .expect("validated registration"),
+        projection: Uuid::parse_str(&reservation.projection_uuid).expect("validated projection"),
+        checkpoint: Uuid::parse_str(&reservation.checkpoint_uuid).expect("validated checkpoint"),
         source_branch: branch,
         database,
         consumer_id: consumer.into(),
@@ -1237,3 +1313,6 @@ mod tests {
             .contains("foreign previous root"));
     }
 }
+
+#[cfg(all(test, any(target_os = "linux", target_vendor = "apple", windows)))]
+mod bootstrap_tests;

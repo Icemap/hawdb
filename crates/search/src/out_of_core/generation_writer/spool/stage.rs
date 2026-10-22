@@ -451,6 +451,24 @@ pub(in crate::out_of_core) struct StageDirectory {
 }
 
 impl StageDirectory {
+    pub(in crate::out_of_core) fn cleanup_working_bytes(&self) -> u64 {
+        self.cleanup_memory
+            .as_ref()
+            .map_or(0, QueryMemoryLease::bytes) as u64
+            + CLEANUP_ACCOUNT_METADATA_BYTES as u64
+    }
+
+    pub(in crate::out_of_core) fn rebind_task(&mut self, task: &RuntimeTaskContext) -> Result<()> {
+        if self.captured_task.is_none() || self.native.is_none() {
+            return Err(HawDBError::Execution(
+                "Consumer stage lacks native custody".into(),
+            ));
+        }
+        self.admission.take();
+        self.captured_task = Some(task.clone());
+        Ok(())
+    }
+
     pub(in crate::out_of_core) fn create(
         root: &Path,
         memory: &BuildMemory,

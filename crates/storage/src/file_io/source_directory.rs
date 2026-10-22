@@ -518,7 +518,7 @@ impl SourceDirectory {
         };
         #[cfg(not(any(test, feature = "test-support")))]
         let inner = open()?;
-        if !inner.metadata()?.is_file() {
+        if !create_new && !inner.metadata()?.is_file() {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 "mutable catalog child is not a regular file",
