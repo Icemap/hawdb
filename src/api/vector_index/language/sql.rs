@@ -147,7 +147,8 @@ impl VectorIndexReadTransaction {
         };
         rows.deliver(|row| {
             crate::api::query_runtime::query_runtime_checkpoint(Some(&query_task))?;
-            consumer(row)
+            consumer(row)?;
+            crate::api::query_runtime::query_runtime_checkpoint(Some(&query_task))
         })?;
         Ok(report)
     }

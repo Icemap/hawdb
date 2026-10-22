@@ -1578,3 +1578,99 @@ fn vector_index_sql_rejects_reserved_distance_column() {
         "{rejected:?}"
     );
 }
+
+#[test]
+fn vector_index_sql_checks_callback_cancellation_and_preserves_consumer_errors() {
+    use crate::{
+        QueryStreamOptions, VectorIndexLanguageBudget, VectorIndexReadError, VectorIndexSqlRequest,
+    };
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    db.query_sql("CREATE TABLE vectors (id BIGINT PRIMARY KEY, embedding VECTOR(2))")
+        .unwrap();
+    for (id, coordinates) in [(1, [1.0, 0.0]), (2, [0.0, 1.0])] {
+        db.query_sql_with_params(
+            "INSERT INTO vectors (id, embedding) VALUES ($1, $2)",
+            &[
+                Value::Int(id),
+                Value::Vector(Vector::new(&coordinates).unwrap()),
+            ],
+        )
+        .unwrap();
+    }
+    let consumer = db
+        .create_vector_index(
+            "rows",
+            &sql_field(),
+            fixture.0.join("index"),
+            registration(),
+            Default::default(),
+        )
+        .unwrap();
+    let permit = db
+        .search_projection_consumer_read_permit(
+            RuntimeWorkRequest::foreground_query(128 << 20, 4 << 20).with_io_wave_slots(1),
+        )
+        .unwrap();
+    let read = db
+        .begin_read_transaction()
+        .unwrap()
+        .bind_vector_index(&consumer, &permit)
+        .unwrap();
+    let budget = VectorIndexLanguageBudget {
+        index_working_bytes: NonZeroUsize::new(32 << 20).unwrap(),
+        index_result_bytes: NonZeroUsize::new(1 << 20).unwrap(),
+    };
+    let parameters = [Value::Vector(Vector::new(&[1.0, 0.0]).unwrap())];
+    for (top_k, cancel_after, consumer_error) in
+        [(1, 1, false), (2, 1, false), (2, 2, false), (2, 2, true)]
+    {
+        let sql = format!(
+            "SELECT id FROM vector_index_search('rows', $1, candidates => 2, top_k => {top_k})"
+        );
+        let request = |task| VectorIndexSqlRequest {
+            sql: &sql,
+            parameters: &parameters,
+            output_limits: QueryStreamOptions::default(),
+            task,
+        };
+        let task = RuntimeTaskContext::default();
+        let mut delivered = Vec::new();
+        let rejected = read.query_sql_streaming(&permit, budget, request(task.clone()), |row| {
+            delivered.push(row["id"].clone());
+            if delivered.len() == cancel_after {
+                task.cancellation().cancel();
+                if consumer_error {
+                    return Err(HawDBError::Execution("host consumer failed".into()));
+                }
+            }
+            Ok(())
+        });
+        let expected = [Value::Int(1), Value::Int(2)];
+        assert_eq!(delivered, expected[..cancel_after]);
+        let expected_error = if consumer_error {
+            "host consumer failed"
+        } else {
+            "runtime task stopped: cancelled"
+        };
+        assert!(
+            matches!(&rejected, Err(VectorIndexReadError::Query(HawDBError::Execution(message))) if message == expected_error),
+            "top_k={top_k}, cancel_after={cancel_after}, consumer_error={consumer_error}: {rejected:?}"
+        );
+
+        let mut retried = Vec::new();
+        let report = read
+            .query_sql_streaming(
+                &permit,
+                budget,
+                request(RuntimeTaskContext::default()),
+                |row| {
+                    retried.push(row["id"].clone());
+                    Ok(())
+                },
+            )
+            .unwrap();
+        assert_eq!(report.output_rows, top_k);
+        assert_eq!(retried, expected[..top_k]);
+    }
+}
