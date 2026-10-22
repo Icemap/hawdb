@@ -148,8 +148,9 @@ impl PhysicalPlan {
                 "{pad}GraphSeedScan query=${query_parameter} label={label:?} node={variable} score={score_column} candidate_top_k={top_k} canonical_visibility={node_visibility_predicate:?}"
             ),
             PhysicalPlan::VectorIndexScan(scan) => format!(
-                "{pad}VectorIndexScan index={:?} embedding=${} candidates={} top_k={} metric=cosine candidate_policy={} rerank=exact filter_position={} node={} distance={} canonical_visibility={:?} eligible={:?} max_work={}",
+                "{pad}VectorIndexScan index={:?} embedding=${} candidates={} top_k={} metric=cosine mode={} candidate_policy={} rerank=exact filter_position={} node={} distance={} canonical_visibility={:?} eligible={:?} max_work={}",
                 scan.index, scan.embedding_parameter, scan.candidate_limit, scan.top_k,
+                scan.mode.as_str(),
                 if scan.mode == hawdb_core::VectorIndexQueryMode::Exact { "exact" } else { "approximate" },
                 scan.mode.filter_position(),
                 scan.variable, scan.distance_column, scan.node_visibility_predicate, scan.eligible_variable, scan.max_work,

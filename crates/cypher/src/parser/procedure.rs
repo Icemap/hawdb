@@ -364,9 +364,18 @@ impl Parser<'_> {
                     ));
                 }
             }
+            hawdb_core::VectorIndexQueryMode::FilteredAnn => {
+                if candidates.is_none() || eligible.is_none() {
+                    return Err(
+                        self.error("filtered_ann vector search requires eligible and candidates")
+                    );
+                }
+            }
         }
-        if (mode == hawdb_core::VectorIndexQueryMode::Exact) != max_work.is_some() {
-            return Err(self.error("maxWork is required only for exact vector search"));
+        if mode.requires_eligible_domain() != max_work.is_some() {
+            return Err(
+                self.error("maxWork is required for exact and filtered_ann vector search only")
+            );
         }
         Ok(VectorIndexSearch {
             index,

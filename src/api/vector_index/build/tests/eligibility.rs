@@ -13,6 +13,15 @@ fn budget() -> VectorIndexLanguageBudget {
 
 #[test]
 fn vector_index_exact_eligibility_finds_neighbors_after_an_ineligible_prefix() {
+    eligibility_after_ineligible_prefix(hawdb_core::VectorIndexQueryMode::Exact);
+}
+
+#[test]
+fn vector_index_filtered_ann_finds_neighbors_without_scoring_the_whole_domain() {
+    eligibility_after_ineligible_prefix(hawdb_core::VectorIndexQueryMode::FilteredAnn);
+}
+
+fn eligibility_after_ineligible_prefix(mode: hawdb_core::VectorIndexQueryMode) {
     let fixture = Fixture::new();
     let mut db = fixture.database();
     db.query_sql(
@@ -85,8 +94,17 @@ fn vector_index_exact_eligibility_finds_neighbors_after_an_ineligible_prefix() {
         .unwrap();
     let embedding = Value::Vector(Vector::new(&[1.0, 0.0]).unwrap());
     let parameters = BTreeMap::from([("q".into(), embedding.clone())]);
-    let exact_sql = "SELECT v.id, distance FROM vector_index_search('rows', $1, mode => 'exact', top_k => 2, max_work => 5) AS v WHERE v.active = true ORDER BY distance, v.id";
-    let exact_graph = "MATCH (d:Document) WHERE d.active = true CALL vector_index_search('nodes', $q, mode := 'exact', eligible := d, topK := 2, maxWork := 100) YIELD node AS n, distance RETURN n.id AS id, distance ORDER BY distance, id";
+    let exact = mode == hawdb_core::VectorIndexQueryMode::Exact;
+    let exact_sql = if exact {
+        "SELECT v.id, distance FROM vector_index_search('rows', $1, mode => 'exact', top_k => 2, max_work => 5) AS v WHERE v.active = true ORDER BY distance, v.id"
+    } else {
+        "SELECT v.id, distance FROM vector_index_search('rows', $1, mode => 'filtered_ann', candidates => 2, top_k => 2, max_work => 100) AS v WHERE v.active = true ORDER BY distance, v.id"
+    };
+    let exact_graph = if exact {
+        "MATCH (d:Document) WHERE d.active = true CALL vector_index_search('nodes', $q, mode := 'exact', eligible := d, topK := 2, maxWork := 100) YIELD node AS n, distance RETURN n.id AS id, distance ORDER BY distance, id"
+    } else {
+        "MATCH (d:Document) WHERE d.active = true CALL vector_index_search('nodes', $q, mode := 'filtered_ann', eligible := d, candidates := 2, topK := 2, maxWork := 100) YIELD node AS n, distance RETURN n.id AS id, distance ORDER BY distance, id"
+    };
     let mut sql_rows = Vec::new();
     let sql_report = sql_read
         .query_sql_streaming(
@@ -132,14 +150,23 @@ fn vector_index_exact_eligibility_finds_neighbors_after_an_ineligible_prefix() {
         [Value::Float(1.0), Value::Float(2.0)]
     );
     for (report, input_rows) in [(sql_report.index(), 5), (graph_report.index().unwrap(), 3)] {
-        assert_eq!(report.mode, hawdb_core::VectorIndexQueryMode::Exact);
-        assert_eq!(report.backend, "exact");
-        assert_eq!(report.candidate_limit, 0);
+        assert_eq!(report.mode, mode);
+        assert_eq!(report.backend, if exact { "exact" } else { "rabitq" });
+        assert_eq!(
+            report.filter_position,
+            if exact {
+                "before_ranking"
+            } else {
+                "before_candidates"
+            }
+        );
+        assert_eq!(report.candidate_limit, if exact { 0 } else { 2 });
+        assert_eq!(report.reranked_candidate_count, 2);
         let eligibility = report.eligibility.unwrap();
         assert!(eligibility.complete);
         assert_eq!(eligibility.input_rows, input_rows);
         assert_eq!(eligibility.eligible_vectors, 2);
-        assert_eq!(eligibility.scored_vectors, 2);
+        assert_eq!(eligibility.scored_vectors, if exact { 2 } else { 0 });
     }
     let window_sql = "SELECT v.id FROM vector_index_search('rows', $1, candidates => 8, top_k => 2) AS v WHERE v.active = true";
     let mut window_rows = 0;
@@ -161,7 +188,14 @@ fn vector_index_exact_eligibility_finds_neighbors_after_an_ineligible_prefix() {
         .unwrap();
     assert_eq!(window_rows, 0, "legacy window must not refill");
     for rejected_sql in [
-        exact_sql.replace("max_work => 5", "max_work => 4"),
+        exact_sql.replace(
+            if exact {
+                "max_work => 5"
+            } else {
+                "max_work => 100"
+            },
+            "max_work => 4",
+        ),
         exact_sql.replace("v.active = true", "distance < 1.5"),
         exact_sql.replace("v.active = true", "v.absent = true"),
     ] {
@@ -177,6 +211,106 @@ fn vector_index_exact_eligibility_finds_neighbors_after_an_ineligible_prefix() {
             |_| panic!("invalid domain must not deliver rows"),
         );
         assert!(result.is_err(), "{rejected_sql}");
+    }
+    if !exact {
+        // Canonical collection consumes five units; native mapping must use
+        // the same budget and refuse before delivering any ANN result.
+        let mapping_refusal = exact_sql.replace("max_work => 100", "max_work => 5");
+        let error = sql_read
+            .query_sql_streaming(
+                &permit,
+                budget(),
+                VectorIndexSqlRequest {
+                    sql: &mapping_refusal,
+                    parameters: std::slice::from_ref(&embedding),
+                    output_limits: QueryStreamOptions::default(),
+                    task: Default::default(),
+                },
+                |_| panic!("mapping refusal must not deliver rows"),
+            )
+            .unwrap_err();
+        assert!(
+            matches!(error, crate::VectorIndexReadError::Index(hawdb_search::SearchQueryError::Query(HawDBError::ResourceBudgetExceeded(ref error))) if error.resource == hawdb_core::ResourceBudgetKind::WorkUnits),
+            "{error:?}"
+        );
+        sql_read
+            .query_sql_streaming(
+                &permit,
+                budget(),
+                VectorIndexSqlRequest {
+                    sql: exact_sql,
+                    parameters: std::slice::from_ref(&embedding),
+                    output_limits: QueryStreamOptions::default(),
+                    task: Default::default(),
+                },
+                |_| Ok(()),
+            )
+            .unwrap();
+        let bounded =
+            exact_sql.replace("candidates => 2, top_k => 2", "candidates => 1, top_k => 1");
+        let mut bounded_rows = Vec::new();
+        let report = sql_read
+            .query_sql_streaming(
+                &permit,
+                budget(),
+                VectorIndexSqlRequest {
+                    sql: &bounded,
+                    parameters: std::slice::from_ref(&embedding),
+                    output_limits: QueryStreamOptions::default(),
+                    task: Default::default(),
+                },
+                |row| {
+                    bounded_rows.push(row);
+                    Ok(())
+                },
+            )
+            .unwrap();
+        assert_eq!(bounded_rows.len(), 1);
+        assert!(sql_rows.contains(&bounded_rows[0]));
+        assert_eq!(report.index().eligibility.unwrap().eligible_vectors, 2);
+        assert_eq!(report.index().eligibility.unwrap().scored_vectors, 0);
+        assert_eq!(report.index().reranked_candidate_count, 1);
+        let empty = exact_sql
+            .replace("v.active = true", "v.id < 0")
+            .replace("max_work => 100", "max_work => 5");
+        let empty_report = sql_read
+            .query_sql_streaming(
+                &permit,
+                budget(),
+                VectorIndexSqlRequest {
+                    sql: &empty,
+                    parameters: std::slice::from_ref(&embedding),
+                    output_limits: QueryStreamOptions::default(),
+                    task: Default::default(),
+                },
+                |_| panic!("empty eligibility must not become unrestricted ANN"),
+            )
+            .unwrap();
+        assert_eq!(
+            empty_report.index().eligibility.unwrap().eligible_vectors,
+            0
+        );
+        assert_eq!(empty_report.index().eligibility.unwrap().work_units, 5);
+        assert_eq!(empty_report.index().generated_candidate_count, 0);
+        assert_eq!(empty_report.index().reranked_candidate_count, 0);
+        for invalid in [
+            Vector::new(&[0.0, 0.0]).unwrap(),
+            Vector::new(&[1.0, 0.0, 0.0]).unwrap(),
+        ] {
+            assert!(sql_read
+                .query_sql_streaming(
+                    &permit,
+                    budget(),
+                    VectorIndexSqlRequest {
+                        sql: &empty,
+                        parameters: &[Value::Vector(invalid)],
+                        output_limits: QueryStreamOptions::default(),
+                        task: Default::default(),
+                    },
+                    |_| panic!("invalid empty query must not deliver rows")
+                )
+                .is_err());
+        }
     }
     let rejected_graph = exact_graph.replace("maxWork := 100", "maxWork := 1");
     assert!(graph_read
@@ -249,27 +383,29 @@ fn vector_index_exact_graph_preserves_limit_before_identity_deduplication() {
         .bind_vector_index(&consumer, &permit)
         .unwrap();
     let parameters = BTreeMap::from([("q".into(), embedding)]);
-    for (limit, ids, inputs) in [
-        ("LIMIT 2", vec![Value::Int(1)], 2),
-        ("", vec![Value::Int(1), Value::Int(2)], 3),
-    ] {
-        let query = format!("MATCH (o:Origin)-[:RELATED]->(d:Document) WITH d ORDER BY d.id {limit} CALL vector_index_search('nodes', $q, mode := 'exact', eligible := d, topK := 2, maxWork := 100) YIELD node AS n, distance RETURN n.id AS id, distance ORDER BY id");
-        let mut rows = Vec::new();
-        let report = read
-            .query_cypher_streaming(
-                &permit,
-                budget(),
-                QueryRequest::new(&query).with_params(&parameters),
-                |row| {
-                    rows.push(row["id"].clone());
-                    Ok(())
-                },
-            )
-            .unwrap();
-        assert_eq!(rows, ids);
-        let eligibility = report.index().unwrap().eligibility.unwrap();
-        assert_eq!(eligibility.input_rows, inputs);
-        assert_eq!(eligibility.eligible_vectors, rows.len());
+    for (mode, candidates) in [("exact", ""), ("filtered_ann", ", candidates := 2")] {
+        for (limit, ids, inputs) in [
+            ("LIMIT 2", vec![Value::Int(1)], 2),
+            ("", vec![Value::Int(1), Value::Int(2)], 3),
+        ] {
+            let query = format!("MATCH (o:Origin)-[:RELATED]->(d:Document) WITH d ORDER BY d.id {limit} CALL vector_index_search('nodes', $q, mode := '{mode}'{candidates}, eligible := d, topK := 2, maxWork := 100) YIELD node AS n, distance RETURN n.id AS id, distance ORDER BY id");
+            let mut rows = Vec::new();
+            let report = read
+                .query_cypher_streaming(
+                    &permit,
+                    budget(),
+                    QueryRequest::new(&query).with_params(&parameters),
+                    |row| {
+                        rows.push(row["id"].clone());
+                        Ok(())
+                    },
+                )
+                .unwrap();
+            assert_eq!(rows, ids);
+            let eligibility = report.index().unwrap().eligibility.unwrap();
+            assert_eq!(eligibility.input_rows, inputs);
+            assert_eq!(eligibility.eligible_vectors, rows.len());
+        }
     }
 }
 
@@ -336,50 +472,52 @@ fn vector_index_exact_bounds_rejected_source_work_and_retries_after_reopen() {
             .unwrap()
             .bind_vector_index(&consumer, &permit)
             .unwrap();
-        for prefix in [
-            "MATCH (d:Document) WHERE d.active = true",
-            "MATCH (o)-[r:RELATED]->(d:Document) WHERE id(o) = $origin AND r.active = true",
-        ] {
-            let query = format!("{prefix} CALL vector_index_search('nodes', $q, mode := 'exact', eligible := d, topK := 2, maxWork := 2) YIELD node AS n, distance RETURN n.id AS id");
-            let error = read
-                .query_cypher_streaming(
-                    &permit,
-                    budget(),
-                    QueryRequest::new(&query).with_params(&parameters),
-                    |_| panic!("work refusal must not deliver rows"),
-                )
-                .unwrap_err();
-            assert!(
-                matches!(error, crate::VectorIndexReadError::Query(HawDBError::ResourceBudgetExceeded(ref error)) if error.resource == hawdb_core::ResourceBudgetKind::WorkUnits),
-                "{error:?}"
-            );
-            let retry = query.replace("maxWork := 2", "maxWork := 1000");
-            let report = read
-                .query_cypher_streaming(
-                    &permit,
-                    budget(),
-                    QueryRequest::new(&retry).with_params(&parameters),
-                    |_| panic!("all source records are ineligible"),
-                )
-                .unwrap();
-            let eligible = report.index().unwrap().eligibility.unwrap();
-            assert_eq!(eligible.input_rows, 0);
-            assert_eq!(eligible.eligible_vectors, 0);
-            assert!(eligible.work_units > 2);
-            assert_eq!(eligible.source_strategy, "bounded_canonical");
-            assert!(eligible.complete);
-            let task = hawdb_core::RuntimeTaskContext::default();
-            task.cancellation().cancel();
-            assert!(read
-                .query_cypher_streaming(
-                    &permit,
-                    budget(),
-                    QueryRequest::new(&retry)
-                        .with_params(&parameters)
-                        .with_task_context(&task),
-                    |_| panic!("cancelled input must not deliver rows")
-                )
-                .is_err());
+        for (mode, candidates) in [("exact", ""), ("filtered_ann", ", candidates := 2")] {
+            for prefix in [
+                "MATCH (d:Document) WHERE d.active = true",
+                "MATCH (o)-[r:RELATED]->(d:Document) WHERE id(o) = $origin AND r.active = true",
+            ] {
+                let query = format!("{prefix} CALL vector_index_search('nodes', $q, mode := '{mode}'{candidates}, eligible := d, topK := 2, maxWork := 2) YIELD node AS n, distance RETURN n.id AS id");
+                let error = read
+                    .query_cypher_streaming(
+                        &permit,
+                        budget(),
+                        QueryRequest::new(&query).with_params(&parameters),
+                        |_| panic!("work refusal must not deliver rows"),
+                    )
+                    .unwrap_err();
+                assert!(
+                    matches!(error, crate::VectorIndexReadError::Query(HawDBError::ResourceBudgetExceeded(ref error)) if error.resource == hawdb_core::ResourceBudgetKind::WorkUnits),
+                    "{error:?}"
+                );
+                let retry = query.replace("maxWork := 2", "maxWork := 1000");
+                let report = read
+                    .query_cypher_streaming(
+                        &permit,
+                        budget(),
+                        QueryRequest::new(&retry).with_params(&parameters),
+                        |_| panic!("all source records are ineligible"),
+                    )
+                    .unwrap();
+                let eligible = report.index().unwrap().eligibility.unwrap();
+                assert_eq!(eligible.input_rows, 0);
+                assert_eq!(eligible.eligible_vectors, 0);
+                assert!(eligible.work_units > 2);
+                assert_eq!(eligible.source_strategy, "bounded_canonical");
+                assert!(eligible.complete);
+                let task = hawdb_core::RuntimeTaskContext::default();
+                task.cancellation().cancel();
+                assert!(read
+                    .query_cypher_streaming(
+                        &permit,
+                        budget(),
+                        QueryRequest::new(&retry)
+                            .with_params(&parameters)
+                            .with_task_context(&task),
+                        |_| panic!("cancelled input must not deliver rows")
+                    )
+                    .is_err());
+            }
         }
     }
 }
@@ -437,33 +575,35 @@ fn vector_index_exact_visibility_precedes_top_k() {
     let parameters =
         BTreeMap::from([("q".into(), Value::Vector(Vector::new(&[1.0, 0.0]).unwrap()))]);
     let access = crate::QueryAccessControlContext::visibility_scope(42, "scope", "in");
-    let query = "MATCH (o:Origin)-[:LINK]->(d:Document) CALL vector_index_search('nodes', $q, mode := 'exact', eligible := d, topK := 1, maxWork := 100) YIELD node AS n, distance RETURN n.id AS id, distance";
-    let mut rows = Vec::new();
-    let report = read
-        .query_cypher_streaming(
-            &permit,
-            budget(),
-            QueryRequest::new(query)
-                .with_params(&parameters)
-                .with_access_control(&access),
-            |row| {
-                rows.push(row);
-                Ok(())
-            },
-        )
-        .unwrap();
-    assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0]["id"], Value::Int(2));
-    assert_eq!(rows[0]["distance"], Value::Float(1.0));
-    assert_eq!(
-        report
-            .index()
-            .unwrap()
-            .eligibility
-            .unwrap()
-            .eligible_vectors,
-        1
-    );
+    for (mode, candidates) in [("exact", ""), ("filtered_ann", ", candidates := 1")] {
+        let query = format!("MATCH (o:Origin)-[:LINK]->(d:Document) CALL vector_index_search('nodes', $q, mode := '{mode}'{candidates}, eligible := d, topK := 1, maxWork := 100) YIELD node AS n, distance RETURN n.id AS id, distance");
+        let mut rows = Vec::new();
+        let report = read
+            .query_cypher_streaming(
+                &permit,
+                budget(),
+                QueryRequest::new(&query)
+                    .with_params(&parameters)
+                    .with_access_control(&access),
+                |row| {
+                    rows.push(row);
+                    Ok(())
+                },
+            )
+            .unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0]["id"], Value::Int(2));
+        assert_eq!(rows[0]["distance"], Value::Float(1.0));
+        assert_eq!(
+            report
+                .index()
+                .unwrap()
+                .eligibility
+                .unwrap()
+                .eligible_vectors,
+            1
+        );
+    }
 }
 
 #[test]
@@ -500,55 +640,172 @@ fn vector_index_exact_refuses_domains_from_a_different_native_binding() {
         memory.blocking_operator_bytes,
     );
     let identity = read.pin.vector_index_read_identity();
-    for changed in [
-        hawdb_core::VectorIndexReadIdentity {
-            source_epoch: identity.source_epoch + 1,
-            ..identity
-        },
-        hawdb_core::VectorIndexReadIdentity {
-            generation: NonZeroU64::new(identity.generation.get() + 1).unwrap(),
-            ..identity
-        },
-        hawdb_core::VectorIndexReadIdentity {
-            target_incarnation: NonZeroU64::new(identity.target_incarnation.get() + 1).unwrap(),
-            ..identity
-        },
-        hawdb_core::VectorIndexReadIdentity {
-            branch: hawdb_core::generate_uuidv7().unwrap(),
-            ..identity
-        },
-        hawdb_core::VectorIndexReadIdentity {
-            database: hawdb_core::generate_uuidv7().unwrap(),
-            ..identity
-        },
+    for mode in [
+        hawdb_core::VectorIndexQueryMode::Exact,
+        hawdb_core::VectorIndexQueryMode::FilteredAnn,
     ] {
+        for changed in [
+            hawdb_core::VectorIndexReadIdentity {
+                source_epoch: identity.source_epoch + 1,
+                ..identity
+            },
+            hawdb_core::VectorIndexReadIdentity {
+                generation: NonZeroU64::new(identity.generation.get() + 1).unwrap(),
+                ..identity
+            },
+            hawdb_core::VectorIndexReadIdentity {
+                target_incarnation: NonZeroU64::new(identity.target_incarnation.get() + 1).unwrap(),
+                ..identity
+            },
+            hawdb_core::VectorIndexReadIdentity {
+                branch: hawdb_core::generate_uuidv7().unwrap(),
+                ..identity
+            },
+            hawdb_core::VectorIndexReadIdentity {
+                database: hawdb_core::generate_uuidv7().unwrap(),
+                ..identity
+            },
+        ] {
+            let mut domain = hawdb_executor::vector_eligibility::VectorEligibleDomain::new(
+                &read.definition,
+                changed,
+                vector.as_ref(),
+                mode,
+                0,
+                &account,
+                None,
+            )
+            .unwrap();
+            domain.finish().unwrap();
+            let request = hawdb_search::VectorIndexQuery {
+                descriptor: &read.definition,
+                embedding: &[1.0, 0.0],
+                candidate_limit: NonZeroUsize::MIN,
+                top_k: NonZeroUsize::MIN,
+                mode,
+                eligible: Some(&domain),
+            };
+            let error = read
+                .pin
+                .query_vector_index(&permit, Default::default(), request)
+                .unwrap_err();
+            assert!(
+                error.to_string().contains("another source or publication"),
+                "{error}"
+            );
+        }
+    }
+}
+
+#[test]
+fn vector_index_filtered_ann_refuses_missing_mappings_and_invalid_empty_requests() {
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    db.query_sql("CREATE TABLE vectors (id BIGINT PRIMARY KEY, embedding VECTOR(2))")
+        .unwrap();
+    let consumer = db
+        .create_vector_index(
+            "rows",
+            &sql_field(),
+            fixture.0.join("sql"),
+            registration(),
+            Default::default(),
+        )
+        .unwrap();
+    let permit = db
+        .search_projection_consumer_read_permit(
+            RuntimeWorkRequest::foreground_query(128 << 20, 4 << 20).with_io_wave_slots(1),
+        )
+        .unwrap();
+    let read = db
+        .begin_read_transaction()
+        .unwrap()
+        .bind_vector_index(&consumer, &permit)
+        .unwrap();
+    let vector = Vector::new(&[1.0, 0.0]).unwrap();
+    let memory = hawdb_executor::ExecutionMemoryConfig::default();
+    let ledger = hawdb_executor::QueryMemoryLedger::for_query(&memory, None).unwrap();
+    let account = ledger.account(
+        hawdb_executor::QueryMemoryClass::BlockingState,
+        "eligible mapping test",
+        memory.blocking_operator_bytes,
+    );
+    for missing in [true, false] {
         let mut domain = hawdb_executor::vector_eligibility::VectorEligibleDomain::new(
             &read.definition,
-            changed,
+            read.pin.vector_index_read_identity(),
             vector.as_ref(),
-            0,
+            hawdb_core::VectorIndexQueryMode::FilteredAnn,
+            10,
             &account,
             None,
         )
         .unwrap();
+        if missing {
+            domain.observe_input().unwrap();
+            domain.insert("r:missing", vector.as_ref()).unwrap();
+        }
         domain.finish().unwrap();
-        let request = hawdb_search::VectorIndexQuery {
+        let request = || hawdb_search::VectorIndexQuery {
             descriptor: &read.definition,
             embedding: &[1.0, 0.0],
             candidate_limit: NonZeroUsize::MIN,
             top_k: NonZeroUsize::MIN,
-            mode: hawdb_core::VectorIndexQueryMode::Exact,
+            mode: hawdb_core::VectorIndexQueryMode::FilteredAnn,
             eligible: Some(&domain),
         };
-        let error = read
-            .pin
-            .query_vector_index(&permit, Default::default(), request)
-            .unwrap_err();
-        assert!(
-            error.to_string().contains("another source or publication"),
-            "{error}"
-        );
+        if missing {
+            // Repeat with the same permit: failed mapping must release its
+            // original-custody spill, working memory and single I/O wave.
+            for _ in 0..2 {
+                let error = read
+                    .pin
+                    .query_vector_index(&permit, Default::default(), request())
+                    .unwrap_err();
+                assert!(
+                    matches!(error, hawdb_search::SearchQueryError::Query(HawDBError::StorageIntegrity(ref message)) if message.contains("mapping is incomplete")),
+                    "{error:?}"
+                );
+            }
+        } else {
+            let result = read
+                .pin
+                .query_vector_index(&permit, Default::default(), request())
+                .unwrap();
+            assert!(result.hits().is_empty());
+            assert_eq!(result.metrics().candidate_spill_bytes, 0);
+            assert_eq!(result.metrics().metadata_segment_bytes_read, 0);
+            assert_eq!(result.metrics().rabitq_payload_bytes_read, 0);
+            for mode in [
+                hawdb_core::VectorIndexQueryMode::Exact,
+                hawdb_core::VectorIndexQueryMode::AnnWindow,
+            ] {
+                let mut wrong_mode = request();
+                wrong_mode.mode = mode;
+                assert!(read
+                    .pin
+                    .query_vector_index(&permit, Default::default(), wrong_mode)
+                    .is_err());
+            }
+            let mut oversized = request();
+            oversized.candidate_limit = NonZeroUsize::MAX;
+            let error = read
+                .pin
+                .query_vector_index(&permit, Default::default(), oversized)
+                .unwrap_err();
+            assert!(
+                matches!(error, hawdb_search::SearchQueryError::Query(HawDBError::ResourceBudgetExceeded(ref error)) if error.resource == hawdb_core::ResourceBudgetKind::MetadataEntries),
+                "{error:?}"
+            );
+            let mut inconsistent = request();
+            inconsistent.top_k = NonZeroUsize::new(2).unwrap();
+            assert!(read
+                .pin
+                .query_vector_index(&permit, Default::default(), inconsistent)
+                .is_err());
+        }
     }
+    assert_eq!(ledger.snapshot().used_bytes, 0);
 }
 
 #[test]
@@ -592,66 +849,68 @@ fn vector_index_exact_preserves_ordered_limit_and_rebinds_parameters() {
         .unwrap()
         .bind_vector_index(&consumer, &permit)
         .unwrap();
-    let query = "MATCH (d:Document) WHERE d.rank >= $minimum WITH d ORDER BY d.rank LIMIT $limit CALL vector_index_search('nodes', $q, mode := 'exact', eligible := d, topK := $top, maxWork := $work) YIELD node AS n, distance RETURN n.rank AS rank ORDER BY rank";
-    for (minimum, limit, top, expected) in [
-        (1, 1, 1, vec![1]),
-        (2, 2, 2, vec![2, 3]),
-        (1, 2, 2, vec![1, 2]),
-    ] {
-        let mut parameters = BTreeMap::from([
-            ("q".into(), vector.clone()),
-            ("minimum".into(), Value::Int(minimum)),
-            ("limit".into(), Value::Int(limit)),
-            ("top".into(), Value::Int(top)),
-            ("work".into(), Value::Int(1000)),
-        ]);
-        let mut rows = Vec::new();
-        read.query_cypher_streaming(
-            &permit,
-            budget(),
-            QueryRequest::new(query).with_params(&parameters),
-            |row| {
-                rows.push(row["rank"].clone());
-                Ok(())
-            },
-        )
-        .unwrap();
-        assert_eq!(
-            rows,
-            expected.into_iter().map(Value::Int).collect::<Vec<_>>()
-        );
-        parameters.insert("work".into(), Value::Int(0));
-        assert!(read
-            .query_cypher_streaming(
+    for (mode, candidates) in [("exact", ""), ("filtered_ann", ", candidates := 3")] {
+        let query = format!("MATCH (d:Document) WHERE d.rank >= $minimum WITH d ORDER BY d.rank LIMIT $limit CALL vector_index_search('nodes', $q, mode := '{mode}'{candidates}, eligible := d, topK := $top, maxWork := $work) YIELD node AS n, distance RETURN n.rank AS rank ORDER BY rank");
+        for (minimum, limit, top, expected) in [
+            (1, 1, 1, vec![1]),
+            (2, 2, 2, vec![2, 3]),
+            (1, 2, 2, vec![1, 2]),
+        ] {
+            let mut parameters = BTreeMap::from([
+                ("q".into(), vector.clone()),
+                ("minimum".into(), Value::Int(minimum)),
+                ("limit".into(), Value::Int(limit)),
+                ("top".into(), Value::Int(top)),
+                ("work".into(), Value::Int(1000)),
+            ]);
+            let mut rows = Vec::new();
+            read.query_cypher_streaming(
                 &permit,
                 budget(),
-                QueryRequest::new(query).with_params(&parameters),
-                |_| panic!("work refusal delivered output")
+                QueryRequest::new(&query).with_params(&parameters),
+                |row| {
+                    rows.push(row["rank"].clone());
+                    Ok(())
+                },
             )
-            .is_err());
-        parameters.insert("work".into(), Value::Int(1000));
-        let invalid_scope = query.replace("n.rank AS rank ORDER BY rank", "d.rank AS rank");
-        assert!(read
-            .query_cypher_streaming(
-                &permit,
-                budget(),
-                QueryRequest::new(&invalid_scope).with_params(&parameters),
-                |_| panic!("upstream binding escaped CALL")
-            )
-            .is_err());
-    }
-    for coordinates in [&[1.0_f32, 0.0, 0.0][..], &[0.0, 0.0][..]] {
-        let parameters =
-            BTreeMap::from([("q".into(), Value::Vector(Vector::new(coordinates).unwrap()))]);
-        let empty = "MATCH (d:Document) WHERE d.rank < 0 CALL vector_index_search('nodes', $q, mode := 'exact', eligible := d, topK := 1, maxWork := 100) YIELD node RETURN node";
-        assert!(read
-            .query_cypher_streaming(
-                &permit,
-                budget(),
-                QueryRequest::new(empty).with_params(&parameters),
-                |_| panic!("invalid vector delivered output")
-            )
-            .is_err());
+            .unwrap();
+            assert_eq!(
+                rows,
+                expected.into_iter().map(Value::Int).collect::<Vec<_>>()
+            );
+            parameters.insert("work".into(), Value::Int(0));
+            assert!(read
+                .query_cypher_streaming(
+                    &permit,
+                    budget(),
+                    QueryRequest::new(&query).with_params(&parameters),
+                    |_| panic!("work refusal delivered output")
+                )
+                .is_err());
+            parameters.insert("work".into(), Value::Int(1000));
+            let invalid_scope = query.replace("n.rank AS rank ORDER BY rank", "d.rank AS rank");
+            assert!(read
+                .query_cypher_streaming(
+                    &permit,
+                    budget(),
+                    QueryRequest::new(&invalid_scope).with_params(&parameters),
+                    |_| panic!("upstream binding escaped CALL")
+                )
+                .is_err());
+        }
+        for coordinates in [&[1.0_f32, 0.0, 0.0][..], &[0.0, 0.0][..]] {
+            let parameters =
+                BTreeMap::from([("q".into(), Value::Vector(Vector::new(coordinates).unwrap()))]);
+            let empty = format!("MATCH (d:Document) WHERE d.rank < 0 CALL vector_index_search('nodes', $q, mode := '{mode}'{candidates}, eligible := d, topK := 1, maxWork := 100) YIELD node RETURN node");
+            assert!(read
+                .query_cypher_streaming(
+                    &permit,
+                    budget(),
+                    QueryRequest::new(&empty).with_params(&parameters),
+                    |_| panic!("invalid vector delivered output")
+                )
+                .is_err());
+        }
     }
 }
 
@@ -732,7 +991,10 @@ fn vector_index_exact_sql_hands_one_memory_ledger_to_output() {
     let candidates = Candidates(
         domain
             .distances()
-            .map(|(id, distance)| (id.to_owned(), distance))
+            .map(|entry| {
+                let (id, distance) = entry.unwrap();
+                (id.to_owned(), distance)
+            })
             .collect(),
     );
     let retained = ledger.snapshot().used_bytes;

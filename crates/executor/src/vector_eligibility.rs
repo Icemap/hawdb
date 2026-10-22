@@ -4,7 +4,9 @@
 //! One admitted, complete eligible domain shared by relational and graph reads.
 
 use crate::{QueryMemoryAccount, QueryMemoryLease};
-use hawdb_core::{HawDBError, Result, RuntimeTaskContext, VectorIndexDescriptor, VectorRef};
+use hawdb_core::{
+    HawDBError, Result, RuntimeTaskContext, VectorIndexDescriptor, VectorIndexQueryMode, VectorRef,
+};
 use std::collections::BTreeMap;
 
 /// Counts input rows separately from unique non-NULL vector identities. An
@@ -25,7 +27,8 @@ pub struct VectorEligibleDomain<'a> {
     definition: &'a VectorIndexDescriptor,
     identity: hawdb_core::VectorIndexReadIdentity,
     embedding: VectorRef<'a>,
-    distances: BTreeMap<String, f64>,
+    mode: VectorIndexQueryMode,
+    entries: BTreeMap<String, Option<f64>>,
     report: VectorEligibilityReport,
     task: RuntimeTaskContext,
     // Payloads are destroyed before their original allocation owner.
@@ -37,10 +40,16 @@ impl<'a> VectorEligibleDomain<'a> {
         definition: &'a VectorIndexDescriptor,
         identity: hawdb_core::VectorIndexReadIdentity,
         embedding: VectorRef<'a>,
+        mode: VectorIndexQueryMode,
         max_work: usize,
         account: &QueryMemoryAccount,
         task: Option<&RuntimeTaskContext>,
     ) -> Result<Self> {
+        if !mode.requires_eligible_domain() {
+            return Err(HawDBError::Semantic(
+                "ann_window does not accept an eligible domain".into(),
+            ));
+        }
         if embedding.dimension() != definition.dimension() {
             return Err(HawDBError::Semantic(
                 "vector query dimension differs from the bound index".into(),
@@ -57,7 +66,8 @@ impl<'a> VectorEligibleDomain<'a> {
             definition,
             identity,
             embedding,
-            distances: BTreeMap::new(),
+            mode,
+            entries: BTreeMap::new(),
             report: VectorEligibilityReport {
                 max_work,
                 source_strategy: "bounded_canonical",
@@ -80,7 +90,8 @@ impl<'a> VectorEligibleDomain<'a> {
     }
 
     /// The caller supplies the identity and vector from the same canonical row.
-    /// IDs and scores are retained; canonical payloads remain with their reader.
+    /// Retain identities and, in exact mode only, scores. Canonical payloads
+    /// remain with their reader; filtered ANN must not score the whole domain.
     pub fn insert(&mut self, identity: &str, vector: VectorRef<'_>) -> Result<()> {
         crate::pipeline::runtime_checkpoint(Some(&self.task))?;
         if self.report.complete {
@@ -88,20 +99,29 @@ impl<'a> VectorEligibleDomain<'a> {
                 "vector eligible domain is already complete".into(),
             ));
         }
-        if self.distances.contains_key(identity) {
+        if self.entries.contains_key(identity) {
             return Ok(());
         }
+        if vector.dimension() != self.definition.dimension() {
+            return Err(HawDBError::StorageIntegrity(
+                "eligible vector dimension differs from the bound index".into(),
+            ));
+        }
         let distance =
-            self.definition
-                .distance()
-                .distance_with_work(self.embedding, vector, || {
-                    crate::pipeline::runtime_checkpoint(Some(&self.task))
-                })?;
+            if self.mode == VectorIndexQueryMode::Exact {
+                Some(self.definition.distance().distance_with_work(
+                    self.embedding,
+                    vector,
+                    || crate::pipeline::runtime_checkpoint(Some(&self.task)),
+                )?)
+            } else {
+                None
+            };
         // Conservative B-tree node/split bookkeeping is admitted before insertion.
         self.memory.grow(identity.len().saturating_add(256))?;
-        self.distances.insert(identity.to_owned(), distance);
+        self.entries.insert(identity.to_owned(), distance);
         self.report.eligible_vectors += 1;
-        self.report.scored_vectors += 1;
+        self.report.scored_vectors += usize::from(distance.is_some());
         Ok(())
     }
 
@@ -112,8 +132,16 @@ impl<'a> VectorEligibleDomain<'a> {
         Ok(())
     }
 
-    pub fn validate(&self, definition: &VectorIndexDescriptor, embedding: &[f32]) -> Result<()> {
+    pub fn validate(
+        &self,
+        definition: &VectorIndexDescriptor,
+        embedding: &[f32],
+        mode: VectorIndexQueryMode,
+    ) -> Result<()> {
+        crate::pipeline::runtime_checkpoint(Some(&self.task))?;
+        self.task.check_work_limit()?;
         if !self.report.complete
+            || self.mode != mode
             || self.definition != definition
             || !self.embedding.coordinates().eq(embedding.iter().copied())
         {
@@ -139,9 +167,17 @@ impl<'a> VectorEligibleDomain<'a> {
         }
     }
 
-    pub fn distances(&self) -> impl Iterator<Item = (&str, f64)> {
-        self.distances
-            .iter()
-            .map(|(id, distance)| (id.as_str(), *distance))
+    pub fn find_identity(&self, identity: &str) -> Option<&str> {
+        self.entries
+            .get_key_value(identity)
+            .map(|(key, _)| key.as_str())
+    }
+
+    pub fn distances(&self) -> impl Iterator<Item = Result<(&str, f64)>> {
+        self.entries.iter().map(|(id, distance)| {
+            distance
+                .map(|distance| (id.as_str(), distance))
+                .ok_or_else(|| HawDBError::Execution("eligible identity has no exact score".into()))
+        })
     }
 }

@@ -2611,7 +2611,10 @@ impl SearchOutOfCoreReader {
             output_memory.optional(predicate_pushdown.report.parse_error.as_deref())?;
         let mut metrics = SearchOutOfCoreMetrics::default();
         let candidate_set = self.build_candidate_set(
-            &predicate_pushdown.predicates,
+            candidate_set::CandidateFilter {
+                predicates: &predicate_pushdown.predicates,
+                eligible: None,
+            },
             &mut predicate_pushdown.report,
             &mut metrics,
             query,

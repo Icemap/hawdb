@@ -49,24 +49,25 @@ pub(in super::super) fn bind_vector_index(
         .unwrap_or(0);
     let top_k = bind_non_negative_usize(&search.top_k, parameters, "topK")?;
     if top_k == 0
-        || (search.mode == hawdb_core::VectorIndexQueryMode::AnnWindow && top_k > candidate_limit)
+        || (search.mode != hawdb_core::VectorIndexQueryMode::Exact && top_k > candidate_limit)
     {
         return Err(unsupported(match search.mode {
             hawdb_core::VectorIndexQueryMode::Exact => "exact vector search requires topK > 0",
-            hawdb_core::VectorIndexQueryMode::AnnWindow => {
+            hawdb_core::VectorIndexQueryMode::AnnWindow
+            | hawdb_core::VectorIndexQueryMode::FilteredAnn => {
                 "vector index requires 0 < topK <= candidates"
             }
         }));
     }
     let input = match (&search.eligible, input) {
-        (Some(variable), Some(input)) if search.mode == hawdb_core::VectorIndexQueryMode::Exact => {
+        (Some(variable), Some(input)) if search.mode.requires_eligible_domain() => {
             if !matches!(input_scope.0.get(variable), Some(BindingType::Graph { kind: GraphEntityKind::Node, .. })) {
                 return Err(unsupported("vector eligible input must be a bound node variable"));
             }
             Some(Box::new(restore_bindings(Some(input), &mut input_scope)))
         }
         (None, None) if search.mode == hawdb_core::VectorIndexQueryMode::AnnWindow => None,
-        _ => return Err(unsupported("exact vector search requires an upstream eligible node domain; ann_window must start the pipeline")),
+        _ => return Err(unsupported("exact and filtered_ann vector search require an upstream eligible node domain; ann_window must start the pipeline")),
     };
     let mut variable = "node".to_owned();
     let mut distance_column = "distance".to_owned();

@@ -80,7 +80,8 @@ pub(super) fn lower_source(table: &TableFactor) -> Result<Option<SqlVectorIndexS
                 hawdb_core::VectorIndexQueryMode::Exact => {
                     "exact vector search requires explicit top_k"
                 }
-                hawdb_core::VectorIndexQueryMode::AnnWindow => {
+                hawdb_core::VectorIndexQueryMode::AnnWindow
+                | hawdb_core::VectorIndexQueryMode::FilteredAnn => {
                     "vector index requires explicit candidates and top_k"
                 }
             }
@@ -88,7 +89,10 @@ pub(super) fn lower_source(table: &TableFactor) -> Result<Option<SqlVectorIndexS
         )
     };
     match mode {
-        hawdb_core::VectorIndexQueryMode::AnnWindow if candidates.is_none() => {
+        hawdb_core::VectorIndexQueryMode::AnnWindow
+        | hawdb_core::VectorIndexQueryMode::FilteredAnn
+            if candidates.is_none() =>
+        {
             return Err(required())
         }
         hawdb_core::VectorIndexQueryMode::Exact if candidates.is_some() => {
@@ -98,9 +102,9 @@ pub(super) fn lower_source(table: &TableFactor) -> Result<Option<SqlVectorIndexS
         }
         _ => {}
     }
-    if (mode == hawdb_core::VectorIndexQueryMode::Exact) != max_work.is_some() {
+    if mode.requires_eligible_domain() != max_work.is_some() {
         return Err(HawDBError::Semantic(
-            "max_work is required only for exact vector search".into(),
+            "max_work is required for exact and filtered_ann vector search only".into(),
         ));
     }
     Ok(Some(SqlVectorIndexSearch {
@@ -160,6 +164,8 @@ mod tests {
             "mode => 'exact', top_k => 1, max_work => 10, candidates => 2",
             "mode => $2, top_k => 1, max_work => 10",
             "mode => 'filtered_ann', top_k => 1, max_work => 10",
+            "mode => 'filtered_ann', candidates => 2, top_k => 1",
+            "mode => 'filtered_ann', candidates => 2, max_work => 10",
             "mode => 'ann_window', top_k => 1, candidates => 2, max_work => 10",
             "mode => 'exact', top_k => 1, max_work => 10, max_work => 20",
         ] {
@@ -172,5 +178,6 @@ mod tests {
             );
         }
         crate::prepare_postgres_sql("SELECT id FROM vector_index_search('rows', $1, mode => 'exact', top_k => 1, max_work => $2) WHERE active = true").unwrap();
+        crate::prepare_postgres_sql("SELECT id FROM vector_index_search('rows', $1, mode => 'filtered_ann', candidates => $2, top_k => 1, max_work => $3) WHERE active = true").unwrap();
     }
 }

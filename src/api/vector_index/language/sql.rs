@@ -104,11 +104,11 @@ impl VectorIndexReadTransaction {
             &self.source.config.execution_memory,
             Some(&query_task),
         )?;
-        let eligible = if search.mode == hawdb_core::VectorIndexQueryMode::Exact {
+        let eligible = if search.mode.requires_eligible_domain() {
             let value = search
                 .max_work
                 .as_ref()
-                .ok_or_else(|| invalid("exact vector search requires max_work"))?;
+                .ok_or_else(|| invalid("eligible vector search requires max_work"))?;
             let hawdb_core::Value::Int(max_work) = bind(value, request.parameters)? else {
                 return Err(invalid("max_work must be a nonnegative integer").into());
             };

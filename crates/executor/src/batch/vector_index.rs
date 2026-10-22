@@ -1,8 +1,8 @@
 // Copyright 2026 Nowledge
 // Licensed under the Apache License, Version 2.0.
 
-//! An explicit ANN window followed by canonical node hydration. Neither a
-//! downstream limit nor visibility can change the declared candidate window.
+//! Shared eligible-domain collection and canonical hydration for explicit
+//! vector modes. Upstream limits remain inside the eligible input boundary.
 
 use super::*;
 use crate::{ExternalReadResourceContract, ExternalReadResultBudget, VectorIndexExecutionRequest};
@@ -38,7 +38,7 @@ pub(super) fn stream(
         context.memory.blocking_operator_bytes,
     );
     let definition_memory;
-    let definition = if scan.mode == hawdb_core::VectorIndexQueryMode::Exact {
+    let definition = if scan.mode.requires_eligible_domain() {
         definition_memory = Some(
             eligibility_account
                 .reserve(hawdb_core::vector_index::MAX_VECTOR_INDEX_DESCRIPTOR_BYTES)?,
@@ -55,6 +55,7 @@ pub(super) fn stream(
                 definition,
                 *identity,
                 embedding.as_ref(),
+                scan.mode,
                 scan.max_work,
                 &eligibility_account,
                 context.task_context,

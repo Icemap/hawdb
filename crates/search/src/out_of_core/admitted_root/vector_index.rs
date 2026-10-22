@@ -83,7 +83,7 @@ impl OpenedRoot {
             )
             .into());
         }
-        if request.mode == hawdb_core::VectorIndexQueryMode::AnnWindow
+        if request.mode != hawdb_core::VectorIndexQueryMode::Exact
             && request.top_k > request.candidate_limit
         {
             return Err(
@@ -92,7 +92,7 @@ impl OpenedRoot {
         }
         for (requested, limit, option) in [
             (
-                if request.mode == hawdb_core::VectorIndexQueryMode::AnnWindow {
+                if request.mode != hawdb_core::VectorIndexQueryMode::Exact {
                     request.candidate_limit.get()
                 } else {
                     0
@@ -126,6 +126,14 @@ impl OpenedRoot {
             request.embedding,
             || preflight.checkpoint(),
         )?;
+        if let Some(domain) = request.eligible {
+            domain.validate(request.descriptor, request.embedding, request.mode)?;
+        } else if request.mode.requires_eligible_domain() {
+            return Err(HawDBError::Semantic(
+                "vector mode requires a complete eligible domain".into(),
+            )
+            .into());
+        }
         let frame = query_output::Frame::with_view_bytes(
             preflight,
             permit,
@@ -135,9 +143,14 @@ impl OpenedRoot {
         let mut metrics = SearchOutOfCoreMetrics::default();
         let scan = if request.mode == hawdb_core::VectorIndexQueryMode::Exact {
             self.reader.rank_exact_index_domain(request, preflight)?
+        } else if request
+            .eligible
+            .is_some_and(|domain| domain.report().eligible_vectors == 0)
+        {
+            crate::out_of_core::vector_serving::VectorScoreScan::default()
         } else {
             // Scratch precedes the one I/O wave so cleanup can obtain fresh I/O.
-            let stage = if self.reader.visibility.is_empty() {
+            let stage = if self.reader.visibility.is_empty() && request.eligible.is_none() {
                 None
             } else {
                 let disk_bytes = self
@@ -172,7 +185,10 @@ impl OpenedRoot {
             };
             let mut predicates = query_memory::Predicates::new(&Default::default(), Some(query))?;
             let candidates = self.reader.build_candidate_set(
-                &predicates.predicates,
+                crate::out_of_core::candidate_set::CandidateFilter {
+                    predicates: &predicates.predicates,
+                    eligible: request.eligible,
+                },
                 &mut predicates.report,
                 &mut metrics,
                 Some(query),

@@ -38,6 +38,8 @@ pub enum VectorIndexQueryMode {
     AnnWindow,
     /// Exhaust the declared eligible domain before selecting exact nearest rows.
     Exact,
+    /// Restrict approximate candidate generation to a complete eligible domain.
+    FilteredAnn,
 }
 
 impl VectorIndexQueryMode {
@@ -45,7 +47,10 @@ impl VectorIndexQueryMode {
         match value {
             "ann_window" => Ok(Self::AnnWindow),
             "exact" => Ok(Self::Exact),
-            _ => Err(invalid("query mode must be 'ann_window' or 'exact'")),
+            "filtered_ann" => Ok(Self::FilteredAnn),
+            _ => Err(invalid(
+                "query mode must be 'ann_window', 'exact' or 'filtered_ann'",
+            )),
         }
     }
 
@@ -53,13 +58,19 @@ impl VectorIndexQueryMode {
         match self {
             Self::AnnWindow => "ann_window",
             Self::Exact => "exact",
+            Self::FilteredAnn => "filtered_ann",
         }
+    }
+
+    pub const fn requires_eligible_domain(self) -> bool {
+        matches!(self, Self::Exact | Self::FilteredAnn)
     }
 
     pub const fn filter_position(self) -> &'static str {
         match self {
             Self::AnnWindow => "after_window",
             Self::Exact => "before_ranking",
+            Self::FilteredAnn => "before_candidates",
         }
     }
 }

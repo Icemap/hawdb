@@ -3,7 +3,8 @@
 
 //! Explicit candidate input for a SQL table function. Identities are hydrated
 //! through the caller's canonical row snapshot; ordinary relational predicates,
-//! projections and Top-N execute after the complete ANN window is fixed.
+//! projections and Top-N execute after membership is selected. Explicit
+//! eligible modes collect WHERE matches before exact or approximate ranking.
 
 use super::*;
 
@@ -126,6 +127,11 @@ pub fn collect_vector_eligible_domain<'query, R: RelationalRowStoreReader>(
         definition,
         identity,
         embedding,
+        select
+            .vector_index
+            .as_ref()
+            .expect("validated vector source")
+            .mode,
         max_work.min(resources.limits.max_candidate_work),
         &account,
         task,
@@ -239,7 +245,7 @@ fn residual_selection(select: &SelectStatement) -> Option<&SqlExpression> {
     if select
         .vector_index
         .as_ref()
-        .is_some_and(|search| search.mode == hawdb_core::VectorIndexQueryMode::Exact)
+        .is_some_and(|search| search.mode.requires_eligible_domain())
     {
         None
     } else {

@@ -290,13 +290,13 @@ impl SearchOutOfCoreReader {
         let domain = request.eligible.ok_or_else(|| {
             HawDBError::Semantic("exact vector search requires a complete eligible domain".into())
         })?;
-        domain.validate(request.descriptor, request.embedding)?;
         let mut collector = BoundedScoreCollector::with_context(
             Some(request.top_k.get()),
             self.config.max_score_entries.get(),
             Some(query),
         )?;
-        for (id, distance) in domain.distances() {
+        for entry in domain.distances() {
+            let (id, distance) = entry?;
             query.checkpoint()?;
             collector.push_borrowed(id, -distance)?;
         }
