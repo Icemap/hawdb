@@ -1,0 +1,12 @@
+{
+  "cases": 54,
+  "writes": 55296,
+  "verified": [
+    "per-writer/raw aggregate correspondence",
+    "all p50/p95/p99 and maxima",
+    "source epoch delta",
+    "quiescent sample counts",
+    "unique complete matrix cells"
+  ],
+  "results_sha256": "319122c9377309dbd87fd71392a0f6561c27931c5aa70a9fd8711a9f388ad8a3"
+}

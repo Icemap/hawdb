@@ -1,0 +1,45 @@
+{
+  "environment_overrides": {
+    "RUSTFLAGS": null,
+    "CARGO_ENCODED_RUSTFLAGS": null,
+    "CARGO_BUILD_RUSTFLAGS": null,
+    "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS": null
+  },
+  "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+  "cargo": "cargo 1.97.1 (c980f4866 2026-06-30)",
+  "benchmark_artifact": {
+    "reason": "compiler-artifact",
+    "package_id": "path+file:///tmp/hawdb-867-generation-reclamation#hawdb@0.11.0",
+    "manifest_path": "/tmp/hawdb-867-generation-reclamation/Cargo.toml",
+    "target": {
+      "kind": [
+        "bench"
+      ],
+      "crate_types": [
+        "bin"
+      ],
+      "name": "consumer_publication",
+      "src_path": "/tmp/hawdb-867-generation-reclamation/benches/consumer_publication.rs",
+      "edition": "2024",
+      "doc": false,
+      "doctest": false,
+      "test": false
+    },
+    "profile": {
+      "opt_level": "3",
+      "debuginfo": 0,
+      "debug_assertions": false,
+      "overflow_checks": false,
+      "test": true
+    },
+    "features": [
+      "background-maintenance",
+      "full-text-search"
+    ],
+    "filenames": [
+      "/home/hawkingrei/devel/nowledge/skein/target/consumer-publication-867-release/release/deps/consumer_publication-7f0adf8e1e199222"
+    ],
+    "executable": "/home/hawkingrei/devel/nowledge/skein/target/consumer-publication-867-release/release/deps/consumer_publication-7f0adf8e1e199222",
+    "fresh": false
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "original_path": "/home/hawkingrei/devel/nowledge/skein/target/consumer-publication-fixtures/consumer-publication-2-0-11",
+  "retained_path": "/home/hawkingrei/devel/nowledge/skein/target/consumer-publication-fixtures/aborted-v1-consumer-publication-2-0-11",
+  "reason": "Preserve the failed fixture while avoiding a sandbox PID-reuse collision with the explicitly restarted matrix."
+}

@@ -1,0 +1,1001 @@
+{
+  "command": "bazel test //tools/shiro:shiro_tests //tools/shiro:shiro_cli_tests //:hawdb_linux_ci_fuzz_smoke_test --build_event_json_file=/tmp/hawdb-867-validation/qualification-fuzz.bep.jsonl",
+  "invocation_id": "62a804b1-83c9-410e-a88e-8ee6367dd72e",
+  "bazel_version": "9.3.0",
+  "started_utc": "2026-10-22T06:54:28.956Z",
+  "finished_utc": "2026-10-22T08:12:04.150Z",
+  "wall_seconds_including_build": 4655.194,
+  "exit_code": 0,
+  "passed_targets": 98,
+  "executed_runs": 81,
+  "cached_runs": 17,
+  "note": "Wall time includes compilation and cached actions; it is not a fuzz-campaign duration. Cached targets are not claimed as freshly executed.",
+  "raw_bep_sha256": "894843edf3d673d6e333e5f3976db6dc273d32ae6bc33ba2f0c85a507f2403ce",
+  "archived_test_logs": "/tmp/hawdb-867-validation/qualification-fuzz-testlogs",
+  "test_log_sha256": {
+    "crates/sql-syntax/hawdb_sql_alias_boundary_fuzz_tests/test.log": "73da26cac3867b6fcee9167c92888a4ef93123d0e907ff614986f83b33fd38a6",
+    "crates/sql-syntax/hawdb_sql_alias_boundary_fuzz_tests/test.xml": "97a287badc61ffa5d01ff5f3026f003506b934de00a2ac17aad058162d3affc2",
+    "crates/route-ownership/hawdb_graph_route_ownership_fuzz_tests/test.log": "693368d24ae89ea13216d8b4373aaf73cf7052cd205847f575744889b22b1e7c",
+    "crates/route-ownership/hawdb_graph_route_ownership_fuzz_tests/test.xml": "e12c44e27966beebf493eafb7d2c619a8f4be78d4c62d2855bf937f2f2392689",
+    "crates/evidence/hawdb_source_inventory_fuzz_tests/test.log": "666479325395de80ffdd3983f6fc422edb0e8dd9849180466d53e663ba3d20b7",
+    "crates/evidence/hawdb_source_inventory_fuzz_tests/test.xml": "77cbdf3cf06436eb795ea9050b69fc187a0fa34030afcfd729a63d5d126ad614",
+    "crates/evidence/hawdb_inventory_health_fuzz_tests/test.log": "c9bc55aec1a39b280c0fa1f8ae1b56c81a6b457ef511dea8bf02d03908e1bc72",
+    "crates/evidence/hawdb_inventory_health_fuzz_tests/test.xml": "33e4f4178df33801c90382c207bf419af3956f65827f89cc424d38ca54d09a5b",
+    "crates/cypher/hawdb_cypher_backtracking_fuzz_tests/test.log": "98ab86098d4175cd1d3823f1c3645fe3773bb32b21a3ae2dffcca0c511ce415f",
+    "crates/cypher/hawdb_cypher_backtracking_fuzz_tests/test.xml": "b398f028db6c0429c05c384611378e7e131f1b5049c34cfa9cd27fad49faee9a",
+    "crates/evidence/hawdb_resource_profile_fuzz_tests/test.log": "bce5f732b6c04d7598bcdf73118c10bede3b1fb22fe1c0163a87cb7d0b99e77b",
+    "crates/evidence/hawdb_resource_profile_fuzz_tests/test.xml": "8b0fed41bc38c2c44422339b098c64283f365aea303f4ec210f5b2ad5e8062dc",
+    "crates/optimizer-relational/hawdb_optimizer_access_cost_fuzz_tests/test.log": "93fee55dcd970d763e5e2dd23993b9e6f81796c214ff9698df145bd1c466616f",
+    "crates/optimizer-relational/hawdb_optimizer_access_cost_fuzz_tests/test.xml": "f610e9992a27330b85252e500260b0752ebaa0bf6a653cced607236e9d331754",
+    "crates/plan-cypher/hawdb_plan_cypher_explain_fuzz_tests/test.log": "2279b6c196c18ce7597695dc2297a057842beb84b93c331caee0ae85414ba0f4",
+    "crates/plan-cypher/hawdb_plan_cypher_explain_fuzz_tests/test.xml": "abf460c8f1254946be520e0e7f3ab10fbaaf1f595cc480f8356376b8f6901e6b",
+    "crates/optimizer-graph/hawdb_optimizer_cardinality_defaults_fuzz_tests/test.log": "e00c7113b87c0f87269edad59e6e3ba5a6116c787f18e3ceef7781d18bf1a288",
+    "crates/optimizer-graph/hawdb_optimizer_cardinality_defaults_fuzz_tests/test.xml": "6dbcf5dd6a64bf7ec4affba8fdaee29d4d694b06de7d33f1d7dd4381fad98f77",
+    "crates/optimizer-graph/hawdb_optimizer_trace_cost_fuzz_tests/test.log": "e0837f32208d87bc735ee0933beebbc20e3178214c8f9a88779e94c4502699d6",
+    "crates/optimizer-graph/hawdb_optimizer_trace_cost_fuzz_tests/test.xml": "c8979586e38308e155d819495b2605d419a3796241c7c9ff55ddf56695def436",
+    "crates/optimizer-graph/hawdb_optimizer_full_text_cost_fuzz_tests/test.log": "d1b552c5654f236db9df47e7f653c89703d607a994cfb7b8a1b40e96b81e14c6",
+    "crates/optimizer-graph/hawdb_optimizer_full_text_cost_fuzz_tests/test.xml": "f4d17afe296396c789e5bda881d856cd86613c33d5fa3cbc141cf2d925d83cc8",
+    "crates/optimizer-graph/hawdb_optimizer_cardinality_metadata_fuzz_tests/test.log": "263b01527a33dd8cb99d612d96525ae2196f244c1632c3bf75bf61bd71c0defe",
+    "crates/optimizer-graph/hawdb_optimizer_cardinality_metadata_fuzz_tests/test.xml": "51cae449bc5235a53fd7dba7dbc6855cae97b4f5b215ef7aca703b88f409a513",
+    "crates/sql/hawdb_sql_clause_diagnostics_fuzz_tests/test.log": "c0eac87285449a8fe086b9505fc482fc74677a9293bfccd47d70c6b38bce9393",
+    "crates/sql/hawdb_sql_clause_diagnostics_fuzz_tests/test.xml": "f093080c36c06842b2681c72d509a155e9650739225cc45fc68ffa2f07b313b9",
+    "crates/optimizer-graph/hawdb_optimizer_ddl_command_fuzz_tests/test.log": "e029cda82cdc5a7d9ffbefa641b0d64f2bafb88bc5b9afc646aeeb05e41af377",
+    "crates/optimizer-graph/hawdb_optimizer_ddl_command_fuzz_tests/test.xml": "5db8cf4bb04982146f59a0e0b1e2b9d3195b517c4b7ad15a2901d5467ef7c2dd",
+    "crates/sql/hawdb_sql_frontend_corpus_fuzz_tests/test.log": "083f2a259d731c6bb1b6e9f7f514b2f5da77f88431575c395a2540c48ffd59b6",
+    "crates/sql/hawdb_sql_frontend_corpus_fuzz_tests/test.xml": "e74ff824354ff772c068cff98c8c65ec0d3864e419b712e3f3b0cf146464b5d9",
+    "crates/optimizer-graph/hawdb_optimizer_candidate_fingerprint_fuzz_tests/test.log": "1f1b38b7d3c0ceec4f025d911254be040f6d821894b5b9aef692d6f43c3aea93",
+    "crates/optimizer-graph/hawdb_optimizer_candidate_fingerprint_fuzz_tests/test.xml": "3ea9f3b352f6b5183b1ffefc3cab0342db51319a3a35f47686426cfc008406eb",
+    "crates/sql/hawdb_sql_create_binding_fuzz_tests/test.log": "5f1856975b1a533dcbe964b6526b17757dfdb39d51205c3eda7c07e64a0289e1",
+    "crates/sql/hawdb_sql_create_binding_fuzz_tests/test.xml": "729875460f0313fe8c3590478105078721870e9ddedb54ac871fbc5fbc339530",
+    "crates/storage/hawdb_storage_set_value_fuzz_tests/test.log": "0c3d1d8af10ff1c6ce5172e2243f87bd7da79448d73f8f86e7da5087b7da8768",
+    "crates/storage/hawdb_storage_set_value_fuzz_tests/test.xml": "1deada0cd86060af31b27f748cf60fdb7545534d20a1554d91f391cb910eb6c4",
+    "crates/storage/hawdb_storage_relational_index_view_fuzz_tests/test.log": "3a01f44f64e817dda5a1f8377afab24b5a35c6f9ca24960dd45d42972babc666",
+    "crates/storage/hawdb_storage_relational_index_view_fuzz_tests/test.xml": "f832329e58bfaee43780432de33d6f366dd15da36caa7ecdcd9445f558c46be9",
+    "crates/storage/hawdb_storage_shadow_metadata_fuzz_tests/test.log": "56e14bce86a81ba288e396ae15ad604d905e56b1db5470ec67fc8bfc16e59623",
+    "crates/storage/hawdb_storage_shadow_metadata_fuzz_tests/test.xml": "0e3c553a375069b52933ab6d5360e15f8f73e31ae36bc2de1037e76a0f749659",
+    "crates/executor/hawdb_mutation_preflight_fuzz_tests/test.log": "a3d246521c0451de83bda669646caf15091caf4e6115bff0db4aee6e136021b1",
+    "crates/executor/hawdb_mutation_preflight_fuzz_tests/test.xml": "184ff1c08c3a8eb41b26459868e0bcbb98d8963b45cbc46a48fbedf274475fdb",
+    "crates/executor/hawdb_batch_dispatch_fuzz_tests/test.log": "8fcbcb8cc4c851120672b1d6f6e216fae7fabd4c8d814956d33d719786159ad6",
+    "crates/executor/hawdb_batch_dispatch_fuzz_tests/test.xml": "dc9ce4b416f90efaeae80c51049e8236b128217b23183d2137873097ecba065b",
+    "crates/executor/hawdb_query_observer_fuzz_tests/test.log": "6905232d36f254b2bdd3467ed582d7f46ea5a318cc7c9ad12799a404ab91ba70",
+    "crates/executor/hawdb_query_observer_fuzz_tests/test.xml": "3056ae2c192d2195499c27373d45718a849b2f4b7bfea4b551da8e53db6bfe32",
+    "crates/executor/hawdb_vector_seed_fuzz_tests/test.log": "fab3df85eb4e0447ae57e746ae53145d2f1622f33840e8db24b40d12b9d3da1c",
+    "crates/executor/hawdb_vector_seed_fuzz_tests/test.xml": "230edfdc73d426b644b946977f81b877c5a67e24b7e97e03486dcbcc54190f68",
+    "crates/storage/hawdb_storage_source_scan_fuzz_tests/test.log": "01ac95337394714c06854c174df29d8b2b3db5c3f4b79647b40008aedc1fafa8",
+    "crates/storage/hawdb_storage_source_scan_fuzz_tests/test.xml": "b998dc8503d36008387d57a5b0047f4112c1e675fa1767a699c9da2ccc99b70c",
+    "crates/executor/hawdb_result_delivery_fuzz_tests/test.log": "da23c690b1951505cb1e0bc3bd9ee62b04054eadcd4a43bccb53979d357165ba",
+    "crates/executor/hawdb_result_delivery_fuzz_tests/test.xml": "02cc5a7f2bb7e4ba95b1a45d2020b9b518fe823a542b7b23fd21e7e899e554df",
+    "crates/executor/hawdb_execution_report_value_fuzz_tests/test.log": "7be81546ef01faadb7e0bdbfee1c1b9de11e241c3b71c0ab3cfa51121ec3c169",
+    "crates/executor/hawdb_execution_report_value_fuzz_tests/test.xml": "1613ca0d0af857cafd1b8f1a97f413677e898c1814d965c1689bc2cdb0cba10f",
+    "crates/executor/hawdb_execution_lifecycle_fuzz_tests/test.log": "a9c43336d1825fc4786a7d438edebcd0dab21eb116e099dc5b09bf4c0df438dc",
+    "crates/executor/hawdb_execution_lifecycle_fuzz_tests/test.xml": "a09ac439c34cdab17b5daa71d6a016ccb9b2727472d587ae975fda5b5a29b77d",
+    "crates/storage/hawdb_storage_property_projection_hex_fuzz_tests/test.log": "769f48d4693a6b17bdefb10b9b41e7ded6e949f3b8e37bc0158d8445a8492b9f",
+    "crates/storage/hawdb_storage_property_projection_hex_fuzz_tests/test.xml": "2757f321823903d7756fc56ae932178b25e2b86f5204205750ac57d63d0ec4fb",
+    "crates/executor/hawdb_numeric_execution_fuzz_tests/test.log": "02df6f1df4d83064eebe3820cfa3a08c9c5ff26268141b6481e0b4ff5311ecca",
+    "crates/executor/hawdb_numeric_execution_fuzz_tests/test.xml": "058791bbccf9632f38ae0beb4908b746ee6d7f84ff957e8853afff70f9342cc0",
+    "crates/storage/hawdb_storage_checkpoint_wal_verbatim_fuzz_tests/test.log": "7adafbf9c0bfea4c22bf743ea2bdc7240a7f1ab53e6140b7cdbffda841c80616",
+    "crates/storage/hawdb_storage_checkpoint_wal_verbatim_fuzz_tests/test.xml": "a2ad016dab540848465ff682f3c790bc92e1fb63016f6fdc2797667acc63c58d",
+    "crates/executor/hawdb_spill_compaction_fuzz_tests/test.log": "e898ebbc5a53be97e6a55c479ba7555c57e7949fa1ed44a3fd5e9c749a5cdf74",
+    "crates/executor/hawdb_spill_compaction_fuzz_tests/test.xml": "59f9aa24f5679570c145f6c762449b0956bafc3030fede8411623844ecf13ee6",
+    "crates/storage/hawdb_storage_graph_overlay_fuzz_tests/test.log": "ab4b9d875c0abfb634f1e9ce5e93f4d0e96f47082ce26587452a9a46537ddca1",
+    "crates/storage/hawdb_storage_graph_overlay_fuzz_tests/test.xml": "c7919a63a3bc4c75896e2d000af2b18368ea0e241156d9c140cbf010650fa77b",
+    "crates/executor/hawdb_graph_algorithm_fuzz_tests/test.log": "df9cf075e1379d55796bff5f1bc8c3cd864c37f25fbebdbff7b672608094e4c8",
+    "crates/executor/hawdb_graph_algorithm_fuzz_tests/test.xml": "89f1f373f9baf4e232243d817c24866be540b23f13d1a803481465ad89656d77",
+    "crates/executor/hawdb_mutation_lowering_fuzz_tests/test.log": "7f2f23c87298ba705b2559745baa8e051fcc1e10dac7dc74ebe5d66bec83b40b",
+    "crates/executor/hawdb_mutation_lowering_fuzz_tests/test.xml": "716b8e8a4f489975c3b7133a8eff2f1535377beb748e33c605bb6366a701134f",
+    "crates/storage/hawdb_storage_durable_manifest_fuzz_tests/test.log": "34bd561fe325537cf4b1b97e39f78224ddf4dc245df45f6ae3f34d9d46b874d8",
+    "crates/storage/hawdb_storage_durable_manifest_fuzz_tests/test.xml": "c41ffcbd2d6e3f47208ce4ba769cb266b7ffa65d34e9dea47271143a7bfebaa2",
+    "crates/search/hawdb_search_manifest_encoding_fuzz_tests/test.log": "17379d1b87ef726a7fa9c081feb3734be1ed08291e21f96d3a433ca00b103b6e",
+    "crates/search/hawdb_search_manifest_encoding_fuzz_tests/test.xml": "863fc0bba5135c4695c21ed354988663497c9461c63f7e3f9b5d370acd52bfce",
+    "crates/storage/hawdb_storage_artifact_binding_fuzz_tests/test.log": "e5c94c04b06be34bb2e8455ffdaf4f4ec7c6127a8dfdca63a602b594b5aea6fa",
+    "crates/storage/hawdb_storage_artifact_binding_fuzz_tests/test.xml": "efd2a1ae4661ae68dd79245680dd1779ac97f4af03431f745449c1985ea2696b",
+    "crates/search/hawdb_search_manifest_budget_fuzz_tests/test.log": "dfdd8557df83b0f71360ed8efbc1ed28897d3084a335eef3ce3798ca4e8088c4",
+    "crates/search/hawdb_search_manifest_budget_fuzz_tests/test.xml": "84f927d1aa14f98fa48334aa74458ce455075e863af9e3e9789d081927b7f13b",
+    "crates/storage/hawdb_storage_file_lock_fuzz_tests/test.log": "fc61d4c111ab7d96c8bb2c50d31462589149c81db32b21be1cfb9f7e580a236d",
+    "crates/storage/hawdb_storage_file_lock_fuzz_tests/test.xml": "c531f909be902773b3292067009527f57c4595263ec6dd05ff6d8529bb275acf",
+    "crates/search/hawdb_search_compression_fuzz_tests/test.log": "45ab19dff7afcf0375e7ed2d32d17f62e2b56530660b6acd5ac71746d748d187",
+    "crates/search/hawdb_search_compression_fuzz_tests/test.xml": "ce439d06f676d5f58f714b3a714af14849d062acce7165cb6a9fe8313569c10b",
+    "crates/executor/hawdb_graph_hash_join_fuzz_tests/test.log": "8a53569aa4b107db4b039a018b07b1cf92dcea0b416da3ff4395db74a84cccdc",
+    "crates/executor/hawdb_graph_hash_join_fuzz_tests/test.xml": "01d54519f5b061d9dfa0500ca909295ee5b27eeb1e83f751924fe6cebff3231b",
+    "crates/storage/hawdb_storage_append_reader_fuzz_tests/test.log": "ed6986f27f497b7a48dfce7ef758b79ab6a272fac6f040f8f3730356246d7fc1",
+    "crates/storage/hawdb_storage_append_reader_fuzz_tests/test.xml": "5fe15952716d8cd6902b46bf4e3c5a2fc1e2c04120ee9de4de16c7d8955593cd",
+    "crates/storage/hawdb_storage_relational_row_workspace_fuzz_tests/test.log": "2745c25011f62dbab80c24eb82db0f421cc29e9c829f14f04714f8a61e05f623",
+    "crates/storage/hawdb_storage_relational_row_workspace_fuzz_tests/test.xml": "2529b62180613fbb98b56d72d0532fa8d2ee8eed440a5bf1fa567f08fed56b00",
+    "crates/executor/hawdb_sort_merge_account_fuzz_tests/test.log": "033f2912cc620907d8eae304eebcf231c30553555b9633936e2e0a6cdcb8d736",
+    "crates/executor/hawdb_sort_merge_account_fuzz_tests/test.xml": "380b431e9b7a53d426f9134397ea9b5c54db74e649c1c2a8641e5273b039d1b8",
+    "crates/storage/hawdb_storage_transaction_compaction_fuzz_tests/test.log": "a1bf334cf83f1e12a5aa9df21313f75d4f4e626301ac601762675b46d30364bb",
+    "crates/storage/hawdb_storage_transaction_compaction_fuzz_tests/test.xml": "152c12d895ee96798c2a7fb92250796cb29e64258a8f61b9102f741b758acffe",
+    "crates/relational/hawdb_relational_statement_fuzz_tests/test.log": "80c986c0cd0fc089e17ed5caa2dfc07634eed1bbdae207d47e21fd65148798c0",
+    "crates/relational/hawdb_relational_statement_fuzz_tests/test.xml": "2b221670534e39dc5756d375b5c80d6ba8768994362b782822ea381472d1f065",
+    "crates/storage/hawdb_storage_transaction_locks_fuzz_tests/test.log": "d3aa42c66072e6a649deb54f5e03255110b5ba9a61390ac94ba7a4e2e7d66ca0",
+    "crates/storage/hawdb_storage_transaction_locks_fuzz_tests/test.xml": "759115718f062d33fa42ffa9052726d52adcfa63dd49dcfae058ca9c7b81b4c0",
+    "crates/relational/hawdb_relational_explain_report_fuzz_tests/test.log": "f842ccb65ad5ae8cd25521e9a3ea1e9c05f6656cc107bb1184fd93839b6afb1c",
+    "crates/relational/hawdb_relational_explain_report_fuzz_tests/test.xml": "f31081bd49c470b4156a2be507d04a45c3f9fbbbdd65aefdf677b990da52f1a7",
+    "crates/storage/hawdb_storage_sharded_cache_fuzz_tests/test.log": "dae5097aa59e0b03fdbef582a2a6c93e28a3398962352ed1f9e03fc6ad7a35d6",
+    "crates/storage/hawdb_storage_sharded_cache_fuzz_tests/test.xml": "ec5606b065043349e6436a604ad031a99ad6fe2e30e1c02e621578f554113c6e",
+    "crates/relational/hawdb_relational_row_runtime_fuzz_tests/test.log": "11d1838dd91606b1e05bbaf31ba81e788f31b372786eec67eeea8372f3fb648e",
+    "crates/relational/hawdb_relational_row_runtime_fuzz_tests/test.xml": "0f0ccf2423f378f1197ce7721a44cf7423f45d6028c02638be72735628833860",
+    "crates/executor/hawdb_transform_fuzz_tests/test.log": "92788550d15d59ac0f90cf8bd0942b742ebd3f3a1412369f1d88114430fdb5df",
+    "crates/executor/hawdb_transform_fuzz_tests/test.xml": "c06e34f3346fb2c862d5e4d404ae6353813aff48d4ac3e99c2f1ff13ad2bbf21",
+    "crates/search/hawdb_search_document_analysis_fuzz_tests/test.log": "761387183f3d43b10f9e585c9d113b8c4982aab3338d6fc193b083a72999ed8e",
+    "crates/search/hawdb_search_document_analysis_fuzz_tests/test.xml": "798f4d3e4763aa3ece1b2509bf065bfda10220e8827d26047a7aefc034260856",
+    "crates/storage/hawdb_storage_backup_hex_fuzz_tests/test.log": "12058f1d271e27ff11c50792df3c55b3e19c7e7e47ef5bafd96ee5eba6fdf5b2",
+    "crates/storage/hawdb_storage_backup_hex_fuzz_tests/test.xml": "e12dfbb07c2d48c0a521739bed0ade9784e8036ad7ce7d28e11b81d2e27fc337",
+    "crates/search/hawdb_search_mini_delta_snapshot_fuzz_tests/test.log": "7f44bc1ec29ea6c7c5518455fe575b8fd38f52bbe06c40749f2efbab42c5b0bc",
+    "crates/search/hawdb_search_mini_delta_snapshot_fuzz_tests/test.xml": "2b6aeed6d0a1810f5e4830b7fd4b113d1c9b266d7867d3250413bb0efc02c863",
+    "crates/storage/hawdb_storage_positioned_read_fuzz_tests/test.log": "489a4c7f71a3022e384a77be175c1d7271c1b3a565f03e755b3fecf86006df31",
+    "crates/storage/hawdb_storage_positioned_read_fuzz_tests/test.xml": "5414c64db652528f3be6264456b7cee8a7f7cdc6c0c5588e31c9ae0944825a8f",
+    "crates/storage/hawdb_storage_text_fuzz_tests/test.log": "5b97385a6b6a2a6c92eada0ad5dd0b9b94832d70ab6f6da203141a082a27a5f6",
+    "crates/storage/hawdb_storage_text_fuzz_tests/test.xml": "0abede259d52215d2ba9ef8739cc88c1e9949ae83157eae5b125969ebca12282",
+    "crates/storage/hawdb_storage_projected_artifact_fuzz_tests/test.log": "59ea1bb6d136181d61c9225cb31cab0202feb60ed6139e4d2fb6ef479480823c",
+    "crates/storage/hawdb_storage_projected_artifact_fuzz_tests/test.xml": "dd75ed3f01c8877174c7ea5f4fc5b26c7ffb6e55414b1d071de9decc2d510321",
+    "crates/storage/hawdb_storage_durable_envelope_fuzz_tests/test.log": "0fac9e7db10e06b4440d175af3404c2159ede0719905fa609434d508b2ffdea5",
+    "crates/storage/hawdb_storage_durable_envelope_fuzz_tests/test.xml": "2223eb65f22ad0c72e9d602557ea0043b19717f58b2375a07357b37d4378afff",
+    "crates/storage/hawdb_storage_statistics_refresh_fuzz_tests/test.log": "b2843dc886f72816eb2494b2a49f2cb62cebb63d319f19268326b0aeefad736e",
+    "crates/storage/hawdb_storage_statistics_refresh_fuzz_tests/test.xml": "81f4746b81040489a8e6e6ba7e66304e572d18f163a21aa4c688a8cabc48c5c7",
+    "crates/compat/hawdb_compat_contract_fuzz_tests/test.log": "97806ce0ff7a25986a54a80d76bb60ec1460d50b4e4f1b40d33a702adfd6518c",
+    "crates/compat/hawdb_compat_contract_fuzz_tests/test.xml": "112fc38e3107e2d673774b3a60b112f9c2fd2c47c6b0c9ffb49b3dfe689c1e0b",
+    "tools/shiro/shiro_fast_tests/test.log": "586a4b4237f043c2dd4f778cffaa1ea8d7d0696bcd057082c188b08c36c04ef0",
+    "tools/shiro/shiro_fast_tests/test.xml": "f167577819c9f9d95ec77ed8c8d26b0e7d29878e2abfd709028b9c06c39303a4",
+    "hawdb_scan_callback_fuzz_tests/test.log": "b9bbc40207ef92ce9504a3685ce11449d709256af6125c14a7be4a1fe048e424",
+    "hawdb_scan_callback_fuzz_tests/test.xml": "246ac1dc58aaccf59ec3f83c9dd20b21809fd3cb5e926fbdf1f202421276d3a6",
+    "crates/search/hawdb_search_spool_decoding_fuzz_tests/test.log": "7659a28afe348ebb6e8c1ec77da0f4990d752eff173ac8fbbd6bd07202aa6b88",
+    "crates/search/hawdb_search_spool_decoding_fuzz_tests/test.xml": "8efd10a7aefa0f22d897248e66e33d243a6731fe1375d5362204b5cb53adf046",
+    "crates/search/hawdb_search_concurrent_read_fuzz_tests/test.log": "6ea11bec960e5a8a5d72e6ce36103bb8faf0a20941ca00676cbdb0dfd8fccab6",
+    "crates/search/hawdb_search_concurrent_read_fuzz_tests/test.xml": "018f8166064f66545899af851bb509f5f4214f74943d8435e58ea5ce875ba679",
+    "crates/relational/hawdb_relational_field_plan_fuzz_tests/test.log": "fe05d7ce3f1739c633d8d3b2411a0730b07ca0e7841ab352812d9fd05e148225",
+    "crates/relational/hawdb_relational_field_plan_fuzz_tests/test.xml": "f777c754f982e93e13cd565a456d65616d21aff08e898763563c2ad573eb6b39",
+    "crates/search/hawdb_search_document_frequency_fuzz_tests/test.log": "261945799805c08f50299aa63511236f677a9551be6d9e187ad7e445acf0a253",
+    "crates/search/hawdb_search_document_frequency_fuzz_tests/test.xml": "34c3b42566ea180c80cdd8c27574a9e6fd37959082ba4eabedaf6fd359c55cf0",
+    "crates/relational/hawdb_relational_physical_plan_fuzz_tests/test.log": "4aba2b0cf7dd91e2896fafe2fa9e4400cc4c15d6e6173b21ae471c42c17a6524",
+    "crates/relational/hawdb_relational_physical_plan_fuzz_tests/test.xml": "136adcfa2e491ff4a220576d397ceae92d56c384a6273193a46cde5b2ab8f163",
+    "crates/relational/hawdb_relational_columnar_aggregate_fuzz_tests/test.log": "e0e45ffdac696e17ad3dc7fbb945c004186e2416d6cd0670367e215c0aab7104",
+    "crates/relational/hawdb_relational_columnar_aggregate_fuzz_tests/test.xml": "743d77b8c8d481bb36484cabee34c68f8e83f77f314a6c6c2860f2790f7c91d6",
+    "crates/readiness/hawdb_source_mutation_readiness_fuzz_tests/test.log": "736a3bfe04ac46c582c2f44fd45ff3ec70ee65dea5096de7f1256835f478ca4c",
+    "crates/readiness/hawdb_source_mutation_readiness_fuzz_tests/test.xml": "ef5bdd2451e455b7f9853a33a88c60a65e3da50b80b9e60fab1a2fa75943af0f",
+    "crates/search/hawdb_search_lexical_spill_fuzz_tests/test.log": "707bb80409776c59cf352714cb94671769b983ca1c7f3aef6675239000f47710",
+    "crates/search/hawdb_search_lexical_spill_fuzz_tests/test.xml": "a099767edc01c9843205e66ad33eba5ff6c91243b8af792cff38428183667051",
+    "crates/search/hawdb_search_spool_encoding_fuzz_tests/test.log": "a009283c93a33b5ba1f3b8358d0ac4c8b7a6d649827a77a15c8aadbc42e82f18",
+    "crates/search/hawdb_search_spool_encoding_fuzz_tests/test.xml": "10056cb42eb917f5f902916979e3200dabce8fd0afa256a81ea64cae438b1a8e",
+    "crates/search/hawdb_search_projection_evidence_fuzz_tests/test.log": "73c8ce7a75ee4174b743ca1927df554f31adb3fb15253c69b3efcca43d40d5b2",
+    "crates/search/hawdb_search_projection_evidence_fuzz_tests/test.xml": "ee7a13c25cfc05b138e6b6eec9f69b466df0fc90ab73e894360dffefefd389d9",
+    "crates/search/hawdb_search_block_encoding_fuzz_tests/test.log": "e0570ad880ddcc92353237f448834f11253c317c2c480e6631ca20ef5efa5c59",
+    "crates/search/hawdb_search_block_encoding_fuzz_tests/test.xml": "da14fa29b4251f9bb44d9ca5f2a02e7b777dfabdb1676688f30e7efca616ed3a",
+    "crates/storage/hawdb_storage_graph_constraints_fuzz_tests/test.log": "c5682cccaf95bcf465e157bf922d44468ba8003bebb3e46ffb8b4cb2ee401230",
+    "crates/storage/hawdb_storage_graph_constraints_fuzz_tests/test.xml": "21a194352f2ba0e4300b3187e79a7f39078d09332ea7f1cac0903eb11ae10a9d",
+    "crates/readiness/hawdb_replacement_summary_fuzz_tests/test.log": "130f81c6c7eb6cac118c0f9c2b62e83572d7ac3c0c311109e577547b5b03b3ef",
+    "crates/readiness/hawdb_replacement_summary_fuzz_tests/test.xml": "e61c0d04c44919ac3afaef5538abfce6e00fe8296c6d4b145be011a8065e681c",
+    "crates/search/hawdb_search_hydration_fuzz_tests/test.log": "2a6b27157fa9927c92d29f6c7cfe26ebf4efe490d298bab9277114e8b94fc3fd",
+    "crates/search/hawdb_search_hydration_fuzz_tests/test.xml": "73f7f180911ee25df0c36f90acab84c6bc130bda458514379675039b452ca32e",
+    "crates/readiness/hawdb_graph_route_readiness_fuzz_tests/test.log": "9026131344b47ad043b1dbd2652a97309968f73d285dc160fa0b199663def6ea",
+    "crates/readiness/hawdb_graph_route_readiness_fuzz_tests/test.xml": "8ab7a6faeb97a388ad5225f2129380a2c15f35b22d1cbf2021aa998e216a68c8",
+    "crates/search/hawdb_search_candidate_evidence_fuzz_tests/test.log": "cdaa0022e9fb8381518bc766fef9896094257cf6d3fd56913902b1ea34eae7c8",
+    "crates/search/hawdb_search_candidate_evidence_fuzz_tests/test.xml": "dd9d250845f9d70016111626f29c0540f701c4a805e3c08e2f80a3e55c092322",
+    "crates/search/hawdb_search_hex_decoding_fuzz_tests/test.log": "c8f99683e1642d3eab3cb982e10e5b91328a236c7fa8084fdd53a4f7dabcb5d9",
+    "crates/search/hawdb_search_hex_decoding_fuzz_tests/test.xml": "7f9fbadee9d4bf6da6a28b0e8daf088ae972be59427dd57ef7518c493c4effd2",
+    "crates/search/hawdb_search_bounded_file_fuzz_tests/test.log": "1261c0b77f1045052e7736258cc41191caf7e5879c39f6daf9affdfe41c2ad8e",
+    "crates/search/hawdb_search_bounded_file_fuzz_tests/test.xml": "51f9b4d29fa90408a65973ee008625f916e6138faf4a4e28145739e99328599f",
+    "tools/shiro/shiro_storage_tests/test.log": "8f0632d61d971a08e34c3d86bb92710103ae2bb7bdd14e8ef95cbc70494d076b",
+    "tools/shiro/shiro_storage_tests/test.xml": "1db640fc9f22aca448a57c91ee9a1d6fd16010612799400a6b06c41677f1fd84",
+    "tools/shiro/shiro_parser_cli_tests/test.log": "1d185854656a2d473a4933380b7043d97e4ce8942170c078545862efbdae27f4",
+    "tools/shiro/shiro_parser_cli_tests/test.xml": "cad51e6fea4dbcaded9db2699f41133c314d79eac38fb3a99a3b6f85b10ad2c3",
+    "crates/search/hawdb_search_term_policy_fuzz_tests/test.log": "062a482ed9ac001050e450184059950906ac1c55db185fc0416335855b68763b",
+    "crates/search/hawdb_search_term_policy_fuzz_tests/test.xml": "67677b864d950b16cf08b243cc41f4211d846252ca0fd77995186a6ebfee230d",
+    "crates/relational/hawdb_relational_qualification_fuzz_tests/test.log": "4c554b902c85d4b36737cf503a6cae2094d81bbf29151018b272f288ffd092ee",
+    "crates/relational/hawdb_relational_qualification_fuzz_tests/test.xml": "5627be0f4d968ddc62ff910782b0f30efb77f21d1ca0a44f2c59013de7a1fdce",
+    "crates/executor/hawdb_morsel_oracle_fuzz_tests/test.log": "67f91e9253dcaba119f38a16a8f652d9ebf4b442081d66bf32a4771e23c6103e",
+    "crates/executor/hawdb_morsel_oracle_fuzz_tests/test.xml": "16134d5d91ff7b887e7ad56a6df5bb680adac035c4e94b229b9259f0db2ebf0e",
+    "hawdb_concurrent_key_range_fuzz_tests/test.log": "1dbfe07de9492cffc939fb745f2ca7c4ebe5de3203d06e7f19510d279bd6636d",
+    "hawdb_concurrent_key_range_fuzz_tests/test.xml": "925b8b0a8c0c0122cef7859976f83e1dc8ca14fdfbdafd27c5049d81bf3db305",
+    "crates/relational/hawdb_relational_index_runtime_fuzz_tests/test.log": "ba6d6d7a55e61ac40e20ad5d6f399de89ace1f3fd531d07d30ff25eedfb0cfc3",
+    "crates/relational/hawdb_relational_index_runtime_fuzz_tests/test.xml": "7d4ea53bfe4eb18c760d92184bb3f107c3a9ad94f61c271ff10fbbdd73334872",
+    "tools/shiro/shiro_relational_join_rewrite_tests/test.log": "b1baf4d9a4f956f0bd0f5b973224dd2bfa5c676ce75680f37b6b1cd3bf04452a",
+    "tools/shiro/shiro_relational_join_rewrite_tests/test.xml": "b050963d965e7bd0dba64838d90b1d4cf2639ee0cc62e673599b31490d9ea466",
+    "crates/relational/hawdb_relational_aggregate_state_fuzz_tests/test.log": "057a8088c86e4910dab58c13ffdcc2d765c542ad322a8a98d6f3a4fb0736e8d3",
+    "crates/relational/hawdb_relational_aggregate_state_fuzz_tests/test.xml": "4e88aadd0b9b882fd1cc12bff1154f6fd9ac5ccd31ad1da32ceaf819d5c7aa5f",
+    "crates/readiness/hawdb_integration_bundle_fuzz_tests/test.log": "30c4d59370428a227c2d5342c37d46710c7309a424b753e3ca639e9805541d33",
+    "crates/readiness/hawdb_integration_bundle_fuzz_tests/test.xml": "fc37d849bd8778b2b78287c9d9b3dce94b4d410e53915fabe1e11a0388a3c1f8",
+    "tools/shiro/shiro_cli_tests/test.log": "c96639c6171d09a7dff14f5e4c67ecf9d0b245d137f13c0d21bf3739e7989808",
+    "tools/shiro/shiro_cli_tests/test.xml": "a1f2e73fbd1533ee8c8983784f77df614a768a6125c908acc69702f740049973",
+    "tools/shiro/shiro_append_cli_tests/test.log": "64e87bdf6eb70f9673c905b1a846d1b8b1bee44a802a2b77f94fff5bbb0403d2",
+    "tools/shiro/shiro_append_cli_tests/test.xml": "bce3a06c0e0e7bedad1556a1d80f0b6197dd7cb6f38b462bf7af44c596d5a399",
+    "tools/shiro/shiro_append_replay_tests/test.log": "20b5bedc75b6035a59cf9c7d4c8a8b5f2ca2d21cfffff18544b188c574405bde",
+    "tools/shiro/shiro_append_replay_tests/test.xml": "2bb219182f677ef603377b81c9c8004ae8901de46f4c92683389969093d70bee",
+    "tools/shiro/shiro_append_seed_7_tests/test.log": "0fb7199983f7b80064bc5728e503a1397da14809dc8199d9c92c0458a5c532ad",
+    "tools/shiro/shiro_append_seed_7_tests/test.xml": "71198928a68c9d3c561368663d08a9cbf2fe4de8f42bb01dc8aafc6d9f484850",
+    "hawdb_linux_ci_fuzz_smoke_test/test.log": "39a8074ffb316bc145747528fc427d5aa07a63870080cab075ae99cdfeeb8059",
+    "hawdb_linux_ci_fuzz_smoke_test/test.xml": "2a496e6a6bfe98703c6944bc17dec16656244451c55536cec64c311e40e1a502",
+    "hawdb_graph_projection_residency_fuzz_second_half_tests/test.log": "f65eb13dda5fdd7b8fbb757826fd11bdd4468de40482d7c6caa5336462335d72",
+    "hawdb_graph_projection_residency_fuzz_second_half_tests/test.xml": "a62f04715c6e584502681725419f6e6cef6c0d27a86a36a3cb451d2396ef6828",
+    "hawdb_graph_projection_residency_fuzz_first_half_tests/test.log": "28b3e7a64fa7028bd71df62ff5f51e8efd95fd7ffc80d1fcf53fdb8f2d2b544f",
+    "hawdb_graph_projection_residency_fuzz_first_half_tests/test.xml": "ac7f0060eefeb7ceb14c07768b2b9345285e64d1ad0d4580389706ff03f01158"
+  },
+  "targets": [
+    {
+      "label": "//:hawdb_concurrent_key_range_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "0.249s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//:hawdb_graph_projection_residency_fuzz_first_half_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "230.127s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//:hawdb_graph_projection_residency_fuzz_second_half_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "196.962s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//:hawdb_linux_ci_fuzz_smoke_test",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "95.542s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//:hawdb_scan_callback_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "6.455s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/compat:hawdb_compat_contract_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "0.225s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/cypher:hawdb_cypher_backtracking_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 1,
+      "reported_duration": "0.327s",
+      "strategy": "disk cache hit"
+    },
+    {
+      "label": "//crates/evidence:hawdb_inventory_health_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 1,
+      "reported_duration": "1.544s",
+      "strategy": "disk cache hit"
+    },
+    {
+      "label": "//crates/evidence:hawdb_resource_profile_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 1,
+      "reported_duration": "0.266s",
+      "strategy": "disk cache hit"
+    },
+    {
+      "label": "//crates/evidence:hawdb_source_inventory_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 1,
+      "reported_duration": "0.179s",
+      "strategy": "disk cache hit"
+    },
+    {
+      "label": "//crates/executor:hawdb_batch_dispatch_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "0.482s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/executor:hawdb_execution_lifecycle_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "0.120s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/executor:hawdb_execution_report_value_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "0.704s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/executor:hawdb_graph_algorithm_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "1.223s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/executor:hawdb_graph_hash_join_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "43.513s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/executor:hawdb_morsel_oracle_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "0.260s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/executor:hawdb_mutation_lowering_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "0.100s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/executor:hawdb_mutation_preflight_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "0.590s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/executor:hawdb_numeric_execution_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "0.323s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/executor:hawdb_query_observer_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "0.184s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/executor:hawdb_result_delivery_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "0.375s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/executor:hawdb_sort_merge_account_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "1.796s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/executor:hawdb_spill_compaction_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "12.719s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/executor:hawdb_transform_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "1.562s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/executor:hawdb_vector_seed_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "0.398s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/optimizer-graph:hawdb_optimizer_candidate_fingerprint_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 1,
+      "reported_duration": "0.372s",
+      "strategy": "disk cache hit"
+    },
+    {
+      "label": "//crates/optimizer-graph:hawdb_optimizer_cardinality_defaults_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 1,
+      "reported_duration": "0.316s",
+      "strategy": "disk cache hit"
+    },
+    {
+      "label": "//crates/optimizer-graph:hawdb_optimizer_cardinality_metadata_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 1,
+      "reported_duration": "0.654s",
+      "strategy": "disk cache hit"
+    },
+    {
+      "label": "//crates/optimizer-graph:hawdb_optimizer_ddl_command_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 1,
+      "reported_duration": "0.118s",
+      "strategy": "disk cache hit"
+    },
+    {
+      "label": "//crates/optimizer-graph:hawdb_optimizer_full_text_cost_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 1,
+      "reported_duration": "0.131s",
+      "strategy": "disk cache hit"
+    },
+    {
+      "label": "//crates/optimizer-graph:hawdb_optimizer_trace_cost_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 1,
+      "reported_duration": "0.183s",
+      "strategy": "disk cache hit"
+    },
+    {
+      "label": "//crates/optimizer-relational:hawdb_optimizer_access_cost_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 1,
+      "reported_duration": "1.667s",
+      "strategy": "disk cache hit"
+    },
+    {
+      "label": "//crates/plan-cypher:hawdb_plan_cypher_explain_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 1,
+      "reported_duration": "0.174s",
+      "strategy": "disk cache hit"
+    },
+    {
+      "label": "//crates/readiness:hawdb_graph_route_readiness_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "36.599s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/readiness:hawdb_integration_bundle_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "18.798s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/readiness:hawdb_replacement_summary_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "114.906s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/readiness:hawdb_source_mutation_readiness_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "8.443s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/relational:hawdb_relational_aggregate_state_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "11.447s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/relational:hawdb_relational_columnar_aggregate_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "3.121s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/relational:hawdb_relational_explain_report_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "8.456s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/relational:hawdb_relational_field_plan_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "4.574s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/relational:hawdb_relational_index_runtime_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "6.854s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/relational:hawdb_relational_physical_plan_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "4.306s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/relational:hawdb_relational_qualification_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "0.219s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/relational:hawdb_relational_row_runtime_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "9.543s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/relational:hawdb_relational_statement_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "0.208s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/route-ownership:hawdb_graph_route_ownership_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 1,
+      "reported_duration": "3.088s",
+      "strategy": "disk cache hit"
+    },
+    {
+      "label": "//crates/search:hawdb_search_block_encoding_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "1.547s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/search:hawdb_search_bounded_file_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "0.078s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/search:hawdb_search_candidate_evidence_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "0.110s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/search:hawdb_search_compression_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "2.012s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/search:hawdb_search_concurrent_read_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "5.970s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/search:hawdb_search_document_analysis_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "7.437s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/search:hawdb_search_document_frequency_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "26.614s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/search:hawdb_search_hex_decoding_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "0.089s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/search:hawdb_search_hydration_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "0.734s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/search:hawdb_search_lexical_spill_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "4.113s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/search:hawdb_search_manifest_budget_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "33.839s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/search:hawdb_search_manifest_encoding_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "0.221s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/search:hawdb_search_mini_delta_snapshot_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "1.302s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/search:hawdb_search_projection_evidence_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "104.073s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/search:hawdb_search_spool_decoding_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "3.957s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/search:hawdb_search_spool_encoding_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "0.621s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/search:hawdb_search_term_policy_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "31.871s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/sql-syntax:hawdb_sql_alias_boundary_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 1,
+      "reported_duration": "0.076s",
+      "strategy": "disk cache hit"
+    },
+    {
+      "label": "//crates/sql:hawdb_sql_clause_diagnostics_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 1,
+      "reported_duration": "0.565s",
+      "strategy": "disk cache hit"
+    },
+    {
+      "label": "//crates/sql:hawdb_sql_create_binding_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 1,
+      "reported_duration": "0.201s",
+      "strategy": "disk cache hit"
+    },
+    {
+      "label": "//crates/sql:hawdb_sql_frontend_corpus_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 1,
+      "reported_duration": "0.144s",
+      "strategy": "disk cache hit"
+    },
+    {
+      "label": "//crates/storage:hawdb_storage_append_reader_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "10.809s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/storage:hawdb_storage_artifact_binding_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "0.273s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/storage:hawdb_storage_backup_hex_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "0.212s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/storage:hawdb_storage_checkpoint_wal_verbatim_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "0.548s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/storage:hawdb_storage_durable_envelope_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "3.838s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/storage:hawdb_storage_durable_manifest_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "1.873s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/storage:hawdb_storage_file_lock_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "0.610s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/storage:hawdb_storage_graph_constraints_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "0.154s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/storage:hawdb_storage_graph_overlay_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "3.707s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/storage:hawdb_storage_positioned_read_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "0.272s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/storage:hawdb_storage_projected_artifact_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "6.423s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/storage:hawdb_storage_property_projection_hex_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "0.127s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/storage:hawdb_storage_relational_index_view_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "30.371s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/storage:hawdb_storage_relational_row_workspace_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "10.978s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/storage:hawdb_storage_set_value_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "0.403s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/storage:hawdb_storage_shadow_metadata_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "0.442s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/storage:hawdb_storage_sharded_cache_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "0.830s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/storage:hawdb_storage_source_scan_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "21.794s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/storage:hawdb_storage_statistics_refresh_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "1.770s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/storage:hawdb_storage_text_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "0.358s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/storage:hawdb_storage_transaction_compaction_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "4.379s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//crates/storage:hawdb_storage_transaction_locks_fuzz_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "0.641s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//tools/shiro:shiro_append_cli_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "10.322s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//tools/shiro:shiro_append_replay_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "13.741s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//tools/shiro:shiro_append_seed_7_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "17.263s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//tools/shiro:shiro_cli_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "0.648s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//tools/shiro:shiro_fast_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "117.499s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//tools/shiro:shiro_parser_cli_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "0.046s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//tools/shiro:shiro_relational_join_rewrite_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "4.387s",
+      "strategy": "linux-sandbox"
+    },
+    {
+      "label": "//tools/shiro:shiro_storage_tests",
+      "status": "PASSED",
+      "runs": 1,
+      "cached_runs": 0,
+      "reported_duration": "23.723s",
+      "strategy": "linux-sandbox"
+    }
+  ],
+  "raw_command_log_sha256": "300df3f15f5172e862fb204ebd55f00a54eb3c77b6b97fe3bb0f242df7a91c14",
+  "committed_command_log_note": "Trailing whitespace is trimmed in fuzz.log; the raw command log and BEP are retained under /tmp/hawdb-867-validation."
+}

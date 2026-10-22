@@ -1,0 +1,27 @@
+{
+  "production_reference": "47fdffc9d626cb0d0c7a7ba4c647366d723cab2e",
+  "measurement_checkout_head": "fad86fd0c58be70de609676a7ed7942b5e41be1d",
+  "measurement_checkout_merge_head": "277178caaeda9affd68b8703d67d71aec3e47a0f",
+  "explanation": "Measurement used an uncommitted integration tree. All tracked production files match the production reference; Cargo.toml only adds the manual benchmark target. The manifest retains the actual checkout HEAD and dirty status. Benchmark/configuration digests match the final delivered files.",
+  "benchmark_inputs_match_measurement_manifest": true,
+  "input_sha256": {
+    "Cargo.toml": "3991acd34a731e37496c47797650beba94a1a03b75676e064b0bb33e11be26ee",
+    "Cargo.lock": "3bd8d3cb059b5bb282d387ccebd6e3c80d6a6402ab2633adb725a6c763b51f05",
+    ".cargo/config.toml": "06c7ca26d39223bd90a6412acd8609c380ce2d1650a72b70c90171656ca89819",
+    "rust-toolchain.toml": "8e390d6a0838315f972690f46ef8bae8b7ecc9ee6c1ed70140ef852869c2482e",
+    "benches/consumer_publication.rs": "1ae5196a670536cbbed0e12a1ed78f31dab34cc8dfb503e30de429d2b779b3ee",
+    "benches/consumer_publication/workload.rs": "dbddd19053cf87cbc7cd143e8fbe01dd0b6d55bc546338660ad0be8ca87f963b",
+    "scripts/measure-consumer-publication.py": "43202144c1c2d2c7fadbebb53b2c579e0573bb47cbf49c389a5a97aba79519e7"
+  },
+  "regression_source_sha256": "7a336ef3575588dae3809cd5dfa397d5219b7be520fb881a71e599cd3d89c470",
+  "results_sha256": "319122c9377309dbd87fd71392a0f6561c27931c5aa70a9fd8711a9f388ad8a3",
+  "first_release_build_wall": "11m 51s (initial benchmark; shared host)",
+  "final_release_incremental_build_wall": "1m 31s (corrected cumulative budget and diagnostic fields)",
+  "tracked_delta_before_staging_new_qualification_files": [
+    "Cargo.toml",
+    "benchmarks.bzl",
+    "docs/TEST_INDEX.md",
+    "tests/support/registered_consumer_coverage.rs"
+  ],
+  "non_qualification_tracked_diff": []
+}

@@ -37,6 +37,7 @@ HAWDB_MANUAL_BENCHMARKS = [
     "branch_catalog_inspection",
     "concurrent_snapshot_reads",
     "concurrent_writers",
+    "consumer_publication",
     "graph_analytics",
     "host_boundary",
     "host_boundary_allocations",

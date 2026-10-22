@@ -1,0 +1,1581 @@
+Starting local Bazel server (9.3.0) and connecting to it...
+WARNING: Option 'experimental_guard_against_concurrent_changes' is deprecated: Use --guard_against_concurrent_changes instead
+WARNING: Option 'experimental_remote_cache_compression' is deprecated: Use --remote_cache_compression instead
+INFO: Invocation ID: 62a804b1-83c9-410e-a88e-8ee6367dd72e
+INFO: Reading 'startup' options from /tmp/hawdb-867-generation-reclamation/.bazelrc: --host_jvm_args=-Xmx2g, --unlimit_coredumps
+INFO: Reading 'startup' options from /home/hawkingrei/.bazelrc: --host_jvm_args=-Xmx2g, --host_jvm_args=-DsocksProxyHost=100.68.15.70, --host_jvm_args=-DsocksProxyPort=6153, --host_jvm_args=-Dhttps.ProxyHost=100.68.15.70, --host_jvm_args=-Dhttps.ProxyPort=6152
+INFO: Options provided by the client:
+  Inherited 'common' options: --isatty=0 --terminal_columns=80
+INFO: Reading rc options for 'test' from /tmp/hawdb-867-generation-reclamation/.bazelrc:
+  Inherited 'build' options: --announce_rc --@rules_rust//rust/settings:extra_rustc_flags=-Copt-level=1,-Cdebuginfo=0,-Ccodegen-units=16,-Cdebug-assertions=yes,-Coverflow-checks=yes,-Cstrip=none --@rules_rust//rust/settings:lto=off --java_runtime_version=remotejdk_21 --tool_java_runtime_version=remotejdk_21 --enable_platform_specific_config
+INFO: Reading rc options for 'test' from /home/hawkingrei/.bazelrc:
+  Inherited 'build' options: --announce_rc --experimental_guard_against_concurrent_changes --norun_validations --experimental_disk_cache_gc_max_size=150G --experimental_disk_cache_gc_max_age=30d --disk_cache=/home/hawkingrei/tmp/bazel --experimental_remote_cache_compression --repository_cache=/home/hawkingrei/tmp/bazel-repository
+INFO: Reading rc options for 'test' from /tmp/hawdb-867-generation-reclamation/.bazelrc:
+  'test' options: --local_test_jobs=HOST_CPUS*0.5
+INFO: Reading rc options for 'test' from /home/hawkingrei/.bazelrc:
+  'test' options: --jobs=4 --experimental_ui_max_stdouterr_bytes=10000000 --test_summary=detailed
+Computing main repo mapping:
+Computing main repo mapping:
+Computing main repo mapping:
+WARNING: High value for --local_test_jobs: 8. This exceeds the value for --jobs: 4. Only up to 4 local tests will run concurrently.
+Loading:
+Loading: 1 packages loaded
+Loading: 2 packages loaded
+    currently loading:
+Loading: 2 packages loaded
+    currently loading:
+Loading: 2 packages loaded
+    currently loading:
+Loading: 2 packages loaded
+    currently loading:
+Loading: 2 packages loaded
+    currently loading:
+Loading: 2 packages loaded
+    currently loading:
+Loading: 2 packages loaded
+    currently loading:
+Loading: 11 packages loaded
+    currently loading: crates/search ... (5 packages)
+Analyzing: 98 targets (18 packages loaded)
+Analyzing: 98 targets (22 packages loaded)
+Analyzing: 98 targets (22 packages loaded, 6 targets configured)
+Analyzing: 98 targets (22 packages loaded, 6 targets configured)
+
+Analyzing: 98 targets (81 packages loaded, 22 targets configured)
+
+Analyzing: 98 targets (104 packages loaded, 1419 targets configured)
+
+Analyzing: 98 targets (245 packages loaded, 8024 targets configured)
+
+Analyzing: 98 targets (329 packages loaded, 11251 targets configured)
+[1 / 1] no actions running
+Analyzing: 98 targets (329 packages loaded, 11747 targets configured)
+[93 / 203] checking cached actions
+INFO: Analyzed 98 targets (329 packages loaded, 11775 targets configured).
+[326 / 842] Writing repo mapping manifest for //crates/readiness:hawdb_integration_bundle_fuzz_tests; 0s local ... (3 actions, 1 running)
+[477 / 1,055] [Prepa] Creating symlink external/rules_rust++rust+rust_linux_x86_64__x86_64-unknown-linux-gnu__stable_tools/rust_toolchain/lib/libLLVM.so.22.1-rust-1.97.1-stable ... (2 actions, 0 running)
+INFO: From Compiling Rust (without process_wrapper) bin process_wrapper (6 files) [for tool]:
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+INFO: From Compiling Rust bin runner (1 file) [for tool]:
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+INFO: From Compiling Rust bin hawdb_sql_alias_boundary_fuzz_tests (2 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[683 / 1,261] Testing //crates/sql-syntax:hawdb_sql_alias_boundary_fuzz_tests; 0s disk-cache ... (2 actions, 0 running)
+INFO: From Compiling Rust bin cargo_toml_variable_extractor (1 file) [for tool]:
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+INFO: From Compiling Rust bin hawdb_graph_route_ownership_fuzz_tests (4 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+INFO: From Compiling Rust bin hawdb_source_inventory_fuzz_tests (21 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+INFO: From Compiling Rust bin hawdb_inventory_health_fuzz_tests (21 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+INFO: From Compiling Rust bin hawdb_cypher_backtracking_fuzz_tests (21 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+INFO: From Compiling Rust bin hawdb_resource_profile_fuzz_tests (21 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+INFO: From Compiling Rust bin hawdb_optimizer_access_cost_fuzz_tests (17 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+INFO: From Compiling Rust bin hawdb_plan_cypher_explain_fuzz_tests (38 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+INFO: From Compiling Rust bin hawdb_optimizer_cardinality_defaults_fuzz_tests (46 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+INFO: From Compiling Rust bin hawdb_optimizer_trace_cost_fuzz_tests (46 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+INFO: From Compiling Rust bin hawdb_optimizer_cardinality_metadata_fuzz_tests (46 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+INFO: From Compiling Rust bin hawdb_sql_clause_diagnostics_fuzz_tests (33 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+INFO: From Compiling Rust bin hawdb_optimizer_full_text_cost_fuzz_tests (46 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+INFO: From Compiling Rust bin hawdb_optimizer_ddl_command_fuzz_tests (46 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+INFO: From Compiling Rust bin hawdb_optimizer_candidate_fingerprint_fuzz_tests (46 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+INFO: From Compiling Rust bin hawdb_sql_frontend_corpus_fuzz_tests (33 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+INFO: From Compiling Rust bin hawdb_sql_create_binding_fuzz_tests (33 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,068 / 1,277] 17 / 98 tests; Compiling Rust rlib hawdb_qos (15 files); 0s disk-cache, linux-sandbox
+[1,071 / 1,277] 17 / 98 tests; Compiling Rust bin hawdb_storage_projected_artifact_fuzz_tests (537 files); 0s disk-cache, linux-sandbox ... (4 actions running)
+[1,071 / 1,277] 17 / 98 tests; Compiling Rust bin hawdb_storage_projected_artifact_fuzz_tests (537 files); 11s disk-cache, linux-sandbox ... (4 actions running)
+[1,071 / 1,277] 17 / 98 tests; Compiling Rust bin hawdb_storage_projected_artifact_fuzz_tests (537 files); 41s disk-cache, linux-sandbox ... (4 actions running)
+[1,071 / 1,277] 17 / 98 tests; Compiling Rust bin hawdb_storage_projected_artifact_fuzz_tests (537 files); 102s disk-cache, linux-sandbox ... (4 actions running)
+[1,071 / 1,277] 17 / 98 tests; Compiling Rust bin hawdb_storage_projected_artifact_fuzz_tests (537 files); 162s disk-cache, linux-sandbox ... (4 actions running)
+[1,071 / 1,277] 17 / 98 tests; Compiling Rust bin hawdb_storage_projected_artifact_fuzz_tests (537 files); 222s disk-cache, linux-sandbox ... (4 actions running)
+[1,071 / 1,277] 17 / 98 tests; Compiling Rust bin hawdb_storage_projected_artifact_fuzz_tests (537 files); 283s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_storage_source_scan_fuzz_tests (537 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+INFO: From Compiling Rust bin hawdb_storage_text_fuzz_tests (537 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,073 / 1,277] 17 / 98 tests; Compiling Rust bin hawdb_storage_projected_artifact_fuzz_tests (537 files); 307s disk-cache, linux-sandbox ... (4 actions, 2 running)
+[1,075 / 1,279] 17 / 98 tests; Compiling Rust bin hawdb_storage_projected_artifact_fuzz_tests (537 files); 308s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_storage_projected_artifact_fuzz_tests (537 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,076 / 1,279] 17 / 98 tests; Compiling Rust bin hawdb_storage_durable_envelope_fuzz_tests (537 files); 312s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,077 / 1,280] 17 / 98 tests; Compiling Rust bin hawdb_storage_durable_envelope_fuzz_tests (537 files); 314s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_storage_durable_envelope_fuzz_tests (537 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,078 / 1,280] 17 / 98 tests; Compiling Rust rlib hawdb_storage (537 files); 8s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,079 / 1,281] 17 / 98 tests; Compiling Rust rlib hawdb_storage (537 files); 10s disk-cache, linux-sandbox ... (4 actions running)
+[1,079 / 1,281] 17 / 98 tests; Compiling Rust rlib hawdb_storage (537 files); 20s disk-cache, linux-sandbox ... (4 actions running)
+[1,079 / 1,281] 17 / 98 tests; Compiling Rust rlib hawdb_storage (537 files); 50s disk-cache, linux-sandbox ... (4 actions running)
+[1,080 / 1,281] 17 / 98 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (537 files); 92s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,081 / 1,281] 17 / 98 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (537 files); 94s disk-cache, linux-sandbox ... (4 actions running)
+[1,082 / 1,281] 17 / 98 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (537 files); 95s disk-cache, linux-sandbox ... (4 actions running)
+[1,083 / 1,281] 17 / 98 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (537 files); 104s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,084 / 1,281] 17 / 98 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (537 files); 105s disk-cache, linux-sandbox ... (4 actions running)
+[1,084 / 1,281] 17 / 98 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (537 files); 116s disk-cache, linux-sandbox ... (4 actions running)
+[1,084 / 1,281] 17 / 98 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (537 files); 146s disk-cache, linux-sandbox ... (4 actions running)
+[1,084 / 1,281] 17 / 98 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (537 files); 206s disk-cache, linux-sandbox ... (4 actions running)
+[1,084 / 1,281] 17 / 98 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (537 files); 266s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_storage_set_value_fuzz_tests (537 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,085 / 1,281] 17 / 98 tests; Compiling Rust bin hawdb_storage_relational_index_view_fuzz_tests (537 files); 311s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,086 / 1,282] 17 / 98 tests; Compiling Rust bin hawdb_storage_relational_index_view_fuzz_tests (537 files); 312s disk-cache, linux-sandbox ... (4 actions running)
+[1,086 / 1,282] 17 / 98 tests; Compiling Rust bin hawdb_storage_relational_index_view_fuzz_tests (537 files); 322s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_storage_relational_index_view_fuzz_tests (537 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,087 / 1,282] 17 / 98 tests; Compiling Rust bin hawdb_storage_shadow_metadata_fuzz_tests (537 files); 321s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,088 / 1,283] 17 / 98 tests; Compiling Rust bin hawdb_storage_shadow_metadata_fuzz_tests (537 files); 322s disk-cache, linux-sandbox ... (4 actions running)
+[1,088 / 1,283] 17 / 98 tests; Compiling Rust bin hawdb_storage_shadow_metadata_fuzz_tests (537 files); 332s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_storage_shadow_metadata_fuzz_tests (537 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,089 / 1,283] 17 / 98 tests; Compiling Rust rlib hawdb_compat (13 files); 250s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,090 / 1,284] 17 / 98 tests; Compiling Rust rlib hawdb_compat (13 files); 251s disk-cache, linux-sandbox ... (4 actions running)
+[1,090 / 1,284] 17 / 98 tests; Compiling Rust rlib hawdb_compat (13 files); 261s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_mutation_preflight_fuzz_tests (118 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,091 / 1,284] 17 / 98 tests; Compiling Rust rlib hawdb_compat (13 files); 274s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,092 / 1,285] 17 / 98 tests; Compiling Rust rlib hawdb_compat (13 files); 275s disk-cache, linux-sandbox ... (4 actions running)
+[1,093 / 1,285] 17 / 98 tests; Compiling Rust bin hawdb_storage_append_reader_fuzz_tests (537 files); 54s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,093 / 1,285] 17 / 98 tests; Compiling Rust bin hawdb_storage_append_reader_fuzz_tests (537 files); 55s disk-cache, linux-sandbox ... (4 actions running)
+[1,094 / 1,285] 17 / 98 tests; Compiling Rust bin hawdb_storage_append_reader_fuzz_tests (537 files); 56s disk-cache, linux-sandbox ... (4 actions running)
+[1,095 / 1,285] 17 / 98 tests; Compiling Rust bin hawdb_storage_append_reader_fuzz_tests (537 files); 60s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,096 / 1,285] 17 / 98 tests; Compiling Rust bin hawdb_storage_append_reader_fuzz_tests (537 files); 62s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,096 / 1,285] 17 / 98 tests; Compiling Rust bin hawdb_storage_append_reader_fuzz_tests (537 files); 63s disk-cache, linux-sandbox ... (4 actions running)
+[1,097 / 1,285] 17 / 98 tests; Compiling Rust bin hawdb_storage_append_reader_fuzz_tests (537 files); 66s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,097 / 1,285] 17 / 98 tests; Compiling Rust bin hawdb_storage_append_reader_fuzz_tests (537 files); 67s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_batch_dispatch_fuzz_tests (118 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,098 / 1,285] 17 / 98 tests; Compiling Rust bin hawdb_storage_append_reader_fuzz_tests (537 files); 75s disk-cache, linux-sandbox ... (3 actions running)
+[1,099 / 1,286] 17 / 98 tests; Compiling Rust bin hawdb_storage_append_reader_fuzz_tests (537 files); 77s disk-cache, linux-sandbox ... (4 actions running)
+[1,099 / 1,286] 17 / 98 tests; Compiling Rust bin hawdb_storage_append_reader_fuzz_tests (537 files); 87s disk-cache, linux-sandbox ... (4 actions running)
+[1,100 / 1,286] 17 / 98 tests; Compiling Rust bin hawdb_storage_append_reader_fuzz_tests (537 files); 92s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,100 / 1,286] 17 / 98 tests; Compiling Rust bin hawdb_storage_append_reader_fuzz_tests (537 files); 94s disk-cache, linux-sandbox ... (4 actions running)
+[1,101 / 1,286] 17 / 98 tests; Compiling Rust bin hawdb_storage_append_reader_fuzz_tests (537 files); 99s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,101 / 1,286] 17 / 98 tests; Compiling Rust bin hawdb_storage_append_reader_fuzz_tests (537 files); 101s disk-cache, linux-sandbox ... (4 actions running)
+[1,102 / 1,286] 17 / 98 tests; Compiling Rust bin hawdb_storage_append_reader_fuzz_tests (537 files); 102s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,102 / 1,286] 17 / 98 tests; Compiling Rust bin hawdb_storage_append_reader_fuzz_tests (537 files); 104s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_query_observer_fuzz_tests (118 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,104 / 1,287] 17 / 98 tests; Compiling Rust bin hawdb_storage_append_reader_fuzz_tests (537 files); 106s disk-cache, linux-sandbox ... (4 actions running)
+[1,105 / 1,287] 17 / 98 tests; Compiling Rust bin hawdb_storage_append_reader_fuzz_tests (537 files); 108s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,105 / 1,287] 17 / 98 tests; Compiling Rust bin hawdb_storage_append_reader_fuzz_tests (537 files); 110s disk-cache, linux-sandbox ... (4 actions running)
+[1,105 / 1,287] 17 / 98 tests; Compiling Rust bin hawdb_storage_append_reader_fuzz_tests (537 files); 120s disk-cache, linux-sandbox ... (4 actions running)
+[1,106 / 1,287] 17 / 98 tests; Compiling Rust bin hawdb_storage_append_reader_fuzz_tests (537 files); 131s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,106 / 1,287] 17 / 98 tests; Compiling Rust bin hawdb_storage_append_reader_fuzz_tests (537 files); 133s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_vector_seed_fuzz_tests (118 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,107 / 1,287] 17 / 98 tests; Compiling Rust bin hawdb_storage_append_reader_fuzz_tests (537 files); 137s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,109 / 1,288] 17 / 98 tests; Compiling Rust bin hawdb_storage_append_reader_fuzz_tests (537 files); 139s disk-cache, linux-sandbox ... (4 actions running)
+[1,109 / 1,288] 17 / 98 tests; Compiling Rust bin hawdb_storage_append_reader_fuzz_tests (537 files); 149s disk-cache, linux-sandbox ... (4 actions running)
+[1,109 / 1,288] 17 / 98 tests; Compiling Rust bin hawdb_storage_append_reader_fuzz_tests (537 files); 179s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_result_delivery_fuzz_tests (118 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,110 / 1,288] 17 / 98 tests; Compiling Rust bin hawdb_storage_append_reader_fuzz_tests (537 files); 214s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,111 / 1,289] 17 / 98 tests; Compiling Rust bin hawdb_storage_append_reader_fuzz_tests (537 files); 216s disk-cache, linux-sandbox ... (4 actions running)
+[1,111 / 1,289] 17 / 98 tests; Compiling Rust bin hawdb_storage_append_reader_fuzz_tests (537 files); 226s disk-cache, linux-sandbox ... (4 actions running)
+[1,111 / 1,289] 17 / 98 tests; Compiling Rust bin hawdb_storage_append_reader_fuzz_tests (537 files); 256s disk-cache, linux-sandbox ... (4 actions running)
+[1,111 / 1,289] 17 / 98 tests; Compiling Rust bin hawdb_storage_append_reader_fuzz_tests (537 files); 316s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_graph_hash_join_fuzz_tests (118 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,112 / 1,289] 17 / 98 tests; Compiling Rust bin hawdb_storage_append_reader_fuzz_tests (537 files); 318s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,113 / 1,290] 17 / 98 tests; Compiling Rust bin hawdb_storage_append_reader_fuzz_tests (537 files); 319s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_storage_append_reader_fuzz_tests (537 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,114 / 1,290] 17 / 98 tests; Compiling Rust bin hawdb_storage_relational_row_workspace_fuzz_tests (537 files); 296s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,115 / 1,291] 17 / 98 tests; Compiling Rust bin hawdb_storage_relational_row_workspace_fuzz_tests (537 files); 298s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_storage_relational_row_workspace_fuzz_tests (537 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,116 / 1,291] 17 / 98 tests; Compiling Rust bin hawdb_storage_property_projection_hex_fuzz_tests (537 files); 190s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,117 / 1,292] 17 / 98 tests; Compiling Rust bin hawdb_storage_property_projection_hex_fuzz_tests (537 files); 192s disk-cache, linux-sandbox ... (4 actions running)
+[1,117 / 1,292] 17 / 98 tests; Compiling Rust bin hawdb_storage_property_projection_hex_fuzz_tests (537 files); 202s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_sort_merge_account_fuzz_tests (118 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,118 / 1,292] 17 / 98 tests; Compiling Rust bin hawdb_storage_property_projection_hex_fuzz_tests (537 files); 220s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,119 / 1,293] 17 / 98 tests; Compiling Rust bin hawdb_storage_property_projection_hex_fuzz_tests (537 files); 222s disk-cache, linux-sandbox ... (4 actions running)
+[1,119 / 1,293] 17 / 98 tests; Compiling Rust bin hawdb_storage_property_projection_hex_fuzz_tests (537 files); 232s disk-cache, linux-sandbox ... (4 actions running)
+[1,119 / 1,293] 17 / 98 tests; Compiling Rust bin hawdb_storage_property_projection_hex_fuzz_tests (537 files); 262s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_transform_fuzz_tests (118 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,119 / 1,293] 17 / 98 tests; Compiling Rust bin hawdb_storage_property_projection_hex_fuzz_tests (537 files); 281s disk-cache, linux-sandbox ... (4 actions running)
+[1,121 / 1,294] 17 / 98 tests; Compiling Rust bin hawdb_storage_property_projection_hex_fuzz_tests (537 files); 282s disk-cache, linux-sandbox ... (4 actions running)
+[1,121 / 1,294] 17 / 98 tests; Compiling Rust bin hawdb_storage_property_projection_hex_fuzz_tests (537 files); 292s disk-cache, linux-sandbox ... (4 actions running)
+[1,121 / 1,294] 17 / 98 tests; Compiling Rust bin hawdb_storage_property_projection_hex_fuzz_tests (537 files); 322s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_execution_report_value_fuzz_tests (118 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,122 / 1,294] 17 / 98 tests; Compiling Rust bin hawdb_storage_property_projection_hex_fuzz_tests (537 files); 356s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,123 / 1,295] 17 / 98 tests; Compiling Rust bin hawdb_storage_property_projection_hex_fuzz_tests (537 files); 357s disk-cache, linux-sandbox ... (4 actions running)
+[1,123 / 1,295] 17 / 98 tests; Compiling Rust bin hawdb_storage_property_projection_hex_fuzz_tests (537 files); 367s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_execution_lifecycle_fuzz_tests (118 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,124 / 1,295] 17 / 98 tests; Compiling Rust bin hawdb_storage_property_projection_hex_fuzz_tests (537 files); 394s disk-cache, linux-sandbox ... (4 actions, 3 running)
+INFO: From Compiling Rust bin hawdb_storage_property_projection_hex_fuzz_tests (537 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,126 / 1,296] 17 / 98 tests; Compiling Rust bin hawdb_storage_checkpoint_wal_verbatim_fuzz_tests (537 files); 211s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,127 / 1,297] 17 / 98 tests; Compiling Rust bin hawdb_storage_checkpoint_wal_verbatim_fuzz_tests (537 files); 212s disk-cache, linux-sandbox ... (4 actions running)
+[1,127 / 1,297] 17 / 98 tests; Compiling Rust bin hawdb_storage_checkpoint_wal_verbatim_fuzz_tests (537 files); 221s disk-cache, linux-sandbox ... (4 actions running)
+[1,127 / 1,297] 17 / 98 tests; Compiling Rust bin hawdb_storage_checkpoint_wal_verbatim_fuzz_tests (537 files); 251s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_numeric_execution_fuzz_tests (118 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,128 / 1,297] 17 / 98 tests; Compiling Rust bin hawdb_storage_checkpoint_wal_verbatim_fuzz_tests (537 files); 296s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,129 / 1,298] 17 / 98 tests; Compiling Rust bin hawdb_storage_checkpoint_wal_verbatim_fuzz_tests (537 files); 297s disk-cache, linux-sandbox ... (4 actions running)
+[1,129 / 1,298] 17 / 98 tests; Compiling Rust bin hawdb_storage_checkpoint_wal_verbatim_fuzz_tests (537 files); 307s disk-cache, linux-sandbox ... (4 actions running)
+[1,129 / 1,298] 17 / 98 tests; Compiling Rust bin hawdb_storage_checkpoint_wal_verbatim_fuzz_tests (537 files); 337s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_storage_checkpoint_wal_verbatim_fuzz_tests (537 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,130 / 1,298] 17 / 98 tests; Compiling Rust bin hawdb_storage_graph_overlay_fuzz_tests (537 files); 344s disk-cache, linux-sandbox ... (4 actions, 3 running)
+INFO: From Compiling Rust bin hawdb_spill_compaction_fuzz_tests (118 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,133 / 1,300] 17 / 98 tests; Compiling Rust bin hawdb_storage_graph_overlay_fuzz_tests (537 files); 346s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_storage_graph_overlay_fuzz_tests (537 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,134 / 1,300] 17 / 98 tests; Compiling Rust bin hawdb_storage_backup_hex_fuzz_tests (537 files); 150s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,135 / 1,301] 17 / 98 tests; Compiling Rust bin hawdb_storage_backup_hex_fuzz_tests (537 files); 152s disk-cache, linux-sandbox ... (4 actions running)
+[1,135 / 1,301] 17 / 98 tests; Compiling Rust bin hawdb_storage_backup_hex_fuzz_tests (537 files); 162s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_graph_algorithm_fuzz_tests (118 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,136 / 1,301] 17 / 98 tests; Compiling Rust bin hawdb_storage_backup_hex_fuzz_tests (537 files); 182s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,137 / 1,302] 17 / 98 tests; Compiling Rust bin hawdb_storage_backup_hex_fuzz_tests (537 files); 184s disk-cache, linux-sandbox ... (4 actions running)
+[1,137 / 1,302] 17 / 98 tests; Compiling Rust bin hawdb_storage_backup_hex_fuzz_tests (537 files); 193s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_mutation_lowering_fuzz_tests (118 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,138 / 1,302] 17 / 98 tests; Compiling Rust bin hawdb_storage_backup_hex_fuzz_tests (537 files); 214s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,139 / 1,303] 17 / 98 tests; Compiling Rust bin hawdb_storage_backup_hex_fuzz_tests (537 files); 216s disk-cache, linux-sandbox ... (4 actions running)
+[1,139 / 1,303] 17 / 98 tests; Compiling Rust bin hawdb_storage_backup_hex_fuzz_tests (537 files); 226s disk-cache, linux-sandbox ... (4 actions running)
+[1,139 / 1,303] 17 / 98 tests; Compiling Rust bin hawdb_storage_backup_hex_fuzz_tests (537 files); 256s disk-cache, linux-sandbox ... (4 actions running)
+[1,139 / 1,303] 17 / 98 tests; Compiling Rust bin hawdb_storage_backup_hex_fuzz_tests (537 files); 316s disk-cache, linux-sandbox ... (4 actions running)
+[1,139 / 1,303] 17 / 98 tests; Compiling Rust bin hawdb_storage_backup_hex_fuzz_tests (537 files); 376s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_search_document_analysis_fuzz_tests (294 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,140 / 1,303] 17 / 98 tests; Compiling Rust bin hawdb_storage_backup_hex_fuzz_tests (537 files); 388s disk-cache, linux-sandbox ... (3 actions running)
+[1,141 / 1,304] 17 / 98 tests; Compiling Rust bin hawdb_storage_backup_hex_fuzz_tests (537 files); 389s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_storage_backup_hex_fuzz_tests (537 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,142 / 1,304] 17 / 98 tests; Compiling Rust bin hawdb_storage_durable_manifest_fuzz_tests (537 files); 258s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,143 / 1,305] 17 / 98 tests; Compiling Rust bin hawdb_storage_durable_manifest_fuzz_tests (537 files); 260s disk-cache, linux-sandbox ... (4 actions running)
+[1,143 / 1,305] 17 / 98 tests; Compiling Rust bin hawdb_storage_durable_manifest_fuzz_tests (537 files); 270s disk-cache, linux-sandbox ... (4 actions running)
+[1,143 / 1,305] 17 / 98 tests; Compiling Rust bin hawdb_storage_durable_manifest_fuzz_tests (537 files); 300s disk-cache, linux-sandbox ... (4 actions running)
+[1,143 / 1,305] 17 / 98 tests; Compiling Rust bin hawdb_storage_durable_manifest_fuzz_tests (537 files); 360s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_storage_durable_manifest_fuzz_tests (537 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,144 / 1,305] 17 / 98 tests; Compiling Rust bin hawdb_storage_artifact_binding_fuzz_tests (537 files); 396s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,145 / 1,306] 17 / 98 tests; Compiling Rust bin hawdb_storage_artifact_binding_fuzz_tests (537 files); 397s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_search_manifest_encoding_fuzz_tests (294 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,146 / 1,306] 17 / 98 tests; Compiling Rust bin hawdb_storage_artifact_binding_fuzz_tests (537 files); 403s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,147 / 1,307] 17 / 98 tests; Compiling Rust bin hawdb_storage_artifact_binding_fuzz_tests (537 files); 404s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_storage_artifact_binding_fuzz_tests (537 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,148 / 1,307] 17 / 98 tests; Compiling Rust bin hawdb_storage_file_lock_fuzz_tests (537 files); 159s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,149 / 1,308] 17 / 98 tests; Compiling Rust bin hawdb_storage_file_lock_fuzz_tests (537 files); 160s disk-cache, linux-sandbox ... (4 actions running)
+[1,149 / 1,308] 17 / 98 tests; Compiling Rust bin hawdb_storage_file_lock_fuzz_tests (537 files); 170s disk-cache, linux-sandbox ... (4 actions running)
+[1,149 / 1,308] 17 / 98 tests; Compiling Rust bin hawdb_storage_file_lock_fuzz_tests (537 files); 200s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_search_manifest_budget_fuzz_tests (294 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,150 / 1,308] 17 / 98 tests; Compiling Rust bin hawdb_storage_file_lock_fuzz_tests (537 files); 219s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,151 / 1,309] 17 / 98 tests; Compiling Rust bin hawdb_storage_file_lock_fuzz_tests (537 files); 220s disk-cache, linux-sandbox ... (4 actions running)
+[1,151 / 1,309] 17 / 98 tests; Compiling Rust bin hawdb_storage_file_lock_fuzz_tests (537 files); 230s disk-cache, linux-sandbox ... (4 actions running)
+[1,151 / 1,309] 17 / 98 tests; Compiling Rust bin hawdb_storage_file_lock_fuzz_tests (537 files); 260s disk-cache, linux-sandbox ... (4 actions running)
+[1,151 / 1,309] 17 / 98 tests; Compiling Rust bin hawdb_storage_file_lock_fuzz_tests (537 files); 320s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_storage_file_lock_fuzz_tests (537 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,152 / 1,309] 17 / 98 tests; Compiling Rust bin hawdb_storage_transaction_compaction_fuzz_tests (537 files); 187s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,153 / 1,310] 17 / 98 tests; Compiling Rust bin hawdb_storage_transaction_compaction_fuzz_tests (537 files); 189s disk-cache, linux-sandbox ... (4 actions running)
+[1,153 / 1,310] 17 / 98 tests; Compiling Rust bin hawdb_storage_transaction_compaction_fuzz_tests (537 files); 199s disk-cache, linux-sandbox ... (4 actions running)
+[1,153 / 1,310] 17 / 98 tests; Compiling Rust bin hawdb_storage_transaction_compaction_fuzz_tests (537 files); 229s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_search_compression_fuzz_tests (294 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,154 / 1,310] 17 / 98 tests; Compiling Rust bin hawdb_storage_transaction_compaction_fuzz_tests (537 files); 230s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,155 / 1,311] 17 / 98 tests; Compiling Rust bin hawdb_storage_transaction_compaction_fuzz_tests (537 files); 232s disk-cache, linux-sandbox ... (4 actions running)
+[1,155 / 1,311] 17 / 98 tests; Compiling Rust bin hawdb_storage_transaction_compaction_fuzz_tests (537 files); 241s disk-cache, linux-sandbox ... (4 actions running)
+[1,155 / 1,311] 17 / 98 tests; Compiling Rust bin hawdb_storage_transaction_compaction_fuzz_tests (537 files); 271s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_storage_transaction_compaction_fuzz_tests (537 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,156 / 1,311] 17 / 98 tests; Compiling Rust bin hawdb_storage_transaction_locks_fuzz_tests (537 files); 311s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,157 / 1,312] 17 / 98 tests; Compiling Rust bin hawdb_storage_transaction_locks_fuzz_tests (537 files); 313s disk-cache, linux-sandbox ... (4 actions running)
+[1,157 / 1,312] 17 / 98 tests; Compiling Rust bin hawdb_storage_transaction_locks_fuzz_tests (537 files); 323s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_relational_statement_fuzz_tests (71 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,158 / 1,312] 17 / 98 tests; Compiling Rust bin hawdb_storage_transaction_locks_fuzz_tests (537 files); 324s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,159 / 1,313] 17 / 98 tests; Compiling Rust bin hawdb_storage_transaction_locks_fuzz_tests (537 files); 326s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_storage_transaction_locks_fuzz_tests (537 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,160 / 1,313] 17 / 98 tests; Compiling Rust bin hawdb_storage_positioned_read_fuzz_tests (537 files); 151s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,161 / 1,314] 17 / 98 tests; Compiling Rust bin hawdb_storage_positioned_read_fuzz_tests (537 files); 153s disk-cache, linux-sandbox ... (4 actions running)
+[1,161 / 1,314] 17 / 98 tests; Compiling Rust bin hawdb_storage_positioned_read_fuzz_tests (537 files); 163s disk-cache, linux-sandbox ... (4 actions running)
+[1,161 / 1,314] 17 / 98 tests; Compiling Rust bin hawdb_storage_positioned_read_fuzz_tests (537 files); 193s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_relational_explain_report_fuzz_tests (71 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,162 / 1,314] 17 / 98 tests; Compiling Rust bin hawdb_storage_positioned_read_fuzz_tests (537 files); 211s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,163 / 1,315] 17 / 98 tests; Compiling Rust bin hawdb_storage_positioned_read_fuzz_tests (537 files); 213s disk-cache, linux-sandbox ... (4 actions running)
+[1,163 / 1,315] 17 / 98 tests; Compiling Rust bin hawdb_storage_positioned_read_fuzz_tests (537 files); 223s disk-cache, linux-sandbox ... (4 actions running)
+[1,163 / 1,315] 17 / 98 tests; Compiling Rust bin hawdb_storage_positioned_read_fuzz_tests (537 files); 253s disk-cache, linux-sandbox ... (4 actions running)
+[1,163 / 1,315] 17 / 98 tests; Compiling Rust bin hawdb_storage_positioned_read_fuzz_tests (537 files); 313s disk-cache, linux-sandbox ... (4 actions running)
+[1,163 / 1,315] 17 / 98 tests; Compiling Rust bin hawdb_storage_positioned_read_fuzz_tests (537 files); 373s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_search_mini_delta_snapshot_fuzz_tests (294 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,164 / 1,315] 17 / 98 tests; Compiling Rust bin hawdb_storage_positioned_read_fuzz_tests (537 files); 397s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,165 / 1,316] 17 / 98 tests; Compiling Rust bin hawdb_storage_positioned_read_fuzz_tests (537 files); 398s disk-cache, linux-sandbox ... (4 actions running)
+[1,165 / 1,316] 17 / 98 tests; Compiling Rust bin hawdb_storage_positioned_read_fuzz_tests (537 files); 408s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_storage_positioned_read_fuzz_tests (537 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,166 / 1,316] 17 / 98 tests; Compiling Rust bin hawdb_storage_statistics_refresh_fuzz_tests (537 files); 297s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,167 / 1,317] 17 / 98 tests; Compiling Rust bin hawdb_storage_statistics_refresh_fuzz_tests (537 files); 299s disk-cache, linux-sandbox ... (4 actions running)
+[1,167 / 1,317] 17 / 98 tests; Compiling Rust bin hawdb_storage_statistics_refresh_fuzz_tests (537 files); 302s disk-cache, linux-sandbox ... (4 actions running)
+[1,167 / 1,317] 17 / 98 tests; Compiling Rust bin hawdb_storage_statistics_refresh_fuzz_tests (537 files); 303s disk-cache, linux-sandbox ... (4 actions running)
+[1,167 / 1,317] 17 / 98 tests; Compiling Rust bin hawdb_storage_statistics_refresh_fuzz_tests (537 files); 309s disk-cache, linux-sandbox ... (4 actions running)
+[1,167 / 1,317] 17 / 98 tests; Compiling Rust bin hawdb_storage_statistics_refresh_fuzz_tests (537 files); 339s disk-cache, linux-sandbox ... (4 actions running)
+[1,167 / 1,317] 17 / 98 tests; Compiling Rust bin hawdb_storage_statistics_refresh_fuzz_tests (537 files); 399s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_storage_statistics_refresh_fuzz_tests (537 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,168 / 1,317] 17 / 98 tests; Compiling Rust bin hawdb_storage_sharded_cache_fuzz_tests (537 files); 420s disk-cache, linux-sandbox ... (3 actions running)
+[1,169 / 1,318] 17 / 98 tests; Compiling Rust bin hawdb_storage_sharded_cache_fuzz_tests (537 files); 421s disk-cache, linux-sandbox ... (4 actions running)
+[1,170 / 1,318] 18 / 98 tests; Compiling Rust bin hawdb_storage_sharded_cache_fuzz_tests (537 files); 422s disk-cache, linux-sandbox ... (4 actions running)
+[1,170 / 1,318] 18 / 98 tests; Compiling Rust bin hawdb_storage_sharded_cache_fuzz_tests (537 files); 433s disk-cache, linux-sandbox ... (4 actions running)
+[1,170 / 1,318] 18 / 98 tests; Compiling Rust bin hawdb_storage_sharded_cache_fuzz_tests (537 files); 453s disk-cache, linux-sandbox ... (4 actions running)
+[1,172 / 1,318] 20 / 98 tests; Compiling Rust bin hawdb_storage_sharded_cache_fuzz_tests (537 files); 454s disk-cache, linux-sandbox ... (4 actions running)
+[1,174 / 1,318] 22 / 98 tests; Compiling Rust bin hawdb_storage_sharded_cache_fuzz_tests (537 files); 455s disk-cache, linux-sandbox ... (4 actions running)
+[1,176 / 1,318] 24 / 98 tests; Compiling Rust bin hawdb_storage_sharded_cache_fuzz_tests (537 files); 456s disk-cache, linux-sandbox ... (4 actions running)
+[1,176 / 1,318] 24 / 98 tests; Compiling Rust bin hawdb_storage_sharded_cache_fuzz_tests (537 files); 466s disk-cache, linux-sandbox ... (4 actions running)
+[1,176 / 1,318] 24 / 98 tests; Compiling Rust bin hawdb_storage_sharded_cache_fuzz_tests (537 files); 497s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_storage_sharded_cache_fuzz_tests (537 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,177 / 1,318] 24 / 98 tests; Compiling Rust bin hawdb_compat_contract_fuzz_tests (13 files); 255s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,178 / 1,319] 24 / 98 tests; Compiling Rust bin hawdb_compat_contract_fuzz_tests (13 files); 256s disk-cache, linux-sandbox ... (4 actions running)
+[1,178 / 1,319] 24 / 98 tests; Compiling Rust bin hawdb_compat_contract_fuzz_tests (13 files); 266s disk-cache, linux-sandbox ... (4 actions running)
+[1,178 / 1,319] 24 / 98 tests; Compiling Rust bin hawdb_compat_contract_fuzz_tests (13 files); 277s disk-cache, linux-sandbox ... (4 actions running)
+[1,180 / 1,319] 26 / 98 tests; Compiling Rust bin hawdb_compat_contract_fuzz_tests (13 files); 278s disk-cache, linux-sandbox ... (4 actions running)
+[1,183 / 1,319] 29 / 98 tests; Compiling Rust bin hawdb_compat_contract_fuzz_tests (13 files); 279s disk-cache, linux-sandbox ... (4 actions running)
+[1,184 / 1,319] 31 / 98 tests; Compiling Rust bin hawdb_compat_contract_fuzz_tests (13 files); 280s disk-cache, linux-sandbox ... (4 actions running)
+[1,185 / 1,319] 31 / 98 tests; Compiling Rust bin hawdb_compat_contract_fuzz_tests (13 files); 282s disk-cache, linux-sandbox ... (4 actions running)
+[1,185 / 1,319] 31 / 98 tests; Compiling Rust bin hawdb_compat_contract_fuzz_tests (13 files); 292s disk-cache, linux-sandbox ... (4 actions running)
+[1,185 / 1,319] 32 / 98 tests; Compiling Rust bin hawdb_compat_contract_fuzz_tests (13 files); 293s disk-cache, linux-sandbox ... (4 actions running)
+[1,186 / 1,319] 32 / 98 tests; Compiling Rust bin hawdb_compat_contract_fuzz_tests (13 files); 295s disk-cache, linux-sandbox ... (4 actions running)
+[1,186 / 1,319] 32 / 98 tests; Compiling Rust bin hawdb_compat_contract_fuzz_tests (13 files); 297s disk-cache, linux-sandbox ... (4 actions running)
+[1,187 / 1,319] 33 / 98 tests; Compiling Rust bin hawdb_compat_contract_fuzz_tests (13 files); 298s disk-cache, linux-sandbox ... (4 actions running)
+[1,189 / 1,319] 35 / 98 tests; Compiling Rust bin hawdb_compat_contract_fuzz_tests (13 files); 299s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_relational_row_runtime_fuzz_tests (71 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,191 / 1,320] 35 / 98 tests; Compiling Rust bin hawdb_compat_contract_fuzz_tests (13 files); 300s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,193 / 1,320] 37 / 98 tests; Compiling Rust bin hawdb_compat_contract_fuzz_tests (13 files); 301s disk-cache, linux-sandbox ... (4 actions running)
+[1,194 / 1,320] 38 / 98 tests; Compiling Rust bin hawdb_compat_contract_fuzz_tests (13 files); 302s disk-cache, linux-sandbox ... (4 actions running)
+[1,194 / 1,320] 38 / 98 tests; Compiling Rust bin hawdb_compat_contract_fuzz_tests (13 files); 312s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_compat_contract_fuzz_tests (13 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,195 / 1,320] 38 / 98 tests; Compiling Rust bin hawdb_storage_graph_constraints_fuzz_tests (537 files); 284s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,196 / 1,321] 38 / 98 tests; Compiling Rust bin hawdb_storage_graph_constraints_fuzz_tests (537 files); 286s disk-cache, linux-sandbox ... (4 actions running)
+[1,196 / 1,321] 38 / 98 tests; Compiling Rust bin hawdb_storage_graph_constraints_fuzz_tests (537 files); 296s disk-cache, linux-sandbox ... (4 actions running)
+[1,196 / 1,321] 38 / 98 tests; Compiling Rust bin hawdb_storage_graph_constraints_fuzz_tests (537 files); 300s disk-cache, linux-sandbox ... (4 actions running)
+[1,197 / 1,321] 39 / 98 tests; Compiling Rust bin hawdb_storage_graph_constraints_fuzz_tests (537 files); 301s disk-cache, linux-sandbox ... (4 actions running)
+[1,198 / 1,321] 40 / 98 tests; Compiling Rust bin hawdb_storage_graph_constraints_fuzz_tests (537 files); 303s disk-cache, linux-sandbox ... (4 actions running)
+[1,199 / 1,321] 41 / 98 tests; Compiling Rust bin hawdb_storage_graph_constraints_fuzz_tests (537 files); 304s disk-cache, linux-sandbox ... (4 actions running)
+[1,199 / 1,321] 41 / 98 tests; Compiling Rust bin hawdb_storage_graph_constraints_fuzz_tests (537 files); 315s disk-cache, linux-sandbox ... (4 actions running)
+[1,199 / 1,321] 41 / 98 tests; Compiling Rust bin hawdb_storage_graph_constraints_fuzz_tests (537 files); 345s disk-cache, linux-sandbox ... (4 actions running)
+[1,199 / 1,321] 41 / 98 tests; Compiling Rust bin hawdb_storage_graph_constraints_fuzz_tests (537 files); 347s disk-cache, linux-sandbox ... (4 actions running)
+[1,200 / 1,321] 42 / 98 tests; Compiling Rust bin hawdb_storage_graph_constraints_fuzz_tests (537 files); 348s disk-cache, linux-sandbox ... (4 actions running)
+[1,200 / 1,321] 42 / 98 tests; Compiling Rust bin hawdb_storage_graph_constraints_fuzz_tests (537 files); 358s disk-cache, linux-sandbox ... (4 actions running)
+[1,201 / 1,321] 43 / 98 tests; Compiling Rust bin hawdb_storage_graph_constraints_fuzz_tests (537 files); 360s disk-cache, linux-sandbox ... (4 actions running)
+[1,201 / 1,321] 43 / 98 tests; Compiling Rust bin hawdb_storage_graph_constraints_fuzz_tests (537 files); 370s disk-cache, linux-sandbox ... (4 actions running)
+[1,202 / 1,321] 44 / 98 tests; Compiling Rust bin hawdb_storage_graph_constraints_fuzz_tests (537 files); 371s disk-cache, linux-sandbox ... (4 actions running)
+[1,202 / 1,321] 44 / 98 tests; Compiling Rust bin hawdb_storage_graph_constraints_fuzz_tests (537 files); 372s disk-cache, linux-sandbox ... (4 actions running)
+[1,203 / 1,321] 45 / 98 tests; Compiling Rust bin hawdb_storage_graph_constraints_fuzz_tests (537 files); 374s disk-cache, linux-sandbox ... (4 actions running)
+[1,203 / 1,321] 45 / 98 tests; Compiling Rust bin hawdb_storage_graph_constraints_fuzz_tests (537 files); 377s disk-cache, linux-sandbox ... (4 actions running)
+[1,205 / 1,321] 47 / 98 tests; Compiling Rust bin hawdb_storage_graph_constraints_fuzz_tests (537 files); 378s disk-cache, linux-sandbox ... (4 actions running)
+[1,206 / 1,321] 48 / 98 tests; Compiling Rust bin hawdb_storage_graph_constraints_fuzz_tests (537 files); 379s disk-cache, linux-sandbox ... (4 actions running)
+[1,206 / 1,321] 48 / 98 tests; Compiling Rust bin hawdb_storage_graph_constraints_fuzz_tests (537 files); 387s disk-cache, linux-sandbox ... (4 actions running)
+[1,207 / 1,321] 49 / 98 tests; Compiling Rust bin hawdb_storage_graph_constraints_fuzz_tests (537 files); 388s disk-cache, linux-sandbox ... (4 actions running)
+[1,208 / 1,321] 50 / 98 tests; Compiling Rust bin hawdb_storage_graph_constraints_fuzz_tests (537 files); 389s disk-cache, linux-sandbox ... (4 actions running)
+[1,208 / 1,321] 50 / 98 tests; Compiling Rust bin hawdb_storage_graph_constraints_fuzz_tests (537 files); 398s disk-cache, linux-sandbox ... (4 actions running)
+[1,209 / 1,321] 51 / 98 tests; Compiling Rust bin hawdb_storage_graph_constraints_fuzz_tests (537 files); 399s disk-cache, linux-sandbox ... (4 actions running)
+[1,210 / 1,321] 52 / 98 tests; Compiling Rust bin hawdb_storage_graph_constraints_fuzz_tests (537 files); 400s disk-cache, linux-sandbox ... (4 actions running)
+[1,210 / 1,321] 52 / 98 tests; Compiling Rust bin hawdb_storage_graph_constraints_fuzz_tests (537 files); 408s disk-cache, linux-sandbox ... (4 actions running)
+[1,212 / 1,321] 54 / 98 tests; Compiling Rust bin hawdb_storage_graph_constraints_fuzz_tests (537 files); 409s disk-cache, linux-sandbox ... (4 actions running)
+[1,212 / 1,321] 54 / 98 tests; Compiling Rust bin hawdb_storage_graph_constraints_fuzz_tests (537 files); 410s disk-cache, linux-sandbox ... (4 actions running)
+[1,214 / 1,321] 56 / 98 tests; Compiling Rust bin hawdb_storage_graph_constraints_fuzz_tests (537 files); 411s disk-cache, linux-sandbox ... (4 actions running)
+[1,215 / 1,321] 57 / 98 tests; Compiling Rust bin hawdb_storage_graph_constraints_fuzz_tests (537 files); 413s disk-cache, linux-sandbox ... (4 actions running)
+[1,215 / 1,321] 57 / 98 tests; Compiling Rust bin hawdb_storage_graph_constraints_fuzz_tests (537 files); 418s disk-cache, linux-sandbox ... (4 actions running)
+[1,216 / 1,321] 58 / 98 tests; Compiling Rust bin hawdb_storage_graph_constraints_fuzz_tests (537 files); 419s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_relational_field_plan_fuzz_tests (71 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,218 / 1,322] 58 / 98 tests; Compiling Rust bin hawdb_storage_graph_constraints_fuzz_tests (537 files); 420s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,218 / 1,322] 58 / 98 tests; Compiling Rust bin hawdb_storage_graph_constraints_fuzz_tests (537 files); 422s disk-cache, linux-sandbox ... (4 actions running)
+[1,219 / 1,322] 59 / 98 tests; Compiling Rust bin hawdb_storage_graph_constraints_fuzz_tests (537 files); 423s disk-cache, linux-sandbox ... (4 actions running)
+[1,220 / 1,322] 60 / 98 tests; Compiling Rust bin hawdb_storage_graph_constraints_fuzz_tests (537 files); 424s disk-cache, linux-sandbox ... (4 actions running)
+[1,221 / 1,322] 61 / 98 tests; Compiling Rust bin hawdb_storage_graph_constraints_fuzz_tests (537 files); 425s disk-cache, linux-sandbox ... (4 actions running)
+[1,221 / 1,322] 61 / 98 tests; Compiling Rust bin hawdb_storage_graph_constraints_fuzz_tests (537 files); 436s disk-cache, linux-sandbox ... (4 actions running)
+[1,221 / 1,322] 61 / 98 tests; Compiling Rust bin hawdb_storage_graph_constraints_fuzz_tests (537 files); 466s disk-cache, linux-sandbox ... (4 actions running)
+[1,221 / 1,322] 61 / 98 tests; Compiling Rust bin hawdb_storage_graph_constraints_fuzz_tests (537 files); 526s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_storage_graph_constraints_fuzz_tests (537 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+INFO: From Compiling Rust bin hawdb_search_block_encoding_fuzz_tests (294 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,223 / 1,322] 61 / 98 tests; Compiling Rust bin hawdb_relational_qualification_fuzz_tests (71 files); 116s disk-cache, linux-sandbox ... (4 actions, 2 running)
+[1,225 / 1,324] 61 / 98 tests; Compiling Rust bin hawdb_relational_qualification_fuzz_tests (71 files); 118s disk-cache, linux-sandbox ... (4 actions running)
+[1,225 / 1,324] 61 / 98 tests; Compiling Rust bin hawdb_relational_qualification_fuzz_tests (71 files); 128s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_relational_aggregate_state_fuzz_tests (71 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,226 / 1,324] 61 / 98 tests; Compiling Rust bin hawdb_relational_qualification_fuzz_tests (71 files); 143s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,227 / 1,325] 61 / 98 tests; Compiling Rust bin hawdb_relational_qualification_fuzz_tests (71 files); 145s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_relational_qualification_fuzz_tests (71 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,229 / 1,326] 61 / 98 tests; Compiling Rust bin hawdb_relational_columnar_aggregate_fuzz_tests (71 files); 30s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_morsel_oracle_fuzz_tests (1 file):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,229 / 1,326] 61 / 98 tests; Compiling Rust bin hawdb_relational_columnar_aggregate_fuzz_tests (71 files); 40s disk-cache, linux-sandbox ... (4 actions running)
+[1,231 / 1,327] 61 / 98 tests; Compiling Rust bin hawdb_relational_columnar_aggregate_fuzz_tests (71 files); 41s disk-cache, linux-sandbox ... (4 actions running)
+[1,231 / 1,327] 61 / 98 tests; Compiling Rust bin hawdb_relational_columnar_aggregate_fuzz_tests (71 files); 52s disk-cache, linux-sandbox ... (4 actions running)
+[1,231 / 1,327] 61 / 98 tests; Compiling Rust bin hawdb_relational_columnar_aggregate_fuzz_tests (71 files); 82s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_relational_physical_plan_fuzz_tests (71 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,232 / 1,327] 61 / 98 tests; Compiling Rust bin hawdb_relational_columnar_aggregate_fuzz_tests (71 files); 132s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,233 / 1,328] 61 / 98 tests; Compiling Rust bin hawdb_relational_columnar_aggregate_fuzz_tests (71 files); 134s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_relational_columnar_aggregate_fuzz_tests (71 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,234 / 1,328] 61 / 98 tests; Compiling Rust bin hawdb_search_concurrent_read_fuzz_tests (294 files); 114s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,235 / 1,329] 61 / 98 tests; Compiling Rust bin hawdb_search_concurrent_read_fuzz_tests (294 files); 116s disk-cache, linux-sandbox ... (4 actions running)
+[1,235 / 1,329] 61 / 98 tests; Compiling Rust bin hawdb_search_concurrent_read_fuzz_tests (294 files); 126s disk-cache, linux-sandbox ... (4 actions running)
+[1,235 / 1,329] 61 / 98 tests; Compiling Rust bin hawdb_search_concurrent_read_fuzz_tests (294 files); 156s disk-cache, linux-sandbox ... (4 actions running)
+[1,235 / 1,329] 61 / 98 tests; Compiling Rust bin hawdb_search_concurrent_read_fuzz_tests (294 files); 216s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_search_concurrent_read_fuzz_tests (294 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,236 / 1,329] 61 / 98 tests; Compiling Rust bin hawdb_search_document_frequency_fuzz_tests (294 files); 222s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,237 / 1,330] 61 / 98 tests; Compiling Rust bin hawdb_search_document_frequency_fuzz_tests (294 files); 223s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_search_document_frequency_fuzz_tests (294 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,238 / 1,330] 61 / 98 tests; Compiling Rust bin hawdb_search_spool_encoding_fuzz_tests (294 files); 135s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,239 / 1,331] 61 / 98 tests; Compiling Rust bin hawdb_search_spool_encoding_fuzz_tests (294 files); 137s disk-cache, linux-sandbox ... (4 actions running)
+[1,239 / 1,331] 61 / 98 tests; Compiling Rust bin hawdb_search_spool_encoding_fuzz_tests (294 files); 147s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_replacement_summary_fuzz_tests (35 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,240 / 1,331] 61 / 98 tests; Compiling Rust bin hawdb_search_spool_encoding_fuzz_tests (294 files); 166s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,241 / 1,332] 61 / 98 tests; Compiling Rust bin hawdb_search_spool_encoding_fuzz_tests (294 files); 168s disk-cache, linux-sandbox ... (4 actions running)
+[1,241 / 1,332] 61 / 98 tests; Compiling Rust bin hawdb_search_spool_encoding_fuzz_tests (294 files); 178s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_source_mutation_readiness_fuzz_tests (35 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,242 / 1,332] 61 / 98 tests; Compiling Rust bin hawdb_search_spool_encoding_fuzz_tests (294 files); 206s disk-cache, linux-sandbox ... (4 actions, 3 running)
+INFO: From Compiling Rust bin hawdb_search_lexical_spill_fuzz_tests (294 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,244 / 1,333] 61 / 98 tests; Compiling Rust bin hawdb_search_spool_encoding_fuzz_tests (294 files); 208s disk-cache, linux-sandbox ... (4 actions, 3 running)
+INFO: From Compiling Rust bin hawdb_search_spool_encoding_fuzz_tests (294 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,247 / 1,335] 61 / 98 tests; Compiling Rust bin hawdb_search_hydration_fuzz_tests (294 files); 73s disk-cache, linux-sandbox ... (4 actions running)
+[1,247 / 1,335] 61 / 98 tests; Compiling Rust bin hawdb_search_hydration_fuzz_tests (294 files); 84s disk-cache, linux-sandbox ... (4 actions running)
+[1,247 / 1,335] 61 / 98 tests; Compiling Rust bin hawdb_search_hydration_fuzz_tests (294 files); 114s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_graph_route_readiness_fuzz_tests (35 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,248 / 1,335] 61 / 98 tests; Compiling Rust bin hawdb_search_hydration_fuzz_tests (294 files); 121s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,249 / 1,336] 61 / 98 tests; Compiling Rust bin hawdb_search_hydration_fuzz_tests (294 files); 122s disk-cache, linux-sandbox ... (4 actions running)
+[1,249 / 1,336] 61 / 98 tests; Compiling Rust bin hawdb_search_hydration_fuzz_tests (294 files); 132s disk-cache, linux-sandbox ... (4 actions running)
+[1,249 / 1,336] 61 / 98 tests; Compiling Rust bin hawdb_search_hydration_fuzz_tests (294 files); 162s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_search_hydration_fuzz_tests (294 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,250 / 1,336] 61 / 98 tests; Compiling Rust bin hawdb_graph_projection_residency_fuzz_first_half_tests (303 files); 100s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,251 / 1,337] 61 / 98 tests; Compiling Rust bin hawdb_graph_projection_residency_fuzz_first_half_tests (303 files); 101s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_integration_bundle_fuzz_tests (35 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,252 / 1,337] 61 / 98 tests; Compiling Rust bin hawdb_graph_projection_residency_fuzz_first_half_tests (303 files); 108s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,253 / 1,338] 61 / 98 tests; Compiling Rust bin hawdb_graph_projection_residency_fuzz_first_half_tests (303 files); 110s disk-cache, linux-sandbox ... (4 actions running)
+[1,253 / 1,338] 61 / 98 tests; Compiling Rust bin hawdb_graph_projection_residency_fuzz_first_half_tests (303 files); 120s disk-cache, linux-sandbox ... (4 actions running)
+[1,253 / 1,338] 61 / 98 tests; Compiling Rust bin hawdb_graph_projection_residency_fuzz_first_half_tests (303 files); 150s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_search_projection_evidence_fuzz_tests (294 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,254 / 1,338] 61 / 98 tests; Compiling Rust bin hawdb_graph_projection_residency_fuzz_first_half_tests (303 files); 169s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,255 / 1,339] 61 / 98 tests; Compiling Rust bin hawdb_graph_projection_residency_fuzz_first_half_tests (303 files); 171s disk-cache, linux-sandbox ... (4 actions running)
+[1,255 / 1,339] 61 / 98 tests; Compiling Rust bin hawdb_graph_projection_residency_fuzz_first_half_tests (303 files); 181s disk-cache, linux-sandbox ... (4 actions running)
+[1,255 / 1,339] 61 / 98 tests; Compiling Rust bin hawdb_graph_projection_residency_fuzz_first_half_tests (303 files); 211s disk-cache, linux-sandbox ... (4 actions running)
+[1,255 / 1,339] 61 / 98 tests; Compiling Rust bin hawdb_graph_projection_residency_fuzz_first_half_tests (303 files); 271s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_graph_projection_residency_fuzz_first_half_tests (303 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,256 / 1,339] 61 / 98 tests; Compiling Rust bin hawdb_search_term_policy_fuzz_tests (294 files); 173s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,257 / 1,339] 61 / 98 tests; Compiling Rust bin hawdb_search_term_policy_fuzz_tests (294 files); 174s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_search_term_policy_fuzz_tests (294 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,258 / 1,339] 61 / 98 tests; Compiling Rust bin hawdb_search_bounded_file_fuzz_tests (294 files); 170s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,259 / 1,340] 61 / 98 tests; Compiling Rust bin hawdb_search_bounded_file_fuzz_tests (294 files); 171s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_search_bounded_file_fuzz_tests (294 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,260 / 1,340] 61 / 98 tests; Compiling Rust bin hawdb_relational_index_runtime_fuzz_tests (71 files); 117s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,261 / 1,341] 61 / 98 tests; Compiling Rust bin hawdb_relational_index_runtime_fuzz_tests (71 files); 119s disk-cache, linux-sandbox ... (4 actions running)
+[1,261 / 1,341] 61 / 98 tests; Compiling Rust bin hawdb_relational_index_runtime_fuzz_tests (71 files); 129s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_relational_index_runtime_fuzz_tests (71 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,262 / 1,341] 61 / 98 tests; Compiling Rust bin hawdb_scan_callback_fuzz_tests (303 files); 53s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,263 / 1,342] 61 / 98 tests; Compiling Rust bin hawdb_scan_callback_fuzz_tests (303 files); 54s disk-cache, linux-sandbox ... (4 actions running)
+[1,263 / 1,342] 61 / 98 tests; Compiling Rust bin hawdb_scan_callback_fuzz_tests (303 files); 64s disk-cache, linux-sandbox ... (4 actions running)
+[1,263 / 1,342] 61 / 98 tests; Compiling Rust bin hawdb_scan_callback_fuzz_tests (303 files); 94s disk-cache, linux-sandbox ... (4 actions running)
+[1,263 / 1,342] 61 / 98 tests; Compiling Rust bin hawdb_scan_callback_fuzz_tests (303 files); 155s disk-cache, linux-sandbox ... (4 actions running)
+[1,263 / 1,342] 61 / 98 tests; Compiling Rust bin hawdb_scan_callback_fuzz_tests (303 files); 215s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_search_hex_decoding_fuzz_tests (294 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+INFO: From Compiling Rust bin hawdb_search_candidate_evidence_fuzz_tests (294 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,265 / 1,342] 61 / 98 tests; Compiling Rust bin hawdb_scan_callback_fuzz_tests (303 files); 222s disk-cache, linux-sandbox ... (3 actions, 2 running)
+[1,267 / 1,344] 61 / 98 tests; Compiling Rust bin hawdb_scan_callback_fuzz_tests (303 files); 224s disk-cache, linux-sandbox ... (4 actions running)
+[1,267 / 1,344] 61 / 98 tests; Compiling Rust bin hawdb_scan_callback_fuzz_tests (303 files); 233s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin shiro_fast_tests (14 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,268 / 1,344] 61 / 98 tests; Compiling Rust bin hawdb_scan_callback_fuzz_tests (303 files); 258s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,269 / 1,345] 61 / 98 tests; Compiling Rust bin hawdb_scan_callback_fuzz_tests (303 files); 260s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin nowledge_previous_wrapper_shadow_adapter (1 file):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,270 / 1,345] 61 / 98 tests; Compiling Rust bin hawdb_scan_callback_fuzz_tests (303 files); 265s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,270 / 1,345] 61 / 98 tests; Compiling Rust bin hawdb_scan_callback_fuzz_tests (303 files); 266s disk-cache, linux-sandbox ... (4 actions running)
+[1,270 / 1,345] 61 / 98 tests; Compiling Rust bin hawdb_scan_callback_fuzz_tests (303 files); 276s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_scan_callback_fuzz_tests (303 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,271 / 1,345] 61 / 98 tests; Compiling Rust bin hawdb_search_spool_decoding_fuzz_tests (294 files); 229s disk-cache, linux-sandbox ... (4 actions, 3 running)
+INFO: From Compiling Rust bin hawdb_cli (3 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,273 / 1,346] 61 / 98 tests; Compiling Rust bin hawdb_search_spool_decoding_fuzz_tests (294 files); 230s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,273 / 1,346] 61 / 98 tests; Compiling Rust bin hawdb_search_spool_decoding_fuzz_tests (294 files); 232s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_search_spool_decoding_fuzz_tests (294 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,275 / 1,347] 61 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 65s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_shadow_self (1 file):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,276 / 1,347] 61 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 72s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,276 / 1,347] 61 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 73s disk-cache, linux-sandbox ... (4 actions running)
+[1,276 / 1,347] 61 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 83s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_bench_optimizer_smoke (1 file):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,277 / 1,347] 61 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 85s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,277 / 1,347] 61 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 87s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_bench_relational_join_execution (1 file):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,278 / 1,347] 61 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 95s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,278 / 1,347] 61 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 96s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_bench_relational_join_planning (1 file):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,279 / 1,347] 61 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 101s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,279 / 1,347] 61 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 103s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_bench_aggregate_partial_spill (1 file):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,280 / 1,347] 61 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 105s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,280 / 1,347] 61 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 106s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_bench_aggregate_hash (1 file):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,281 / 1,347] 61 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 108s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_bench_canonical_point_lookup (1 file):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,282 / 1,347] 61 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 109s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_bench_executor_vectorization (3 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,283 / 1,347] 61 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 112s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,283 / 1,347] 61 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 114s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_bench_index_restart_cost (1 file):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,284 / 1,347] 61 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 116s disk-cache, linux-sandbox ... (4 actions, 3 running)
+INFO: From Compiling Rust bin hawdb_bench_integrity_checksum (1 file):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,285 / 1,347] 61 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 118s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,285 / 1,347] 61 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 119s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_bench_relational_index_access (2 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,286 / 1,347] 61 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 124s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,286 / 1,347] 61 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 126s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_bench_relational_index_page_cache (1 file):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,287 / 1,347] 61 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 128s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,287 / 1,347] 61 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 129s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_bench_relational_monotonic_append (1 file):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,288 / 1,347] 61 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 134s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,288 / 1,347] 61 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 136s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_bench_relational_oltp_mix (1 file):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,289 / 1,347] 61 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 143s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,289 / 1,347] 61 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 145s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_bench_relational_overflow (1 file):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,290 / 1,347] 61 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 148s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,290 / 1,347] 61 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 149s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_bench_relational_row_delta_runs (1 file):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,291 / 1,347] 61 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 152s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,291 / 1,347] 61 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 153s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_bench_relational_row_page_lending (1 file):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,292 / 1,347] 61 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 161s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,292 / 1,347] 61 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 163s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_bench_search_checkpoint (1 file):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,293 / 1,347] 61 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 166s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,293 / 1,347] 61 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 168s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_bench_search_generation (1 file):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,294 / 1,347] 61 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 174s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,294 / 1,347] 61 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 176s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_bench_search_tokenization (1 file):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,295 / 1,347] 61 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 179s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,295 / 1,347] 61 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 180s disk-cache, linux-sandbox ... (4 actions running)
+[1,295 / 1,347] 61 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 181s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_bench_storage_segment_read (1 file):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,297 / 1,347] 62 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 183s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_bench_store_cow_feasibility (1 file):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,298 / 1,347] 62 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 184s disk-cache, linux-sandbox ... (4 actions, 3 running)
+INFO: From Compiling Rust bin hawdb_bench_vector_projection_scan (1 file):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,299 / 1,347] 62 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 186s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,299 / 1,347] 62 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 187s disk-cache, linux-sandbox ... (4 actions running)
+[1,299 / 1,347] 62 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 189s disk-cache, linux-sandbox ... (4 actions running)
+[1,300 / 1,347] 63 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 190s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_bench_wal_group_commit (2 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,300 / 1,347] 63 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 193s disk-cache, linux-sandbox ... (4 actions running)
+[1,302 / 1,347] 64 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 195s disk-cache, linux-sandbox ... (4 actions running)
+[1,302 / 1,347] 64 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 200s disk-cache, linux-sandbox ... (4 actions running)
+[1,303 / 1,347] 65 / 98 tests; Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files); 201s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_concurrent_key_range_fuzz_tests (303 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,304 / 1,347] 65 / 98 tests; Compiling Rust bin hawdb_graph_projection_residency_fuzz_second_half_tests (303 files); 150s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,305 / 1,348] 65 / 98 tests; Compiling Rust bin hawdb_graph_projection_residency_fuzz_second_half_tests (303 files); 151s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin shiro_relational_join_rewrite_tests (14 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,306 / 1,348] 65 / 98 tests; Compiling Rust bin hawdb_graph_projection_residency_fuzz_second_half_tests (303 files); 155s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,307 / 1,349] 66 / 98 tests; Compiling Rust bin hawdb_graph_projection_residency_fuzz_second_half_tests (303 files); 156s disk-cache, linux-sandbox ... (4 actions running)
+[1,308 / 1,349] 66 / 98 tests; Compiling Rust bin hawdb_graph_projection_residency_fuzz_second_half_tests (303 files); 157s disk-cache, linux-sandbox ... (4 actions running)
+[1,308 / 1,349] 66 / 98 tests; Compiling Rust bin hawdb_graph_projection_residency_fuzz_second_half_tests (303 files); 167s disk-cache, linux-sandbox ... (4 actions running)
+[1,309 / 1,349] 67 / 98 tests; Compiling Rust bin hawdb_graph_projection_residency_fuzz_second_half_tests (303 files); 168s disk-cache, linux-sandbox ... (4 actions running)
+[1,309 / 1,349] 67 / 98 tests; Compiling Rust bin hawdb_graph_projection_residency_fuzz_second_half_tests (303 files); 178s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin shiro_append_replay_tests (14 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,309 / 1,349] 67 / 98 tests; Compiling Rust bin hawdb_graph_projection_residency_fuzz_second_half_tests (303 files); 194s disk-cache, linux-sandbox ... (4 actions running)
+[1,311 / 1,350] 67 / 98 tests; Compiling Rust bin hawdb_graph_projection_residency_fuzz_second_half_tests (303 files); 195s disk-cache, linux-sandbox ... (4 actions running)
+[1,311 / 1,350] 67 / 98 tests; Compiling Rust bin hawdb_graph_projection_residency_fuzz_second_half_tests (303 files); 206s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin shiro_cli_tests (1 file):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,312 / 1,350] 67 / 98 tests; Compiling Rust bin hawdb_graph_projection_residency_fuzz_second_half_tests (303 files); 207s disk-cache, linux-sandbox ... (4 actions running)
+[1,312 / 1,350] 67 / 98 tests; Compiling Rust bin hawdb_graph_projection_residency_fuzz_second_half_tests (303 files); 209s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin shiro_append_cli_tests (1 file):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,313 / 1,350] 67 / 98 tests; Compiling Rust bin hawdb_graph_projection_residency_fuzz_second_half_tests (303 files); 217s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,314 / 1,351] 67 / 98 tests; Compiling Rust bin hawdb_graph_projection_residency_fuzz_second_half_tests (303 files); 218s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin shiro_append (1 file):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,315 / 1,351] 67 / 98 tests; Compiling Rust bin hawdb_graph_projection_residency_fuzz_second_half_tests (303 files); 223s disk-cache, linux-sandbox ... (3 actions running)
+[1,315 / 1,351] 67 / 98 tests; Compiling Rust bin hawdb_graph_projection_residency_fuzz_second_half_tests (303 files); 224s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin hawdb_graph_projection_residency_fuzz_second_half_tests (303 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,316 / 1,351] 67 / 98 tests; Testing //crates/search:hawdb_search_projection_evidence_fuzz_tests; 72s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,317 / 1,351] 67 / 98 tests; Testing //crates/search:hawdb_search_projection_evidence_fuzz_tests; 73s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin shiro_storage (1 file):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,318 / 1,351] 67 / 98 tests; Testing //crates/search:hawdb_search_projection_evidence_fuzz_tests; 76s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,319 / 1,351] 68 / 98 tests; Testing //crates/search:hawdb_search_projection_evidence_fuzz_tests; 77s disk-cache, linux-sandbox ... (4 actions running)
+[1,319 / 1,351] 68 / 98 tests; Testing //crates/search:hawdb_search_projection_evidence_fuzz_tests; 80s disk-cache, linux-sandbox ... (4 actions running)
+[1,320 / 1,351] 69 / 98 tests; Testing //crates/search:hawdb_search_projection_evidence_fuzz_tests; 82s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin shiro (1 file):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,321 / 1,351] 69 / 98 tests; Testing //crates/search:hawdb_search_projection_evidence_fuzz_tests; 84s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,323 / 1,353] 69 / 98 tests; Testing //crates/search:hawdb_search_projection_evidence_fuzz_tests; 86s disk-cache, linux-sandbox ... (4 actions running)
+[1,323 / 1,353] 69 / 98 tests; Testing //crates/search:hawdb_search_projection_evidence_fuzz_tests; 89s disk-cache, linux-sandbox ... (4 actions running)
+[1,324 / 1,353] 70 / 98 tests; Testing //crates/search:hawdb_search_projection_evidence_fuzz_tests; 90s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin shiro_storage_tests (1 file):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,325 / 1,353] 70 / 98 tests; Testing //crates/search:hawdb_search_projection_evidence_fuzz_tests; 92s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,327 / 1,354] 71 / 98 tests; Testing //crates/search:hawdb_search_projection_evidence_fuzz_tests; 94s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin shiro_parser_cli_tests (1 file):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,328 / 1,354] 72 / 98 tests; Testing //crates/search:hawdb_search_projection_evidence_fuzz_tests; 95s disk-cache, linux-sandbox ... (4 actions running)
+[1,330 / 1,355] 72 / 98 tests; Testing //crates/search:hawdb_search_projection_evidence_fuzz_tests; 96s disk-cache, linux-sandbox ... (4 actions running)
+[1,330 / 1,355] 72 / 98 tests; Testing //crates/search:hawdb_search_projection_evidence_fuzz_tests; 104s disk-cache, linux-sandbox ... (4 actions running)
+[1,331 / 1,355] 73 / 98 tests; Testing //crates/readiness:hawdb_replacement_summary_fuzz_tests; 95s disk-cache, linux-sandbox ... (4 actions running)
+INFO: From Compiling Rust bin shiro_append_seed_7_tests (14 files):
+warning: the gold linker is deprecated and has known bugs with Rust
+  |
+  = help: consider using LLD or ld from GNU binutils instead
+
+warning: 1 warning emitted
+
+[1,332 / 1,355] 73 / 98 tests; Testing //crates/readiness:hawdb_replacement_summary_fuzz_tests; 97s disk-cache, linux-sandbox ... (4 actions, 3 running)
+[1,333 / 1,356] 73 / 98 tests; Testing //crates/readiness:hawdb_replacement_summary_fuzz_tests; 98s disk-cache, linux-sandbox ... (4 actions running)
+[1,335 / 1,356] 75 / 98 tests; Testing //crates/readiness:hawdb_replacement_summary_fuzz_tests; 100s disk-cache, linux-sandbox ... (4 actions running)
+[1,335 / 1,356] 75 / 98 tests; Testing //crates/readiness:hawdb_replacement_summary_fuzz_tests; 110s disk-cache, linux-sandbox ... (4 actions running)
+[1,335 / 1,356] 75 / 98 tests; Testing //crates/readiness:hawdb_replacement_summary_fuzz_tests; 114s disk-cache, linux-sandbox ... (4 actions running)
+[1,337 / 1,356] 77 / 98 tests; Testing //crates/readiness:hawdb_graph_route_readiness_fuzz_tests; 33s disk-cache, linux-sandbox ... (4 actions running)
+[1,337 / 1,356] 77 / 98 tests; Testing //crates/readiness:hawdb_graph_route_readiness_fuzz_tests; 36s disk-cache, linux-sandbox ... (4 actions running)
+[1,339 / 1,356] 79 / 98 tests; Testing //crates/search:hawdb_search_term_policy_fuzz_tests; 27s disk-cache, linux-sandbox ... (4 actions running)
+[1,341 / 1,356] 81 / 98 tests; Testing //crates/search:hawdb_search_term_policy_fuzz_tests; 28s disk-cache, linux-sandbox ... (4 actions running)
+[1,343 / 1,356] 83 / 98 tests; Testing //crates/search:hawdb_search_term_policy_fuzz_tests; 30s disk-cache, linux-sandbox ... (4 actions running)
+[1,343 / 1,356] 83 / 98 tests; Testing //crates/search:hawdb_search_term_policy_fuzz_tests; 31s disk-cache, linux-sandbox ... (4 actions running)
+[1,346 / 1,356] 86 / 98 tests; Testing //crates/readiness:hawdb_integration_bundle_fuzz_tests; 10s disk-cache, linux-sandbox ... (4 actions running)
+[1,347 / 1,356] 87 / 98 tests; Testing //crates/readiness:hawdb_integration_bundle_fuzz_tests; 11s disk-cache, linux-sandbox ... (4 actions running)
+[1,347 / 1,356] 87 / 98 tests; Testing //crates/readiness:hawdb_integration_bundle_fuzz_tests; 13s disk-cache, linux-sandbox ... (4 actions running)
+[1,348 / 1,356] 88 / 98 tests; Testing //crates/readiness:hawdb_integration_bundle_fuzz_tests; 14s disk-cache, linux-sandbox ... (4 actions running)
+[1,349 / 1,356] 89 / 98 tests; Testing //crates/readiness:hawdb_integration_bundle_fuzz_tests; 15s disk-cache, linux-sandbox ... (4 actions running)
+[1,349 / 1,356] 89 / 98 tests; Testing //crates/readiness:hawdb_integration_bundle_fuzz_tests; 18s disk-cache, linux-sandbox ... (4 actions running)
+[1,351 / 1,356] 91 / 98 tests; Testing //tools/shiro:shiro_append_replay_tests; 6s disk-cache, linux-sandbox ... (4 actions running)
+[1,352 / 1,356] 92 / 98 tests; Testing //tools/shiro:shiro_append_replay_tests; 7s disk-cache, linux-sandbox ... (4 actions running)
+[1,352 / 1,356] 92 / 98 tests; Testing //tools/shiro:shiro_append_replay_tests; 12s disk-cache, linux-sandbox ... (4 actions running)
+[1,353 / 1,356] 93 / 98 tests; Testing //tools/shiro:shiro_append_replay_tests; 13s disk-cache, linux-sandbox ... (3 actions running)
+[1,354 / 1,356] 94 / 98 tests; Testing //:hawdb_linux_ci_fuzz_smoke_test; 9s disk-cache, linux-sandbox ... (2 actions running)
+[1,354 / 1,356] 94 / 98 tests; Testing //:hawdb_linux_ci_fuzz_smoke_test; 18s disk-cache, linux-sandbox ... (2 actions running)
+[1,355 / 1,356] 95 / 98 tests; Testing //:hawdb_linux_ci_fuzz_smoke_test; 19s disk-cache, linux-sandbox
+[1,355 / 1,356] 95 / 98 tests; Testing //:hawdb_linux_ci_fuzz_smoke_test; 30s disk-cache, linux-sandbox
+[1,355 / 1,356] 95 / 98 tests; Testing //:hawdb_linux_ci_fuzz_smoke_test; 60s disk-cache, linux-sandbox
+[1,355 / 1,356] 95 / 98 tests; Testing //:hawdb_linux_ci_fuzz_smoke_test; 95s disk-cache, linux-sandbox
+[1,356 / 1,357] 96 / 98 tests; Testing //:hawdb_graph_projection_residency_fuzz_second_half_tests; 0s disk-cache, linux-sandbox
+[1,356 / 1,357] 96 / 98 tests; Testing //:hawdb_graph_projection_residency_fuzz_second_half_tests; 197s disk-cache, linux-sandbox
+[1,357 / 1,358] 97 / 98 tests; Testing //:hawdb_graph_projection_residency_fuzz_first_half_tests; 0s disk-cache, linux-sandbox
+[1,357 / 1,358] 97 / 98 tests; Testing //:hawdb_graph_projection_residency_fuzz_first_half_tests; 230s disk-cache, linux-sandbox
+INFO: Found 98 test targets...
+[1,358 / 1,358] 98 / 98 tests; no actions running
+INFO: Elapsed time: 4655.194s, Critical Path: 889.14s
+INFO: 1358 processes: 448 disk cache hit, 725 internal, 283 linux-sandbox.
+INFO: Build completed successfully, 1358 total actions
+INFO:
+//crates/cypher:hawdb_cypher_backtracking_fuzz_tests            (cached) PASSED in 0.3s
+    PASSED  .crates/cypher/hawdb_cypher_backtracking_fuzz_tests (0.0s)
+//crates/evidence:hawdb_inventory_health_fuzz_tests             (cached) PASSED in 1.5s
+    PASSED  .crates/evidence/hawdb_inventory_health_fuzz_tests (0.0s)
+//crates/evidence:hawdb_resource_profile_fuzz_tests             (cached) PASSED in 0.3s
+    PASSED  .crates/evidence/hawdb_resource_profile_fuzz_tests (0.0s)
+//crates/evidence:hawdb_source_inventory_fuzz_tests             (cached) PASSED in 0.2s
+    PASSED  .crates/evidence/hawdb_source_inventory_fuzz_tests (0.0s)
+//crates/optimizer-graph:hawdb_optimizer_candidate_fingerprint_fuzz_tests (cached) PASSED in 0.4s
+    PASSED  .crates/optimizer-graph/hawdb_optimizer_candidate_fingerprint_fuzz_tests (0.0s)
+//crates/optimizer-graph:hawdb_optimizer_cardinality_defaults_fuzz_tests (cached) PASSED in 0.3s
+    PASSED  .crates/optimizer-graph/hawdb_optimizer_cardinality_defaults_fuzz_tests (0.0s)
+//crates/optimizer-graph:hawdb_optimizer_cardinality_metadata_fuzz_tests (cached) PASSED in 0.7s
+    PASSED  .crates/optimizer-graph/hawdb_optimizer_cardinality_metadata_fuzz_tests (0.0s)
+//crates/optimizer-graph:hawdb_optimizer_ddl_command_fuzz_tests (cached) PASSED in 0.1s
+    PASSED  .crates/optimizer-graph/hawdb_optimizer_ddl_command_fuzz_tests (0.0s)
+//crates/optimizer-graph:hawdb_optimizer_full_text_cost_fuzz_tests (cached) PASSED in 0.1s
+    PASSED  .crates/optimizer-graph/hawdb_optimizer_full_text_cost_fuzz_tests (0.0s)
+//crates/optimizer-graph:hawdb_optimizer_trace_cost_fuzz_tests  (cached) PASSED in 0.2s
+    PASSED  .crates/optimizer-graph/hawdb_optimizer_trace_cost_fuzz_tests (0.0s)
+//crates/optimizer-relational:hawdb_optimizer_access_cost_fuzz_tests (cached) PASSED in 1.7s
+    PASSED  .crates/optimizer-relational/hawdb_optimizer_access_cost_fuzz_tests (0.0s)
+//crates/plan-cypher:hawdb_plan_cypher_explain_fuzz_tests       (cached) PASSED in 0.2s
+    PASSED  .crates/plan-cypher/hawdb_plan_cypher_explain_fuzz_tests (0.0s)
+//crates/route-ownership:hawdb_graph_route_ownership_fuzz_tests (cached) PASSED in 3.1s
+    PASSED  .crates/route-ownership/hawdb_graph_route_ownership_fuzz_tests (0.0s)
+//crates/sql:hawdb_sql_clause_diagnostics_fuzz_tests            (cached) PASSED in 0.6s
+    PASSED  .crates/sql/hawdb_sql_clause_diagnostics_fuzz_tests (0.0s)
+//crates/sql:hawdb_sql_create_binding_fuzz_tests                (cached) PASSED in 0.2s
+    PASSED  .crates/sql/hawdb_sql_create_binding_fuzz_tests (0.0s)
+//crates/sql:hawdb_sql_frontend_corpus_fuzz_tests               (cached) PASSED in 0.1s
+    PASSED  .crates/sql/hawdb_sql_frontend_corpus_fuzz_tests (0.0s)
+//crates/sql-syntax:hawdb_sql_alias_boundary_fuzz_tests         (cached) PASSED in 0.1s
+    PASSED  .crates/sql-syntax/hawdb_sql_alias_boundary_fuzz_tests (0.0s)
+//:hawdb_concurrent_key_range_fuzz_tests                                 PASSED in 0.2s
+    PASSED  .hawdb_concurrent_key_range_fuzz_tests (0.0s)
+//:hawdb_graph_projection_residency_fuzz_first_half_tests                PASSED in 230.1s
+    PASSED  .hawdb_graph_projection_residency_fuzz_first_half_tests (0.2s)
+//:hawdb_graph_projection_residency_fuzz_second_half_tests               PASSED in 197.0s
+    PASSED  .hawdb_graph_projection_residency_fuzz_second_half_tests (0.2s)
+//:hawdb_linux_ci_fuzz_smoke_test                                        PASSED in 95.5s
+    PASSED  .hawdb_linux_ci_fuzz_smoke_test (0.1s)
+//:hawdb_scan_callback_fuzz_tests                                        PASSED in 6.5s
+    PASSED  .hawdb_scan_callback_fuzz_tests (0.0s)
+//crates/compat:hawdb_compat_contract_fuzz_tests                         PASSED in 0.2s
+    PASSED  .crates/compat/hawdb_compat_contract_fuzz_tests (0.0s)
+//crates/executor:hawdb_batch_dispatch_fuzz_tests                        PASSED in 0.5s
+    PASSED  .crates/executor/hawdb_batch_dispatch_fuzz_tests (0.0s)
+//crates/executor:hawdb_execution_lifecycle_fuzz_tests                   PASSED in 0.1s
+    PASSED  .crates/executor/hawdb_execution_lifecycle_fuzz_tests (0.0s)
+//crates/executor:hawdb_execution_report_value_fuzz_tests                PASSED in 0.7s
+    PASSED  .crates/executor/hawdb_execution_report_value_fuzz_tests (0.0s)
+//crates/executor:hawdb_graph_algorithm_fuzz_tests                       PASSED in 1.2s
+    PASSED  .crates/executor/hawdb_graph_algorithm_fuzz_tests (0.0s)
+//crates/executor:hawdb_graph_hash_join_fuzz_tests                       PASSED in 43.5s
+    PASSED  .crates/executor/hawdb_graph_hash_join_fuzz_tests (0.0s)
+//crates/executor:hawdb_morsel_oracle_fuzz_tests                         PASSED in 0.3s
+    PASSED  .crates/executor/hawdb_morsel_oracle_fuzz_tests (0.0s)
+//crates/executor:hawdb_mutation_lowering_fuzz_tests                     PASSED in 0.1s
+    PASSED  .crates/executor/hawdb_mutation_lowering_fuzz_tests (0.0s)
+//crates/executor:hawdb_mutation_preflight_fuzz_tests                    PASSED in 0.6s
+    PASSED  .crates/executor/hawdb_mutation_preflight_fuzz_tests (0.0s)
+//crates/executor:hawdb_numeric_execution_fuzz_tests                     PASSED in 0.3s
+    PASSED  .crates/executor/hawdb_numeric_execution_fuzz_tests (0.0s)
+//crates/executor:hawdb_query_observer_fuzz_tests                        PASSED in 0.2s
+    PASSED  .crates/executor/hawdb_query_observer_fuzz_tests (0.0s)
+//crates/executor:hawdb_result_delivery_fuzz_tests                       PASSED in 0.4s
+    PASSED  .crates/executor/hawdb_result_delivery_fuzz_tests (0.0s)
+//crates/executor:hawdb_sort_merge_account_fuzz_tests                    PASSED in 1.8s
+    PASSED  .crates/executor/hawdb_sort_merge_account_fuzz_tests (0.0s)
+//crates/executor:hawdb_spill_compaction_fuzz_tests                      PASSED in 12.7s
+    PASSED  .crates/executor/hawdb_spill_compaction_fuzz_tests (0.0s)
+//crates/executor:hawdb_transform_fuzz_tests                             PASSED in 1.6s
+    PASSED  .crates/executor/hawdb_transform_fuzz_tests (0.0s)
+//crates/executor:hawdb_vector_seed_fuzz_tests                           PASSED in 0.4s
+    PASSED  .crates/executor/hawdb_vector_seed_fuzz_tests (0.0s)
+//crates/readiness:hawdb_graph_route_readiness_fuzz_tests                PASSED in 36.6s
+    PASSED  .crates/readiness/hawdb_graph_route_readiness_fuzz_tests (0.0s)
+//crates/readiness:hawdb_integration_bundle_fuzz_tests                   PASSED in 18.8s
+    PASSED  .crates/readiness/hawdb_integration_bundle_fuzz_tests (0.0s)
+//crates/readiness:hawdb_replacement_summary_fuzz_tests                  PASSED in 114.9s
+    PASSED  .crates/readiness/hawdb_replacement_summary_fuzz_tests (0.1s)
+//crates/readiness:hawdb_source_mutation_readiness_fuzz_tests            PASSED in 8.4s
+    PASSED  .crates/readiness/hawdb_source_mutation_readiness_fuzz_tests (0.0s)
+//crates/relational:hawdb_relational_aggregate_state_fuzz_tests          PASSED in 11.4s
+    PASSED  .crates/relational/hawdb_relational_aggregate_state_fuzz_tests (0.0s)
+//crates/relational:hawdb_relational_columnar_aggregate_fuzz_tests       PASSED in 3.1s
+    PASSED  .crates/relational/hawdb_relational_columnar_aggregate_fuzz_tests (0.0s)
+//crates/relational:hawdb_relational_explain_report_fuzz_tests           PASSED in 8.5s
+    PASSED  .crates/relational/hawdb_relational_explain_report_fuzz_tests (0.0s)
+//crates/relational:hawdb_relational_field_plan_fuzz_tests               PASSED in 4.6s
+    PASSED  .crates/relational/hawdb_relational_field_plan_fuzz_tests (0.0s)
+//crates/relational:hawdb_relational_index_runtime_fuzz_tests            PASSED in 6.9s
+    PASSED  .crates/relational/hawdb_relational_index_runtime_fuzz_tests (0.0s)
+//crates/relational:hawdb_relational_physical_plan_fuzz_tests            PASSED in 4.3s
+    PASSED  .crates/relational/hawdb_relational_physical_plan_fuzz_tests (0.0s)
+//crates/relational:hawdb_relational_qualification_fuzz_tests            PASSED in 0.2s
+    PASSED  .crates/relational/hawdb_relational_qualification_fuzz_tests (0.0s)
+//crates/relational:hawdb_relational_row_runtime_fuzz_tests              PASSED in 9.5s
+    PASSED  .crates/relational/hawdb_relational_row_runtime_fuzz_tests (0.0s)
+//crates/relational:hawdb_relational_statement_fuzz_tests                PASSED in 0.2s
+    PASSED  .crates/relational/hawdb_relational_statement_fuzz_tests (0.0s)
+//crates/search:hawdb_search_block_encoding_fuzz_tests                   PASSED in 1.5s
+    PASSED  .crates/search/hawdb_search_block_encoding_fuzz_tests (0.0s)
+//crates/search:hawdb_search_bounded_file_fuzz_tests                     PASSED in 0.1s
+    PASSED  .crates/search/hawdb_search_bounded_file_fuzz_tests (0.0s)
+//crates/search:hawdb_search_candidate_evidence_fuzz_tests               PASSED in 0.1s
+    PASSED  .crates/search/hawdb_search_candidate_evidence_fuzz_tests (0.0s)
+//crates/search:hawdb_search_compression_fuzz_tests                      PASSED in 2.0s
+    PASSED  .crates/search/hawdb_search_compression_fuzz_tests (0.0s)
+//crates/search:hawdb_search_concurrent_read_fuzz_tests                  PASSED in 6.0s
+    PASSED  .crates/search/hawdb_search_concurrent_read_fuzz_tests (0.0s)
+//crates/search:hawdb_search_document_analysis_fuzz_tests                PASSED in 7.4s
+    PASSED  .crates/search/hawdb_search_document_analysis_fuzz_tests (0.0s)
+//crates/search:hawdb_search_document_frequency_fuzz_tests               PASSED in 26.6s
+    PASSED  .crates/search/hawdb_search_document_frequency_fuzz_tests (0.0s)
+//crates/search:hawdb_search_hex_decoding_fuzz_tests                     PASSED in 0.1s
+    PASSED  .crates/search/hawdb_search_hex_decoding_fuzz_tests (0.0s)
+//crates/search:hawdb_search_hydration_fuzz_tests                        PASSED in 0.7s
+    PASSED  .crates/search/hawdb_search_hydration_fuzz_tests (0.0s)
+//crates/search:hawdb_search_lexical_spill_fuzz_tests                    PASSED in 4.1s
+    PASSED  .crates/search/hawdb_search_lexical_spill_fuzz_tests (0.0s)
+//crates/search:hawdb_search_manifest_budget_fuzz_tests                  PASSED in 33.8s
+    PASSED  .crates/search/hawdb_search_manifest_budget_fuzz_tests (0.0s)
+//crates/search:hawdb_search_manifest_encoding_fuzz_tests                PASSED in 0.2s
+    PASSED  .crates/search/hawdb_search_manifest_encoding_fuzz_tests (0.0s)
+//crates/search:hawdb_search_mini_delta_snapshot_fuzz_tests              PASSED in 1.3s
+    PASSED  .crates/search/hawdb_search_mini_delta_snapshot_fuzz_tests (0.0s)
+//crates/search:hawdb_search_projection_evidence_fuzz_tests              PASSED in 104.1s
+    PASSED  .crates/search/hawdb_search_projection_evidence_fuzz_tests (0.1s)
+//crates/search:hawdb_search_spool_decoding_fuzz_tests                   PASSED in 4.0s
+    PASSED  .crates/search/hawdb_search_spool_decoding_fuzz_tests (0.0s)
+//crates/search:hawdb_search_spool_encoding_fuzz_tests                   PASSED in 0.6s
+    PASSED  .crates/search/hawdb_search_spool_encoding_fuzz_tests (0.0s)
+//crates/search:hawdb_search_term_policy_fuzz_tests                      PASSED in 31.9s
+    PASSED  .crates/search/hawdb_search_term_policy_fuzz_tests (0.0s)
+//crates/storage:hawdb_storage_append_reader_fuzz_tests                  PASSED in 10.8s
+    PASSED  .crates/storage/hawdb_storage_append_reader_fuzz_tests (0.0s)
+//crates/storage:hawdb_storage_artifact_binding_fuzz_tests               PASSED in 0.3s
+    PASSED  .crates/storage/hawdb_storage_artifact_binding_fuzz_tests (0.0s)
+//crates/storage:hawdb_storage_backup_hex_fuzz_tests                     PASSED in 0.2s
+    PASSED  .crates/storage/hawdb_storage_backup_hex_fuzz_tests (0.0s)
+//crates/storage:hawdb_storage_checkpoint_wal_verbatim_fuzz_tests        PASSED in 0.5s
+    PASSED  .crates/storage/hawdb_storage_checkpoint_wal_verbatim_fuzz_tests (0.0s)
+//crates/storage:hawdb_storage_durable_envelope_fuzz_tests               PASSED in 3.8s
+    PASSED  .crates/storage/hawdb_storage_durable_envelope_fuzz_tests (0.0s)
+//crates/storage:hawdb_storage_durable_manifest_fuzz_tests               PASSED in 1.9s
+    PASSED  .crates/storage/hawdb_storage_durable_manifest_fuzz_tests (0.0s)
+//crates/storage:hawdb_storage_file_lock_fuzz_tests                      PASSED in 0.6s
+    PASSED  .crates/storage/hawdb_storage_file_lock_fuzz_tests (0.0s)
+//crates/storage:hawdb_storage_graph_constraints_fuzz_tests              PASSED in 0.2s
+    PASSED  .crates/storage/hawdb_storage_graph_constraints_fuzz_tests (0.0s)
+//crates/storage:hawdb_storage_graph_overlay_fuzz_tests                  PASSED in 3.7s
+    PASSED  .crates/storage/hawdb_storage_graph_overlay_fuzz_tests (0.0s)
+//crates/storage:hawdb_storage_positioned_read_fuzz_tests                PASSED in 0.3s
+    PASSED  .crates/storage/hawdb_storage_positioned_read_fuzz_tests (0.0s)
+//crates/storage:hawdb_storage_projected_artifact_fuzz_tests             PASSED in 6.4s
+    PASSED  .crates/storage/hawdb_storage_projected_artifact_fuzz_tests (0.0s)
+//crates/storage:hawdb_storage_property_projection_hex_fuzz_tests        PASSED in 0.1s
+    PASSED  .crates/storage/hawdb_storage_property_projection_hex_fuzz_tests (0.0s)
+//crates/storage:hawdb_storage_relational_index_view_fuzz_tests          PASSED in 30.4s
+    PASSED  .crates/storage/hawdb_storage_relational_index_view_fuzz_tests (0.0s)
+//crates/storage:hawdb_storage_relational_row_workspace_fuzz_tests       PASSED in 11.0s
+    PASSED  .crates/storage/hawdb_storage_relational_row_workspace_fuzz_tests (0.0s)
+//crates/storage:hawdb_storage_set_value_fuzz_tests                      PASSED in 0.4s
+    PASSED  .crates/storage/hawdb_storage_set_value_fuzz_tests (0.0s)
+//crates/storage:hawdb_storage_shadow_metadata_fuzz_tests                PASSED in 0.4s
+    PASSED  .crates/storage/hawdb_storage_shadow_metadata_fuzz_tests (0.0s)
+//crates/storage:hawdb_storage_sharded_cache_fuzz_tests                  PASSED in 0.8s
+    PASSED  .crates/storage/hawdb_storage_sharded_cache_fuzz_tests (0.0s)
+//crates/storage:hawdb_storage_source_scan_fuzz_tests                    PASSED in 21.8s
+    PASSED  .crates/storage/hawdb_storage_source_scan_fuzz_tests (0.0s)
+//crates/storage:hawdb_storage_statistics_refresh_fuzz_tests             PASSED in 1.8s
+    PASSED  .crates/storage/hawdb_storage_statistics_refresh_fuzz_tests (0.0s)
+//crates/storage:hawdb_storage_text_fuzz_tests                           PASSED in 0.4s
+    PASSED  .crates/storage/hawdb_storage_text_fuzz_tests (0.0s)
+//crates/storage:hawdb_storage_transaction_compaction_fuzz_tests         PASSED in 4.4s
+    PASSED  .crates/storage/hawdb_storage_transaction_compaction_fuzz_tests (0.0s)
+//crates/storage:hawdb_storage_transaction_locks_fuzz_tests              PASSED in 0.6s
+    PASSED  .crates/storage/hawdb_storage_transaction_locks_fuzz_tests (0.0s)
+//tools/shiro:shiro_append_cli_tests                                     PASSED in 10.3s
+    PASSED  .tools/shiro/shiro_append_cli_tests (0.0s)
+//tools/shiro:shiro_append_replay_tests                                  PASSED in 13.7s
+    PASSED  .tools/shiro/shiro_append_replay_tests (0.0s)
+//tools/shiro:shiro_append_seed_7_tests                                  PASSED in 17.3s
+    PASSED  .tools/shiro/shiro_append_seed_7_tests (0.0s)
+//tools/shiro:shiro_cli_tests                                            PASSED in 0.6s
+    PASSED  .tools/shiro/shiro_cli_tests (0.0s)
+//tools/shiro:shiro_fast_tests                                           PASSED in 117.5s
+    PASSED  .tools/shiro/shiro_fast_tests (0.1s)
+//tools/shiro:shiro_parser_cli_tests                                     PASSED in 0.0s
+    PASSED  .tools/shiro/shiro_parser_cli_tests (0.0s)
+//tools/shiro:shiro_relational_join_rewrite_tests                        PASSED in 4.4s
+    PASSED  .tools/shiro/shiro_relational_join_rewrite_tests (0.0s)
+//tools/shiro:shiro_storage_tests                                        PASSED in 23.7s
+    PASSED  .tools/shiro/shiro_storage_tests (0.0s)
+Test cases: finished with 98 passing, 0 skipped and 0 failing out of 98 test cases
+
+Executed 81 out of 98 tests: 98 tests pass.
+There were tests whose specified size is too big. Use the --test_verbose_timeout_warnings command line option to see which ones these are.
+INFO: Build Event Protocol files produced successfully.

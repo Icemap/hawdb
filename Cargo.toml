@@ -264,6 +264,10 @@ name = "concurrent_writers"
 harness = false
 
 [[bench]]
+name = "consumer_publication"
+harness = false
+
+[[bench]]
 name = "relational_monotonic_append"
 harness = false
 
