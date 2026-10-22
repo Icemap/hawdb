@@ -238,7 +238,12 @@ before ANN. No mapping is cached across requests or reused after a rebuild,
 including a rebuild at the same source epoch.
 
 Mapping charges every visited metadata record to the eligibility work scope,
-including rejected records. Existing index memory, file-descriptor, I/O and
+including rejected records. `max_work` / `maxWork` must budget for canonical
+eligibility collection plus the index's metadata size. Mapping is O(index
+metadata) per query in this delivery, so a small eligible set over a large index
+can exhaust the work limit during mapping alone.
+
+Existing index memory, file-descriptor, I/O and
 spill admission remains separate from that work counter. The mapping proof and
 candidate blocks are admitted before allocation. Non-empty explicit eligibility
 uses the native custody-owned scratch stage even without a visibility mask.
