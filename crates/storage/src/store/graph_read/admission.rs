@@ -39,6 +39,13 @@ pub(super) struct ProjectionAdmission<'a> {
     admission: ProjectionAllocationPolicy<'a>,
     error: RefCell<Option<HawDBError>>,
     stopped: Cell<bool>,
+    work: RefCell<ProjectionWorkAdmission>,
+}
+
+enum ProjectionWorkAdmission {
+    Unchecked,
+    Unbounded,
+    Bounded(Box<dyn GraphReadAllocation>),
 }
 
 enum ProjectionAllocationPolicy<'a> {
@@ -65,6 +72,7 @@ impl<'a> ProjectionAdmission<'a> {
             admission: ProjectionAllocationPolicy::Required(GraphReadAdmission::new(admit)),
             error: RefCell::new(None),
             stopped: Cell::new(false),
+            work: RefCell::new(ProjectionWorkAdmission::Unchecked),
         }
     }
 
@@ -73,6 +81,7 @@ impl<'a> ProjectionAdmission<'a> {
             admission: ProjectionAllocationPolicy::Controlled(RefCell::new(admit)),
             error: RefCell::new(None),
             stopped: Cell::new(false),
+            work: RefCell::new(ProjectionWorkAdmission::Unchecked),
         }
     }
 
@@ -97,6 +106,37 @@ impl<'a> ProjectionAdmission<'a> {
             }
             Err(error) => Err(self.refusal(error)),
         }
+    }
+
+    fn with_work<T>(
+        &self,
+        use_work: impl FnOnce(Option<&dyn GraphReadAllocation>) -> Result<T>,
+    ) -> std::result::Result<T, CanonicalSegmentError> {
+        let mut work = self.work.borrow_mut();
+        if matches!(*work, ProjectionWorkAdmission::Unchecked) {
+            let permit = self.reserve(0)?;
+            // Probe once per scan. Ordinary scans must not allocate a work
+            // token or lock a query memory account for every visited record.
+            *work = if permit.has_work_limit() {
+                ProjectionWorkAdmission::Bounded(permit)
+            } else {
+                ProjectionWorkAdmission::Unbounded
+            };
+        }
+        let permit = match &*work {
+            ProjectionWorkAdmission::Bounded(permit) => Some(permit.as_ref()),
+            _ => None,
+        };
+        use_work(permit).map_err(|error| self.refusal(error))
+    }
+
+    pub(super) fn has_work_limit(&self) -> Result<bool> {
+        self.with_work(|permit| Ok(permit.is_some()))
+            .map_err(canonical_segment_error)
+    }
+
+    fn charge_work(&self, units: usize) -> std::result::Result<(), CanonicalSegmentError> {
+        self.with_work(|permit| permit.map_or(Ok(()), |permit| permit.charge_work(units)))
     }
 
     fn refusal(&self, error: HawDBError) -> CanonicalSegmentError {
@@ -387,6 +427,7 @@ impl GraphStore {
     ) -> Result<GraphScanControl> {
         let Some(reader) = &self.canonical_base else {
             for node in self.nodes.values() {
+                admission.charge_work(1).map_err(canonical_segment_error)?;
                 if self.node_matches_label(node, label_id)
                     && admission.visit_live_selection(node, properties, &mut consumer)
                         == GraphScanControl::Stop
@@ -400,8 +441,10 @@ impl GraphStore {
         let mut graph_control = GraphScanControl::Continue;
         let (_, control) = reader
             .scan_node_inputs_control(|base| {
+                admission.charge_work(1)?;
                 while delta.peek().is_some_and(|(id, _)| **id <= base.id()) {
                     let (id, node) = delta.next().expect("peeked delta node exists");
+                    admission.charge_work(1)?;
                     if !self.node_tombstones.contains(id)
                         && self.node_matches_label(node, label_id)
                         && admission.visit_live_selection(node, properties, &mut consumer)
@@ -434,6 +477,7 @@ impl GraphStore {
             return Ok(graph_control);
         }
         for (id, node) in delta {
+            admission.charge_work(1).map_err(canonical_segment_error)?;
             if !self.node_tombstones.contains(id)
                 && self.node_matches_label(node, label_id)
                 && admission.visit_live_selection(node, properties, &mut consumer)
@@ -461,6 +505,7 @@ impl GraphStore {
                 let mut graph_control = GraphScanControl::Continue;
                 let (_, control) = reader
                     .scan_node_inputs_by_property_control(label, property, value, |input| {
+                        admission.charge_work(1)?;
                         if self.node_tombstones.contains(&input.id())
                             || self.nodes.contains_key(&input.id())
                             || seen.contains(&input.id())
@@ -489,6 +534,7 @@ impl GraphStore {
             }
         }
         for node in self.nodes.values() {
+            admission.charge_work(1).map_err(canonical_segment_error)?;
             if node.labels.contains(&label)
                 && node
                     .properties
@@ -514,6 +560,7 @@ impl GraphStore {
         // Resident predicates borrow storage values before selected hydration.
         if self.canonical_base.is_none() {
             for node in self.nodes.values() {
+                admission.charge_work(1).map_err(canonical_segment_error)?;
                 if node.labels.contains(&label_id)
                     && matches(&node.properties)
                     && admission.visit_live_selection(node, properties, &mut consumer)
@@ -531,5 +578,58 @@ impl GraphStore {
                 GraphScanControl::Continue
             }
         })
+    }
+}
+
+#[cfg(test)]
+mod work_tests {
+    use super::*;
+
+    struct WorkPermit(hawdb_core::RuntimeTaskContext);
+    impl GraphReadAllocation for WorkPermit {
+        fn bytes(&self) -> usize {
+            0
+        }
+        fn grow(&mut self, _: usize) -> Result<()> {
+            unreachable!("work tokens do not own payload")
+        }
+        fn has_work_limit(&self) -> bool {
+            self.0.has_work_limit()
+        }
+        fn charge_work(&self, units: usize) -> Result<()> {
+            self.0.charge_work(units)
+        }
+    }
+
+    #[test]
+    fn projection_work_admission_probes_once_and_preserves_refusal() {
+        for bounded in [false, true] {
+            let calls = Cell::new(0);
+            let task = if bounded {
+                hawdb_core::RuntimeTaskContext::default().with_work_limit(100)
+            } else {
+                hawdb_core::RuntimeTaskContext::default()
+            };
+            let mut allocate = |bytes| -> Result<Box<dyn GraphReadAllocation>> {
+                assert_eq!(bytes, 0);
+                calls.set(calls.get() + 1);
+                Ok(Box::new(WorkPermit(task.clone())))
+            };
+            let admission = ProjectionAdmission::new(&mut allocate);
+            assert_eq!(admission.has_work_limit().unwrap(), bounded);
+            for _ in 0..100 {
+                admission.charge_work(1).unwrap();
+            }
+            assert_eq!(calls.get(), 1, "record visits must reuse the scan's token");
+            assert_eq!(task.work_units(), if bounded { 100 } else { 0 });
+            if bounded {
+                assert!(admission.charge_work(1).is_err());
+                assert!(matches!(
+                    admission.finish(Ok(GraphScanControl::Continue)),
+                    Err(HawDBError::ResourceBudgetExceeded(ref error))
+                        if error.resource == hawdb_core::ResourceBudgetKind::WorkUnits
+                ));
+            }
+        }
     }
 }

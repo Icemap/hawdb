@@ -13,6 +13,57 @@ mod codec;
 /// Upper bound used to admit descriptor encoding/decoding before allocation.
 pub const MAX_VECTOR_INDEX_DESCRIPTOR_BYTES: usize = 4096;
 
+/// Immutable source and publication identity of an eligible vector domain.
+/// This is a query binding, never independent authority to publish or serve.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct VectorIndexReadIdentity {
+    pub database: crate::Uuid,
+    pub branch: crate::Uuid,
+    pub consumer_id_hash: [u8; 32],
+    pub target_locator_hash: [u8; 32],
+    pub registration: crate::Uuid,
+    pub projection: crate::Uuid,
+    pub checkpoint: crate::Uuid,
+    pub target_incarnation: std::num::NonZeroU64,
+    pub generation: std::num::NonZeroU64,
+    pub operation: std::num::NonZeroU64,
+    pub source_epoch: u64,
+}
+
+/// Query semantics, independent of the persistent index backend.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum VectorIndexQueryMode {
+    /// Fix an approximate window before applying canonical query predicates.
+    #[default]
+    AnnWindow,
+    /// Exhaust the declared eligible domain before selecting exact nearest rows.
+    Exact,
+}
+
+impl VectorIndexQueryMode {
+    pub fn parse(value: &str) -> Result<Self> {
+        match value {
+            "ann_window" => Ok(Self::AnnWindow),
+            "exact" => Ok(Self::Exact),
+            _ => Err(invalid("query mode must be 'ann_window' or 'exact'")),
+        }
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::AnnWindow => "ann_window",
+            Self::Exact => "exact",
+        }
+    }
+
+    pub const fn filter_position(self) -> &'static str {
+        match self {
+            Self::AnnWindow => "after_window",
+            Self::Exact => "before_ranking",
+        }
+    }
+}
+
 /// Resolved field identity. Relational schemas currently identify columns by
 /// normalized table name and ordinal; the descriptor's schema digest fences
 /// reinterpretation of that ordinal after a schema change.

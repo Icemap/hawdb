@@ -335,8 +335,13 @@ fn estimate_local_operator_cost(
         }
         PhysicalPlan::VectorIndexScan(scan) => {
             let rows = scan.top_k as u64;
-            let work = (scan.candidate_limit as u64).saturating_mul(VECTOR_SEED_TOTAL_COST_PER_ROW);
-            PlanCostBreakdown::new(rows, work, 0, 0, rows)
+            let upstream = inputs[0];
+            let domain = upstream.map_or(scan.candidate_limit as u64, |cost| cost.estimated_rows);
+            let work = domain.saturating_mul(VECTOR_SEED_TOTAL_COST_PER_ROW);
+            upstream.map_or_else(
+                || PlanCostBreakdown::new(rows, work, 0, 0, rows),
+                |cost| cost.with_cpu(rows, work, rows),
+            )
         }
         PhysicalPlan::HashJoinExec { .. } => {
             let left = inputs[0].expect("left input cost");

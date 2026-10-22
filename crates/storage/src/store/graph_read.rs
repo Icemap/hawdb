@@ -474,6 +474,10 @@ impl GraphStore {
         label_ids: Option<&[LabelId]>,
         admit: &mut ControlledGraphReadAllocator<'_>,
     ) -> Result<AdmittedNodeRead> {
+        let Some(work) = admit(0)? else {
+            return Ok(AdmittedNodeRead::Stopped);
+        };
+        work.charge_work(1)?;
         if self.node_tombstones.contains(&id) {
             return Ok(AdmittedNodeRead::Missing);
         }
@@ -571,6 +575,10 @@ impl GraphStore {
         id: RelId,
         admit: &mut ControlledGraphReadAllocator<'_>,
     ) -> Result<AdmittedRelationshipRead> {
+        let Some(work) = admit(0)? else {
+            return Ok(AdmittedRelationshipRead::Stopped);
+        };
+        work.charge_work(1)?;
         if self.relationship_tombstones.contains(&id) {
             return Ok(AdmittedRelationshipRead::Missing);
         }
@@ -837,6 +845,9 @@ impl GraphStore {
         admit: &mut ControlledGraphReadAllocator<'_>,
         consumer: &mut dyn FnMut(AdmittedRelationshipRecord) -> Result<GraphScanControl>,
     ) -> Result<GraphScanControl> {
+        let Some(work) = admit(0)? else {
+            return Ok(GraphScanControl::Stop);
+        };
         enum BaseVisit {
             Continue,
             Stop,
@@ -850,6 +861,7 @@ impl GraphStore {
                 .scan_relationship_inputs_control(|input| {
                     let id = input.id;
                     let result = (|| {
+                        work.charge_work(1)?;
                         let mut visit = |id| match self.relationship_with_allocation(id, admit)? {
                             AdmittedRelationshipRead::Missing => Ok(GraphScanControl::Continue),
                             AdmittedRelationshipRead::Stopped => Ok(GraphScanControl::Stop),
@@ -857,6 +869,7 @@ impl GraphStore {
                         };
                         while delta.peek().is_some_and(|(next, _)| **next < id) {
                             let (next, record) = delta.next().expect("peeked delta exists");
+                            work.charge_work(1)?;
                             if !self.relationship_tombstones.contains(next)
                                 && self.relationship_matches_type(record, rel_type)
                                 && visit(*next)? == GraphScanControl::Stop
@@ -866,6 +879,7 @@ impl GraphStore {
                         }
                         if delta.peek().is_some_and(|(next, _)| **next == id) {
                             let (next, record) = delta.next().expect("matching delta exists");
+                            work.charge_work(1)?;
                             if !self.relationship_tombstones.contains(next)
                                 && self.relationship_matches_type(record, rel_type)
                                 && visit(*next)? == GraphScanControl::Stop
@@ -925,6 +939,7 @@ impl GraphStore {
             AdmittedRelationshipRead::Relationship(record) => consumer(record),
         };
         for (id, record) in delta {
+            work.charge_work(1)?;
             if !self.relationship_tombstones.contains(id)
                 && self.relationship_matches_type(record, rel_type)
                 && visit(*id)? == GraphScanControl::Stop
@@ -1797,6 +1812,7 @@ impl GraphStore {
         admission: &ProjectionAdmission<'_>,
         mut consumer: impl FnMut(AdmittedProjection) -> GraphScanControl,
     ) -> Result<GraphScanControl> {
+        let bounded_work = admission.has_work_limit()?;
         let Some(reader) = &self.canonical_base else {
             let mut decode_properties = required_properties.cloned();
             if let Some(properties) = &mut decode_properties {
@@ -1814,6 +1830,7 @@ impl GraphStore {
         let Some(projection) = self
             .persistent_property_projection
             .as_ref()
+            .filter(|_| !bounded_work)
             .filter(|projection| {
                 projection.manifest().supports(
                     label_id,
@@ -2011,6 +2028,7 @@ impl GraphStore {
         admission: &ProjectionAdmission<'_>,
         mut consumer: impl FnMut(AdmittedProjection) -> GraphScanControl,
     ) -> Result<GraphScanControl> {
+        let bounded_work = admission.has_work_limit()?;
         let properties = predicates
             .iter()
             .map(|(property, _)| property.clone())
@@ -2019,6 +2037,7 @@ impl GraphStore {
             .canonical_base
             .as_ref()
             .zip(self.persistent_property_projection.as_ref())
+            .filter(|_| !bounded_work)
             .filter(|(_, projection)| {
                 projection
                     .manifest()
@@ -2213,11 +2232,13 @@ impl GraphStore {
         admission: &ProjectionAdmission<'_>,
         mut consumer: impl FnMut(AdmittedProjection) -> GraphScanControl,
     ) -> Result<GraphScanControl> {
+        let bounded_work = admission.has_work_limit()?;
         validate_composite_range_seek(seek)?;
         let Some((reader, projection)) = self
             .canonical_base
             .as_ref()
             .zip(self.persistent_property_projection.as_ref())
+            .filter(|_| !bounded_work)
             .filter(|(_, projection)| {
                 projection
                     .manifest()
@@ -2410,30 +2431,32 @@ impl GraphStore {
         if let Some(properties) = &mut decode_properties {
             properties.insert(property.to_string());
         }
-        if let Some(control) =
-            self.try_visit_ordered_range(label_id, property, lower, upper, |value, source| {
-                let node = match source {
-                    RangeRecord::Live(node) => {
-                        admission.live_selection(node, decode_properties.as_ref())?
+        if !admission.has_work_limit()?
+            && let Some(control) =
+                self.try_visit_ordered_range(label_id, property, lower, upper, |value, source| {
+                    let node = match source {
+                        RangeRecord::Live(node) => {
+                            admission.live_selection(node, decode_properties.as_ref())?
+                        }
+                        RangeRecord::Canonical(reader, id) => admission
+                            .canonical_selection(reader, id, decode_properties.as_ref())?
+                            .ok_or_else(|| {
+                                PersistentPropertyProjectionError::Corrupt(format!(
+                                    "range projection references missing canonical node {}",
+                                    id.0
+                                ))
+                            })?,
+                    };
+                    if !node.labels.contains(&label_id)
+                        || node.properties.get(property) != Some(value)
+                    {
+                        return Err(PersistentPropertyProjectionError::Corrupt(format!(
+                            "range index key disagrees with projected node {}",
+                            node.id.0
+                        )));
                     }
-                    RangeRecord::Canonical(reader, id) => admission
-                        .canonical_selection(reader, id, decode_properties.as_ref())?
-                        .ok_or_else(|| {
-                            PersistentPropertyProjectionError::Corrupt(format!(
-                                "range projection references missing canonical node {}",
-                                id.0
-                            ))
-                        })?,
-                };
-                if !node.labels.contains(&label_id) || node.properties.get(property) != Some(value)
-                {
-                    return Err(PersistentPropertyProjectionError::Corrupt(format!(
-                        "range index key disagrees with projected node {}",
-                        node.id.0
-                    )));
-                }
-                Ok(consumer(node))
-            })?
+                    Ok(consumer(node))
+                })?
         {
             return Ok(control);
         }
@@ -2693,6 +2716,7 @@ impl GraphStore {
         admission: &ProjectionAdmission<'_>,
         mut consumer: impl FnMut(AdmittedProjection) -> GraphScanControl,
     ) -> Result<GraphScanControl> {
+        let bounded_work = admission.has_work_limit()?;
         let query_tokens = full_text_query_tokens(query);
         if query_tokens.is_empty() {
             return Ok(GraphScanControl::Continue);
@@ -2701,6 +2725,7 @@ impl GraphStore {
             .canonical_base
             .as_ref()
             .zip(self.persistent_property_projection.as_ref())
+            .filter(|_| !bounded_work)
             .filter(|(_, projection)| {
                 projection.manifest().supports(
                     label_id,
@@ -2972,6 +2997,9 @@ impl GraphStore {
         admit: &mut ControlledGraphReadAllocator<'_>,
         mut consumer: impl FnMut(AdmittedRelationshipRecord) -> Result<GraphScanControl>,
     ) -> Result<GraphScanControl> {
+        let Some(work) = admit(0)? else {
+            return Ok(GraphScanControl::Stop);
+        };
         if let Some(rel_type) = rel_type
             && (self.canonical_base.is_none() || self.canonical_adjacency.is_some())
         {
@@ -2998,6 +3026,7 @@ impl GraphStore {
         {
             if rel_type.is_none_or(|expected| expected == *group_type) {
                 for entry in postings.iter_copied() {
+                    work.charge_work(1)?;
                     push_admitted_adjacency_key(
                         &mut entries,
                         entry,
@@ -3012,6 +3041,10 @@ impl GraphStore {
             if let Some(adjacency) = self.canonical_adjacency.as_ref() {
                 let (report, _) = adjacency
                     .scan_endpoint_inputs_control(node_id, direction, rel_type, |input| {
+                        if let Err(error) = work.charge_work(1) {
+                            collect_error = Some(error);
+                            return Ok(CanonicalScanControl::Stop);
+                        }
                         if !self
                             .relationship_tombstones
                             .contains(&input.relationship_id)
@@ -3044,6 +3077,10 @@ impl GraphStore {
                 // existing canonical scan fallback, with properties encoded.
                 reader
                     .scan_relationship_layouts_control(|id, layout| {
+                        if let Err(error) = work.charge_work(1) {
+                            collect_error = Some(error);
+                            return Ok(CanonicalScanControl::Stop);
+                        }
                         let (endpoint, neighbor) = match direction {
                             AdjacencyDirection::Outgoing => (layout.source, layout.target),
                             AdjacencyDirection::Incoming => (layout.target, layout.source),
@@ -3098,6 +3135,9 @@ impl GraphStore {
         admit: &mut ControlledGraphReadAllocator<'_>,
         consumer: &mut impl FnMut(AdmittedRelationshipRecord) -> Result<GraphScanControl>,
     ) -> Result<GraphScanControl> {
+        let Some(work) = admit(0)? else {
+            return Ok(GraphScanControl::Stop);
+        };
         let selection = (node_id, Some(rel_type), direction);
         let mut live_entries = self
             .adjacency_relationship_ids(node_id, rel_type, direction)
@@ -3117,6 +3157,10 @@ impl GraphStore {
         let mut consumer_error = None;
         let (report, control) = adjacency
             .scan_endpoint_inputs_control(node_id, direction, Some(rel_type), |input| {
+                if let Err(error) = work.charge_work(1) {
+                    consumer_error = Some(error);
+                    return Ok(CanonicalScanControl::Stop);
+                }
                 if self
                     .relationship_tombstones
                     .contains(&input.relationship_id)
@@ -3180,7 +3224,11 @@ impl GraphStore {
         mut consumer: impl FnMut(AdmittedRelationshipRecord) -> Result<GraphScanControl>,
     ) -> Result<(GraphScanControl, Option<ScanPruningReport>)> {
         let (node_id, rel_type, direction) = selection;
-        if self.canonical_base.is_none()
+        let Some(work) = admit(0)? else {
+            return Ok((GraphScanControl::Stop, None));
+        };
+        if !work.has_work_limit()
+            && self.canonical_base.is_none()
             && let Some(rel_type) = rel_type
         {
             let adjacency_entries = self
@@ -3280,6 +3328,9 @@ impl GraphStore {
             )
             .map(|control| (control, None))
         };
+        if work.has_work_limit() {
+            return fallback(admit, &mut consumer);
+        }
         let (Some(rel_type), Some(adjacency), Some(projection)) = (
             rel_type,
             self.canonical_adjacency.as_ref(),

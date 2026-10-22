@@ -420,6 +420,9 @@ fn visit_one_hop_relationships_selected(
             return Ok(ScanControl::Continue);
         }
         if metadata_only {
+            if let Some(task) = task_context {
+                task.charge_work(1)?;
+            }
             let mut allocation = None;
             let target =
                 store.projected_node_owned_admitted(target_id, &BTreeSet::new(), &mut |bytes| {

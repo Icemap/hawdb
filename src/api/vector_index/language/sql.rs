@@ -3,7 +3,8 @@
 
 use super::*;
 use hawdb_relational::query::vector_index::{
-    execute_vector_index_select, VectorIndexCandidates, VectorIndexInput, VectorIndexSqlExecution,
+    collect_vector_eligible_domain, execute_vector_index_select, VectorIndexCandidates,
+    VectorIndexInput, VectorIndexSqlExecution,
 };
 use hawdb_sql::{SqlStatement, SqlValue};
 
@@ -19,6 +20,8 @@ pub struct VectorIndexSqlReport {
     pub output_rows: usize,
     pub output_payload_bytes: usize,
     pub row_execution: hawdb_relational::row_runtime::RelationalRowExecutionEvidence,
+    pub eligibility_row_execution:
+        Option<hawdb_relational::row_runtime::RelationalRowExecutionEvidence>,
     index: Arc<VectorIndexRetainedOutput>,
     _metadata_memory: RuntimeRetainedMemory,
 }
@@ -68,6 +71,9 @@ impl VectorIndexReadTransaction {
         let hawdb_core::Value::String(index) = bind(&search.index, request.parameters)? else {
             return Err(invalid("vector index name must be a string").into());
         };
+        if index != self.definition.name() {
+            return Err(invalid("query index differs from the bound index definition").into());
+        }
         if !matches!(&search.embedding, SqlValue::Parameter(_)) {
             return Err(invalid("SQL vector query requires a typed vector parameter").into());
         }
@@ -84,11 +90,54 @@ impl VectorIndexReadTransaction {
                 .filter(|n| *n > 0)
                 .ok_or_else(|| invalid("vector index limits must be positive integers"))
         };
-        let candidate_limit = positive(&search.candidates)?;
         let top_k = positive(&search.top_k)?;
+        let candidate_limit = search
+            .candidates
+            .as_ref()
+            .map(positive)
+            .transpose()?
+            .unwrap_or(top_k);
         if top_k > candidate_limit {
             return Err(invalid("vector top_k exceeds candidates").into());
         }
+        let canonical_memory = hawdb_executor::QueryMemoryLedger::for_query(
+            &self.source.config.execution_memory,
+            Some(&query_task),
+        )?;
+        let eligible = if search.mode == hawdb_core::VectorIndexQueryMode::Exact {
+            let value = search
+                .max_work
+                .as_ref()
+                .ok_or_else(|| invalid("exact vector search requires max_work"))?;
+            let hawdb_core::Value::Int(max_work) = bind(value, request.parameters)? else {
+                return Err(invalid("max_work must be a nonnegative integer").into());
+            };
+            let max_work = usize::try_from(*max_work)
+                .map_err(|_| invalid("max_work must be a nonnegative integer"))?;
+            Some(collect_vector_eligible_domain(
+                select,
+                request.parameters,
+                &self.definition,
+                self.pin.vector_index_read_identity(),
+                embedding.as_ref(),
+                max_work,
+                VectorIndexSqlExecution {
+                    memory_ledger: &canonical_memory,
+                    state: self.source.store.relational_state(),
+                    row_mode: hawdb_relational::row_runtime::RelationalRowReadMode::Store(
+                        &self.source.store,
+                    ),
+                    resources: crate::api::relational_query_resource_context(
+                        &self.source.config,
+                        request.output_limits.max_rows,
+                        request.output_limits.max_payload_bytes,
+                        Some(&query_task),
+                    ),
+                },
+            )?)
+        } else {
+            None
+        };
         let mut provider = IndexProvider {
             pin: &self.pin,
             definition: &self.definition,
@@ -102,6 +151,8 @@ impl VectorIndexReadTransaction {
             embedding: embedding.as_ref(),
             candidate_limit,
             top_k,
+            mode: search.mode,
+            eligible: eligible.as_ref().map(|(domain, _)| domain),
             resources: hawdb_executor::ExternalReadResourceContract {
                 priority: 0,
                 max_parallelism: NonZeroUsize::MIN,
@@ -117,6 +168,12 @@ impl VectorIndexReadTransaction {
             return Err(VectorIndexReadError::Index(error));
         }
         let index = output?;
+        // Both phases share one canonical ledger. Release the domain before
+        // hydration so its retained identities no longer consume the grant.
+        let eligibility_row_execution = eligible.map(|(domain, evidence)| {
+            drop(domain);
+            evidence
+        });
         let candidates = SqlCandidates(&index);
         let rows = execute_vector_index_select(
             select,
@@ -126,6 +183,7 @@ impl VectorIndexReadTransaction {
                 candidates: &candidates,
             },
             VectorIndexSqlExecution {
+                memory_ledger: &canonical_memory,
                 state: self.source.store.relational_state(),
                 row_mode: hawdb_relational::row_runtime::RelationalRowReadMode::Store(
                     &self.source.store,
@@ -142,6 +200,7 @@ impl VectorIndexReadTransaction {
             output_rows: rows.row_count(),
             output_payload_bytes: rows.output_payload_bytes,
             row_execution: rows.row_execution.clone(),
+            eligibility_row_execution,
             index,
             _metadata_memory: metadata_memory,
         };

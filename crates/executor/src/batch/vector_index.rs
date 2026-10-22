@@ -11,7 +11,7 @@ use hawdb_storage::read_view::{
 };
 
 pub(super) fn stream(
-    scan: &hawdb_plan_cypher::VectorIndexScan,
+    scan: &hawdb_plan_cypher::VectorIndexScan<PhysicalPlan>,
     context: BatchReadContext<'_>,
     execution_limit: ExecutionLimit,
     emit: &mut dyn FnMut(BindingBatch) -> Result<BatchControl>,
@@ -32,6 +32,115 @@ pub(super) fn stream(
         },
         task_context: context.task_context,
     };
+    let eligibility_account = context.memory_ledger.account(
+        QueryMemoryClass::BlockingState,
+        "VectorIndexScan eligibility",
+        context.memory.blocking_operator_bytes,
+    );
+    let definition_memory;
+    let definition = if scan.mode == hawdb_core::VectorIndexQueryMode::Exact {
+        definition_memory = Some(
+            eligibility_account
+                .reserve(hawdb_core::vector_index::MAX_VECTOR_INDEX_DESCRIPTOR_BYTES)?,
+        );
+        Some(context.external.vector_index_definition(&scan.index)?)
+    } else {
+        definition_memory = None;
+        None
+    };
+    let mut eligible = definition
+        .as_ref()
+        .map(|(definition, identity)| {
+            crate::vector_eligibility::VectorEligibleDomain::new(
+                definition,
+                *identity,
+                embedding.as_ref(),
+                scan.max_work,
+                &eligibility_account,
+                context.task_context,
+            )
+        })
+        .transpose()?;
+    if let (Some(domain), Some((definition, _))) = (&mut eligible, &definition) {
+        let hawdb_core::VectorIndexTarget::NodeProperty {
+            table, property, ..
+        } = definition.target()
+        else {
+            return Err(HawDBError::Semantic(
+                "Cypher eligibility requires a node-property index".into(),
+            ));
+        };
+        let label = context.catalog.label_id(table).ok_or_else(|| {
+            HawDBError::StorageIntegrity(
+                "vector index label is absent from the canonical catalog".into(),
+            )
+        })?;
+        let variable = scan
+            .eligible_variable
+            .as_ref()
+            .ok_or_else(|| HawDBError::Semantic("missing eligible node variable".into()))?;
+        let input = scan
+            .input
+            .as_deref()
+            .ok_or_else(|| HawDBError::Semantic("missing vector eligible input plan".into()))?;
+        validate_eligible_input(input)?;
+        let eligible_task = domain.task().clone();
+        let eligible_context = BatchReadContext {
+            task_context: Some(&eligible_task),
+            ..context
+        };
+        let collected = execute_prepared_binding_batches(
+            BatchPlanRef::descendant(input),
+            eligible_context,
+            ExecutionLimit::unlimited(),
+            &mut |batch| {
+                for mut binding in batch {
+                    domain.observe_input()?;
+                    // OPTIONAL MATCH nulls contribute input work but no vector identity.
+                    let Some(node) = binding.nodes.remove(variable) else {
+                        continue;
+                    };
+                    if !node.labels.contains(&label) {
+                        continue;
+                    }
+                    binding.nodes.insert(scan.variable.clone(), node);
+                    if let Some(predicate) = &scan.node_visibility_predicate
+                        && !evaluate_predicate_observed(
+                            predicate,
+                            context.catalog,
+                            context.store,
+                            &binding,
+                            context.observer,
+                            crate::store::AdjacencyReadMemory {
+                                budget_bytes: context.memory.query_memory_bytes.get(),
+                                account: Some(&eligibility_account),
+                            },
+                            Some(&eligible_task),
+                        )?
+                    {
+                        continue;
+                    }
+                    let node = &binding.nodes[&scan.variable];
+                    match node.properties.get(property) {
+                        None | Some(Value::Null) => {}
+                        Some(Value::Vector(vector)) => {
+                            let _identity_memory = eligibility_account.reserve(64)?;
+                            domain.insert(&format!("n:{:016x}", node.id.0), vector.as_ref())?;
+                        }
+                        _ => {
+                            return Err(HawDBError::StorageIntegrity(
+                                "eligible property is not a canonical vector".into(),
+                            ))
+                        }
+                    }
+                }
+                Ok(BatchControl::Continue)
+            },
+        );
+        eligible_task.check_work_limit()?;
+        collected?;
+        domain.finish()?;
+    }
     let candidates = context
         .external
         .execute_vector_index(VectorIndexExecutionRequest {
@@ -39,8 +148,13 @@ pub(super) fn stream(
             embedding: embedding.as_ref(),
             candidate_limit: scan.candidate_limit,
             top_k: scan.top_k,
+            mode: scan.mode,
+            eligible: eligible.as_ref(),
             resources,
         })?;
+    drop(eligible);
+    drop(definition);
+    drop(definition_memory);
     resources.checkpoint()?;
     if candidates.row_count() > scan.top_k {
         return Err(HawDBError::StorageIntegrity(
@@ -139,4 +253,58 @@ pub(super) fn stream(
     }
     resources.checkpoint()?;
     output.emit(emit)
+}
+
+fn validate_eligible_input(plan: &PhysicalPlan) -> Result<()> {
+    if matches!(
+        plan,
+        PhysicalPlan::GraphAlgorithm { .. }
+            | PhysicalPlan::GraphAlgorithmOutput(_)
+            | PhysicalPlan::TextSeedScan { .. }
+            | PhysicalPlan::VectorSeedScan { .. }
+            | PhysicalPlan::GraphSeedScan { .. }
+            | PhysicalPlan::VectorIndexScan(_)
+    ) {
+        return Err(HawDBError::Semantic(
+            "vector eligibility requires canonical graph input; algorithm and external seed work is not admitted".into(),
+        ));
+    }
+    match plan.children() {
+        PlanChildren::None => Ok(()),
+        PlanChildren::Unary(input) => validate_eligible_input(input),
+        PlanChildren::Binary(left, right) => {
+            validate_eligible_input(left)?;
+            validate_eligible_input(right)
+        }
+    }
+}
+
+#[cfg(test)]
+mod eligibility_tests {
+    use super::*;
+
+    #[test]
+    fn eligibility_refuses_unmetered_algorithm_even_below_a_limit() {
+        let algorithm = PhysicalPlan::GraphAlgorithm {
+            algorithm: hawdb_plan_cypher::GraphAlgorithmKind::PageRank,
+            graph_name: "input".into(),
+            options: hawdb_plan_cypher::GraphAlgorithmOptions {
+                max_iterations: Some(usize::MAX),
+                tolerance: Some(0.0),
+                ..Default::default()
+            },
+            score_column: "rank".into(),
+            return_node_identity: true,
+            node_visibility_predicate: None,
+        };
+        let plan = PhysicalPlan::LimitExec {
+            offset: 0,
+            limit: Some(1),
+            input: Box::new(algorithm),
+        };
+        assert!(matches!(
+            validate_eligible_input(&plan),
+            Err(HawDBError::Semantic(_))
+        ));
+    }
 }

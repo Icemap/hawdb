@@ -46,6 +46,205 @@ pub struct VectorIndexSqlExecution<'state, 'runtime, R: RelationalRowStoreReader
     pub state: &'state RelationalState,
     pub row_mode: RelationalRowReadMode<'state, R>,
     pub resources: RelationalQueryResourceContext<'runtime>,
+    pub memory_ledger: &'runtime QueryMemoryLedger,
+}
+
+impl<'runtime, R: RelationalRowStoreReader> VectorIndexSqlExecution<'_, 'runtime, R> {
+    fn admitted_ledger(&self) -> Result<&'runtime QueryMemoryLedger> {
+        let limit = hawdb_executor::memory::enforced_query_memory_budget(
+            self.resources.execution_memory,
+            self.resources.task_context,
+        )?;
+        if self.memory_ledger.snapshot().budget_bytes > limit.get() {
+            return Err(HawDBError::Execution(
+                "vector SQL ledger exceeds the canonical query memory grant".into(),
+            ));
+        }
+        Ok(self.memory_ledger)
+    }
+}
+
+fn validate_vector_index_select(select: &SelectStatement) -> Result<()> {
+    if select.vector_index.is_none()
+        || !select.joins.is_empty()
+        || select.distinct
+        || !select.group_by.is_empty()
+        || select.having.is_some()
+        || select.lock_strength.is_some()
+        || select.projection.iter().any(projection_contains_aggregate)
+    {
+        return Err(HawDBError::Semantic("vector index SQL supports a single source with WHERE, projection, ORDER BY, LIMIT and OFFSET".into()));
+    }
+    Ok(())
+}
+
+pub fn collect_vector_eligible_domain<'query, R: RelationalRowStoreReader>(
+    select: &SelectStatement,
+    parameters: &[Value],
+    definition: &'query hawdb_core::VectorIndexDescriptor,
+    identity: hawdb_core::VectorIndexReadIdentity,
+    embedding: hawdb_core::VectorRef<'query>,
+    max_work: usize,
+    execution: VectorIndexSqlExecution<'_, 'query, R>,
+) -> Result<(
+    hawdb_executor::vector_eligibility::VectorEligibleDomain<'query>,
+    RelationalRowExecutionEvidence,
+)> {
+    use hawdb_executor::vector_eligibility::VectorEligibleDomain;
+    validate_vector_index_select(select)?;
+    let hawdb_core::VectorIndexTarget::Relational {
+        table,
+        column_ordinal,
+        ..
+    } = definition.target()
+    else {
+        return Err(HawDBError::Semantic(
+            "SQL eligibility requires a relational index".into(),
+        ));
+    };
+    let resources = execution.resources;
+    let task = resources.task_context;
+    let schema = execution.state.table_schema(table).ok_or_else(|| {
+        HawDBError::StorageIntegrity("vector index source table is absent".into())
+    })?;
+    if schema.column_position("distance").is_some() {
+        return Err(HawDBError::Semantic(
+            "vector index SQL reserves the distance output column".into(),
+        ));
+    }
+    let qualifier = select
+        .from_alias
+        .as_deref()
+        .unwrap_or("vector_index_search");
+    let ledger = execution.admitted_ledger()?;
+    let account = ledger.account(
+        QueryMemoryClass::BlockingState,
+        "VectorIndexSqlScan eligibility",
+        resources.execution_memory.blocking_operator_bytes,
+    );
+    let mut domain = VectorEligibleDomain::new(
+        definition,
+        identity,
+        embedding,
+        max_work.min(resources.limits.max_candidate_work),
+        &account,
+        task,
+    )?;
+    let _setup_memory = account.reserve(
+        schema
+            .columns
+            .len()
+            .saturating_mul(256)
+            .saturating_add(table.len())
+            .saturating_add(qualifier.len())
+            .saturating_add(4096),
+    )?;
+    let empty = BoundRow {
+        bindings: vec![Binding {
+            binding: BindingId::new(0),
+            table,
+            qualifier,
+            schema,
+            row: None,
+        }],
+    };
+    // The generated distance column does not exist in this input schema.
+    // Validate names and predicate types before looking at any source rows.
+    let _predicate_memory = select
+        .selection
+        .as_ref()
+        .map(|predicate| {
+            projection_memory::admit_predicate(predicate, &empty, parameters, &account)
+        })
+        .transpose()?;
+    let _predicate = select
+        .selection
+        .as_ref()
+        .map(|predicate| {
+            BoundStreamingPredicate::bind(predicate, parameters, schema, table, qualifier)
+        })
+        .transpose()?;
+    let original_task = domain.task().clone();
+    let row_task = original_task
+        .clone()
+        .with_memory_controller(Arc::new(CanonicalPointMemory {
+            account: ledger.account(
+                QueryMemoryClass::PipelineBatch,
+                "VectorIndexSqlScan eligible rows",
+                resources.execution_memory.batch_payload_bytes,
+            ),
+            original_task,
+        }));
+    let row_runtime = execution.row_mode.open_runtime(
+        execution.state,
+        crate::field_plan::RelationalFieldPlan::all_columns(table, schema.columns.len()),
+        resources.limits.row_read,
+        resources.limits.hydration,
+        &row_task,
+    )?;
+    row_runtime.visit_all(table, |row| {
+        domain.observe_input()?;
+        let _row_memory =
+            account.reserve(row.resident_bytes().saturating_mul(4).saturating_add(4096))?;
+        let binding = BoundRow {
+            bindings: vec![Binding {
+                binding: BindingId::new(0),
+                table,
+                qualifier,
+                schema,
+                row: Some(row),
+            }],
+        };
+        let _scratch = select
+            .selection
+            .as_ref()
+            .map(|predicate| {
+                projection_memory::admit_predicate(predicate, &binding, parameters, &account)
+            })
+            .transpose()?;
+        if let Some(predicate) = &select.selection
+            && predicate_truth(predicate, &binding, parameters)? != Some(true)
+        {
+            return Ok(true);
+        }
+        let row = binding.bindings[0]
+            .row
+            .as_ref()
+            .expect("canonical eligible row");
+        let vector = match row.value(*column_ordinal as usize)? {
+            RelationalValue::Null => return Ok(true),
+            RelationalValue::Vector(vector) => vector.as_ref(),
+            _ => {
+                return Err(HawDBError::StorageIntegrity(
+                    "eligible SQL field is not a vector".into(),
+                ))
+            }
+        };
+        let encoded = hawdb_storage::relational::encode_relational_primary_key(row.primary_key())
+            .map_err(|error| HawDBError::StorageIntegrity(error.to_string()))?;
+        let mut identity = String::with_capacity(encoded.len().saturating_mul(2).saturating_add(2));
+        identity.push_str("r:");
+        use std::fmt::Write;
+        for byte in encoded {
+            write!(&mut identity, "{byte:02x}").expect("String write");
+        }
+        domain.insert(&identity, vector)?;
+        Ok(true)
+    })?;
+    domain.finish()?;
+    Ok((domain, row_runtime.evidence()))
+}
+
+fn residual_selection(select: &SelectStatement) -> Option<&SqlExpression> {
+    if select
+        .vector_index
+        .as_ref()
+        .is_some_and(|search| search.mode == hawdb_core::VectorIndexQueryMode::Exact)
+    {
+        None
+    } else {
+        select.selection.as_ref()
+    }
 }
 
 pub fn execute_vector_index_select<R: RelationalRowStoreReader>(
@@ -57,16 +256,7 @@ pub fn execute_vector_index_select<R: RelationalRowStoreReader>(
     let resources = execution.resources;
     let task = resources.task_context;
     hawdb_executor::pipeline::runtime_checkpoint(task)?;
-    if select.vector_index.is_none()
-        || !select.joins.is_empty()
-        || select.distinct
-        || !select.group_by.is_empty()
-        || select.having.is_some()
-        || select.lock_strength.is_some()
-        || select.projection.iter().any(projection_contains_aggregate)
-    {
-        return Err(HawDBError::Semantic("vector index SQL supports a single source with WHERE, projection, ORDER BY, LIMIT and OFFSET".into()));
-    }
+    validate_vector_index_select(select)?;
     if input.candidates.row_count() > resources.limits.max_candidate_work {
         return Err(HawDBError::read_budget_exceeded(
             hawdb_core::ReadBudgetResource::Rows,
@@ -82,7 +272,7 @@ pub fn execute_vector_index_select<R: RelationalRowStoreReader>(
             "vector index SQL reserves the distance output column".into(),
         ));
     }
-    let ledger = QueryMemoryLedger::for_query(resources.execution_memory, task)?;
+    let ledger = execution.admitted_ledger()?;
     let account = ledger.account(
         QueryMemoryClass::BlockingState,
         "VectorIndexSqlScan",
@@ -143,9 +333,7 @@ pub fn execute_vector_index_select<R: RelationalRowStoreReader>(
         let _memory = projection_memory::admit(select, &empty, parameters, &account)?;
         let mut empty_projection = project_bound_row(&empty, &select.projection, parameters)?;
         add_relational_order_keys(select, &empty, &mut empty_projection)?;
-        let _predicate = select
-            .selection
-            .as_ref()
+        let _predicate = residual_selection(select)
             .map(|predicate| {
                 BoundStreamingPredicate::bind(
                     predicate,
@@ -183,7 +371,7 @@ pub fn execute_vector_index_select<R: RelationalRowStoreReader>(
         qualifier,
         row_runtime: &row_runtime,
         resources,
-        ledger: &ledger,
+        ledger,
     };
     let offset = usize::try_from(bind_bound(select.offset, parameters, "OFFSET")?.unwrap_or(0))
         .map_err(|_| HawDBError::Semantic("SQL OFFSET is too large".into()))?;
@@ -232,7 +420,7 @@ pub fn execute_vector_index_select<R: RelationalRowStoreReader>(
                 limit.min(resources.limits.max_output_rows.saturating_add(1)),
                 &Catalog::default(),
                 resources.execution_memory,
-                &ledger,
+                ledger,
                 task,
                 &RelationalBlockingObserver::default(),
                 &mut emit,
@@ -337,7 +525,7 @@ impl BindingBatchSource<()> for CandidateRows<'_> {
             };
             let _projection_memory =
                 projection_memory::admit(self.select, &binding, self.parameters, &account)?;
-            if let Some(predicate) = &self.select.selection
+            if let Some(predicate) = residual_selection(self.select)
                 && predicate_truth(predicate, &binding, self.parameters)? != Some(true)
             {
                 continue;

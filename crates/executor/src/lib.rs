@@ -71,6 +71,7 @@ pub mod transform;
 #[doc(hidden)]
 pub mod traversal;
 pub mod vector;
+pub mod vector_eligibility;
 
 pub use binding::value_payload_bytes as query_value_payload_bytes;
 

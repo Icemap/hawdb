@@ -172,6 +172,8 @@ impl VectorIndexReadTransaction {
                     embedding,
                     candidate_limit,
                     top_k,
+                    mode: hawdb_core::VectorIndexQueryMode::AnnWindow,
+                    eligible: None,
                 },
             )
             .map_err(Into::into)

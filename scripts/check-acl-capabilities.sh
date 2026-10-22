@@ -33,4 +33,14 @@ if ! "$test_binary" "$test_filter" --list | awk -v expected="$acl_test" '
   exit 1
 fi
 
-exec "$test_binary" "$test_filter" --nocapture
+readonly vector_filter="api::vector_index::build::tests::eligibility::vector_index_exact_visibility_precedes_top_k"
+if ! "$test_binary" "$vector_filter" --exact --list | awk -v expected="${vector_filter}: test" '
+  $0 == expected { found = 1 }
+  END { exit !found }
+'; then
+  echo "Vector eligibility ACL test is missing from the qualification binary" >&2
+  exit 1
+fi
+
+"$test_binary" "$test_filter" --nocapture
+exec "$test_binary" "$vector_filter" --exact --nocapture

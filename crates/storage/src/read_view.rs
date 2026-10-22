@@ -19,6 +19,17 @@ use crate::cache::ManifestGeneration;
 /// Standalone storage callers may use their own explicit allocation policy.
 pub trait GraphReadAllocation {
     fn bytes(&self) -> usize;
+
+    /// A scoped query work limit; ordinary storage readers remain unmetered.
+    fn has_work_limit(&self) -> bool {
+        false
+    }
+
+    /// Charge before examining a source candidate, including rejected records.
+    fn charge_work(&self, _units: usize) -> hawdb_core::Result<()> {
+        Ok(())
+    }
+
     /// Reserve additional bytes atomically before allocation. Refusal leaves
     /// the existing reservation intact.
     fn grow(&mut self, bytes: usize) -> hawdb_core::Result<()>;
@@ -186,6 +197,14 @@ impl<'a> GraphReadAdmission<'a> {
         Self {
             admit: std::cell::RefCell::new(admit),
         }
+    }
+
+    pub fn has_work_limit(&self) -> hawdb_core::Result<bool> {
+        Ok(self.reserve(0)?.has_work_limit())
+    }
+
+    pub fn charge_work(&self, units: usize) -> hawdb_core::Result<()> {
+        self.reserve(0)?.charge_work(units)
     }
 
     pub fn reserve(&self, bytes: usize) -> hawdb_core::Result<Box<dyn GraphReadAllocation>> {

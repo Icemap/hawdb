@@ -264,6 +264,9 @@ pub(super) fn stream_source_segment_scan_batches(
         ..
     } = context;
     runtime_checkpoint(task_context)?;
+    if task_context.is_some_and(RuntimeTaskContext::has_work_limit) {
+        return stream_node_scan_batches(variable, "Source", None, context, execution_limit, emit);
+    }
     let Some(storage_predicate) = source_storage_scan_predicate(predicate, variable) else {
         return stream_node_scan_batches(variable, "Source", None, context, execution_limit, emit);
     };

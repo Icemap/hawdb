@@ -32,6 +32,8 @@ pub(super) fn lower_source(table: &TableFactor) -> Result<Option<SqlVectorIndexS
     };
     let mut candidates = None;
     let mut top_k = None;
+    let mut mode = None;
+    let mut max_work = None;
     for option in options {
         let (name, value) = match option {
             FunctionArg::Named {
@@ -53,18 +55,60 @@ pub(super) fn lower_source(table: &TableFactor) -> Result<Option<SqlVectorIndexS
         let slot = match normalize_ident(name).as_str() {
             "candidates" => &mut candidates,
             "top_k" => &mut top_k,
+            "mode" => &mut mode,
+            "max_work" => &mut max_work,
             _ => return Err(HawDBError::Semantic("unknown vector index option".into())),
         };
         if slot.replace(lower_literal_expr(value)?).is_some() {
             return Err(HawDBError::Semantic("duplicate vector index option".into()));
         }
     }
-    let required =
-        || HawDBError::Semantic("vector index requires explicit candidates and top_k".into());
+    let mode = match mode {
+        None => hawdb_core::VectorIndexQueryMode::AnnWindow,
+        Some(SqlValue::Literal(hawdb_core::Value::String(mode))) => {
+            hawdb_core::VectorIndexQueryMode::parse(&mode)?
+        }
+        _ => {
+            return Err(HawDBError::Semantic(
+                "vector index mode must be a string literal".into(),
+            ))
+        }
+    };
+    let required = || {
+        HawDBError::Semantic(
+            match mode {
+                hawdb_core::VectorIndexQueryMode::Exact => {
+                    "exact vector search requires explicit top_k"
+                }
+                hawdb_core::VectorIndexQueryMode::AnnWindow => {
+                    "vector index requires explicit candidates and top_k"
+                }
+            }
+            .into(),
+        )
+    };
+    match mode {
+        hawdb_core::VectorIndexQueryMode::AnnWindow if candidates.is_none() => {
+            return Err(required())
+        }
+        hawdb_core::VectorIndexQueryMode::Exact if candidates.is_some() => {
+            return Err(HawDBError::Semantic(
+                "exact vector search does not accept candidates".into(),
+            ));
+        }
+        _ => {}
+    }
+    if (mode == hawdb_core::VectorIndexQueryMode::Exact) != max_work.is_some() {
+        return Err(HawDBError::Semantic(
+            "max_work is required only for exact vector search".into(),
+        ));
+    }
     Ok(Some(SqlVectorIndexSearch {
         index: lower_literal_expr(index)?,
         embedding: lower_literal_expr(embedding)?,
-        candidates: candidates.ok_or_else(required)?,
+        mode,
+        max_work,
+        candidates,
         top_k: top_k.ok_or_else(required)?,
     }))
 }
@@ -107,5 +151,26 @@ mod tests {
             "SELECT * FROM vector_index_search('rows', $1, top_k => 1, candidates => 8)",
         )
         .unwrap();
+    }
+
+    #[test]
+    fn vector_index_exact_options_are_explicit_and_disjoint_from_ann() {
+        for options in [
+            "mode => 'exact', top_k => 1",
+            "mode => 'exact', top_k => 1, max_work => 10, candidates => 2",
+            "mode => $2, top_k => 1, max_work => 10",
+            "mode => 'filtered_ann', top_k => 1, max_work => 10",
+            "mode => 'ann_window', top_k => 1, candidates => 2, max_work => 10",
+            "mode => 'exact', top_k => 1, max_work => 10, max_work => 20",
+        ] {
+            assert!(
+                crate::prepare_postgres_sql(&format!(
+                    "SELECT * FROM vector_index_search('rows', $1, {options})"
+                ))
+                .is_err(),
+                "{options}"
+            );
+        }
+        crate::prepare_postgres_sql("SELECT id FROM vector_index_search('rows', $1, mode => 'exact', top_k => 1, max_work => $2) WHERE active = true").unwrap();
     }
 }

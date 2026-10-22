@@ -10,6 +10,7 @@ pub enum ResourceBudgetKind {
     SpillBytes,
     SpillRuns,
     MetadataEntries,
+    WorkUnits,
 }
 
 impl ResourceBudgetKind {
@@ -19,6 +20,7 @@ impl ResourceBudgetKind {
             Self::SpillBytes => "spill_bytes",
             Self::SpillRuns => "spill_runs",
             Self::MetadataEntries => "metadata_entries",
+            Self::WorkUnits => "work_units",
         }
     }
 }

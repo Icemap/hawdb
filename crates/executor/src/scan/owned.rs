@@ -64,7 +64,10 @@ fn visit_full_nodes(
     consume: &mut dyn FnMut(NodeRecord, Box<dyn GraphReadAllocation>) -> Result<ScanControl>,
 ) -> Result<ScanVisit> {
     let exact_label = exact_scan_label_id(context.catalog, spec.label);
-    if !context.store.is_out_of_core()
+    if !context
+        .task_context
+        .is_some_and(RuntimeTaskContext::has_work_limit)
+        && !context.store.is_out_of_core()
         && let Some(label_id) = exact_label
         && context
             .store

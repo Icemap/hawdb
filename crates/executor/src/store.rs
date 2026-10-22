@@ -55,6 +55,18 @@ struct QueryGraphReadAllocation {
 }
 
 impl hawdb_storage::read_view::GraphReadAllocation for QueryGraphReadAllocation {
+    fn has_work_limit(&self) -> bool {
+        self.task_context
+            .as_ref()
+            .is_some_and(hawdb_core::RuntimeTaskContext::has_work_limit)
+    }
+
+    fn charge_work(&self, units: usize) -> Result<()> {
+        self.task_context
+            .as_ref()
+            .map_or(Ok(()), |task| task.charge_work(units))
+    }
+
     fn bytes(&self) -> usize {
         self.allocation.bytes()
     }
@@ -140,6 +152,18 @@ struct LocalGraphReadAllocation {
 }
 
 impl hawdb_storage::read_view::GraphReadAllocation for LocalGraphReadAllocation {
+    fn has_work_limit(&self) -> bool {
+        self.task_context
+            .as_ref()
+            .is_some_and(hawdb_core::RuntimeTaskContext::has_work_limit)
+    }
+
+    fn charge_work(&self, units: usize) -> Result<()> {
+        self.task_context
+            .as_ref()
+            .map_or(Ok(()), |task| task.charge_work(units))
+    }
+
     fn bytes(&self) -> usize {
         self.bytes
     }

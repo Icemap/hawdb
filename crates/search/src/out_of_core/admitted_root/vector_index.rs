@@ -76,14 +76,27 @@ impl OpenedRoot {
                 .into());
             }
         }
-        if request.top_k > request.candidate_limit {
+        if request.mode == hawdb_core::VectorIndexQueryMode::AnnWindow && request.eligible.is_some()
+        {
+            return Err(HawDBError::Semantic(
+                "ann_window cannot consume an eligible domain".into(),
+            )
+            .into());
+        }
+        if request.mode == hawdb_core::VectorIndexQueryMode::AnnWindow
+            && request.top_k > request.candidate_limit
+        {
             return Err(
                 HawDBError::Semantic("vector top-k exceeds its candidate window".into()).into(),
             );
         }
         for (requested, limit, option) in [
             (
-                request.candidate_limit.get(),
+                if request.mode == hawdb_core::VectorIndexQueryMode::AnnWindow {
+                    request.candidate_limit.get()
+                } else {
+                    0
+                },
                 self.reader.config.max_vector_candidates.get(),
                 "SearchOutOfCoreConfig.max_vector_candidates",
             ),
@@ -119,56 +132,59 @@ impl OpenedRoot {
             std::mem::size_of::<VectorIndexRetainedOutput>(),
         )?;
         let output = query_output::Memory(Some(&frame));
-        // Scratch precedes the one I/O wave so cleanup can obtain fresh I/O.
-        let stage = if self.reader.visibility.is_empty() {
-            None
-        } else {
-            let disk_bytes = self
-                .reader
-                .config
-                .max_candidate_spill_bytes
-                .get()
-                .checked_add(crate::out_of_core::CANDIDATE_FILE_HEADER.len() as u64)
-                .ok_or_else(|| {
-                    HawDBError::Execution("vector candidate spill bound overflow".into())
-                })?;
-            let admission = ReadAdmission {
-                memory: &memory,
-                task,
-                permit: ReadPermit::Governed(permit),
-            };
-            let mut stage = self
-                ._native_custody
-                .as_ref()
-                .ok_or_else(|| {
-                    HawDBError::Execution("vector index lacks original native custody".into())
-                })?
-                .validation_stage(&self.reader.root, &admission)?;
-            stage.reserve_disk(disk_bytes);
-            Some(stage)
-        };
-        let scratch = stage.as_ref().and_then(|stage| stage.scratch_directory());
-        let io = QueryIoScope::acquire(task)?;
-        let query = QueryContext {
-            io_scope: Some(&io),
-            ..preflight
-        };
-        let mut predicates = query_memory::Predicates::new(&Default::default(), Some(query))?;
         let mut metrics = SearchOutOfCoreMetrics::default();
-        let candidates = self.reader.build_candidate_set(
-            &predicates.predicates,
-            &mut predicates.report,
-            &mut metrics,
-            Some(query),
-            scratch.as_deref(),
-            output,
-        )?;
-        let scan = self
-            .reader
-            .scan_index_distances(request, &candidates, query, &mut metrics)?;
+        let scan = if request.mode == hawdb_core::VectorIndexQueryMode::Exact {
+            self.reader.rank_exact_index_domain(request, preflight)?
+        } else {
+            // Scratch precedes the one I/O wave so cleanup can obtain fresh I/O.
+            let stage = if self.reader.visibility.is_empty() {
+                None
+            } else {
+                let disk_bytes = self
+                    .reader
+                    .config
+                    .max_candidate_spill_bytes
+                    .get()
+                    .checked_add(crate::out_of_core::CANDIDATE_FILE_HEADER.len() as u64)
+                    .ok_or_else(|| {
+                        HawDBError::Execution("vector candidate spill bound overflow".into())
+                    })?;
+                let admission = ReadAdmission {
+                    memory: &memory,
+                    task,
+                    permit: ReadPermit::Governed(permit),
+                };
+                let mut stage = self
+                    ._native_custody
+                    .as_ref()
+                    .ok_or_else(|| {
+                        HawDBError::Execution("vector index lacks original native custody".into())
+                    })?
+                    .validation_stage(&self.reader.root, &admission)?;
+                stage.reserve_disk(disk_bytes);
+                Some(stage)
+            };
+            let scratch = stage.as_ref().and_then(|stage| stage.scratch_directory());
+            let io = QueryIoScope::acquire(task)?;
+            let query = QueryContext {
+                io_scope: Some(&io),
+                ..preflight
+            };
+            let mut predicates = query_memory::Predicates::new(&Default::default(), Some(query))?;
+            let candidates = self.reader.build_candidate_set(
+                &predicates.predicates,
+                &mut predicates.report,
+                &mut metrics,
+                Some(query),
+                scratch.as_deref(),
+                output,
+            )?;
+            self.reader
+                .scan_index_distances(request, &candidates, query, &mut metrics)?
+        };
         let mut hits = output.vec(scan.scores.len())?;
         for (id, negative_distance) in &scan.scores {
-            query.checkpoint()?;
+            preflight.checkpoint()?;
             hits.push(VectorIndexHit {
                 id: output.text(id)?,
                 distance: -*negative_distance,
@@ -184,8 +200,19 @@ impl OpenedRoot {
             schema_digest: *request.descriptor.schema_digest(),
             source_epoch,
             generation: publication_generation,
-            backend: "rabitq",
-            candidate_limit: request.candidate_limit.get(),
+            backend: if request.mode == hawdb_core::VectorIndexQueryMode::Exact {
+                "exact"
+            } else {
+                "rabitq"
+            },
+            mode: request.mode,
+            filter_position: request.mode.filter_position(),
+            eligibility: request.eligible.map(|domain| domain.report()),
+            candidate_limit: if request.mode == hawdb_core::VectorIndexQueryMode::Exact {
+                0
+            } else {
+                request.candidate_limit.get()
+            },
             top_k: request.top_k.get(),
             generated_candidate_count: scan.generated_candidate_count,
             reranked_candidate_count: scan.reranked_candidate_count,

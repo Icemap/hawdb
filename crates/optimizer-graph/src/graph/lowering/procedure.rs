@@ -21,7 +21,6 @@ pub(super) fn lower(
     optimizer_context: &OptimizerContext,
 ) -> Option<PhysicalPlan> {
     match logical {
-        LogicalPlan::VectorIndexSearch(scan) => Some(PhysicalPlan::VectorIndexScan(scan.clone())),
         LogicalPlan::ProjectGraph {
             name,
             node_labels,

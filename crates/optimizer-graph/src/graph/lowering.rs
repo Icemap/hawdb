@@ -369,6 +369,14 @@ fn stage_rule_counts(stage_events: &[StageTrace]) -> (usize, usize) {
 impl GroupExpr {
     fn from_logical(logical: &LogicalPlan, memo: &mut GraphMemo) -> Self {
         match logical {
+            LogicalPlan::VectorIndexSearch(scan) => Self {
+                logical: logical.clone(),
+                children: scan
+                    .input
+                    .iter()
+                    .map(|input| insert_logical_group(memo, input))
+                    .collect(),
+            },
             LogicalPlan::GraphMatch { input, .. } => Self {
                 logical: logical.clone(),
                 children: input
@@ -397,7 +405,6 @@ impl GroupExpr {
             | LogicalPlan::VectorSeed { .. }
             | LogicalPlan::TextSeed { .. }
             | LogicalPlan::GraphSeed { .. }
-            | LogicalPlan::VectorIndexSearch(_)
             | LogicalPlan::CreateNode { .. }
             | LogicalPlan::UnwindMutation { .. }
             | LogicalPlan::MergeNode { .. }
@@ -650,6 +657,9 @@ fn vector_plan_top_k(plan: &hawdb_plan_cypher::VectorPhysicalPlan) -> Option<usi
 
 fn logical_group_count(logical: &LogicalPlan) -> usize {
     match logical {
+        LogicalPlan::VectorIndexSearch(scan) => {
+            1 + scan.input.as_deref().map(logical_group_count).unwrap_or(0)
+        }
         LogicalPlan::GraphMatch { input, .. } => {
             1 + input.as_deref().map(logical_group_count).unwrap_or(0)
         }
@@ -698,7 +708,6 @@ fn logical_group_count(logical: &LogicalPlan) -> usize {
         | LogicalPlan::VectorSeed { .. }
         | LogicalPlan::TextSeed { .. }
         | LogicalPlan::GraphSeed { .. }
-        | LogicalPlan::VectorIndexSearch(_)
         | LogicalPlan::CreateNode { .. }
         | LogicalPlan::UnwindMutation { .. }
         | LogicalPlan::MergeNode { .. }
@@ -780,6 +789,27 @@ fn lower_logical(
         return plan;
     }
     match logical {
+        LogicalPlan::VectorIndexSearch(scan) => {
+            // Bounded eligibility scans use canonical identity order, including
+            // range predicates. Do not elide a required sort using index order.
+            let bounded_catalog =
+                (scan.mode == hawdb_core::VectorIndexQueryMode::Exact).then(|| {
+                    let mut catalog = catalog.clone();
+                    catalog.ordered_range_indexes.clear();
+                    catalog
+                });
+            let input_catalog = bounded_catalog.as_ref().unwrap_or(catalog);
+            PhysicalPlan::VectorIndexScan(Box::new((**scan).clone().map_input(|input| {
+                children.lower(
+                    &input,
+                    0,
+                    input_catalog,
+                    optimizer_context,
+                    decisions,
+                    stage_events,
+                )
+            })))
+        }
         LogicalPlan::GraphMatch { program, input } => PhysicalPlan::GraphMatchExec {
             program: program.clone(),
             input: input.as_ref().map(|input| {

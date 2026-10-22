@@ -1084,6 +1084,18 @@ fn bind_read_clauses(
 ) -> Result<LogicalPlan> {
     for clause in clauses {
         match &clause.kind {
+            ClauseKind::Call { procedure, yields } => {
+                let hawdb_cypher::ProcedureCallKind::VectorIndexSearch(search) = &procedure.kind
+                else {
+                    return Err(HawDBError::Semantic(
+                        "only eligible vector search accepts upstream query rows".into(),
+                    ));
+                };
+                let (next, next_scope) =
+                    procedure::bind_vector_index(search, yields, input.take(), scope, parameters)?;
+                input = Some(next);
+                scope = next_scope;
+            }
             ClauseKind::Match {
                 optional,
                 patterns,

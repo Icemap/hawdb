@@ -105,6 +105,9 @@ fn rewrite_logical_plan_with_pass_limit(
 
 fn rewrite_bottom_up(plan: LogicalPlan, events: &mut Vec<RuleEvent>) -> LogicalPlan {
     let plan = match plan {
+        LogicalPlan::VectorIndexSearch(scan) => LogicalPlan::VectorIndexSearch(Box::new(
+            (*scan).map_input(|input| rewrite_bottom_up(input, events)),
+        )),
         LogicalPlan::GraphMatch { program, input } => LogicalPlan::GraphMatch {
             program,
             input: input.map(|input| Box::new(rewrite_bottom_up(*input, events))),
@@ -1018,6 +1021,9 @@ fn record(events: &mut Vec<RuleEvent>, rule: &'static str) {
 
 fn logical_node_count(plan: &LogicalPlan) -> usize {
     match plan {
+        LogicalPlan::VectorIndexSearch(scan) => {
+            1 + scan.input.as_deref().map(logical_node_count).unwrap_or(0)
+        }
         LogicalPlan::GraphMatch { input, .. } => {
             1 + input.as_deref().map(logical_node_count).unwrap_or(0)
         }

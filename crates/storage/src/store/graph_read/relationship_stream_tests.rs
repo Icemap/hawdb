@@ -25,13 +25,18 @@ impl crate::read_view::GraphReadAllocation for Allocation {
         self.bytes
     }
     fn grow(&mut self, bytes: usize) -> Result<()> {
+        if self.bytes == 0 && bytes > 0 {
+            self.live.set(self.live.get() + 1);
+        }
         self.bytes += bytes;
         Ok(())
     }
 }
 impl Drop for Allocation {
     fn drop(&mut self) {
-        self.live.set(self.live.get() - 1);
+        if self.bytes > 0 {
+            self.live.set(self.live.get() - 1);
+        }
     }
 }
 
@@ -108,8 +113,10 @@ fn admitted_relationship_stream_preserves_overlay_filter_stop_and_inventory() {
     let live = Rc::new(Cell::new(0));
     let calls = Cell::new(0);
     let mut admit = |bytes| {
-        calls.set(calls.get() + 1);
-        live.set(live.get() + 1);
+        if bytes > 0 {
+            calls.set(calls.get() + 1);
+            live.set(live.get() + 1);
+        }
         Ok(Some(Box::new(Allocation {
             bytes,
             live: live.clone(),
@@ -155,11 +162,13 @@ fn admitted_relationship_stream_preserves_overlay_filter_stop_and_inventory() {
             .unwrap(),
         GraphScanControl::Stop
     );
-    let mut insufficient = |bytes| {
+    let mut insufficient = |bytes: usize| {
         Ok(Some(Box::new(Allocation {
-            bytes: bytes - 1,
+            bytes: bytes.saturating_sub(1),
             live: {
-                live.set(live.get() + 1);
+                if bytes > 1 {
+                    live.set(live.get() + 1);
+                }
                 live.clone()
             },
         })

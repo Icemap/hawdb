@@ -214,7 +214,12 @@ fn canonical_relationship_scan_stop_and_caller_errors_release_permits_without_po
         let error = store
             .visit_relationships_with_allocation(
                 None,
-                &mut |bytes| Ok(Some(permit(if short { bytes - 1 } else { bytes }, &held))),
+                &mut |bytes| {
+                    Ok(Some(permit(
+                        if short && bytes > 0 { bytes - 1 } else { bytes },
+                        &held,
+                    )))
+                },
                 &mut |_| Err(HawDBError::Execution("consumer refused".into())),
             )
             .unwrap_err();
@@ -231,6 +236,64 @@ fn canonical_relationship_scan_stop_and_caller_errors_release_permits_without_po
         .unwrap_err();
     assert!(matches!(error, HawDBError::Execution(message) if message == "allocator refused"));
     assert_eq!(collect(&store, None).len(), 64);
+    drop(store);
+    std::fs::remove_dir_all(path).unwrap();
+}
+
+#[test]
+fn filtered_adjacency_charges_rejected_edges_before_emission() {
+    struct WorkAllocation {
+        bytes: usize,
+        task: hawdb_core::RuntimeTaskContext,
+    }
+    impl GraphReadAllocation for WorkAllocation {
+        fn bytes(&self) -> usize {
+            self.bytes
+        }
+        fn grow(&mut self, bytes: usize) -> Result<()> {
+            self.bytes += bytes;
+            Ok(())
+        }
+        fn has_work_limit(&self) -> bool {
+            true
+        }
+        fn charge_work(&self, units: usize) -> Result<()> {
+            self.task.charge_work(units)
+        }
+    }
+    let (path, store, catalog, source) = fixture();
+    let selection = (
+        source,
+        catalog.rel_type_id("LINK"),
+        AdjacencyDirection::Outgoing,
+    );
+    let filter = PropertyFilter::Eq {
+        property: "rank".into(),
+        value: Value::Int(-1),
+    };
+    let run = |task: &hawdb_core::RuntimeTaskContext| {
+        store.visit_filtered_ordered_relationships_with_allocation(
+            selection,
+            &filter,
+            1 << 20,
+            &mut |bytes| {
+                Ok(Some(Box::new(WorkAllocation {
+                    bytes,
+                    task: task.clone(),
+                }) as Box<dyn GraphReadAllocation>))
+            },
+            |_| panic!("every relationship is rejected by its property"),
+        )
+    };
+    let bounded = hawdb_core::RuntimeTaskContext::default().with_work_limit(3);
+    let error = run(&bounded).unwrap_err();
+    assert!(
+        matches!(error, HawDBError::ResourceBudgetExceeded(ref error) if error.resource == hawdb_core::ResourceBudgetKind::WorkUnits)
+    );
+    assert_eq!(bounded.work_units(), 3);
+    let retry = hawdb_core::RuntimeTaskContext::default().with_work_limit(1000);
+    assert_eq!(run(&retry).unwrap().0, GraphScanControl::Continue);
+    assert!(retry.work_units() >= 32);
     drop(store);
     std::fs::remove_dir_all(path).unwrap();
 }

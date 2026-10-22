@@ -694,7 +694,10 @@ pub fn stream_node_projection_scan_batches(
     let property_filter = spec
         .predicate
         .and_then(|predicate| property_filter_from_predicate(predicate).ok());
-    let mut resident_scan = if spec.access.is_label_scan()
+    let mut resident_scan = if !context
+        .task_context
+        .is_some_and(RuntimeTaskContext::has_work_limit)
+        && spec.access.is_label_scan()
         && !context.store.is_out_of_core()
         && let Some(label_id) = exact_label
         && context
@@ -854,7 +857,10 @@ pub fn stream_node_projection_scan_batches(
         };
     let indexed_nodes = match (exact_label_id, spec.access) {
         (Some(label_id), NodeProjectionAccess::PropertyValues { property, values })
-            if !context.store.is_out_of_core()
+            if !context
+                .task_context
+                .is_some_and(RuntimeTaskContext::has_work_limit)
+                && !context.store.is_out_of_core()
                 && context
                     .catalog
                     .has_scalar_property_index(label_id, property) =>
