@@ -34,11 +34,14 @@ The finished token owns its original native read pin and captured temporary
 files, and releases the Consumer borrow before activation. It exposes no mutable
 records, candidate substitution, arbitrary activation callback or partial ACK.
 
-Staging, coverage and publication retain one original background admission.
-Publication reuses that permit and its memory budget instead of requiring a
-second task slot while the compared run is still alive. This allows the complete
-flow on hosts configured with a single background task slot. Each I/O wave still
-requires fresh admission; retained native views keep their accounted memory.
+Staging and coverage use one background admission. Finishing coverage releases
+execution and retains only the original native files, pins and governed memory.
+An idle token occupies no CPU, background-task or I/O slots: a single-slot host
+can create or reopen another Consumer, or prepare another update, before
+publishing it. Publication obtains fresh admission from the same governor and
+rebinds read-back and cleanup to that operation. Each I/O wave still requires
+fresh admission. Dropping an idle token may admit bounded cleanup; refusal keeps
+the existing funded native cleanup ticket for retry.
 
 ## Content and publication handoff
 
@@ -66,6 +69,11 @@ view and durable receipt become complete together; only then is the disposable
 registry cache acknowledged and published. An empty interval retains the exact
 existing receipt and creates no successor.
 
+Resident-size and retained-memory admission, and opening the held comparison
+run, happen before reserving an allocation or creating a successor directory.
+Repeated deterministic budget refusals leave the allocation ledger unchanged;
+resident refusals retain typed `ResourceBudgetExceeded` diagnostics.
+
 `SearchProjectionConsumerCatchUpReport.applied_batch_count` counts completed
 whole-interval publications (zero for an empty interval). Its operation count is
 the number of admitted delta emissions before repeated-key reduction; private
@@ -74,7 +82,10 @@ feed/ordering steps are not published batches.
 ## Refusal and recovery
 
 `ProjectionConsumerCatchUpError` preserves lifecycle, feed and publication errors
-as separate typed variants. Cancellation, incomplete intake, invalid mapping,
+as separate typed variants. `Stopped` preserves cancellation/deadline reasons.
+If retaining a failed publication owner also fails, `RecoveryRetention` retains
+the original typed failure as its error source and attaches the retention error.
+Cancellation, incomplete intake, invalid mapping,
 budget refusal, changed registration/base, or changed source cannot acknowledge
 an intermediate watermark. Before selection the previous completed receipt
 remains authoritative. A prepared publication failure can leave a retained native
@@ -114,6 +125,16 @@ under their own contracts.
 Default/minimal `hawdb_mvcc_staging_session` tests own public graph/SQL, hot/cold,
 one-item, full-rebuild equality, cancellation, budget, competing-base and reopen
 regressions. Root Consumer tests own selector/cache lost-response injection and
-original-operation recovery after later source writes. Native Windows runs both
-families explicitly. Process reopen and deterministic failure injection are
-distinct from power-loss qualification.
+original-operation recovery after later source writes. The covered family also
+checks native generation refusal retires its birth, and real FD exhaustion at
+seal/intent retains the same prepared operation with zero idle execution slots.
+The FD observer cases require `test-support`. Native Windows runs both families
+explicitly. Process reopen and deterministic failure injection are distinct from
+power-loss qualification.
+
+The covered path uses the recovery-owner handoff from PR #1156. It reserves
+recovery metadata before allocation, passes an uncreated birth into native
+preparation, and retains the returned original owner after preparation or
+completion failure. The existing resolver retries or retires that same native
+operation with fresh admission; idle recovery owners retain no construction
+execution permit.

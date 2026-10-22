@@ -91,6 +91,20 @@ fn retry_and_check_source(schema: &RelationalTableSchema, expected: Sha256Digest
 }
 
 #[test]
+fn vector_schema_dimensions_change_both_index_digest_paths() {
+    let mut source = schema(RelationalValue::Null);
+    let mut previous = None;
+    for dimension in [1, 768, 1024, u32::MAX] {
+        source.columns[1].scalar_type =
+            RelationalScalarType::Vector(hawdb_core::VectorDimension::new(dimension).unwrap());
+        let digest = relational_schema_digest(&source).unwrap();
+        retry_and_check_source(&source, digest);
+        assert_ne!(previous, Some(digest));
+        previous = Some(digest);
+    }
+}
+
+#[test]
 fn checkpoint_units_schema_memory_scalar_defaults_deny_before_allocating_and_fully_retry() {
     for value in [
         RelationalValue::Null,
@@ -344,5 +358,18 @@ fn checkpoint_units_schema_memory_pressure_defers_and_retries_the_same_admitted_
         drop(task);
         drop(permit);
         assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    }
+}
+
+#[test]
+fn shared_vector_defaults_affect_ordinary_and_checkpoint_schema_digests() {
+    let mut digests = std::collections::BTreeSet::new();
+    for values in [vec![1.0, 0.0], vec![0.0, 1.0], vec![1.0, 0.0, 0.0]] {
+        let value = hawdb_core::Vector::new(&values).unwrap();
+        let mut source = schema(RelationalValue::Vector(value.clone()));
+        source.columns[1].scalar_type = RelationalScalarType::Vector(value.dimension());
+        let digest = relational_schema_digest(&source).unwrap();
+        retry_and_check_source(&source, digest);
+        assert!(digests.insert(digest));
     }
 }

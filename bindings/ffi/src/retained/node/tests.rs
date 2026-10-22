@@ -391,3 +391,32 @@ fn empty_foreign_cursor_control_is_charged_after_eof_until_release() {
         super::super::super::hawdb_close(db);
     }
 }
+
+#[test]
+fn shared_vector_retained_bytes_survive_database_release() {
+    let (db, governor) = fixture(8);
+    let vector = hawdb::Vector::new(&[1.0, -0.0]).unwrap();
+    unsafe { &*db }
+        .inner
+        .lock()
+        .unwrap()
+        .database_mut()
+        .query_with_params(
+            "MATCH (n:Item) WHERE n.id = 1 SET n.embedding = $embedding",
+            &BTreeMap::from([("embedding".into(), Value::Vector(vector.clone()))]),
+        )
+        .unwrap();
+    let cursor = cursor(db, 1);
+    let node = next(cursor);
+    let embedding = field(node, "embedding");
+    assert_eq!(embedding.kind, HAWDB_RETAINED_VECTOR);
+    assert_eq!(embedding.flags, HAWDB_RETAINED_READ_ONLY);
+    release(node.owner_namespace, node.owner_id);
+    release(cursor.owner_namespace, cursor.owner_id);
+    unsafe {
+        super::super::super::hawdb_close(db);
+    }
+    assert_eq!(bytes(embedding), vector.encoded());
+    release(embedding.owner_namespace, embedding.owner_id);
+    assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+}

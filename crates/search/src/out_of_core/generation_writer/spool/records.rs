@@ -28,7 +28,7 @@ use std::mem::size_of;
 struct SourceFile {
     file: File,
     length: u64,
-    io_task: Option<RuntimeTaskContext>,
+    io_task: std::sync::Mutex<Option<RuntimeTaskContext>>,
     _memory: QueryMemoryLease,
 }
 
@@ -77,7 +77,7 @@ impl HeldSpool {
         Ok(Self(Shared::new(SourceFile {
             file,
             length: expected,
-            io_task,
+            io_task: std::sync::Mutex::new(io_task),
             _memory: charge,
         })))
     }
@@ -86,11 +86,24 @@ impl HeldSpool {
     pub(super) fn range(&self) -> Result<RangeReader<'_>> {
         self.0.range()
     }
+
+    pub(in super::super) fn rebind_task(&self, task: &RuntimeTaskContext) {
+        *self
+            .0
+            .io_task
+            .lock()
+            .unwrap_or_else(|error| error.into_inner()) = Some(task.clone());
+    }
 }
 
 impl SourceFile {
     fn io(&self) -> Result<Option<Box<dyn hawdb_core::RuntimeIoWavePermit>>> {
-        match &self.io_task {
+        let task = self
+            .io_task
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .clone();
+        match &task {
             Some(task) => crate::out_of_core::scratch_directory::io_scope(task, true),
             None => Ok(None),
         }
@@ -606,7 +619,7 @@ impl SpoolSource<'_> {
                 Shared::new(SourceFile {
                     file,
                     length,
-                    io_task: None,
+                    io_task: std::sync::Mutex::new(None),
                     _memory: shared_memory,
                 })
             }

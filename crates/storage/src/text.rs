@@ -113,6 +113,14 @@ pub fn encode_value(value: &Value) -> String {
         Value::Float(value) => format!("f{}", value.to_bits()),
         Value::String(value) => format!("s{}", encode_string(value)),
         Value::Uuid(value) => format!("u{value}"),
+        Value::Vector(value) => format!(
+            "v{}",
+            value
+                .encoded()
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect::<String>()
+        ),
         Value::Binary(value) => format!(
             "x{}",
             value
@@ -163,6 +171,9 @@ impl value_decode::Decoder for OrdinaryValueDecoder {
     }
     fn binary(&self, input: &str) -> Result<Vec<u8>> {
         decode_hex_bytes(input)
+    }
+    fn vector(&self, input: &str) -> Result<hawdb_core::Vector> {
+        crate::background::decode_vector(decode_hex_bytes(input)?, None)
     }
     fn temporary(&self, input: &str) -> Result<String> {
         decode_string(input)
@@ -315,7 +326,7 @@ pub fn decode_table_kind(input: &str) -> Result<TableKind> {
     }
 }
 
-pub fn encode_property_type(value_type: PropertyType) -> &'static str {
+pub fn encode_property_type(value_type: PropertyType) -> std::borrow::Cow<'static, str> {
     match value_type {
         PropertyType::Any => "any",
         PropertyType::Bool => "bool",
@@ -324,10 +335,23 @@ pub fn encode_property_type(value_type: PropertyType) -> &'static str {
         PropertyType::String => "string",
         PropertyType::Text => "text",
         PropertyType::List => "list",
+        PropertyType::Vector(dimension) => return format!("vector({})", dimension.get()).into(),
     }
+    .into()
 }
 
 pub fn decode_property_type(input: &str) -> Result<PropertyType> {
+    if let Some(dimension) = input
+        .strip_prefix("vector(")
+        .and_then(|value| value.strip_suffix(')'))
+    {
+        return dimension
+            .parse::<u32>()
+            .ok()
+            .and_then(hawdb_core::VectorDimension::new)
+            .map(PropertyType::Vector)
+            .ok_or_else(|| HawDBError::Storage("invalid vector property dimension".into()));
+    }
     match input {
         "any" => Ok(PropertyType::Any),
         "bool" => Ok(PropertyType::Bool),

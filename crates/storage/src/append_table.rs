@@ -949,6 +949,11 @@ fn validate_table_schema_visiting(
     let mut names = BTreeSet::new();
     for column in &schema.columns {
         visit()?;
+        if matches!(column.scalar_type, RelationalScalarType::Vector(_)) {
+            return Err(AppendTableError::Schema(
+                "Strict Append tables do not support VECTOR columns".into(),
+            ));
+        }
         if column.name.is_empty() || !names.insert(column.name.as_str()) {
             return Err(AppendTableError::Schema(format!(
                 "duplicate or empty column {}",

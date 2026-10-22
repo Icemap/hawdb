@@ -40,6 +40,9 @@ use std::sync::Arc;
 
 pub(crate) mod schema_encoding;
 
+#[cfg(test)]
+mod vector_schema_tests;
+
 mod checkpoint;
 pub(crate) use checkpoint::{
     clone_string_with_work_context, decode_relational_checkpoint_file_with_work_context,
@@ -1169,7 +1172,11 @@ impl Encoder {
             RelationalScalarType::Text => 4,
             RelationalScalarType::Bytea => 5,
             RelationalScalarType::Uuid => 6,
+            RelationalScalarType::Vector(_) => 7,
         });
+        if let RelationalScalarType::Vector(dimension) = scalar_type {
+            self.u32(dimension.get());
+        }
     }
 
     fn value(&mut self, value: &RelationalValue) -> Result<(), RelationalError> {
@@ -1820,6 +1827,9 @@ impl<I: DecodeInput> Decoder<I> {
             4 => Ok(RelationalScalarType::Text),
             5 => Ok(RelationalScalarType::Bytea),
             6 => Ok(RelationalScalarType::Uuid),
+            7 => hawdb_core::VectorDimension::new(self.u32()?)
+                .map(RelationalScalarType::Vector)
+                .ok_or_else(|| RelationalError::Corruption("zero VECTOR dimension".into())),
             tag => Err(RelationalError::Corruption(format!(
                 "invalid relational scalar type tag {tag}"
             ))),
@@ -1860,6 +1870,14 @@ impl<I: DecodeInput> Decoder<I> {
             6 => {
                 let digest = self.sha256()?;
                 let scalar_type = self.scalar_type()?;
+                if !matches!(
+                    scalar_type,
+                    RelationalScalarType::Text | RelationalScalarType::Bytea
+                ) {
+                    return Err(RelationalError::Corruption(
+                        "overflow values require TEXT or BYTEA".into(),
+                    ));
+                }
                 let compressed_bytes = self.u64()?;
                 let uncompressed_bytes = self.u64()?;
                 let max_value_bytes = u64::try_from(self.limits.max_value_bytes).map_err(|_| {
@@ -1885,6 +1903,14 @@ impl<I: DecodeInput> Decoder<I> {
                 }))
             }
             7 => Ok(RelationalValue::Uuid(Uuid::from_bytes(self.fixed()?))),
+            8 => {
+                let bytes = self.bounded_bytes(self.limits.max_value_bytes, "VECTOR value")?;
+                self.value_bytes = self.value_bytes.checked_add(bytes.len()).ok_or_else(|| {
+                    RelationalError::Admission("decoded value byte count overflow".into())
+                })?;
+                decode_vector(bytes, self.input.checkpoint_work_context())
+                    .map(RelationalValue::Vector)
+            }
             tag => Err(RelationalError::Corruption(format!(
                 "invalid relational value tag {tag}"
             ))),
@@ -2252,4 +2278,23 @@ impl<I: DecodeInput> Decoder<I> {
             ))),
         }
     }
+}
+
+fn decode_vector(
+    bytes: Vec<u8>,
+    work: Option<&crate::background::CheckpointWorkContext>,
+) -> Result<hawdb_core::Vector, RelationalError> {
+    let corrupt = |error: hawdb_core::HawDBError| RelationalError::Corruption(error.to_string());
+    let Some(work) = work else {
+        return hawdb_core::Vector::from_encoded(bytes).map_err(corrupt);
+    };
+    hawdb_core::Vector::from_encoded_with_work(
+        bytes,
+        || work.start_unit().map_err(checkpoint::work_error),
+        |unit| {
+            unit.finish();
+            work.checkpoint().map_err(checkpoint::work_error)
+        },
+        corrupt,
+    )
 }

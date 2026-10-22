@@ -458,3 +458,49 @@ pub(crate) use decode::{
 mod text;
 #[doc(hidden)]
 pub use text::CheckpointText;
+
+pub(crate) fn decode_vector(
+    encoded: Vec<u8>,
+    work: Option<&CheckpointWorkContext>,
+) -> hawdb_core::Result<hawdb_core::Vector> {
+    hawdb_core::Vector::from_encoded_with_work(
+        encoded,
+        || vector_unit(work),
+        |unit| finish_vector_unit(unit, work),
+        |error| hawdb_core::HawDBError::Storage(error.to_string()),
+    )
+}
+
+pub(crate) fn validate_vector<'a>(
+    encoded: &'a [u8],
+    work: Option<&CheckpointWorkContext>,
+) -> hawdb_core::Result<hawdb_core::VectorRef<'a>> {
+    hawdb_core::VectorRef::from_encoded_with_work(
+        encoded,
+        || vector_unit(work),
+        |unit| finish_vector_unit(unit, work),
+        |error| hawdb_core::HawDBError::Storage(error.to_string()),
+    )
+}
+
+fn vector_unit(
+    work: Option<&CheckpointWorkContext>,
+) -> hawdb_core::Result<Option<CheckpointWorkUnit>> {
+    work.map(CheckpointWorkContext::start_unit)
+        .transpose()
+        .map_err(hawdb_core::HawDBError::from_storage_error)
+}
+
+fn finish_vector_unit(
+    unit: Option<CheckpointWorkUnit>,
+    work: Option<&CheckpointWorkContext>,
+) -> hawdb_core::Result<()> {
+    if let Some(unit) = unit {
+        unit.finish();
+    }
+    if let Some(work) = work {
+        work.checkpoint()
+            .map_err(hawdb_core::HawDBError::from_storage_error)?;
+    }
+    Ok(())
+}

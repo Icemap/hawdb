@@ -507,22 +507,33 @@ fn bootstrap_catalog_without_ledger_is_not_virgin_evidence() {
 }
 
 #[test]
-fn bootstrap_descriptor_refusal_preserves_empty_ledger_for_original_identity_retry() {
+fn bootstrap_descriptor_refusal_keeps_ledger_unpublished_for_identity_retry() {
     let root = std::env::temp_dir().join(format!(
         "hawdb-bootstrap-budget-{}",
         hawdb_core::generate_uuidv7().unwrap()
     ));
     let selected = identity(171, 172);
     let ledger = root.join(crate::consumer_allocation::LEDGER_FILE);
-    let evidence = {
+    {
         let files = ProjectFileDescriptors::acquire(&root, 4).unwrap();
         let error = reserve_bootstrap_identity(&files, selected).unwrap_err();
         assert!(matches!(error, HawDBError::FileDescriptors(_)), "{error}");
         assert_eq!(files.metrics().open, 0);
         assert!(!root.join(BOOTSTRAP_FILE).exists());
-        std::fs::read(&ledger).unwrap()
-    };
+        // Refusal before the atomic selector has no authoritative identity.
+        assert!(!ledger.exists());
+        assert!(!std::fs::read_dir(&root).unwrap().any(|entry| entry
+            .unwrap()
+            .file_name()
+            .to_string_lossy()
+            .starts_with("consumer-bootstrap-")));
+    }
     let files = ProjectFileDescriptors::acquire(&root, 8).unwrap();
+    assert_eq!(
+        reserve_bootstrap_identity(&files, selected).unwrap(),
+        selected
+    );
+    let evidence = std::fs::read(&ledger).unwrap();
     assert_eq!(
         reserve_bootstrap_identity(&files, identity(173, 174)).unwrap(),
         selected

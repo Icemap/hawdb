@@ -336,13 +336,11 @@ fn registered_consumer_post_e_source_conflict_preserves_receipt_and_retries() {
 
 #[test]
 fn registered_consumer_competing_candidate_and_foreign_registration_cannot_publish() {
-    // This scenario retains two independent background operations: first an
-    // update plus another Consumer creation, then two competing update tokens.
-    // Pin their admission so host CPU detection cannot refuse the second task
-    // before the registration and stale-base checks are exercised.
+    // Idle tokens keep their records and memory, while fresh independent work
+    // must remain possible with only one background execution slot.
     let governor = RuntimeGovernor::new(
         RuntimeGovernorConfig {
-            background_task_limit: Some(nz(2)),
+            background_task_limit: Some(nz(1)),
             memory_budget_bytes: Some(256 << 20),
             ..RuntimeGovernorConfig::shared_host()
         },
@@ -357,7 +355,7 @@ fn registered_consumer_competing_candidate_and_foreign_registration_cannot_publi
     let before = consumer.projection().receipt();
     db.query("MATCH (n:Memory) SET n.value=2").unwrap();
     let stale = consumer_covered(consumer_stage(&mut db, &consumer));
-    assert_eq!(governor.snapshot().active_background_tasks, 1);
+    assert_eq!(governor.snapshot().active_background_tasks, 0);
     let mut other = db
         .create_search_projection_consumer(
             SearchProjectionConsumerId::new("other-v1").unwrap(),
@@ -379,7 +377,7 @@ fn registered_consumer_competing_candidate_and_foreign_registration_cannot_publi
     receipt_unchanged(&db, &consumer, &before);
     let first = consumer_covered(consumer_stage(&mut db, &consumer));
     let stale = consumer_covered(consumer_stage(&mut db, &consumer));
-    assert_eq!(governor.snapshot().active_background_tasks, 2);
+    assert_eq!(governor.snapshot().active_background_tasks, 0);
     db.publish_search_projection_consumer_covered_update(
         &mut consumer,
         first,
@@ -422,13 +420,16 @@ fn registered_consumer_cancelled_work_never_advances_and_reopen_can_retry() {
             }
             let covered = consumer_covered(session);
             cancel.cancel();
-            assert!(db
-                .publish_search_projection_consumer_covered_update(
+            assert!(matches!(
+                db.publish_search_projection_consumer_covered_update(
                     &mut consumer,
                     covered,
                     ProjectionSourceDurability::RequireKnownDurable,
-                )
-                .is_err());
+                ),
+                Err(ProjectionConsumerCatchUpError::Stopped(
+                    hawdb_core::RuntimeCancellationReason::Cancelled
+                ))
+            ));
         } else {
             session.advance(one(), sort()).unwrap();
             cancel.cancel();

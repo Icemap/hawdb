@@ -35,12 +35,15 @@ fn property_value_supports_optimizer_statistics(value: &Value) -> bool {
         | Value::Float(_)
         | Value::String(_)
         | Value::Uuid(_) => true,
-        Value::Binary(_) | Value::List(_) | Value::Map(_) => false,
+        Value::Binary(_) | Value::Vector(_) | Value::List(_) | Value::Map(_) => false,
     }
 }
 
 fn property_type_supports_optimizer_statistics(value_type: PropertyType) -> bool {
-    !matches!(value_type, PropertyType::Text | PropertyType::List)
+    !matches!(
+        value_type,
+        PropertyType::Text | PropertyType::List | PropertyType::Vector(_)
+    )
 }
 
 pub fn node_property_supports_optimizer_statistics(

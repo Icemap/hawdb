@@ -497,7 +497,7 @@ fn truncate<T>(values: &mut Vec<T>, limit: usize) -> bool {
     truncated
 }
 
-const fn property_type_name(value_type: PropertyType) -> &'static str {
+fn property_type_name(value_type: PropertyType) -> std::borrow::Cow<'static, str> {
     match value_type {
         PropertyType::Any => "any",
         PropertyType::Bool => "bool",
@@ -506,7 +506,9 @@ const fn property_type_name(value_type: PropertyType) -> &'static str {
         PropertyType::String => "string",
         PropertyType::Text => "text",
         PropertyType::List => "list",
+        PropertyType::Vector(dimension) => return format!("vector({})", dimension.get()).into(),
     }
+    .into()
 }
 
 fn optional_count(count: Option<u64>) -> String {

@@ -121,6 +121,7 @@ pub(super) fn value<S: Output>(output: &mut S, value: &RelationalValue) -> Resul
                 output.raw(&[6])?;
                 output.raw(value.as_bytes())
             }
+            RelationalValue::Vector(_) => Err(OrderedRelationalKeyError::UnsupportedVector.into()),
             RelationalValue::Overflow(_) => {
                 Err(OrderedRelationalKeyError::UnsupportedOverflow.into())
             }

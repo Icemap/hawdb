@@ -40,26 +40,31 @@ impl Descriptor for ArrowArrayStream {
 }
 
 unsafe extern "C" fn destroy<T: Descriptor>(capsule: *mut ffi::PyObject) {
-    // Preserve a pending Python exception while running a GC/release callback.
-    let mut exception_type = ptr::null_mut();
-    let mut exception_value = ptr::null_mut();
-    let mut traceback = ptr::null_mut();
-    unsafe { ffi::PyErr_Fetch(&mut exception_type, &mut exception_value, &mut traceback) };
+    // No Rust panic may cross the C destructor, including PyErr::take resuming
+    // a pending PanicException. Release the descriptor even in that case.
     let _ = catch_unwind(AssertUnwindSafe(|| {
-        // Consumers may rename a used capsule, but its original descriptor box
-        // still belongs to this destructor. A move sets release to null.
-        let name = unsafe { ffi::PyCapsule_GetName(capsule) };
-        let pointer = unsafe { ffi::PyCapsule_GetPointer(capsule, name) };
-        if !pointer.is_null() {
-            let mut descriptor = unsafe { Box::from_raw(pointer.cast::<T>()) };
-            unsafe { descriptor.release() };
+        // SAFETY: CPython calls capsule destructors on an attached thread.
+        let py = unsafe { Python::assume_attached() };
+        let exception = catch_unwind(AssertUnwindSafe(|| PyErr::take(py)))
+            .ok()
+            .flatten();
+        let _ = catch_unwind(AssertUnwindSafe(|| {
+            // Consumers may rename a used capsule; its original box still
+            // belongs to this destructor. A move sets release to null.
+            let name = unsafe { ffi::PyCapsule_GetName(capsule) };
+            let pointer = unsafe { ffi::PyCapsule_GetPointer(capsule, name) };
+            if !pointer.is_null() {
+                let mut descriptor = unsafe { Box::from_raw(pointer.cast::<T>()) };
+                unsafe { descriptor.release() };
+            }
+        }));
+        unsafe { ffi::PyErr_Clear() };
+        if let Some(exception) = exception {
+            exception.restore(py);
         }
     }));
-    unsafe {
-        ffi::PyErr_Clear();
-        ffi::PyErr_Restore(exception_type, exception_value, traceback);
-    }
 }
+
 fn capsule<'py, T: Descriptor>(py: Python<'py>, descriptor: T) -> PyResult<Bound<'py, PyAny>> {
     let mut descriptor = Box::new(descriptor);
     let object = unsafe {
@@ -177,4 +182,47 @@ pub(super) fn batch_array<'py>(
     };
     let array = capsule(py, array)?;
     Ok((schema, array))
+}
+
+#[cfg(test)]
+mod destructor_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    struct Probe(Arc<AtomicUsize>, bool);
+    impl Descriptor for Probe {
+        const NAME: &'static CStr = c"hawdb_test_release";
+        unsafe fn release(&mut self) {
+            self.0.fetch_add(1, Ordering::SeqCst);
+            assert!(!self.1, "release callback panic");
+        }
+    }
+
+    #[test]
+    fn capsule_destructor_contains_pending_python_panic_and_still_releases() {
+        Python::initialize();
+        Python::attach(|py| {
+            let released = Arc::new(AtomicUsize::new(0));
+            let capsule = capsule(py, Probe(Arc::clone(&released), false)).unwrap();
+            pyo3::panic::PanicException::new_err("pending panic").restore(py);
+            drop(capsule);
+            assert_eq!(released.load(Ordering::SeqCst), 1);
+            assert!(!PyErr::occurred(py));
+        });
+    }
+
+    #[test]
+    fn capsule_destructor_restores_exception_even_when_release_panics() {
+        Python::initialize();
+        Python::attach(|py| {
+            let released = Arc::new(AtomicUsize::new(0));
+            let capsule = capsule(py, Probe(Arc::clone(&released), true)).unwrap();
+            pyo3::exceptions::PyValueError::new_err("preserve me").restore(py);
+            drop(capsule);
+            assert_eq!(released.load(Ordering::SeqCst), 1);
+            let error = PyErr::take(py).unwrap();
+            assert!(error.is_instance_of::<pyo3::exceptions::PyValueError>(py));
+            assert!(error.to_string().contains("preserve me"));
+        });
+    }
 }

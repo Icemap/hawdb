@@ -197,6 +197,7 @@ pub fn bind_relational_value(value: SqlValue, parameters: &[Value]) -> Result<Re
         Value::String(value) => Ok(RelationalValue::Text(value)),
         Value::Binary(value) => Ok(RelationalValue::Bytea(value)),
         Value::Uuid(value) => Ok(RelationalValue::Uuid(value)),
+        Value::Vector(value) => Ok(RelationalValue::Vector(value)),
         Value::List(_) | Value::Map(_) => Err(HawDBError::Semantic(
             "relational SQL parameters must be scalar".to_string(),
         )),
@@ -230,6 +231,7 @@ fn compile_data_type(data_type: SqlDataType) -> RelationalScalarType {
         SqlDataType::Text => RelationalScalarType::Text,
         SqlDataType::Bytea => RelationalScalarType::Bytea,
         SqlDataType::Uuid => RelationalScalarType::Uuid,
+        SqlDataType::Vector(dimension) => RelationalScalarType::Vector(dimension),
     }
 }
 
@@ -250,6 +252,7 @@ fn compile_schema_value(
         Value::String(value) => Ok(RelationalValue::Text(value)),
         Value::Binary(value) => Ok(RelationalValue::Bytea(value)),
         Value::Uuid(value) => Ok(RelationalValue::Uuid(value)),
+        Value::Vector(value) => Ok(RelationalValue::Vector(value)),
         Value::List(_) | Value::Map(_) => Err(HawDBError::Semantic(
             "relational schema defaults must be scalar".to_string(),
         )),

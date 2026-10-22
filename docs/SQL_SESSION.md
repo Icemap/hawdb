@@ -60,7 +60,7 @@ mutations. `DatabaseConfig` row/payload and execution limits remain enforced by
 the same kernel paths.
 
 This session accepts HawDB's existing SQL subset. Unsupported `CREATE EXTENSION`,
-PL/pgSQL, triggers, `tsvector`/`to_tsvector`, `jsonb` operators/casts, `vector(n)`,
+PL/pgSQL, triggers, `tsvector`/`to_tsvector`, `jsonb` operators/casts,
 `pg_trgm`, `now()` and `::timestamptz` retain existing Parse/Semantic errors.
 A GBrain-shaped upsert with `jsonb` and `now()` therefore aborts its transaction.
 The existing `ON CONFLICT DO UPDATE RETURNING` combination also remains
@@ -68,3 +68,11 @@ unsupported; ordinary `INSERT RETURNING` and `DO NOTHING RETURNING` work.
 SQL is never stripped, rewritten or silently skipped. The session does not
 execute GBrain's Postgres schema unchanged, start a TCP listener, embed PGLite,
 or provide a Node addon.
+
+`VECTOR(n)` is accepted as a relational column schema by `CREATE TABLE` and
+`ALTER TABLE ADD COLUMN`. Typed vector parameters support non-NULL writes,
+with exact `cosine_distance` and `l2_distance` projections shared with Cypher.
+Filter ordinary columns, project distance with an alias, then `ORDER BY` that
+alias and `LIMIT` to select the nearest eligible rows. Vector ANN indexes are
+not added. See [the vector contract](specs/VECTOR_COLUMN_SCHEMA_SPEC.md) for
+encoding, recovery, NULL behavior and unsupported-operation boundaries.

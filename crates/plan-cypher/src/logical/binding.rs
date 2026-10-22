@@ -90,6 +90,9 @@ pub(super) fn bind_vector_embedding(
             "vector search embedding must be a parameter".to_string(),
         ));
     };
+    if let Some(Value::Vector(vector)) = parameters.get(name) {
+        return Ok((name.clone(), vector.dimension().get() as usize));
+    }
     let Some(Value::List(values)) = parameters.get(name) else {
         return Err(HawDBError::Semantic(format!(
             "vector search parameter '${name}' must be a numeric list"
@@ -1354,6 +1357,10 @@ pub(super) fn collect_scalar_expression_variables(
         ScalarExpressionKind::Left { expression, .. }
         | ScalarExpressionKind::JsonValue { expression, .. } => {
             collect_scalar_expression_variables(expression, variables);
+        }
+        ScalarExpressionKind::VectorDistance { left, right, .. } => {
+            collect_scalar_expression_variables(left, variables);
+            collect_scalar_expression_variables(right, variables);
         }
         ScalarExpressionKind::Lower(expression) => {
             collect_scalar_expression_variables(expression, variables);

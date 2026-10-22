@@ -21,6 +21,7 @@ pub(super) trait ValueDecoder: record_decode::RecordDecoder {
     type MapNodes: Default;
     fn string(&self, bytes: &[u8], pos: &mut usize) -> Result<String>;
     fn bytes(&self, bytes: &[u8]) -> Result<Vec<u8>>;
+    fn vector(&self, bytes: &[u8]) -> Result<hawdb_core::Vector>;
     fn push_value(&self, values: &mut Vec<Value>, value: Value) -> Result<()>;
     fn singleton_value(&self, value: Value) -> Result<Vec<Value>>;
     fn before_map_insert(&self, nodes: &mut Self::MapNodes, len: usize) -> Result<()>;
@@ -62,6 +63,10 @@ pub(super) fn decode_value<D: ValueDecoder>(
                 value = Some(Value::Binary(
                     decoder.bytes(decode_len_body(bytes, &mut pos)?)?,
                 ));
+            }
+            (VALUE_FIELD_VECTOR, WIRE_TYPE_LEN) => {
+                let encoded = decode_len_body(bytes, &mut pos)?;
+                value = Some(Value::Vector(decoder.vector(encoded)?));
             }
             (VALUE_FIELD_UUID, WIRE_TYPE_LEN) => {
                 let encoded = decode_len_body(bytes, &mut pos)?;

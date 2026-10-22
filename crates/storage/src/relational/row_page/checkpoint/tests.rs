@@ -223,3 +223,85 @@ fn checkpoint_units_row_page_codec_preserves_ordinary_error_priority() {
         probe.assert_released(&local);
     }
 }
+
+#[test]
+fn shared_vector_row_page_borrows_payload_and_cancellation_is_admission() {
+    use crate::background::CheckpointDecodeContext;
+    let vector = hawdb_core::Vector::new(&vec![1.0; 32769]).unwrap();
+    let row = RelationalRow::new(vec![
+        RelationalValue::Vector(vector.clone()),
+        RelationalValue::BigInt(7),
+    ]);
+    let encoded =
+        super::super::value::encode_row_with_allocations(&row, 2, limits(), None).unwrap();
+    let mut fields = Vec::new();
+    super::super::value::decode_row_field_refs(&encoded, 2, &[0, 1], limits(), &mut fields)
+        .unwrap();
+    let crate::relational::RelationalValueRef::Vector(reference) = fields[0].value else {
+        panic!("vector field");
+    };
+    assert_eq!(reference.encoded(), vector.encoded());
+    let pointer = reference.encoded().as_ptr() as usize;
+    assert!(
+        (encoded.as_ptr() as usize..encoded.as_ptr() as usize + encoded.len()).contains(&pointer)
+    );
+    let local = scheduler();
+    let baseline = Arc::new(CheckpointWorkProbe::default());
+    let context = CheckpointDecodeContext {
+        work: baseline.context(local.clone()),
+        memory: Default::default(),
+    };
+    let expected = super::super::value::decode_row_fields_with_allocations(
+        &encoded,
+        2,
+        None,
+        limits(),
+        Some(&context),
+    )
+    .unwrap();
+    let count = baseline.completed.load(Ordering::SeqCst);
+    baseline.assert_released(&local);
+    for cut in 1..=count {
+        let probe = Arc::new(CheckpointWorkProbe::default());
+        probe.cancel_after.store(cut, Ordering::SeqCst);
+        let context = CheckpointDecodeContext {
+            work: probe.context(local.clone()),
+            memory: Default::default(),
+        };
+        let result = super::super::value::decode_row_fields_with_allocations(
+            &encoded,
+            2,
+            None,
+            limits(),
+            Some(&context),
+        );
+        assert!(
+            matches!(result, Err(RelationalRowPageError::Admission(ref reason)) if reason.contains("cancelled")),
+            "{result:?}"
+        );
+        probe.assert_released(&local);
+    }
+    let retry = Arc::new(CheckpointWorkProbe::default());
+    let context = CheckpointDecodeContext {
+        work: retry.context(local.clone()),
+        memory: Default::default(),
+    };
+    assert_eq!(
+        super::super::value::decode_row_fields_with_allocations(
+            &encoded,
+            2,
+            None,
+            limits(),
+            Some(&context)
+        )
+        .unwrap(),
+        expected
+    );
+    retry.assert_released(&local);
+    assert_eq!(
+        super::super::value::decode_row_fields(&encoded, 2, Some(&[1]), limits())
+            .unwrap()
+            .len(),
+        1
+    );
+}

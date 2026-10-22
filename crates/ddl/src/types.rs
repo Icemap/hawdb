@@ -36,10 +36,11 @@ pub enum SchemaPropertyType {
     String,
     Text,
     List,
+    Vector(hawdb_core::VectorDimension),
 }
 
 impl SchemaPropertyType {
-    pub const fn fingerprint_suffix(self) -> &'static str {
+    pub fn fingerprint_suffix(self) -> std::borrow::Cow<'static, str> {
         match self {
             Self::Any => ":any",
             Self::Bool => ":bool",
@@ -48,7 +49,9 @@ impl SchemaPropertyType {
             Self::String => ":string",
             Self::Text => ":text",
             Self::List => ":list",
+            Self::Vector(dimension) => return format!(":vector({})", dimension.get()).into(),
         }
+        .into()
     }
 }
 

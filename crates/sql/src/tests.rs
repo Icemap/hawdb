@@ -27,6 +27,7 @@ mod cross_join;
 mod expression_migration;
 mod frontend_corpus;
 mod having_from;
+mod vector_schema;
 
 #[test]
 fn parses_bounded_branch_catalog_inspection_statements() {

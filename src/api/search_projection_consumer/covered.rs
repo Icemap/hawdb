@@ -36,6 +36,11 @@ pub enum ProjectionConsumerCatchUpError {
     Consumer(SearchProjectionConsumerError),
     Feed(ProjectionFeedError),
     Publication(ProjectionPublicationError),
+    Stopped(hawdb_core::RuntimeCancellationReason),
+    RecoveryRetention {
+        failure: Box<ProjectionConsumerCatchUpError>,
+        retention: HawDBError,
+    },
 }
 impl fmt::Display for ProjectionConsumerCatchUpError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -43,6 +48,11 @@ impl fmt::Display for ProjectionConsumerCatchUpError {
             Self::Consumer(error) => error.fmt(formatter),
             Self::Feed(error) => error.fmt(formatter),
             Self::Publication(error) => error.fmt(formatter),
+            Self::Stopped(error) => error.fmt(formatter),
+            Self::RecoveryRetention { failure, retention } => write!(
+                formatter,
+                "{failure}; retaining the publication owner also failed: {retention}"
+            ),
         }
     }
 }
@@ -52,6 +62,8 @@ impl std::error::Error for ProjectionConsumerCatchUpError {
             Self::Consumer(error) => Some(error),
             Self::Feed(error) => Some(error),
             Self::Publication(error) => Some(error),
+            Self::Stopped(error) => Some(error),
+            Self::RecoveryRetention { failure, .. } => Some(failure.as_ref()),
         }
     }
 }
@@ -82,7 +94,6 @@ struct Base {
     _pin: SearchProjectionConsumerReadPin,
     _memory: hawdb_executor::QueryMemoryLease,
     task: RuntimeTaskContext,
-    permit: Arc<hawdb_qos::RuntimePermit>,
 }
 
 /// Bounded invisible C..E work over this registration's exact selected base.
@@ -224,7 +235,6 @@ impl Database {
                 _pin: pin,
                 _memory: memory,
                 task,
-                permit,
             },
         })
     }
@@ -239,6 +249,21 @@ impl Database {
         consumer: &mut SearchProjectionConsumer,
         covered: ProjectionCoveredConsumerUpdate,
         durability: ProjectionSourceDurability,
+    ) -> CatchUpResult<SearchProjectionConsumerCatchUpReport> {
+        self.publish_covered_consumer_with_limits(
+            consumer,
+            covered,
+            durability,
+            RegisteredConsumerLimits::default(),
+        )
+    }
+
+    pub(super) fn publish_covered_consumer_with_limits(
+        &mut self,
+        consumer: &mut SearchProjectionConsumer,
+        covered: ProjectionCoveredConsumerUpdate,
+        durability: ProjectionSourceDurability,
+        limits: RegisteredConsumerLimits,
     ) -> CatchUpResult<SearchProjectionConsumerCatchUpReport> {
         let root = self.consumer_writable_root()?;
         self.reload_consumer_registry_if_unavailable()?;
@@ -256,37 +281,61 @@ impl Database {
         self.validate_prepared_projection_source(&covered.dependencies, epoch, durability)?;
         // Task refusal before birth/intent leaves both selector and registry intact.
         covered
-            .documents
-            .task_context()
+            .base
+            .task
             .checkpoint()
-            .map_err(|error| HawDBError::Execution(error.to_string()))?;
+            .map_err(ProjectionConsumerCatchUpError::Stopped)?;
         publication_failpoint(PublicationStage::BeforeCheckpoint)?;
         if epoch == current.source_epoch {
             return self.covered_consumer_report(consumer, epoch, epoch, 0, 0);
         }
-        // Preparation and publication are one admitted background operation.
-        // The compared run still owns this permit, so a second admission would
-        // refuse publication on hosts with only one background task slot.
-        let permit = Arc::clone(&covered.base.permit);
+        // Idle compared records retain no execution slot. Re-admit and settle
+        // deterministic resident/reader refusals before reserving a birth.
+        let permit = self.consumer_publication_permit()?;
+        let documents = covered.documents.admit_publication(
+            Arc::clone(&permit),
+            covered.base.task.clone(),
+            limits,
+        )?;
+        let recovery_memory = permit
+            .reserve_retained_memory(
+                hawdb_storage::consumer_allocation::CONSUMER_SELECTION_MEMORY_BOUND,
+            )
+            .map_err(|error| hawdb_core::ResourceBudgetError {
+                resource: hawdb_core::ResourceBudgetKind::MemoryBytes,
+                scope: hawdb_core::ResourceBudgetScope::SharedPool,
+                owner: "covered Consumer recovery metadata".into(),
+                memory_class: None,
+                requested: error.requested,
+                used: 0,
+                budget: error.available,
+                budget_option: "RuntimeGovernor.available_retained_memory_bytes",
+                message: error.to_string(),
+            })
+            .map_err(HawDBError::from)?;
         let allocation = self
             .runtime
             .get()?
             .store
             .reserve_search_consumer_update(consumer.projection().stationary_receipt()?)?;
-        let mut birth = consumer.projection().prepare_successor_birth(allocation)?;
-        birth.create()?;
+        let birth = consumer.projection().prepare_successor_birth(allocation)?;
         let locator = consumer.projection().registered_locator()?.to_owned();
-        let mut prepared = covered.documents.prepare_registered(
+        let preparation = documents.prepare_registered(
             birth,
             RegisteredConsumerPreparation {
                 locator: &locator,
                 epoch,
                 permit: Arc::clone(&permit),
                 task: covered.base.task.clone(),
-                limits: RegisteredConsumerLimits::default(),
+                limits,
+                recovery_memory,
                 previous: Some(consumer.projection()),
             },
-        )?;
+        );
+        let mut prepared = match preparation {
+            Ok(prepared) => prepared,
+            Err(error) => return Err(retain_failed_owner(consumer, *error)),
+        };
         let selection = (|| -> CatchUpResult<_> {
             publication_failpoint(PublicationStage::AfterCheckpoint)?;
             self.validate_prepared_projection_source(&covered.dependencies, epoch, durability)?;
@@ -308,13 +357,22 @@ impl Database {
         let selected = match selection {
             Ok(receipt) => receipt,
             Err(error) => {
-                consumer
+                if let Err(retention) = consumer
                     .projection_mut()
-                    .retain_pending_publication(prepared)?;
+                    .retain_pending_publication(prepared)
+                {
+                    return Err(ProjectionConsumerCatchUpError::RecoveryRetention {
+                        failure: Box::new(error),
+                        retention,
+                    });
+                }
                 return Err(error);
             }
         };
-        *consumer.projection_mut() = prepared.complete(selected)?;
+        match prepared.complete(selected) {
+            Ok(projection) => *consumer.projection_mut() = projection,
+            Err(error) => return Err(retain_failed_owner(consumer, *error)),
+        }
         let receipt = consumer.projection().receipt();
         self.acknowledge_consumer_checkpoint(consumer.id(), &receipt)?;
         self.publish_consumer_registry(&root)?;
@@ -354,4 +412,23 @@ impl Database {
             consumer: self.search_projection_consumer_status(consumer.id())?,
         })
     }
+}
+
+fn retain_failed_owner(
+    consumer: &mut SearchProjectionConsumer,
+    error: RegisteredConsumerError,
+) -> ProjectionConsumerCatchUpError {
+    let (error, recovery) = error.into_parts();
+    let failure = ProjectionConsumerCatchUpError::from(error);
+    if let Some(recovery) = recovery
+        && let Err(retention) = consumer
+            .projection_mut()
+            .retain_failed_preparation(recovery)
+    {
+        return ProjectionConsumerCatchUpError::RecoveryRetention {
+            failure: Box::new(failure),
+            retention,
+        };
+    }
+    failure
 }

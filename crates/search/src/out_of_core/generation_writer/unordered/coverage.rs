@@ -332,13 +332,13 @@ impl<'reader> SearchOutOfCoreDeltaComparison<'reader> {
         }
         checkpoint(self.writer.task_context())?;
         let run = self.expected.reader.map(Reader::into_run);
-        Ok(SearchComparedConsumerDocuments {
+        SearchComparedConsumerDocuments::new(
             run,
-            control: self.writer.control,
-            writer: self.writer.inner.writer,
-            documents: self.report.compared_documents,
-            encoded_bytes: self.expected_encoded_bytes,
-        })
+            self.writer.control,
+            self.writer.inner.writer,
+            self.report.compared_documents,
+            self.expected_encoded_bytes,
+        )
     }
 
     /// Restores only the original, now compared delta. Its expected selector,
@@ -358,68 +358,5 @@ impl<'reader> SearchOutOfCoreDeltaComparison<'reader> {
             reader.remove(&self.writer.control)?;
         }
         self.writer.prepare_publication()
-    }
-}
-
-/// Immutable, fully compared documents and their original captured stage.
-/// This low-level custody grants no database source or registration authority.
-#[doc(hidden)]
-pub struct SearchComparedConsumerDocuments {
-    run: Option<Run>,
-    control: Control,
-    writer: SearchOutOfCoreGenerationWriter,
-    documents: usize,
-    encoded_bytes: u64,
-}
-
-impl SearchComparedConsumerDocuments {
-    pub fn task_context(&self) -> &RuntimeTaskContext {
-        &self.writer.task_context
-    }
-
-    pub fn prepare_registered(
-        mut self,
-        birth: hawdb_storage::consumer_allocation::PendingConsumerGeneration,
-        preparation: crate::consumer::RegisteredConsumerPreparation<'_>,
-    ) -> Result<crate::consumer::PreparedRegisteredConsumer> {
-        checkpoint(self.task_context())?;
-        let resident_bytes = self
-            .encoded_bytes
-            .checked_mul(32)
-            .and_then(|n| n.checked_add(64 * 1024))
-            .filter(|n| *n <= preparation.limits.resident_bytes.get())
-            .ok_or_else(|| {
-                HawDBError::Execution(
-                    "compared Consumer documents exceed resident admission".into(),
-                )
-            })?;
-        let _resident = preparation
-            .permit
-            .reserve_retained_memory(resident_bytes)
-            .map_err(|e| HawDBError::Execution(e.to_string()))?;
-        let mut source = self
-            .run
-            .take()
-            .map(|run| Reader::open(run, &mut self.control, &self.writer))
-            .transpose()?;
-        crate::consumer::ConsumerProjection::prepare_registered(birth, preparation, |index| {
-            let mut count = 0usize;
-            if let Some(source) = source.as_mut() {
-                while let Some(entry) = source.next(&mut self.control)? {
-                    let run::Entry::Upsert(record, _) = entry else {
-                        return Err(unusable());
-                    };
-                    self.control.read(record.encoded_bytes)?;
-                    let admitted =
-                        record.into_document(self.writer.options.max_metadata_fields.get())?;
-                    index.upsert(admitted.document)?;
-                    count = count.checked_add(1).ok_or_else(unusable)?;
-                }
-            }
-            if count != self.documents || index.document_count() != count {
-                return Err(unusable());
-            }
-            checkpoint(&self.writer.task_context)
-        })
     }
 }

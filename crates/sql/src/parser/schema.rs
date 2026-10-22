@@ -18,10 +18,69 @@ use super::{
 };
 use crate::ast::*;
 use hawdb_core::{HawDBError, Result};
+use sqlparser::ast::Spanned;
 use sqlparser::ast::{
     AlterTableOperation, ColumnOption, CreateTableOptions, DataType, Expr, HiveDistributionStyle,
     ReferentialAction, SqlOption, TableConstraint, ValueWithSpan,
 };
+use sqlparser::tokenizer::{Token, Tokenizer};
+
+/// Custom-type modifiers lose quotes and commas in sqlparser's AST. Check
+/// only AST-bound vector type locations against the original tokens.
+pub(super) fn validate_vector_type_syntax(
+    input: &str,
+    statement: &sqlparser::ast::Statement,
+) -> Result<()> {
+    let columns: Vec<_> = match statement {
+        sqlparser::ast::Statement::CreateTable(create) => create.columns.iter().collect(),
+        sqlparser::ast::Statement::AlterTable(alter) => alter
+            .operations
+            .iter()
+            .filter_map(|operation| match operation {
+                AlterTableOperation::AddColumn { column_def, .. } => Some(column_def),
+                _ => None,
+            })
+            .collect(),
+        _ => return Ok(()),
+    };
+    let mut locations = std::collections::BTreeSet::new();
+    for column in columns {
+        if let DataType::Custom(name, _) = &column.data_type
+            && object_name_parts(name)?.as_slice() == ["vector"]
+        {
+            locations.insert(name.span().start);
+        }
+    }
+    if locations.is_empty() {
+        return Ok(());
+    }
+    let dialect = sqlparser::dialect::PostgreSqlDialect {};
+    let tokens = Tokenizer::new(&dialect, input)
+        .tokenize_with_location()
+        .map_err(|error| HawDBError::Parse(format!("invalid VECTOR type syntax: {error}")))?;
+    let mut tokens = tokens
+        .into_iter()
+        .filter(|token| !matches!(token.token, Token::Whitespace(_)));
+    while let Some(token) = tokens.next() {
+        if !locations.remove(&token.span.start) {
+            continue;
+        }
+        if !matches!(tokens.next().map(|t| t.token), Some(Token::LParen))
+            || !matches!(tokens.next().map(|t| t.token), Some(Token::Number(value, false)) if !value.is_empty() && value.bytes().all(|byte| byte.is_ascii_digit()))
+            || !matches!(tokens.next().map(|t| t.token), Some(Token::RParen))
+        {
+            return Err(HawDBError::Semantic(
+                "VECTOR requires exactly one decimal integer dimension".into(),
+            ));
+        }
+    }
+    if !locations.is_empty() {
+        return Err(HawDBError::Semantic(
+            "VECTOR type location is missing from the source".into(),
+        ));
+    }
+    Ok(())
+}
 
 pub(super) fn lower_create_table_statement(
     create: &sqlparser::ast::CreateTable,
@@ -342,6 +401,20 @@ fn lower_data_type(data_type: &DataType) -> Result<SqlDataType> {
         DataType::Text => Ok(SqlDataType::Text),
         DataType::Bytea => Ok(SqlDataType::Bytea),
         DataType::Uuid => Ok(SqlDataType::Uuid),
+        DataType::Custom(name, modifiers) if object_name_parts(name)?.as_slice() == ["vector"] => {
+            let dimension = match modifiers.as_slice() {
+                [dimension] if dimension.bytes().all(|byte| byte.is_ascii_digit()) => dimension
+                    .parse::<u32>()
+                    .ok()
+                    .and_then(hawdb_core::VectorDimension::new),
+                _ => None,
+            };
+            dimension.map(SqlDataType::Vector).ok_or_else(|| {
+                HawDBError::Semantic(
+                    "VECTOR requires one dimension between 1 and 4294967295".into(),
+                )
+            })
+        }
         _ => Err(HawDBError::Semantic(format!(
             "unsupported PostgreSQL data type {data_type}"
         ))),

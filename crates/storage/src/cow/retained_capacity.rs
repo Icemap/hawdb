@@ -35,6 +35,7 @@ fn value_capacity(value: &Value, depth: usize) -> Option<usize> {
     match value {
         Value::String(value) => Some(value.capacity()),
         Value::Binary(value) => Some(value.capacity()),
+        Value::Vector(value) => Some(value.retained_capacity()),
         Value::List(values) => values.iter().try_fold(
             values
                 .capacity()

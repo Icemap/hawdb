@@ -429,6 +429,11 @@ pub enum ScalarExpressionKind {
     RelationshipType(String),
     Value(ValueExpression),
     Coalesce(Vec<ScalarExpression>),
+    VectorDistance {
+        metric: hawdb_core::VectorDistance,
+        left: Box<ScalarExpression>,
+        right: Box<ScalarExpression>,
+    },
     JsonValue {
         expression: Box<ScalarExpression>,
         path: ValueExpression,
@@ -617,7 +622,9 @@ impl ScalarExpressionKind {
                 )
                 .chain(otherwise.iter().map(Box::as_ref))
                 .all(visit),
-            Self::Binary { left, right, .. } => visit(left) && visit(right),
+            Self::Binary { left, right, .. } | Self::VectorDistance { left, right, .. } => {
+                visit(left) && visit(right)
+            }
             Self::Not(expression)
             | Self::IsNull { expression, .. }
             | Self::Lower(expression)

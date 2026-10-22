@@ -608,7 +608,12 @@ fn seed_metadata_value(value: &Value) -> Option<String> {
         Value::Int(value) => Some(value.to_string()),
         Value::Float(value) if value.is_finite() => Some(value.to_string()),
         Value::Uuid(value) => Some(value.to_string()),
-        Value::Null | Value::Float(_) | Value::Binary(_) | Value::List(_) | Value::Map(_) => None,
+        Value::Null
+        | Value::Float(_)
+        | Value::Binary(_)
+        | Value::Vector(_)
+        | Value::List(_)
+        | Value::Map(_) => None,
     }
 }
 
@@ -1652,6 +1657,7 @@ fn collect_projection_properties(
 ) -> bool {
     match expression {
         ProjectionExpression::Case { .. }
+        | ProjectionExpression::VectorDistance { .. }
         | ProjectionExpression::Binary { .. }
         | ProjectionExpression::Not(_)
         | ProjectionExpression::IsNull { .. } => expression

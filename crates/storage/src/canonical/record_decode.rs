@@ -239,6 +239,24 @@ pub(super) fn value<D: Decoder>(
             decoder.finish_unit(unit)?;
             return decoder.bytes(bytes).map(Value::Binary);
         }
+        10 => {
+            let length = cursor.read_u32()? as usize;
+            let bytes = cursor.read_exact(length)?;
+            decoder.finish_unit(unit)?;
+            hawdb_core::VectorRef::from_encoded_with_work(
+                bytes,
+                || decoder.start_unit(),
+                |unit| decoder.finish_unit(unit),
+                |error| CanonicalSegmentError::Corrupt(error.to_string()),
+            )?;
+            return hawdb_core::Vector::from_encoded_with_work(
+                decoder.bytes(bytes)?,
+                || decoder.start_unit(),
+                |unit| decoder.finish_unit(unit),
+                |error| CanonicalSegmentError::Corrupt(error.to_string()),
+            )
+            .map(Value::Vector);
+        }
         9 => Value::Uuid(hawdb_core::Uuid::from_bytes(
             cursor
                 .read_exact(16)?

@@ -97,6 +97,10 @@ impl CheckpointText {
                 self.escaped(b"x", escapes, work)?;
                 self.escaped(value, escapes + 1, work)?;
             }
+            Value::Vector(value) => {
+                self.escaped(b"v", escapes, work)?;
+                self.escaped(value.encoded(), escapes + 1, work)?;
+            }
             Value::List(values) => {
                 self.escaped(b"l", escapes, work)?;
                 for (index, value) in values.iter().enumerate() {

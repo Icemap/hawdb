@@ -3754,6 +3754,7 @@ fn owned_record_bounds_cover_actual_container_and_nested_value_allocations() {
                         Value::List(vec![
                             Value::String("payload".repeat(3)),
                             Value::Binary(vec![7; 19]),
+                            Value::Vector(hawdb_core::Vector::new(&[1.0; 1024]).unwrap()),
                             Value::Int(id),
                         ]),
                     )])),

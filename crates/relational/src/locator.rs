@@ -464,6 +464,7 @@ fn relational_value_encoded_len(value: &RelationalValue) -> Result<usize> {
         RelationalValue::BigInt(_) | RelationalValue::DoublePrecision(_) => Ok(9),
         RelationalValue::Text(value) => checked_add(5, value.len(), "text value"),
         RelationalValue::Bytea(value) => checked_add(5, value.len(), "bytea value"),
+        RelationalValue::Vector(value) => checked_add(5, value.encoded().len(), "vector value"),
         RelationalValue::Uuid(_) => Ok(17),
         RelationalValue::Overflow(_) => Err(HawDBError::Execution(
             "typed relational locator cannot spill an overflow reference".to_string(),
@@ -503,6 +504,10 @@ fn write_relational_value(
             output.push(5);
             write_bytes(output, value)?;
         }
+        RelationalValue::Vector(value) => {
+            output.push(7);
+            write_bytes(output, value.encoded())?;
+        }
         RelationalValue::Uuid(value) => {
             output.push(6);
             output.extend_from_slice(value.as_bytes());
@@ -539,6 +544,10 @@ fn read_relational_value(
         ),
         5 => RelationalValue::Bytea(read_bytes(input, record_bytes)?),
         6 => RelationalValue::Uuid(hawdb_core::Uuid::from_bytes(read_array(input)?)),
+        7 => RelationalValue::Vector(
+            hawdb_core::Vector::from_encoded(read_bytes(input, record_bytes)?)
+                .map_err(|_| invalid_typed_record("invalid vector value"))?,
+        ),
         _ => return Err(invalid_typed_record("invalid relational value tag")),
     })
 }
@@ -869,7 +878,7 @@ mod tests {
             RelationalValue::Text(value) => ("text", Value::String(value.clone())),
             RelationalValue::Bytea(value) => ("bytea", Value::Binary(value.clone())),
             RelationalValue::Uuid(value) => ("uuid", Value::Uuid(*value)),
-            RelationalValue::Null | RelationalValue::Overflow(_) => {
+            RelationalValue::Null | RelationalValue::Overflow(_) | RelationalValue::Vector(_) => {
                 panic!("test key must be inline and non-null")
             }
         };

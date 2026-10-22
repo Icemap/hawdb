@@ -23,6 +23,7 @@ enum ParameterValueShape {
     Float,
     String,
     Binary,
+    Vector(hawdb_core::VectorDimension),
     Uuid,
     List(Vec<ParameterValueShape>),
     Map(BTreeMap<String, ParameterValueShape>),
@@ -197,6 +198,7 @@ fn parameter_value_shape(value: &Value) -> ParameterValueShape {
         Value::Float(_) => ParameterValueShape::Float,
         Value::String(_) => ParameterValueShape::String,
         Value::Binary(_) => ParameterValueShape::Binary,
+        Value::Vector(value) => ParameterValueShape::Vector(value.dimension()),
         Value::Uuid(_) => ParameterValueShape::Uuid,
         Value::List(values) => {
             ParameterValueShape::List(values.iter().map(parameter_value_shape).collect())
@@ -502,6 +504,7 @@ fn marker_use_in_projection_expression(
 ) -> MarkerUse {
     let marker_use = match expression {
         ProjectionExpression::Case { .. }
+        | ProjectionExpression::VectorDistance { .. }
         | ProjectionExpression::Binary { .. }
         | ProjectionExpression::Not(_)
         | ProjectionExpression::IsNull { .. } => {
@@ -996,6 +999,7 @@ fn bind_projection_expression(
 ) -> Result<()> {
     match expression {
         ProjectionExpression::Case { .. }
+        | ProjectionExpression::VectorDistance { .. }
         | ProjectionExpression::Binary { .. }
         | ProjectionExpression::Not(_)
         | ProjectionExpression::IsNull { .. } => expression

@@ -46,6 +46,10 @@ fn checkpoint_units_canonical_decode_matches_independent_all_value_and_float_bit
         Value::Float(f64::from_bits(0x7ff8_0000_0000_0001)),
         Value::String(format!("{}🌏last", "界".repeat(21_846))),
         Value::Binary(vec![0xa5; 64 * 1024 + 7]),
+        Value::Vector(hawdb_core::Vector::new(&vec![1.25; 32769]).unwrap()),
+        Value::List(vec![Value::Vector(
+            hawdb_core::Vector::new(&[1.0, -0.0]).unwrap(),
+        )]),
         Value::Uuid(hawdb_core::Uuid::from_bytes([0x3f; 16])),
         Value::List(vec![Value::Null, Value::List(Vec::new())]),
         Value::Map(BTreeMap::from([

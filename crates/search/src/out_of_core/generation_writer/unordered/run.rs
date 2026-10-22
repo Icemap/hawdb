@@ -18,6 +18,15 @@ pub(super) struct Control {
     step: Option<(SearchMutationSortStepLimits, SearchMutationSortStepUsage)>,
 }
 impl Control {
+    pub(super) fn rebind_execution(
+        &mut self,
+        task: &RuntimeTaskContext,
+        permit: Option<std::sync::Arc<hawdb_qos::RuntimePermit>>,
+    ) {
+        self.task = task.clone();
+        self.memory.host_admission = permit;
+    }
+
     pub(super) fn new(
         limits: SearchUnorderedMutationLimits,
         memory: BuildMemory,
@@ -213,6 +222,16 @@ pub(super) struct Run {
     records: usize,
     bytes: u64,
     digest: DocumentsDigest,
+}
+impl Run {
+    pub(super) fn rebind_task(&self, task: &RuntimeTaskContext) -> Result<()> {
+        let held = self
+            .held
+            .as_ref()
+            .ok_or_else(|| invalid("Consumer run lacks native custody"))?;
+        held.rebind_task(task);
+        Ok(())
+    }
 }
 pub(super) struct Output {
     file: BufWriter<File>,

@@ -24,14 +24,16 @@ pub(super) use crate::query_value::{
 };
 use hawdb_sql::{Expr, ExprKind};
 
-pub(super) fn projection_uses_non_aggregate_coalesce(projection: &[SelectProjection]) -> bool {
+pub(super) fn projection_uses_non_aggregate_scalar_function(
+    projection: &[SelectProjection],
+) -> bool {
     projection.iter().any(|projection| {
         matches!(
             projection,
             SelectProjection::Expression {
                 expression: Expr { kind: ExprKind::Function { name, .. }, .. },
                 ..
-            } if name == "coalesce" && !projection_contains_aggregate(projection)
+            } if (name == "coalesce" || hawdb_core::VectorDistance::from_function_name(name).is_some()) && !projection_contains_aggregate(projection)
         )
     })
 }
@@ -52,7 +54,9 @@ pub(super) fn validate_non_aggregate_coalesce_projections(
         else {
             continue;
         };
-        if name == "coalesce" && !projection_contains_aggregate(projection) {
+        if (name == "coalesce" || hawdb_core::VectorDistance::from_function_name(name).is_some())
+            && !projection_contains_aggregate(projection)
+        {
             infer_coalesce_scalar_type(expression, select, parameters, state)?;
         }
     }
@@ -117,6 +121,48 @@ pub(super) fn infer_coalesce_scalar_type(
                 }
             }
             Ok(scalar_type)
+        }
+        Expr {
+            kind:
+                ExprKind::Function {
+                    name,
+                    arguments,
+                    distinct: false,
+                    filter: None,
+                },
+            ..
+        } if hawdb_core::VectorDistance::from_function_name(name).is_some() => {
+            let [SqlFunctionArgument::Expression(left), SqlFunctionArgument::Expression(right)] =
+                arguments.as_slice()
+            else {
+                return Err(HawDBError::Semantic(
+                    "distance requires two vector arguments".into(),
+                ));
+            };
+            if [left, right].iter().any(|expression| {
+                !matches!(expression.kind, ExprKind::Column(_) | ExprKind::Value(_))
+            }) {
+                return Err(HawDBError::Semantic(
+                    "distance arguments must be vector columns or parameters".into(),
+                ));
+            }
+            let left = infer_coalesce_scalar_type(left, select, parameters, state)?;
+            let right = infer_coalesce_scalar_type(right, select, parameters, state)?;
+            for scalar_type in [left, right].into_iter().flatten() {
+                if !matches!(scalar_type, RelationalScalarType::Vector(_)) {
+                    return Err(HawDBError::Semantic(
+                        "distance arguments must be vectors".into(),
+                    ));
+                }
+            }
+            if let (Some(left), Some(right)) = (left, right)
+                && left != right
+            {
+                return Err(HawDBError::Semantic(
+                    "distance dimensions must match".into(),
+                ));
+            }
+            Ok(Some(RelationalScalarType::DoublePrecision))
         }
         Expr {
             kind: ExprKind::Function { name, .. },
@@ -331,6 +377,23 @@ pub(super) fn evaluate_projection_expression(
             ..
         } if name == "coalesce" => evaluate_coalesce(arguments, row, parameters),
         Expr {
+            kind:
+                ExprKind::Function {
+                    name,
+                    arguments,
+                    distinct: false,
+                    filter: None,
+                },
+            ..
+        } if hawdb_core::VectorDistance::from_function_name(name).is_some() => {
+            crate::query_value::evaluate_vector_distance(
+                hawdb_core::VectorDistance::from_function_name(name).expect("recognized function"),
+                arguments,
+                parameters,
+                |column| resolve_column(row, column),
+            )
+        }
+        Expr {
             kind: ExprKind::Function { name, .. },
             ..
         } => Err(HawDBError::Semantic(format!(
@@ -372,6 +435,12 @@ pub(super) fn evaluate_coalesce(
                     },
                 ..
             } if name == "coalesce" => evaluate_coalesce(arguments, row, parameters)?,
+            Expr {
+                kind: ExprKind::Function { name, .. },
+                ..
+            } if hawdb_core::VectorDistance::from_function_name(name).is_some() => {
+                evaluate_projection_expression(expression, row, parameters)?
+            }
             Expr {
                 kind: ExprKind::Function { name, .. },
                 ..

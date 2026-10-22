@@ -312,7 +312,6 @@ pub use hawdb_bootstrap::{
     verify_hawdb_lightning_staging_catalog, write_bootstrap_atomic_file,
     HawDBLightningPublishOptions, HAWDB_LIGHTNING_STAGING_CATALOG_PROTOCOL_VERSION,
 };
-pub use hawdb_core::LogicalType;
 pub use hawdb_core::{time, Uuid};
 pub use hawdb_core::{
     GraphRagCommonPathSummary, GraphRagGeneratedQuery, GraphRagLabelSummary,
@@ -329,6 +328,7 @@ pub use hawdb_core::{
     DEFAULT_GRAPH_RAG_MAX_PROPERTIES_PER_SUBJECT, DEFAULT_GRAPH_RAG_MAX_RELATIONSHIP_TYPES,
     DEFAULT_GRAPH_RAG_MAX_ROUTES, GRAPH_RAG_SCHEMA_CONTEXT_PROTOCOL, MAX_GRAPH_RAG_QUERY_LIMIT,
 };
+pub use hawdb_core::{LogicalType, Vector, VectorDimension, VectorDistance, VectorRef};
 pub use hawdb_executor::numeric::retained::{
     NumericBufferIdentity as RetainedBufferIdentity,
     NumericBufferProvenance as RetainedBufferProvenance,

@@ -202,6 +202,19 @@ impl Parser<'_> {
             self.expect_char(')')?;
             return Ok(ScalarExpressionKind::RelationshipType(variable));
         }
+        if let Some(metric) = hawdb_core::VectorDistance::from_function_name(&variable)
+            && self.consume_char('(')
+        {
+            let left = Box::new(self.parse_scalar_expression()?);
+            self.expect_char(',')?;
+            let right = Box::new(self.parse_scalar_expression()?);
+            self.expect_char(')')?;
+            return Ok(ScalarExpressionKind::VectorDistance {
+                metric,
+                left,
+                right,
+            });
+        }
         if variable.eq_ignore_ascii_case("coalesce") && self.consume_char('(') {
             let mut expressions = Vec::new();
             loop {

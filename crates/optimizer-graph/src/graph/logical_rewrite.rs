@@ -406,6 +406,7 @@ fn collect_projection_columns(
 ) -> bool {
     match expression {
         ProjectionExpression::Case { .. }
+        | ProjectionExpression::VectorDistance { .. }
         | ProjectionExpression::Binary { .. }
         | ProjectionExpression::Not(_)
         | ProjectionExpression::IsNull { .. } => {
@@ -453,6 +454,7 @@ fn collect_projection_columns(
 fn projection_expression_references_column(expression: &ProjectionExpression) -> bool {
     match expression {
         ProjectionExpression::Case { .. }
+        | ProjectionExpression::VectorDistance { .. }
         | ProjectionExpression::Binary { .. }
         | ProjectionExpression::Not(_)
         | ProjectionExpression::IsNull { .. } => {

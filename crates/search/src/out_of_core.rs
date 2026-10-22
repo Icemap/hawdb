@@ -231,19 +231,19 @@ mod vector_selection_tests;
 mod vector_serving;
 pub use generation_writer::{
     GovernedSearchGenerationUpdate, GovernedSearchGenerationWriter, PreparedSearchPublication,
-    ScheduledSearchOutOfCoreSegmentCompactionReport, SearchBaselineComparisonLimits,
-    SearchBaselineComparisonReport, SearchComparedConsumerDocuments, SearchGenerationAdmission,
-    SearchMatchedBaseline, SearchMutationInspectionInput, SearchMutationInspectionStep,
-    SearchMutationSortStep, SearchMutationSortStepLimits, SearchMutationSortStepUsage,
-    SearchOutOfCoreBaselineComparison, SearchOutOfCoreDeltaComparison,
-    SearchOutOfCoreGenerationBuildOptions, SearchOutOfCoreGenerationBuildReport,
-    SearchOutOfCoreGenerationUpdate, SearchOutOfCoreGenerationWriter,
-    SearchOutOfCoreMutationWriter, SearchOutOfCorePreparedGeneration,
-    SearchOutOfCorePreparedUpdate, SearchOutOfCoreSegmentCompaction,
-    SearchOutOfCoreSegmentCompactionPolicy, SearchOutOfCoreSegmentCompactionReport,
-    SearchOutOfCoreSegmentCompactionStopReason, SearchOutOfCoreUnorderedMutationWriter,
-    SearchOutOfCoreUnorderedReplacementWriter, SearchStagingCleanupReport,
-    SearchUnorderedMutationLimits, SearchUnorderedMutationReport,
+    ScheduledSearchOutOfCoreSegmentCompactionReport, SearchAdmittedConsumerDocuments,
+    SearchBaselineComparisonLimits, SearchBaselineComparisonReport,
+    SearchComparedConsumerDocuments, SearchGenerationAdmission, SearchMatchedBaseline,
+    SearchMutationInspectionInput, SearchMutationInspectionStep, SearchMutationSortStep,
+    SearchMutationSortStepLimits, SearchMutationSortStepUsage, SearchOutOfCoreBaselineComparison,
+    SearchOutOfCoreDeltaComparison, SearchOutOfCoreGenerationBuildOptions,
+    SearchOutOfCoreGenerationBuildReport, SearchOutOfCoreGenerationUpdate,
+    SearchOutOfCoreGenerationWriter, SearchOutOfCoreMutationWriter,
+    SearchOutOfCorePreparedGeneration, SearchOutOfCorePreparedUpdate,
+    SearchOutOfCoreSegmentCompaction, SearchOutOfCoreSegmentCompactionPolicy,
+    SearchOutOfCoreSegmentCompactionReport, SearchOutOfCoreSegmentCompactionStopReason,
+    SearchOutOfCoreUnorderedMutationWriter, SearchOutOfCoreUnorderedReplacementWriter,
+    SearchStagingCleanupReport, SearchUnorderedMutationLimits, SearchUnorderedMutationReport,
 };
 pub(super) use publish_lease::SearchProjectionPublishLease;
 pub use text_seed::{SearchTextSeedOutput, SearchTextSeedReport};

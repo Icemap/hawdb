@@ -138,6 +138,7 @@ pub(super) fn scalar_expression_is_scoped(
             column_names.contains(variable) || scope.contains(variable)
         }
         ScalarExpressionKind::Case { .. }
+        | ScalarExpressionKind::VectorDistance { .. }
         | ScalarExpressionKind::Binary { .. }
         | ScalarExpressionKind::Not(_)
         | ScalarExpressionKind::IsNull { .. } => expression

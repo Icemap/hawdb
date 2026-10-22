@@ -165,3 +165,83 @@ fn graph_procedures_and_shortest_paths_execute_from_ordered_clauses() {
         Value::Int(3)
     ])));
 }
+
+#[test]
+fn shared_vector_exact_filtered_top_k_differs_from_candidate_post_filter() {
+    let mut store = GraphStore::in_memory();
+    let mut catalog = Catalog::default();
+    for (id, eligible, coordinates) in [
+        ("keep", false, [1.0, 0.0]),
+        ("missing", true, [0.8, 0.6]),
+        ("extra", true, [0.6, 0.8]),
+    ] {
+        store
+            .create_node(
+                &mut catalog,
+                "Document",
+                BTreeMap::from([
+                    ("id".into(), Value::String(id.into())),
+                    ("eligible".into(), Value::Bool(eligible)),
+                    ("space_id".into(), Value::String("selected".into())),
+                    (
+                        "embedding".into(),
+                        Value::Vector(crate::Vector::new(&coordinates).unwrap()),
+                    ),
+                ]),
+            )
+            .unwrap();
+    }
+    let parameters = BTreeMap::from([(
+        "embedding".into(),
+        Value::Vector(crate::Vector::new(&[1.0, 0.0]).unwrap()),
+    )]);
+    let exact = plan("MATCH (n:Document) WHERE n.space_id = 'selected' AND n.eligible = true RETURN n.id AS id, cosine_distance(n.embedding, $embedding) AS distance ORDER BY distance, id LIMIT 2", &parameters);
+    assert!(!format!("{exact:?}").contains("VectorSeedScan"));
+    let exact = execute_with_row_limit_profile_and_external(
+        &exact,
+        &mut catalog,
+        &mut store,
+        &parameters,
+        &mut FilteredSeed,
+        None,
+    )
+    .unwrap();
+    assert_eq!(
+        exact
+            .rows
+            .iter()
+            .map(|row| row["id"].clone())
+            .collect::<Vec<_>>(),
+        vec![
+            Value::String("missing".into()),
+            Value::String("extra".into())
+        ]
+    );
+    let candidates = plan("CALL vector_search($embedding, topK := 2) YIELD id, score MATCH (n:Document) WHERE n.space_id = 'selected' AND n.eligible = true RETURN n.id AS id LIMIT 2", &parameters);
+    assert!(format!("{candidates:?}").contains("VectorSeedScan"));
+    let filtered = execute_with_row_limit_profile_and_external(
+        &candidates,
+        &mut catalog,
+        &mut store,
+        &parameters,
+        &mut FilteredSeed,
+        None,
+    )
+    .unwrap();
+    assert_eq!(filtered.rows.len(), 1);
+    assert_eq!(filtered.rows[0]["id"], Value::String("missing".into()));
+}
+
+struct FilteredSeed;
+impl ExternalReadOperator for FilteredSeed {
+    fn execute_vector_seed(
+        &mut self,
+        request: VectorSeedExecutionRequest<'_>,
+    ) -> Result<VectorSeedExecutionOutput> {
+        assert_eq!(
+            request.metadata_filters,
+            &BTreeMap::from([("space_id".into(), "selected".into())])
+        );
+        Seed.execute_vector_seed(request)
+    }
+}

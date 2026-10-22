@@ -185,6 +185,10 @@ fn value(sink: &mut impl Sink, value: &Value, layers: u32) -> Result<()> {
             sink.bytes(b"x", layers)?;
             sink.bytes(bytes, layers + 1)
         }
+        Value::Vector(vector) => {
+            sink.bytes(b"v", layers)?;
+            sink.bytes(vector.encoded(), layers + 1)
+        }
         Value::List(values) => {
             sink.bytes(b"l", layers)?;
             for (index, item) in values.iter().enumerate() {

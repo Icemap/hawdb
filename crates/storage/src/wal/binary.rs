@@ -158,6 +158,7 @@ const VALUE_FIELD_ELEMENT: u32 = 6;
 const VALUE_FIELD_MAP_ENTRY: u32 = 7;
 const VALUE_FIELD_BINARY: u32 = 8;
 const VALUE_FIELD_UUID: u32 = 9;
+const VALUE_FIELD_VECTOR: u32 = 10;
 
 const ENTRY_FIELD_KEY: u32 = 1;
 const ENTRY_FIELD_VALUE: u32 = 2;
@@ -234,6 +235,7 @@ fn property_type_code(value_type: PropertyType) -> u64 {
         PropertyType::String => 4,
         PropertyType::List => 5,
         PropertyType::Text => 6,
+        PropertyType::Vector(dimension) => (u64::from(dimension.get()) << 8) | 7,
     }
 }
 
@@ -246,6 +248,11 @@ fn decode_property_type_code(code: u64) -> Result<PropertyType> {
         4 => Ok(PropertyType::String),
         5 => Ok(PropertyType::List),
         6 => Ok(PropertyType::Text),
+        code if code & 0xff == 7 => u32::try_from(code >> 8)
+            .ok()
+            .and_then(hawdb_core::VectorDimension::new)
+            .map(PropertyType::Vector)
+            .ok_or_else(|| HawDBError::Storage("invalid vector property dimension".into())),
         code => Err(HawDBError::Storage(format!(
             "invalid property type: {code}"
         ))),
@@ -285,6 +292,7 @@ fn encode_value_message(value: &Value, out: &mut Vec<u8>) {
         Value::Float(value) => encode_fixed64_field(VALUE_FIELD_FLOAT, value.to_bits(), out),
         Value::String(value) => encode_string_field(VALUE_FIELD_STRING, value, out),
         Value::Binary(value) => encode_len_field(VALUE_FIELD_BINARY, value, out),
+        Value::Vector(value) => encode_len_field(VALUE_FIELD_VECTOR, value.encoded(), out),
         Value::Uuid(value) => encode_len_field(VALUE_FIELD_UUID, value.as_bytes(), out),
         Value::List(values) => {
             for value in values {
@@ -660,6 +668,9 @@ impl value_decode::ValueDecoder for OrdinaryOpDecoder {
 
     fn bytes(&self, bytes: &[u8]) -> Result<Vec<u8>> {
         Ok(bytes.to_vec())
+    }
+    fn vector(&self, bytes: &[u8]) -> Result<hawdb_core::Vector> {
+        crate::background::validate_vector(bytes, None).map(|value| value.to_owned())
     }
 
     fn push_value(&self, values: &mut Vec<Value>, value: Value) -> Result<()> {

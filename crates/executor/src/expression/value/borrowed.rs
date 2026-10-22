@@ -89,6 +89,7 @@ impl std::fmt::Debug for ValueDescription<'_> {
             match self.value {
                 Value::String(_) => return output.write_str("String(..)"),
                 Value::Binary(_) => return output.write_str("Binary(..)"),
+                Value::Vector(_) => return output.write_str("Vector(..)"),
                 Value::List(_) => return output.write_str("List(..)"),
                 Value::Map(_) => return output.write_str("Map(..)"),
                 _ => {}
@@ -328,6 +329,18 @@ pub(crate) fn evaluate_projection_borrowed<'a>(
                     description(value, account)
                 ))),
             }
+        }
+        ProjectionExpression::VectorDistance {
+            metric,
+            left,
+            right,
+        } => {
+            let left = evaluate(left)?;
+            let right = evaluate(right)?;
+            let distance = metric.evaluate(left.as_ref().as_ref(), right.as_ref().as_ref())?;
+            Ok(ProjectedValue::scalar(
+                distance.map_or(Value::Null, Value::Float),
+            ))
         }
         ProjectionExpression::Lower(expression) => {
             let value = evaluate(expression)?;

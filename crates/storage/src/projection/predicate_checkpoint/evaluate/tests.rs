@@ -45,6 +45,8 @@ fn checkpoint_units_predicate_evaluation_matches_ordinary_value_and_missing_prop
         Value::String(format!("{wide}z")),
         Value::Binary(vec![0xff; 64 * 1024 + 1]),
         Value::Uuid(hawdb_core::Uuid::from_u128(17)),
+        Value::Vector(hawdb_core::Vector::new(&[1.0, -0.0]).unwrap()),
+        Value::Vector(hawdb_core::Vector::new(&[1.0, 0.0]).unwrap()),
         Value::List(vec![Value::Int(0), Value::String(wide.clone())]),
         Value::Map(BTreeMap::from([(
             wide.clone(),
@@ -91,10 +93,12 @@ fn checkpoint_units_predicate_evaluation_splits_wide_comparisons_before_completi
     let local = scheduler();
     for value in [
         Value::Binary(vec![0x9f; 32 * 64 * 1024 + 1]),
+        Value::Vector(hawdb_core::Vector::new(&vec![1.0; 32 * 16 * 1024 + 1]).unwrap()),
         Value::String(format!("{}界", "a".repeat(32 * 64 * 1024 + 1))),
     ] {
         let bytes = match &value {
             Value::Binary(bytes) => bytes.len(),
+            Value::Vector(value) => value.encoded().len(),
             Value::String(text) => text.len(),
             _ => unreachable!(),
         };
@@ -137,6 +141,7 @@ fn checkpoint_units_predicate_evaluation_cancels_each_actual_unit_and_retries_co
             Value::String("\0界🦀".repeat(17000)),
             Value::Binary(vec![0x9f; 3 * 64 * 1024 + 1]),
             Value::Float(-0.0),
+            Value::Vector(hawdb_core::Vector::new(&vec![1.0; 3 * 16 * 1024 + 1]).unwrap()),
         ]),
     )]));
     let properties = BTreeMap::from([(name.clone(), value.clone())]);

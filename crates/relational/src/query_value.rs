@@ -45,6 +45,7 @@ pub fn relational_ref_to_value(value: RelationalValueRef<'_>) -> Result<Value> {
         RelationalValueRef::Text(value) => Ok(Value::String(value.to_owned())),
         RelationalValueRef::Bytea(value) => Ok(Value::Binary(value.to_vec())),
         RelationalValueRef::Uuid(value) => Ok(Value::Uuid(value)),
+        RelationalValueRef::Vector(value) => Ok(Value::Vector(value.to_owned())),
         RelationalValueRef::Overflow(_) => Err(HawDBError::Execution(
             "overflow value reached projection without hydration".to_string(),
         )),
@@ -93,6 +94,7 @@ pub fn value_to_relational(value: Value) -> Result<RelationalValue> {
         Value::String(value) => Ok(RelationalValue::Text(value)),
         Value::Binary(value) => Ok(RelationalValue::Bytea(value)),
         Value::Uuid(value) => Ok(RelationalValue::Uuid(value)),
+        Value::Vector(value) => Ok(RelationalValue::Vector(value)),
         Value::List(_) | Value::Map(_) => Err(HawDBError::Semantic(
             "relational SQL values must be scalar".to_string(),
         )),
@@ -115,8 +117,58 @@ pub fn relational_to_value(value: &RelationalValue) -> Result<Value> {
         RelationalValue::Text(value) => Ok(Value::String(value.clone())),
         RelationalValue::Bytea(value) => Ok(Value::Binary(value.clone())),
         RelationalValue::Uuid(value) => Ok(Value::Uuid(*value)),
+        RelationalValue::Vector(value) => Ok(Value::Vector(value.clone())),
         RelationalValue::Overflow(_) => Err(HawDBError::Execution(
             "overflow value reached projection without hydration".to_string(),
         )),
     }
+}
+
+/// Exact distance over borrowed operands: candidate windows belong to explicit search plans.
+pub(crate) fn evaluate_vector_distance<'a>(
+    metric: hawdb_core::VectorDistance,
+    arguments: &'a [hawdb_sql::SqlFunctionArgument],
+    parameters: &'a [Value],
+    resolve: impl Fn(&hawdb_sql::SqlColumnRef) -> Result<&'a RelationalValue>,
+) -> Result<RelationalValue> {
+    fn operand<'a>(
+        expression: &'a SqlExpression,
+        parameters: &'a [Value],
+        resolve: &impl Fn(&hawdb_sql::SqlColumnRef) -> Result<&'a RelationalValue>,
+    ) -> Result<hawdb_core::ValueRef<'a>> {
+        match &expression.kind {
+            ExprKind::Column(column) => match resolve(column)? {
+                RelationalValue::Null => Ok(hawdb_core::ValueRef::Null),
+                RelationalValue::Vector(vector) => {
+                    Ok(hawdb_core::ValueRef::Vector(vector.as_ref()))
+                }
+                _ => Err(HawDBError::Semantic(
+                    "distance arguments must be vectors".into(),
+                )),
+            },
+            ExprKind::Value(SqlValue::Literal(value)) => Ok(value.as_ref()),
+            ExprKind::Value(SqlValue::Parameter(position)) => parameters
+                .get(position.saturating_sub(1))
+                .map(Value::as_ref)
+                .ok_or_else(|| {
+                    HawDBError::Semantic(format!("missing PostgreSQL parameter ${position}"))
+                }),
+            _ => Err(HawDBError::Semantic(
+                "distance arguments must be vector columns or parameters".into(),
+            )),
+        }
+    }
+    let [hawdb_sql::SqlFunctionArgument::Expression(left), hawdb_sql::SqlFunctionArgument::Expression(right)] =
+        arguments
+    else {
+        return Err(HawDBError::Semantic(
+            "distance requires two vector arguments".into(),
+        ));
+    };
+    Ok(metric
+        .evaluate(
+            operand(left, parameters, &resolve)?,
+            operand(right, parameters, &resolve)?,
+        )?
+        .map_or(RelationalValue::Null, RelationalValue::DoublePrecision))
 }

@@ -190,6 +190,17 @@ fn write_property(
                 write!(output, "{byte:02x}").map_err(write_error)?;
             }
         }
+        Value::Vector(vector) => {
+            output.write_str("VECTOR[").map_err(write_error)?;
+            for (index, coordinate) in vector.as_ref().coordinates().enumerate() {
+                runtime_checkpoint(task)?;
+                if index > 0 {
+                    output.write_char(',').map_err(write_error)?;
+                }
+                write!(output, "{coordinate}").map_err(write_error)?;
+            }
+            output.write_char(']').map_err(write_error)?;
+        }
         Value::List(values) => {
             for (index, value) in values.iter().enumerate() {
                 if index > 0 {

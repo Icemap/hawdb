@@ -29,7 +29,8 @@ const GENERATION_METADATA_FILE: &str = "consumer-generation.meta.hawdb";
 
 mod registered;
 pub use registered::{
-    PreparedRegisteredConsumer, RegisteredConsumerLimits, RegisteredConsumerPreparation,
+    PreparedRegisteredConsumer, RegisteredConsumerError, RegisteredConsumerLimits,
+    RegisteredConsumerPreparation, RegisteredConsumerRecovery,
 };
 
 mod control;

@@ -461,6 +461,10 @@ impl value_decode::ValueDecoder for ControlledOpDecoder<'_> {
     fn bytes(&self, bytes: &[u8]) -> Result<Vec<u8>> {
         copy_bytes(bytes, self.0)
     }
+    fn vector(&self, bytes: &[u8]) -> Result<hawdb_core::Vector> {
+        crate::background::validate_vector(bytes, Some(&self.0.work))?;
+        crate::background::decode_vector(copy_bytes(bytes, self.0)?, Some(&self.0.work))
+    }
 
     fn push_value(&self, values: &mut Vec<Value>, value: Value) -> Result<()> {
         push(values, value, self.0)

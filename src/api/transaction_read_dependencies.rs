@@ -117,6 +117,7 @@ impl TransactionReadDependencies {
             let size = match value {
                 Value::String(value) => value.len(),
                 Value::Binary(value) => value.len(),
+                Value::Vector(value) => value.encoded().len(),
                 Value::List(_) | Value::Map(_) => {
                     return Err(refusal("compound Cypher dependency parameters"))
                 }
@@ -325,6 +326,39 @@ impl DatabaseTransactionState {
     pub(super) fn fail_read_dependencies(&mut self) {
         if let Some(dependencies) = &mut self.read_dependencies {
             dependencies.fail();
+        }
+    }
+}
+
+#[cfg(test)]
+mod vector_tests {
+    use super::*;
+
+    #[test]
+    fn shared_vector_serializable_inputs_charge_payload_bytes_in_both_languages() {
+        let database = Database::new();
+        let mut capture = TransactionReadDependencies::capture(
+            &database,
+            TransactionReadDependencyLimits::default(),
+        )
+        .unwrap();
+        for (dimension, accepted) in [(1024, true), (16384, false)] {
+            let vector = Value::Vector(hawdb_core::Vector::new(&vec![1.0; dimension]).unwrap());
+            let cypher =
+                capture.admit_cypher("RETURN $q", &BTreeMap::from([("q".into(), vector.clone())]));
+            let sql = capture.admit_sql("SELECT $1", &[vector]);
+            assert_eq!(cypher.is_ok(), accepted);
+            assert_eq!(sql.is_ok(), accepted);
+            if !accepted {
+                assert!(matches!(
+                    cypher,
+                    Err(HawDBError::TransactionReadDependencyRefused { .. })
+                ));
+                assert!(matches!(
+                    sql,
+                    Err(HawDBError::TransactionReadDependencyRefused { .. })
+                ));
+            }
         }
     }
 }

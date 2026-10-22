@@ -12,7 +12,9 @@ use std::num::{NonZeroU64, NonZeroUsize};
 
 mod baseline;
 mod coverage;
-pub use coverage::{SearchComparedConsumerDocuments, SearchOutOfCoreDeltaComparison};
+pub use coverage::SearchOutOfCoreDeltaComparison;
+mod consumer;
+pub use consumer::{SearchAdmittedConsumerDocuments, SearchComparedConsumerDocuments};
 pub(super) mod replacement;
 pub use baseline::{
     SearchBaselineComparisonLimits, SearchBaselineComparisonReport, SearchMatchedBaseline,

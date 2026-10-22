@@ -151,6 +151,7 @@ fn retained_value_heap_bytes(value: &Value) -> Result<usize> {
     match value {
         Value::String(value) => Ok(value.capacity()),
         Value::Binary(value) => Ok(value.capacity()),
+        Value::Vector(value) => Ok(value.retained_capacity()),
         Value::List(values) => values.iter().try_fold(
             checked_result_mul(values.capacity(), std::mem::size_of::<Value>())?,
             |total, value| checked_result_add(total, retained_value_heap_bytes(value)?),

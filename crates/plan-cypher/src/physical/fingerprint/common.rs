@@ -92,6 +92,13 @@ pub(super) fn write_value(output: &mut String, value: &Value) {
                 output.push(HEX[usize::from(byte & 0x0f)] as char);
             }
         }
+        Value::Vector(value) => {
+            output.push_str("vector:");
+            for byte in value.encoded() {
+                use std::fmt::Write;
+                let _ = write!(output, "{byte:02x}");
+            }
+        }
         Value::Uuid(value) => {
             output.push_str("uuid:");
             output.push_str(&value.to_string());

@@ -18,6 +18,12 @@ fn document(value: &str) -> SearchDocument {
         metadata: BTreeMap::new(),
     }
 }
+fn children(path: &std::path::Path) -> std::collections::BTreeSet<std::ffi::OsString> {
+    std::fs::read_dir(path)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect()
+}
 fn config() -> ProjectionConsumerCatchUpConfig {
     ProjectionConsumerCatchUpConfig {
         reads: PreparedReadLimits {
@@ -134,10 +140,7 @@ fn prepare(
     coverage.finish().unwrap()
 }
 
-#[test]
-fn registered_stationary_covered_catch_up_reuses_one_background_admission() {
-    let fixture = Fixture::new();
-    let mut db = fixture.database();
+fn single_slot_governor() -> hawdb_qos::RuntimeGovernor {
     let governor = hawdb_qos::RuntimeGovernor::new(
         hawdb_qos::RuntimeGovernorConfig {
             background_task_limit: Some(nz(1)),
@@ -157,6 +160,14 @@ fn registered_stationary_covered_catch_up_reuses_one_background_admission() {
         hawdb_qos::IoConcurrencyBudget::new(2, 1),
     );
     governor.pin_resources();
+    governor
+}
+
+#[test]
+fn registered_stationary_covered_idle_token_releases_admission_and_publication_readmits() {
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    let governor = single_slot_governor();
     db.set_runtime_governor(governor.clone());
     append(&mut db, 1);
     let mut consumer = db
@@ -171,10 +182,12 @@ fn registered_stationary_covered_catch_up_reuses_one_background_admission() {
         .unwrap();
     let epoch = db.commit_epoch().unwrap();
     let covered = prepare(&mut db, &consumer);
-    assert_eq!(governor.snapshot().active_background_tasks, 1);
-    assert!(governor
+    assert_eq!(governor.snapshot().active_background_tasks, 0);
+    assert_eq!(governor.snapshot().active_cpu_slots, 0);
+    let unrelated = governor
         .try_admit(hawdb_qos::RuntimeWorkRequest::background_maintenance(1))
-        .is_err());
+        .unwrap();
+    drop(unrelated);
     let report = db
         .publish_search_projection_consumer_covered_update(
             &mut consumer,
@@ -198,6 +211,238 @@ fn registered_stationary_covered_catch_up_reuses_one_background_admission() {
 }
 
 #[test]
+fn registered_stationary_covered_resident_refusal_preserves_ledger_and_directories() {
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    append(&mut db, 1);
+    let path = fixture.0.join("projection");
+    let mut consumer = db
+        .create_search_projection_consumer(
+            id("covered-resident-refusal-v1"),
+            &path,
+            options(1000),
+            |_, index| index.upsert(document("document 1")),
+        )
+        .unwrap();
+    let _suspension = db.runtime.suspend_automatic_checkpoint().unwrap();
+    db.query("MATCH (m:Memory) SET m.content='covered value'")
+        .unwrap();
+    let before = consumer.projection().receipt();
+    let ledger_path = fixture
+        .0
+        .join("database")
+        .join("consumer-allocations.hawdb");
+    let ledger = std::fs::read(&ledger_path).unwrap();
+    let header = ledger.iter().position(|byte| *byte == b'\n').unwrap() + 1;
+    let decoded: serde_json::Value =
+        serde_json::from_slice(&ledger[header..ledger.len() - 4]).unwrap();
+    let rows = decoded["pending"].as_array().unwrap().len();
+    let parent_entries = children(&fixture.0);
+    let target_entries = children(&path);
+    let limits = RegisteredConsumerLimits {
+        resident_bytes: NonZeroU64::new(1).unwrap(),
+        ..Default::default()
+    };
+    for attempt in 0..260 {
+        let covered = prepare(&mut db, &consumer);
+        assert!(
+            matches!(
+                db.publish_covered_consumer_with_limits(
+                    &mut consumer, covered, ProjectionSourceDurability::RequireKnownDurable, limits,
+                ),
+                Err(ProjectionConsumerCatchUpError::Consumer(SearchProjectionConsumerError::Database(
+                    HawDBError::ResourceBudgetExceeded(error)
+                ))) if error.resource == hawdb_core::ResourceBudgetKind::MemoryBytes
+                    && error.budget_option == "RegisteredConsumerLimits.resident_bytes"
+                    && error.budget == 1
+            ),
+            "attempt {attempt}"
+        );
+        assert_eq!(consumer.projection().receipt(), before, "attempt {attempt}");
+        let current = std::fs::read(&ledger_path).unwrap();
+        assert_eq!(
+            current, ledger,
+            "allocation ledger changed at attempt {attempt}"
+        );
+        let current: serde_json::Value =
+            serde_json::from_slice(&current[header..current.len() - 4]).unwrap();
+        assert_eq!(current["pending"].as_array().unwrap().len(), rows);
+        assert_eq!(
+            children(&fixture.0),
+            parent_entries,
+            "born directory at attempt {attempt}"
+        );
+        assert_eq!(
+            children(&path),
+            target_entries,
+            "private stage at attempt {attempt}"
+        );
+    }
+    let covered = prepare(&mut db, &consumer);
+    db.publish_search_projection_consumer_covered_update(
+        &mut consumer,
+        covered,
+        ProjectionSourceDurability::RequireKnownDurable,
+    )
+    .unwrap();
+    db.create_search_projection_consumer(
+        id("after-covered-refusals"),
+        fixture.0.join("after"),
+        options(1000),
+        |_, _| Ok(()),
+    )
+    .unwrap();
+}
+
+#[test]
+fn registered_stationary_covered_native_refusal_retires_birth_before_retry() {
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    let _suspension = db.runtime.suspend_automatic_checkpoint().unwrap();
+    append(&mut db, 1);
+    let path = fixture.0.join("projection");
+    let mut consumer = db
+        .create_search_projection_consumer(
+            id("covered-native-refusal-v1"),
+            &path,
+            options(1000),
+            |_, index| index.upsert(document("document 1")),
+        )
+        .unwrap();
+    db.query("MATCH (m:Memory) SET m.content='covered value'")
+        .unwrap();
+    let before = consumer.projection().receipt();
+    let root = fixture.0.join("database");
+    let ledger = super::recovery::ledger(&root);
+    let parent_entries = children(&fixture.0);
+    let target_entries = children(&path);
+    let covered = prepare(&mut db, &consumer);
+    assert!(matches!(
+        db.publish_covered_consumer_with_limits(
+            &mut consumer,
+            covered,
+            ProjectionSourceDurability::RequireKnownDurable,
+            RegisteredConsumerLimits {
+                generation_bytes: NonZeroU64::MIN,
+                ..Default::default()
+            },
+        ),
+        Err(ProjectionConsumerCatchUpError::Consumer(SearchProjectionConsumerError::Database(
+            HawDBError::Storage(message)
+        ))) if message == "projection consumer: Consumer generation exceeds configured byte bound"
+    ));
+    assert_eq!(consumer.projection().receipt(), before);
+    assert_eq!(children(&fixture.0), parent_entries);
+    assert_eq!(children(&path), target_entries);
+    assert_eq!(
+        super::recovery::ledger(&root)["pending"]
+            .as_array()
+            .unwrap()
+            .len(),
+        ledger["pending"].as_array().unwrap().len()
+    );
+    let covered = prepare(&mut db, &consumer);
+    db.publish_search_projection_consumer_covered_update(
+        &mut consumer,
+        covered,
+        ProjectionSourceDurability::RequireKnownDurable,
+    )
+    .unwrap();
+}
+
+#[cfg(feature = "test-support")]
+#[test]
+fn registered_stationary_covered_preparation_refusal_retains_owner_without_execution() {
+    use super::recovery::{ledger, with_ledger_descriptor_refusal};
+
+    for after_intent in [false, true] {
+        let fixture = Fixture::new();
+        let root = fixture.0.join("database");
+        let mut db = Database::open_with_config(
+            &root,
+            crate::DatabaseConfig {
+                max_open_files: 128,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let governor = single_slot_governor();
+        db.set_runtime_governor(governor.clone());
+        let _suspension = db.runtime.suspend_automatic_checkpoint().unwrap();
+        append(&mut db, 1);
+        let mut consumer = db
+            .create_search_projection_consumer(
+                id("covered-preparation-refusal-v1"),
+                fixture.0.join("projection"),
+                options(1000),
+                |_, index| index.upsert(document("document 1")),
+            )
+            .unwrap();
+        let before = consumer.projection().receipt();
+        let initial_operation = ledger(&root)["pending"][0]["operation"].clone();
+        db.query("MATCH (m:Memory) SET m.content='covered value'")
+            .unwrap();
+        let covered = prepare(&mut db, &consumer);
+        let (result, held) = with_ledger_descriptor_refusal(
+            &mut db,
+            &root,
+            move |row| {
+                row["operation"] != initial_operation
+                    && row["candidate_seal"].is_object()
+                    && row["publication_intent"].is_object() == after_intent
+            },
+            |db| {
+                db.publish_search_projection_consumer_covered_update(
+                    &mut consumer,
+                    covered,
+                    ProjectionSourceDurability::RequireKnownDurable,
+                )
+            },
+        );
+        assert!(
+            matches!(
+                result,
+                Err(ProjectionConsumerCatchUpError::Consumer(
+                    SearchProjectionConsumerError::Database(HawDBError::FileDescriptors(_))
+                ))
+            ),
+            "after_intent={after_intent}: {result:?}"
+        );
+        assert!(matches!(
+            consumer.search_index(),
+            Err(HawDBError::ProjectionBusy)
+        ));
+        assert_eq!(consumer.projection().receipt(), before);
+        assert_eq!(governor.snapshot().active_background_tasks, 0);
+        assert_eq!(governor.snapshot().active_cpu_slots, 0);
+        let pending = ledger(&root);
+        held.borrow_mut().clear();
+        db.query("MATCH (m:Memory) SET m.content='later source'")
+            .unwrap();
+        db.resolve_search_projection_consumer_publication(&mut consumer)
+            .unwrap();
+        assert_eq!(consumer.projection().receipt(), before);
+        assert_eq!(ledger(&root)["high_water"], pending["high_water"]);
+        let covered = prepare(&mut db, &consumer);
+        db.publish_search_projection_consumer_covered_update(
+            &mut consumer,
+            covered,
+            ProjectionSourceDurability::RequireKnownDurable,
+        )
+        .unwrap();
+        assert_eq!(
+            consumer
+                .search_index()
+                .unwrap()
+                .document("memory:m1")
+                .unwrap()
+                .content,
+            "later source"
+        );
+    }
+}
+
+#[test]
 fn registered_stationary_covered_publication_faults_resolve_original_operation_after_source_writes()
 {
     for stage in [
@@ -205,6 +450,7 @@ fn registered_stationary_covered_publication_faults_resolve_original_operation_a
         PublicationStage::BeforeSelector,
         PublicationStage::AfterSelector,
         PublicationStage::AfterSelectorBarrier,
+        PublicationStage::BeforeAcknowledge,
         PublicationStage::BeforeRegistry,
         PublicationStage::AfterRegistry,
     ] {
@@ -254,7 +500,9 @@ fn registered_stationary_covered_publication_faults_resolve_original_operation_a
             );
             if !matches!(
                 stage,
-                PublicationStage::BeforeRegistry | PublicationStage::AfterRegistry
+                PublicationStage::BeforeAcknowledge
+                    | PublicationStage::BeforeRegistry
+                    | PublicationStage::AfterRegistry
             ) {
                 assert!(matches!(
                     consumer.search_index(),

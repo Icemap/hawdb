@@ -143,7 +143,13 @@ impl Binder<'_> {
                     })?;
                 return Ok(BoundExpression::column(
                     index,
-                    scalar_type(source.columns[index].data_type),
+                    scalar_type(source.columns[index].data_type).ok_or_else(|| {
+                        self.error(
+                            Code::UnsupportedExpression,
+                            span,
+                            "VECTOR graph properties are not supported",
+                        )
+                    })?,
                 ));
             }
             Syntax::Literal(literal) => return self.literal(literal, span),

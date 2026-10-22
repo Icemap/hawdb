@@ -131,6 +131,10 @@ pub(crate) fn hash_value(hasher: &mut Sha256, value: &Value) {
             hasher.update([7]);
             hash_bytes(hasher, value);
         }
+        Value::Vector(value) => {
+            hasher.update([9]);
+            hash_bytes(hasher, value.encoded());
+        }
         Value::Uuid(value) => {
             hasher.update([8]);
             hasher.update(value.as_bytes());

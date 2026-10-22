@@ -695,6 +695,7 @@ fn append_value_to_value(value: &RelationalValue) -> Result<Value> {
         RelationalValue::Text(value) => Ok(Value::String(value.clone())),
         RelationalValue::Bytea(value) => Ok(Value::Binary(value.clone())),
         RelationalValue::Uuid(value) => Ok(Value::Uuid(*value)),
+        RelationalValue::Vector(value) => Ok(Value::Vector(value.clone())),
         RelationalValue::Overflow(_) => Err(HawDBError::StorageIntegrity(
             "strict append row contains an overflow reference".to_string(),
         )),

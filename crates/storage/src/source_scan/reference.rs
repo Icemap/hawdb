@@ -44,6 +44,14 @@ pub(super) fn value(value: &Value) -> String {
             value.iter().map(|b| format!("{b:02x}")).collect::<String>()
         ),
         Value::Uuid(value) => format!("u{value}"),
+        Value::Vector(value) => format!(
+            "v{}",
+            value
+                .encoded()
+                .iter()
+                .map(|b| format!("{b:02x}"))
+                .collect::<String>()
+        ),
         Value::List(values) => format!(
             "l{}",
             values

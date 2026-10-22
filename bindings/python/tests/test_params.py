@@ -218,3 +218,15 @@ def test_transactions_name_the_path(table):
     for begin in (table.transaction, table.read_transaction):
         with begin() as tx:
             _rejects(tx, TypeError, decimal.Decimal("1"), "unsupported parameter type: Decimal")
+
+
+def test_shared_vector_parameters_and_distances(db):
+    vector = {"$vector": [1.0, -0.0]}
+    db.execute_sql("CREATE TABLE vectors (id BIGINT PRIMARY KEY, embedding VECTOR(2))")
+    db.execute_sql("INSERT INTO vectors (id, embedding) VALUES ($1, $2)", [1, vector])
+    db.execute("CREATE (:VectorNode {embedding: $v})", {"v": vector})
+    assert db.execute_sql("SELECT embedding, l2_distance(embedding, $1) AS distance FROM vectors", [vector]).fetchall() == [{"embedding": vector, "distance": 0.0}]
+    assert db.execute("MATCH (n:VectorNode) RETURN n.embedding AS embedding, l2_distance(n.embedding, $v) AS distance", {"v": vector}).fetchall() == [{"embedding": vector, "distance": 0.0}]
+    for invalid in [[], [float("nan")], [float("inf")], [1e300]]:
+        with pytest.raises(ValueError, match="invalid vector"):
+            db.execute(COUNT, {"v": {"$vector": invalid}})

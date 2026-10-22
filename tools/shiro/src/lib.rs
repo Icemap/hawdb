@@ -2194,6 +2194,7 @@ fn observes_all_shapes<'a>(observed: impl Iterator<Item = &'a str>, expected: &[
 
 fn error_class(error: &HawDBError) -> &'static str {
     match error {
+        HawDBError::ProjectionBusy => "projection_busy",
         HawDBError::Parse(_) => "parse",
         HawDBError::Semantic(_) => "semantic",
         HawDBError::Execution(_)
@@ -2207,7 +2208,6 @@ fn error_class(error: &HawDBError) -> &'static str {
         HawDBError::Storage(_)
         | HawDBError::FileDescriptors(_)
         | HawDBError::StorageIntegrity(_)
-        | HawDBError::ProjectionBusy
         | HawDBError::AppendSequenceExhausted { .. }
         | HawDBError::BranchBusy { .. }
         | HawDBError::BranchReclamationBlocked { .. } => "storage",
@@ -2303,6 +2303,10 @@ fn typed_value_json(value: &Value) -> JsonValue {
         }),
         Value::String(value) => json!({"type": "string", "value": value}),
         Value::Uuid(value) => json!({"type": "uuid", "value": value.to_string()}),
+        Value::Vector(value) => json!({
+            "type": "vector",
+            "hex": value.encoded().iter().map(|byte| format!("{byte:02x}")).collect::<String>(),
+        }),
         Value::Binary(value) => json!({
             "type": "binary",
             "hex": value.iter().map(|byte| format!("{byte:02x}")).collect::<String>(),
@@ -2394,6 +2398,17 @@ mod tests {
             ResultSemantics::Ordered,
         )
         .is_err());
+    }
+
+    #[test]
+    fn shared_vector_report_preserves_dimension_and_signed_zero_bits() {
+        let vector = hawdb::Vector::new(&[1.0, -0.0]).unwrap();
+        assert_eq!(
+            typed_value_json(&Value::Vector(vector)),
+            json!({
+                "type": "vector", "hex": "020000000000803f00000080"
+            })
+        );
     }
 
     #[test]

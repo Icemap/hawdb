@@ -112,7 +112,7 @@ pub(super) fn create_control_candidate(
     }
     // FILE_CREATE (2), not OPEN_IF: no existing entry may become writable.
     // GENERIC_WRITE supports FlushFileBuffers; DELETE supports held-file rename.
-    relative_open_encoded(
+    relative_open_encoded_raw(
         root,
         &mut encoded[..name.0.len()],
         READ_DATA | 0x4000_0000 | DELETE,

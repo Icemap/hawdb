@@ -61,12 +61,13 @@ pub(super) mod io;
 pub(super) mod mutations;
 pub(super) mod unordered;
 pub use unordered::{
-    SearchBaselineComparisonLimits, SearchBaselineComparisonReport,
-    SearchComparedConsumerDocuments, SearchMatchedBaseline, SearchMutationInspectionInput,
-    SearchMutationInspectionStep, SearchMutationSortStep, SearchMutationSortStepLimits,
-    SearchMutationSortStepUsage, SearchOutOfCoreBaselineComparison, SearchOutOfCoreDeltaComparison,
-    SearchOutOfCoreUnorderedMutationWriter, SearchOutOfCoreUnorderedReplacementWriter,
-    SearchUnorderedMutationLimits, SearchUnorderedMutationReport,
+    SearchAdmittedConsumerDocuments, SearchBaselineComparisonLimits,
+    SearchBaselineComparisonReport, SearchComparedConsumerDocuments, SearchMatchedBaseline,
+    SearchMutationInspectionInput, SearchMutationInspectionStep, SearchMutationSortStep,
+    SearchMutationSortStepLimits, SearchMutationSortStepUsage, SearchOutOfCoreBaselineComparison,
+    SearchOutOfCoreDeltaComparison, SearchOutOfCoreUnorderedMutationWriter,
+    SearchOutOfCoreUnorderedReplacementWriter, SearchUnorderedMutationLimits,
+    SearchUnorderedMutationReport,
 };
 mod prepared;
 mod publication;

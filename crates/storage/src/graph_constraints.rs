@@ -251,16 +251,7 @@ pub fn validate_property_schema_value(
             "property is not nullable",
         ));
     }
-    let matches = matches!(
-        (value_type, value),
-        (PropertyType::Any, _)
-            | (PropertyType::Bool, Value::Bool(_))
-            | (PropertyType::Int, Value::Int(_))
-            | (PropertyType::Float, Value::Float(_))
-            | (PropertyType::String, Value::String(_))
-            | (PropertyType::Text, Value::String(_))
-            | (PropertyType::List, Value::List(_))
-    );
+    let matches = value_type.logical_type().accepts(value.as_ref());
     if matches {
         Ok(())
     } else {

@@ -350,6 +350,7 @@ fn public_expression_at(expression: &ProjectionExpression, depth: usize) -> bool
         | ProjectionExpression::Left { .. }
         | ProjectionExpression::Lower(_)
         | ProjectionExpression::Case { .. }
+        | ProjectionExpression::VectorDistance { .. }
         | ProjectionExpression::Binary { .. }
         | ProjectionExpression::Not(_)
         | ProjectionExpression::IsNull { .. } => true,
