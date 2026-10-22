@@ -227,6 +227,7 @@ impl CapturedProject {
             branch_catalog::Catalog,
         ) -> Result<T>,
     ) -> Result<T> {
+        let _descriptor_operation = self.files.io_context().internal_operation()?;
         let context = self.files.io_context();
         let branches = self.root.open_directory(&context, BRANCH_DIRECTORY)?;
         let _lease = CatalogMetadataLease::acquire_captured(&branches).map_err(|error| {
@@ -270,6 +271,7 @@ impl ProjectMetadata {
     }
 
     pub fn from_files(files: ProjectFileDescriptors) -> Result<Self> {
+        let _descriptor_operation = files.io_context().internal_operation()?;
         let root = Arc::new(SourceDirectory::capture(files.root(), &files.io_context())?);
         #[cfg(test)]
         if let Some(hook) = AFTER_METADATA_CAPTURE.with(|hook| hook.borrow_mut().take()) {
@@ -279,6 +281,7 @@ impl ProjectMetadata {
     }
 
     fn from_captured(files: ProjectFileDescriptors, root: Arc<SourceDirectory>) -> Result<Self> {
+        let _descriptor_operation = files.io_context().internal_operation()?;
         let context = files.io_context();
         let selector = read_captured_selector(&root, &context)?;
         let catalog = {
@@ -379,6 +382,7 @@ pub fn reserve_bootstrap_identity(
     files: &ProjectFileDescriptors,
     proposed: ProjectSelector,
 ) -> Result<ProjectSelector> {
+    let _descriptor_operation = files.io_context().internal_operation()?;
     fs::create_dir_all(files.root())?;
     let root = SourceDirectory::capture(files.root(), &files.io_context())?;
     reserve_bootstrap_identity_captured(files, &root, proposed)
@@ -389,6 +393,7 @@ pub(crate) fn reserve_bootstrap_identity_captured(
     root: &SourceDirectory,
     proposed: ProjectSelector,
 ) -> Result<ProjectSelector> {
+    let _descriptor_operation = files.io_context().internal_operation()?;
     let context = files.io_context();
     match root.create_directory_new(&context, BRANCH_DIRECTORY) {
         Ok(()) => root.sync(&context)?,

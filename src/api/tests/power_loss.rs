@@ -108,6 +108,7 @@ fn open(root: &Path, durability: DurabilityPolicy) -> Database {
         durability,
         DatabaseConfig {
             max_open_files: 32,
+            strict_capacity_limit: true,
             ..Default::default()
         },
     )
@@ -297,6 +298,7 @@ fn relaxed_graph_schema_commit_is_whole_lost_or_fail_closed_under_physical_wal_f
             DurabilityPolicy::SyncOnCheckpoint,
             DatabaseConfig {
                 max_open_files: 32,
+                strict_capacity_limit: true,
                 ..Default::default()
             },
         );
@@ -949,6 +951,7 @@ fn interrupted_legacy_bootstrap_keeps_committed_data_and_reserved_identity() {
             DurabilityPolicy::SyncOnEveryWrite,
             WalReplayConfig {
                 max_open_files: 32,
+                strict_capacity_limit: true,
                 ..Default::default()
             },
         )
@@ -1169,6 +1172,7 @@ fn schema_indexes_and_nested_data_survive_power_loss_in_configured_residencies()
             let mut fixture = Fixture::new();
             let config = DatabaseConfig {
                 max_open_files: 32,
+                strict_capacity_limit: true,
                 storage_residency_mode: mode,
                 relational_index_mode: indexes,
                 ..Default::default()

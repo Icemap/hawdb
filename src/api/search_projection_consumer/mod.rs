@@ -83,6 +83,7 @@ impl Database {
     where
         F: FnOnce(&mut DatabaseReadTransaction, &mut SearchIndex) -> Result<()>,
     {
+        let _descriptor_operation = self.internal_descriptor_operation()?;
         self.consumer_writable_root()?;
         self.reload_consumer_registry_if_unavailable()?;
         {
@@ -191,6 +192,7 @@ impl Database {
     where
         F: FnOnce(&mut DatabaseReadTransaction, &mut SearchIndex) -> Result<()>,
     {
+        let _descriptor_operation = self.internal_descriptor_operation()?;
         let root = self.consumer_writable_root()?;
         self.ensure_runtime_capability(hawdb_core::RuntimeCapability::SearchProjectionPublication)?;
         self.reload_consumer_registry_if_unavailable()?;
@@ -363,6 +365,7 @@ impl Database {
         id: &SearchProjectionConsumerId,
         projection_directory: impl AsRef<Path>,
     ) -> SearchProjectionConsumerResult<SearchProjectionConsumer> {
+        let _descriptor_operation = self.internal_descriptor_operation()?;
         self.ensure_writable()?;
         self.reload_consumer_registry_if_unavailable()?;
         if !self
@@ -468,6 +471,7 @@ impl Database {
             &SearchProjectionChangeBatch,
         ) -> Result<SearchProjectionRelationalDelta>,
     {
+        let _descriptor_operation = self.internal_descriptor_operation()?;
         let root = self.consumer_writable_root()?;
         self.reload_consumer_registry_if_unavailable()?;
         self.validate_consumer_receipt(consumer)?;
@@ -600,6 +604,7 @@ impl Database {
         &mut self,
         consumer: &SearchProjectionConsumer,
     ) -> SearchProjectionConsumerResult<SearchProjectionConsumerStatus> {
+        let _descriptor_operation = self.internal_descriptor_operation()?;
         let root = self.consumer_writable_root()?;
         self.reload_consumer_registry_if_unavailable()?;
         self.validate_consumer_receipt(consumer)?;
@@ -632,6 +637,7 @@ impl Database {
         &mut self,
         id: &SearchProjectionConsumerId,
     ) -> SearchProjectionConsumerResult<()> {
+        let _descriptor_operation = self.internal_descriptor_operation()?;
         self.ensure_writable()?;
         self.reload_consumer_registry_if_unavailable()?;
         let root = self
@@ -760,6 +766,7 @@ impl Database {
         &mut self,
         consumer: &mut SearchProjectionConsumer,
     ) -> SearchProjectionConsumerResult<()> {
+        let _descriptor_operation = self.internal_descriptor_operation()?;
         let root = self.consumer_writable_root()?;
         let permit = self.consumer_publication_permit()?;
         consumer

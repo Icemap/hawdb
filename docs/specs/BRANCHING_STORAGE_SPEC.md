@@ -1146,8 +1146,8 @@ handle merely because it references the same object as its parent. Shared reads
 must use positional I/O or equivalent synchronization, not a shared mutable file
 offset. Mutable WALs and branch ownership locks are not immutable-cache entries.
 
-A typed Rust resource configuration MUST supply a finite FD budget, with a safe
-finite default, for all engine-owned descriptors in that runtime. Include
+A typed Rust resource configuration MUST supply a finite FD capacity target,
+with a safe finite default, for all engine-owned descriptors in that runtime. Include
 non-evictable branch locks and WALs, immutable-file cache entries, and temporary
 open/recovery/checkpoint/seal/GC descriptors. The file cache uses the remaining
 budget; limiting cache size alone is insufficient. Independently opened contexts
@@ -1159,14 +1159,21 @@ domain; do not claim the engine budget prevents every OS descriptor-limit error.
 Reserve descriptor capacity before opening files, including transient operations.
 Every failure/cancellation path releases its reservations and temporary handles.
 Idle cached handles may be evicted under pressure; active I/O handles and open
-locks cannot be evicted. When eviction cannot provide capacity, fail with a typed
-resource-limit error and requested/available counts. OS descriptor exhaustion
+locks cannot be evicted. `strict_capacity_limit` defaults to `false`: when idle
+eviction cannot meet the target, admit accounted excess without reclaiming pins.
+Explicit strict foreground admission instead fails with a typed resource-limit
+error and requested/available counts. Internal control, recovery, change capture,
+publication, checkpoint and cleanup admission MUST always use `strict_capacity_limit=false`,
+including when the host selects strict foreground admission. OS descriptor exhaustion
 must also produce a typed resource error without leaking handles or publishing
-partial branch state. Do not introduce an unbounded wait or an unlimited fallback.
+partial branch state. Do not introduce an unbounded wait or unaccounted fallback.
+See [descriptor capacity and internal progress](../FILE_DESCRIPTOR_CAPACITY.md).
 
-`USE BRANCH` must reserve enough capacity for target admission while preserving
-the source branch. If the target cannot open within budget, release its temporary
-resources and leave the original selection intact. After a successful switch,
+`USE BRANCH` must reserve accounted capacity for internal target admission while
+preserving the source branch. A strict foreground target must not reject this
+internal reservation. If native resource exhaustion or another admission error
+prevents the target from opening, release temporary resources and leave the
+original selection intact. After a successful switch,
 release source ownership when no source reader, job, or other owner needs it.
 An idle branch runtime must not retain non-evictable locks/WALs indefinitely.
 Unsynchronized relaxed-mode writes remain subject to their documented durability
@@ -1195,13 +1202,14 @@ where available to prove:
   repeated listing, multi-level forks, reopen, and failed creation leak no FDs.
 - Parent/child/sibling reads reuse cached immutable handles, and eviction/reopen
   preserves identity and data isolation without sharing mutable file offsets.
-- Active locks/WALs count against admission; oversubscription and target-switch
-  failure leave the source usable and descriptor/reservation counts bounded.
+- Active locks/WALs count against admission; strict foreground refusal and native
+  target-switch failure leave the source usable and release temporary capacity.
 - Repeated switches release unneeded source resources; a surviving snapshot/job
   keeps its original data reachable even when idle data-file FDs are evicted.
-- Concurrent maintenance, GC, and admission stay within budget, including
-  temporary descriptors. Inject OS-limit and I/O errors after each acquisition
-  and verify no leaks, partial publication, or deletion of referenced objects.
+- Concurrent maintenance, GC, and admission retain complete accounting,
+  including temporary descriptors and internal excess over the target. Inject
+  OS-limit and I/O errors after each acquisition and verify no leaks, partial
+  publication, or deletion of referenced objects.
 
 These are implementation and resource-verification requirements; existing open
 helpers and caches are not claimed to satisfy them merely because branches share
@@ -1210,10 +1218,10 @@ immutable storage.
 ### Current descriptor integration boundary
 
 `DatabaseConfig::max_open_files` and `WalReplayConfig::max_open_files` supply
-a finite configured ceiling, default 1024, without pre-opening files. On
+a finite configured capacity target, default 1024, without pre-opening files. On
 native Unix, project acquisition observes `RLIMIT_NOFILE` and installs an
-effective admission ceiling of `min(configured, soft.saturating_sub(64))`.
-Linux and macOS can have different effective ceilings without changing the
+effective capacity target of `min(configured, soft.saturating_sub(64))`.
+Linux and macOS can have different effective targets without changing the
 host's soft or hard limit. A soft limit of 256, for example, admits 192 handles.
 The host owns process-limit changes; the engine does not call `setrlimit`.
 
@@ -1224,14 +1232,14 @@ with `FileDescriptorError::OsLimit`, reporting the required minimum allowance
 and observed soft/hard limits. A low hard limit that still leaves sufficient
 capacity reduces effective admission rather than rejecting the default config.
 Canonical project contexts compare the configured value for conflicts and
-share the effective ceiling installed by the first context. The ceiling stays
+share the effective target installed by the first context. The target stays
 fixed for that domain's lifetime; external process-limit changes are the host's
 responsibility.
 
-`FileDescriptorMetrics` reports configured/effective ceilings, current native
+`FileDescriptorMetrics` reports configured/effective targets, `strict_capacity_limit`, current native
 Unix `os_soft_limit` (`None` on other platforms), and `os_limit_clamped`.
 The runtime readiness JSON exposes this warning without changing cutover
-authorization. Other platforms retain the configured ceiling. The host margin
+authorization. Other platforms retain the configured target. The host margin
 is not a reservation or a bound on other libraries or independent projects;
 hosts account for aggregate process usage.
 
@@ -1282,8 +1290,12 @@ return quota and leak no handle; releasing the host handle permits a complete
 read and returns the process count to baseline. These are bounded fixture
 measurements, not an ownership census of arbitrary host/native-library handles.
 Native Windows execution is required in addition to cross-target Clippy.
-Cross-project alias-probe isolation and additional namespace schedules remain
-tracked by [#819](https://github.com/nowledge-co/hawdb/issues/819).
+Unresolved path-identity probes use a process-owned, serialized descriptor
+ledger instead of reserving against unrelated project domains. Canonical
+aliases retain the resolved project's policy and budget checks. Native Windows
+qualification and additional namespace schedules remain tracked by
+[#819](https://github.com/nowledge-co/hawdb/issues/819); see
+[the capacity policy](../FILE_DESCRIPTOR_CAPACITY.md).
 
 `USE BRANCH` retains a target reservation through recovery and facade validation.
 The current reservation covers three lock/WAL handles, the bounded shared read

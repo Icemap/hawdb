@@ -346,7 +346,10 @@ mod tests {
     #[test]
     fn directory_sync_charges_and_releases_its_project_handle() {
         let root = unique_test_dir();
-        let project = crate::file_descriptors::ProjectFileDescriptors::acquire(&root, 1).unwrap();
+        let project = crate::file_descriptors::ProjectFileDescriptors::acquire_with_capacity_limit(
+            &root, 1, true,
+        )
+        .unwrap();
         let held = crate::file_io::OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -383,7 +386,8 @@ mod tests {
 
         for limit in [5, 6] {
             let root = unique_test_dir();
-            let project = ProjectFileDescriptors::acquire(&root, limit).unwrap();
+            let project =
+                ProjectFileDescriptors::acquire_with_capacity_limit(&root, limit, true).unwrap();
             let candidate = root.join("candidate.hawdb");
             let published = root.join("published.hawdb");
             write_synced(&candidate, b"new");

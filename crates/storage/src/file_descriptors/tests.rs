@@ -31,13 +31,22 @@ struct Fixture {
 
 impl Fixture {
     fn new(limit: usize) -> Self {
+        Self::with_capacity_limit(limit, true)
+    }
+
+    fn with_capacity_limit(limit: usize, strict_capacity_limit: bool) -> Self {
         static SEQUENCE: AtomicU64 = AtomicU64::new(0);
         let root = std::env::temp_dir().join(format!(
             "hawdb-fd-budget-{}-{}",
             std::process::id(),
             SEQUENCE.fetch_add(1, Ordering::Relaxed)
         ));
-        let project = ProjectFileDescriptors::acquire(&root, limit).unwrap();
+        let project = ProjectFileDescriptors::acquire_with_capacity_limit(
+            &root,
+            limit,
+            strict_capacity_limit,
+        )
+        .unwrap();
         Self { root, project }
     }
 
@@ -50,6 +59,9 @@ impl Fixture {
         }
     }
 }
+
+#[path = "capacity_policy.rs"]
+mod capacity_policy;
 
 impl Drop for Fixture {
     fn drop(&mut self) {
@@ -175,12 +187,13 @@ fn descriptor_exhaustion_preserves_relational_checkpoint_for_retry() {
 #[test]
 fn independent_contexts_share_the_limit_and_reject_conflicting_configuration() {
     let fixture = Fixture::new(3);
-    let second = ProjectFileDescriptors::acquire(&fixture.root, 3).unwrap();
+    let second =
+        ProjectFileDescriptors::acquire_with_capacity_limit(&fixture.root, 3, true).unwrap();
     assert!(Arc::ptr_eq(&fixture.project.state, &second.state));
     let file = File::create(fixture.root.join("data")).unwrap();
     assert_eq!(second.metrics().open, 1);
     assert!(matches!(
-        ProjectFileDescriptors::acquire(&fixture.root, 4),
+        ProjectFileDescriptors::acquire_with_capacity_limit(&fixture.root, 4, true),
         Err(HawDBError::FileDescriptors(
             FileDescriptorError::ConfigurationConflict {
                 configured: 3,
@@ -189,7 +202,7 @@ fn independent_contexts_share_the_limit_and_reject_conflicting_configuration() {
         ))
     ));
     assert!(matches!(
-        ProjectFileDescriptors::acquire(&fixture.root, 0),
+        ProjectFileDescriptors::acquire_with_capacity_limit(&fixture.root, 0, true),
         Err(HawDBError::FileDescriptors(
             FileDescriptorError::InvalidBudget { limit: 0 }
         ))
@@ -505,7 +518,8 @@ fn project_admission_reports_insufficient_os_capacity_without_installing_a_root(
     ));
     let requested = 8 + super::os_limit::HOST_HEADROOM;
     assert_eq!(
-        ProjectFileDescriptors::acquire(&root, DEFAULT_MAX_OPEN_FILES).unwrap_err(),
+        ProjectFileDescriptors::acquire_with_capacity_limit(&root, DEFAULT_MAX_OPEN_FILES, true)
+            .unwrap_err(),
         HawDBError::FileDescriptors(FileDescriptorError::OsLimit {
             requested,
             os_code: None,
@@ -516,7 +530,7 @@ fn project_admission_reports_insufficient_os_capacity_without_installing_a_root(
     assert!(!root.exists());
     assert_eq!(descriptor_os_limits().rlim_cur, 68);
     assert_eq!(descriptor_os_limits().rlim_max, 96);
-    let retry = ProjectFileDescriptors::acquire(&root, 4).unwrap();
+    let retry = ProjectFileDescriptors::acquire_with_capacity_limit(&root, 4, true).unwrap();
     assert_eq!(retry.metrics().limit, 4);
     assert_eq!((retry.metrics().open, retry.metrics().reserved), (0, 0));
     drop(retry);
@@ -971,20 +985,16 @@ fn a_new_project_can_start_while_an_independent_project_is_full() {
 }
 
 #[test]
-fn nested_admission_rejects_insufficient_remaining_quota_before_opening() {
+fn nested_internal_admission_exceeds_capacity_without_leaking_quota() {
     let fixture = Fixture::new(3);
     let outer = fixture.project.reserve_admission(2).unwrap();
     let held = File::create(fixture.root.join("held")).unwrap();
-    let error = fixture.project.reserve_admission(2).unwrap_err();
-    assert_eq!(
-        file_descriptor_error(&error),
-        Some(FileDescriptorError::BudgetExceeded {
-            requested: 2,
-            available: 1,
-            limit: 3,
-        })
-    );
+    let additional = fixture.project.reserve_admission(2).unwrap();
     assert_eq!(fixture.project.metrics().open, 1);
+    assert_eq!(fixture.project.metrics().reserved, 3);
+    assert_eq!(fixture.project.metrics().high_water, 4);
+    assert_eq!(fixture.project.metrics().budget_rejections, 0);
+    drop(additional);
     assert_eq!(fixture.project.metrics().reserved, 1);
     drop(held);
     let nested = fixture.project.reserve_admission(2).unwrap();
@@ -1040,16 +1050,17 @@ fn writable_admission_retries_root_ancestry_after_a_read_only_domain() {
     let fixture = Fixture::new(1);
     let root = fixture.root.with_extension("read-only");
     std::fs::create_dir_all(&root).unwrap();
-    let read_only = ProjectFileDescriptors::acquire_existing(&root, 1).unwrap();
+    let read_only =
+        ProjectFileDescriptors::acquire_existing_with_capacity_limit(&root, 1, true).unwrap();
     let failure = crate::durability::fail_sync_directory_for(read_only.root());
-    assert!(ProjectFileDescriptors::acquire(&root, 1).is_err());
+    assert!(ProjectFileDescriptors::acquire_with_capacity_limit(&root, 1, true).is_err());
     assert!(!read_only
         .state
         .root_namespace_durable
         .load(Ordering::Acquire));
     assert_eq!(read_only.metrics().open, 0);
     drop(failure);
-    let writable = ProjectFileDescriptors::acquire(&root, 1).unwrap();
+    let writable = ProjectFileDescriptors::acquire_with_capacity_limit(&root, 1, true).unwrap();
     assert!(Arc::ptr_eq(&read_only.state, &writable.state));
     assert!(writable
         .state

@@ -179,7 +179,7 @@ impl Fixture {
             std::process::id(),
             SEQUENCE.fetch_add(1, Ordering::Relaxed)
         ));
-        let project = ProjectFileDescriptors::acquire(&root, 8).unwrap();
+        let project = ProjectFileDescriptors::acquire_with_capacity_limit(&root, 8, true).unwrap();
         let mut catalog = Catalog::default();
         let store = GraphStore::open_with_durability_and_replay_config(
             &root,
@@ -187,6 +187,7 @@ impl Fixture {
             crate::config::DurabilityPolicy::default(),
             crate::config::WalReplayConfig {
                 max_open_files: 8,
+                strict_capacity_limit: true,
                 ..Default::default()
             },
         )
@@ -247,7 +248,6 @@ impl Fixture {
         .unwrap()
         .is_some());
         assert_eq!(self.project.metrics().reserved, 0);
-        assert!(self.project.metrics().high_water <= 8);
     }
 }
 
@@ -280,24 +280,16 @@ fn read_sidecars(root: &Path) -> Vec<Vec<u8>> {
 }
 
 #[test]
-fn checkpoint_sidecar_admission_rejects_before_replacement_and_retries() {
+fn checkpoint_sidecar_internal_admission_progresses_at_strict_capacity() {
     let fixture = Fixture::new();
     let baseline = fixture.project.metrics().open;
     let held_count = 8 - baseline - (SIDECAR_PUBLICATION_DESCRIPTORS - 1);
     let held = (0..held_count)
         .map(|_| File::open(fixture.durable().manifest_path()).unwrap())
         .collect::<Vec<_>>();
-    let error = fixture.publish().unwrap_err();
-    assert_eq!(
-        error,
-        HawDBError::FileDescriptors(hawdb_core::error::FileDescriptorError::BudgetExceeded {
-            requested: SIDECAR_PUBLICATION_DESCRIPTORS,
-            available: SIDECAR_PUBLICATION_DESCRIPTORS - 1,
-            limit: 8,
-        })
-    );
-    assert_eq!(read_sidecars(&fixture.root), fixture.old);
-    assert_eq!(read_sidecars(&fixture.staging), fixture.new);
+    fixture.publish().unwrap();
+    assert!(fixture.project.metrics().high_water > fixture.project.metrics().limit);
+    assert_eq!(fixture.project.metrics().budget_rejections, 0);
     assert_eq!(
         std::fs::read(fixture.durable().manifest_path()).unwrap(),
         fixture.manifest
@@ -305,7 +297,6 @@ fn checkpoint_sidecar_admission_rejects_before_replacement_and_retries() {
     assert_eq!(fixture.project.metrics().reserved, 0);
     assert_eq!(fixture.project.metrics().open, baseline + held_count);
     drop(held);
-    fixture.publish().unwrap();
     fixture.assert_published();
     assert_eq!(fixture.project.metrics().open, baseline);
 }
@@ -346,6 +337,7 @@ fn checkpoint_sidecar_reservation_survives_competing_owner_after_first_replaceme
             == fixture.old[1],
     );
     fixture.assert_published();
+    assert!(fixture.project.metrics().high_water <= 8);
     assert_eq!(
         fixture.project.metrics().open,
         baseline + held.lock().unwrap().len()

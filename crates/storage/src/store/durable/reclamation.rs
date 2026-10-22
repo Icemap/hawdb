@@ -77,6 +77,10 @@ impl DurableStore {
         pinned_reader_generations: Option<&BTreeSet<u64>>,
     ) -> GenerationReclamationDebt {
         let mut debt = GenerationReclamationDebt::default();
+        let Ok(_descriptor_operation) = self.file_descriptor_context().internal_operation() else {
+            debt.retry_required = true;
+            return debt;
+        };
         if self.oldest_reader_commit_epoch.is_some() && pinned_reader_generations.is_none() {
             return debt;
         }

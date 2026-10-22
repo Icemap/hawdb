@@ -249,6 +249,7 @@ impl DurableStore {
         generation: u64,
         staging_path: &Path,
     ) -> Result<()> {
+        let _descriptor_operation = self.file_descriptor_context().internal_operation()?;
         for file in [
             checkpoint_generation_file(generation),
             relational_checkpoint_generation_file(generation),

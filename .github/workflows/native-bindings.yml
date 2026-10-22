@@ -201,6 +201,17 @@ jobs:
             -- ::serializable:: --nocapture --test-threads=1 \
             2>&1 | tee windows-native-results/serializable-transactions.txt
 
+      - name: Test descriptor capacity and namespace probe isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/cargo-test-required.sh --locked -p hawdb-storage --all-features --lib \
+            -- file_descriptors::tests:: --nocapture --test-threads=1 \
+            2>&1 | tee windows-native-results/descriptor-capacity.txt
+          bash scripts/cargo-test-required.sh --locked -p hawdb --all-features --lib \
+            -- api::tests::descriptor_capacity:: --nocapture --test-threads=1 \
+            2>&1 | tee windows-native-results/descriptor-facade.txt
+
       - name: Test original generation spool ownership
         shell: bash
         run: |

@@ -39,7 +39,8 @@ impl ImmutableFixture {
             ORDINAL.fetch_add(1, Ordering::Relaxed)
         ));
         std::fs::create_dir(&root).unwrap();
-        let project = ProjectFileDescriptors::acquire_existing(&root, 8).unwrap();
+        let project =
+            ProjectFileDescriptors::acquire_existing_with_capacity_limit(&root, 8, true).unwrap();
         let mut objects = ImmutableObjectStore::open(root.join("immutable")).unwrap();
         let bytes = (0..length)
             .map(|ordinal| (ordinal.wrapping_mul(79) % 251) as u8)

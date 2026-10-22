@@ -19,6 +19,7 @@ fn seed(path: &Path, mode: StorageResidencyMode) -> (GraphStore, Catalog, NodeId
         Default::default(),
         WalReplayConfig {
             residency_mode: mode,
+            strict_capacity_limit: true,
             ..Default::default()
         },
     )
@@ -41,6 +42,7 @@ fn reopen(path: &Path, mode: StorageResidencyMode) -> (GraphStore, Catalog) {
         Default::default(),
         WalReplayConfig {
             residency_mode: mode,
+            strict_capacity_limit: true,
             ..Default::default()
         },
     )
@@ -412,7 +414,7 @@ fn canonical_preimage_refusals_do_not_poison_the_store() {
 }
 
 #[test]
-fn cold_capture_descriptor_exhaustion_preserves_the_writer_and_allows_retry() {
+fn cold_internal_capture_progresses_with_strict_foreground_capacity() {
     for kind in [
         "node",
         "adjacency",
@@ -498,6 +500,7 @@ fn cold_capture_descriptor_exhaustion_preserves_the_writer_and_allows_retry() {
             .project_file_descriptors()
             .clone();
         let metrics = project.metrics();
+        assert!(metrics.strict_capacity_limit);
         // Reserving cached capacity evicts idle handles as well as exhausting
         // fresh-open capacity, so warm caches cannot bypass this negative control.
         let available = metrics.limit - metrics.open - metrics.reserved + metrics.cached_handles;
@@ -512,26 +515,20 @@ fn cold_capture_descriptor_exhaustion_preserves_the_writer_and_allows_retry() {
             let _ = release_rx.recv();
         });
         ready_rx.recv().unwrap();
+        let occupied = project.metrics();
+        assert_eq!(occupied.open + occupied.reserved, occupied.limit);
+        assert!(project.reserve(1).is_err());
+        let rejections = project.metrics().budget_rejections;
         let lsn = store.durable.as_ref().unwrap().next_lsn;
         let epoch = store.commit_epoch();
         let floor = store.search_projection_change_log_start_epoch();
-        let changes = store.search_projection_changes_after(0);
-        let error = store
+        store
             .append_graph_wal_and_capture(&catalog, std::slice::from_ref(&op), false)
-            .expect_err(kind);
-        assert!(
-            matches!(
-                error,
-                HawDBError::FileDescriptors(
-                    hawdb_core::error::FileDescriptorError::BudgetExceeded { .. }
-                )
-            ),
-            "{kind}: {error}"
-        );
-        assert_eq!(store.durable.as_ref().unwrap().next_lsn, lsn);
+            .unwrap();
+        assert!(store.durable.as_ref().unwrap().next_lsn > lsn);
+        assert_eq!(project.metrics().budget_rejections, rejections);
+        assert!(project.metrics().high_water > project.metrics().limit);
         assert_eq!(store.commit_epoch(), epoch);
-        assert_eq!(store.search_projection_change_log_start_epoch(), floor);
-        assert_eq!(store.search_projection_changes_after(0), changes);
         store.ensure_usable().unwrap();
         snapshot.ensure_usable().unwrap();
         assert!(
@@ -544,16 +541,12 @@ fn cold_capture_descriptor_exhaustion_preserves_the_writer_and_allows_retry() {
         );
         release_tx.send(()).unwrap();
         held.join().unwrap();
-        store
-            .append_graph_wal_and_capture(&catalog, std::slice::from_ref(&op), false)
-            .unwrap();
         store.apply_wal_op(&mut catalog, op).unwrap();
         store.finish_non_relational_commit();
         assert_eq!(store.commit_epoch(), epoch + 1);
         let expected = store.search_projection_changes_after(epoch);
         if kind == "property_spill" {
-            // Once I/O can proceed, the oversized preimage independently
-            // requires a complete rebuild; the source commit must still retry.
+            // Descriptor admission does not relax the preimage byte limit.
             assert_gap(&store, epoch, epoch + 1);
             assert!(expected.is_empty());
         } else {

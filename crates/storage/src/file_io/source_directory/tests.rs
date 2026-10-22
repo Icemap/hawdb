@@ -17,7 +17,8 @@ impl Fixture {
             "hawdb-source-directory-{}",
             hawdb_core::generate_uuidv7().unwrap()
         ));
-        let project = ProjectFileDescriptors::acquire(&root, limit).unwrap();
+        let project =
+            ProjectFileDescriptors::acquire_with_capacity_limit(&root, limit, true).unwrap();
         Self { root, project }
     }
     fn capture(&self, path: &Path) -> SourceDirectory {
@@ -477,18 +478,21 @@ fn lock_open_uses_current_inventory_and_rejects_noncontrol_names_before_io() {
 }
 
 #[test]
-fn denied_lock_open_does_not_create_an_unadmitted_control_file() {
+fn internal_lock_open_exceeds_strict_capacity_and_retires_its_handle() {
     let fixture = Fixture::new(1);
     let source = fixture.capture(&fixture.root);
-    let error = source
+    let lock = source
         .open_lock_file(
             &fixture.project.io_context(),
             ".source.lock",
             SourceDirectoryLockMode::ReadWriteCreate,
         )
-        .unwrap_err();
-    assert!(hawdb_core::error::file_descriptor_error(&error).is_some());
-    assert!(!fixture.root.join(".source.lock").exists());
+        .unwrap();
+    assert!(fixture.root.join(".source.lock").is_file());
+    assert_eq!(fixture.project.metrics().open, 2);
+    assert_eq!(fixture.project.metrics().high_water, 2);
+    assert_eq!(fixture.project.metrics().budget_rejections, 0);
+    drop(lock);
     assert_eq!(fixture.project.metrics().open, 1);
     drop(source);
     assert_eq!(fixture.project.metrics().open, 0);

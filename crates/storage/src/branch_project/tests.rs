@@ -17,7 +17,7 @@ impl Fixture {
             SEQUENCE.fetch_add(1, Ordering::Relaxed),
         ));
         Self {
-            files: ProjectFileDescriptors::acquire(&root, limit).unwrap(),
+            files: ProjectFileDescriptors::acquire_with_capacity_limit(&root, limit, true).unwrap(),
         }
     }
 
@@ -210,7 +210,7 @@ fn metadata_failure_never_falls_back_to_an_empty_database() {
 }
 
 #[test]
-fn metadata_exhaustion_preserves_files_and_can_be_retried() {
+fn internal_metadata_progress_preserves_files_at_strict_capacity() {
     let fixture = Fixture::new(4);
     let selector = identity(41, 42);
     fixture.publish_metadata(selector);
@@ -219,17 +219,19 @@ fn metadata_exhaustion_preserves_files_and_can_be_retried() {
     let handles = (0..4)
         .map(|_| File::open(&manifest_path).unwrap())
         .collect::<Vec<_>>();
-    assert!(matches!(
-        ProjectMetadata::open(fixture.root(), 4).unwrap_err(),
-        HawDBError::FileDescriptors(FileDescriptorError::BudgetExceeded { limit: 4, .. }),
-    ));
+    let metadata = ProjectMetadata::open(fixture.root(), 4).unwrap();
+    assert_eq!(metadata.selector(), selector);
+    assert_eq!(fixture.files.metrics().open, 5);
+    assert!(fixture.files.metrics().high_water > 4);
+    assert_eq!(fixture.files.metrics().budget_rejections, 0);
     assert_eq!(std::fs::read(&manifest_path).unwrap(), original);
+    drop(metadata);
     assert_eq!(fixture.files.metrics().open, 4);
     drop(handles);
     let metadata = ProjectMetadata::open(fixture.root(), 4).unwrap();
     assert_eq!(metadata.selector(), selector);
     assert_eq!(metadata.file_descriptors().metrics().open, 1);
-    assert!(metadata.file_descriptors().metrics().high_water <= 4);
+    assert_eq!(metadata.file_descriptors().metrics().budget_rejections, 0);
     assert!(matches!(
         ProjectMetadata::open(fixture.root(), 5).unwrap_err(),
         HawDBError::FileDescriptors(FileDescriptorError::ConfigurationConflict { .. }),
@@ -442,7 +444,7 @@ fn transferred_project_capture_rejects_same_uuid_replacement_without_recapture()
 }
 
 #[test]
-fn captured_metadata_descriptor_refusal_preserves_original_and_retries() {
+fn captured_metadata_progress_preserves_original_at_strict_capacity() {
     let fixture = Fixture::new(4);
     let selector = identity(141, 142);
     fixture.publish_metadata(selector);
@@ -451,12 +453,9 @@ fn captured_metadata_descriptor_refusal_preserves_original_and_retries() {
     let blockers = (0..2)
         .map(|_| File::open(fixture.root().join(MANIFEST_FILE)).unwrap())
         .collect::<Vec<_>>();
-    // The selector read fits. Capturing branches then opening its catalog must
-    // refuse in the original domain, refunding only the attempted handles.
-    assert!(matches!(
-        metadata.refresh().unwrap_err(),
-        HawDBError::FileDescriptors(FileDescriptorError::BudgetExceeded { limit: 4, .. })
-    ));
+    assert_eq!(metadata.refresh().unwrap().selector(), selector);
+    assert!(fixture.files.metrics().high_water > 4);
+    assert_eq!(fixture.files.metrics().budget_rejections, 0);
     assert_eq!(fixture.files.metrics().open, 3);
     assert_eq!(
         std::fs::read(catalog_path(fixture.root())).unwrap(),
@@ -507,22 +506,22 @@ fn bootstrap_catalog_without_ledger_is_not_virgin_evidence() {
 }
 
 #[test]
-fn bootstrap_descriptor_refusal_preserves_empty_ledger_for_original_identity_retry() {
+fn bootstrap_internal_progress_preserves_ledger_and_original_identity() {
     let root = std::env::temp_dir().join(format!(
         "hawdb-bootstrap-budget-{}",
         hawdb_core::generate_uuidv7().unwrap()
     ));
     let selected = identity(171, 172);
     let ledger = root.join(crate::consumer_allocation::LEDGER_FILE);
-    let evidence = {
-        let files = ProjectFileDescriptors::acquire(&root, 4).unwrap();
-        let error = reserve_bootstrap_identity(&files, selected).unwrap_err();
-        assert!(matches!(error, HawDBError::FileDescriptors(_)), "{error}");
-        assert_eq!(files.metrics().open, 0);
-        assert!(!root.join(BOOTSTRAP_FILE).exists());
-        std::fs::read(&ledger).unwrap()
-    };
-    let files = ProjectFileDescriptors::acquire(&root, 8).unwrap();
+    let files = ProjectFileDescriptors::acquire_with_capacity_limit(&root, 4, true).unwrap();
+    assert_eq!(
+        reserve_bootstrap_identity(&files, selected).unwrap(),
+        selected
+    );
+    assert_eq!(files.metrics().open, 0);
+    assert!(files.metrics().high_water > files.metrics().limit);
+    assert_eq!(files.metrics().budget_rejections, 0);
+    let evidence = std::fs::read(&ledger).unwrap();
     assert_eq!(
         reserve_bootstrap_identity(&files, identity(173, 174)).unwrap(),
         selected

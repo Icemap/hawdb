@@ -145,6 +145,9 @@ impl RootRegistry {
     }
 
     fn publish(&self, roots: &BTreeMap<u64, ObjectReference>) -> io::Result<()> {
+        let _descriptor_operation =
+            crate::file_descriptors::FileOpenContext::for_path(&self.directory)?
+                .internal_operation()?;
         let target = self.directory.join(RECORD);
         let pending = self.directory.join(PENDING);
         for path in [&target, &pending] {

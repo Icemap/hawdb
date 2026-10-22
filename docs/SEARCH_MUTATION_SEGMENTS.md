@@ -337,18 +337,24 @@ extended as later lifecycle states land.
 
 ## Compaction
 
-`DatabaseConfig::max_open_files` sets the shared project FD ceiling, default
+`DatabaseConfig::max_open_files` sets the shared project FD capacity target, default
 1024, without pre-opening handles. Native Unix observes the process soft
-descriptor limit and admits `min(max_open_files, soft.saturating_sub(64))`,
+descriptor limit and installs `min(max_open_files, soft.saturating_sub(64))`,
 leaving headroom for the host. It never changes process limits. Linux and macOS
-can therefore have different effective budgets; a soft limit of 256 admits
-192 project handles. Other platforms retain the configured admission ceiling.
-Metrics report `configured_limit`, `effective_limit`, `os_soft_limit`, and
+can therefore have different effective targets; a soft limit of 256 selects
+192 project handles. Other platforms retain the configured target.
+Metrics report `configured_limit`, `effective_limit`, `strict_capacity_limit`, `os_soft_limit`, and
 `os_limit_clamped`; the runtime readiness JSON exposes the reduced-capacity
 warning without making it a cutover blocker.
 
 At capacity, LRU closes only idle immutable handles. Each native read pins its
 handle for the complete I/O operation, so concurrent eviction cannot close it.
+`strict_capacity_limit` defaults to `false`, allowing accounted excess when
+pins prevent eviction. Explicit strict mode rejects new foreground admission
+when idle eviction cannot provide capacity. Internal change capture, compaction,
+publication and cleanup always use a non-strict descriptor policy, including
+when foreground mode is strict. Memory, artifact-size and physical-I/O limits
+remain independent. See [descriptor capacity](FILE_DESCRIPTOR_CAPACITY.md).
 Later reads reopen and validate an evicted object. A host retaining old snapshots
 must budget their handles alongside the new generation and temporary publication
 files. Compaction reduces the active owner's fan-out; old readers keep their

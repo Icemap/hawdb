@@ -33,7 +33,9 @@ struct MountedFixture {
 impl MountedFixture {
     fn new() -> Self {
         let (fixture, view, oracle, _) = Fixture::open();
-        let project = ProjectFileDescriptors::acquire_existing(&fixture.0, 8).unwrap();
+        let project =
+            ProjectFileDescriptors::acquire_existing_with_capacity_limit(&fixture.0, 8, true)
+                .unwrap();
         let path = fixture.0.join(relational_index_shadow_artifact_file(1));
         let bytes = std::fs::read(&path).unwrap();
         let RelationalIndexReadBackend::Base(reader) = &view.backend else {

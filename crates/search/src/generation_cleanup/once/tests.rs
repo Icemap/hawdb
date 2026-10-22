@@ -239,50 +239,37 @@ fn failed_closure_discovery_preserves_artifacts_in_both_cleanup_paths() {
 }
 
 #[test]
-fn cleanup_defers_when_scan_or_unlink_exhausts_the_project_descriptor_budget() {
+fn internal_cleanup_progresses_when_scan_or_unlink_exceeds_strict_capacity() {
     use hawdb_storage::file_descriptors::ProjectFileDescriptors;
     use hawdb_storage::file_io as counted;
-    let fixture = Fixture::new();
-    let project = ProjectFileDescriptors::acquire(&fixture.0, 4).unwrap();
-    let evidence = fixture.0.join("search_lexical.1.hawdb");
-    let before = std::fs::read(&evidence).unwrap();
-    let mut held = (0..4)
-        .map(|_| {
-            project
-                .io_context()
-                .open(counted::OpenOptions::new().read(true), &evidence)
-                .unwrap()
-        })
-        .collect::<Vec<_>>();
-    assert_eq!(project.metrics().open, 4);
     for available in [0, 1] {
-        if available == 1 {
-            drop(held.pop());
-        }
-        let rejections = project.metrics().budget_rejections;
+        let fixture = Fixture::new();
+        let project =
+            ProjectFileDescriptors::acquire_with_capacity_limit(&fixture.0, 4, true).unwrap();
+        let evidence = fixture.0.join("search_lexical.1.hawdb");
+        let held = (0..4 - available)
+            .map(|_| {
+                project
+                    .io_context()
+                    .open(counted::OpenOptions::new().read(true), &evidence)
+                    .unwrap()
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(project.metrics().open, 4 - available);
         let (memory, task) = context(8 * 1024 * 1024);
         let report = PreparedCleanup::prepare(&fixture.0, &memory, &task)
             .unwrap()
             .run(&fixture.0, generations(), Default::default(), &task);
-        assert!(report.retry_required);
-        assert_eq!(report.deleted_files, 0);
-        assert_eq!(std::fs::read(&evidence).unwrap(), before);
-        assert!(project.metrics().budget_rejections > rejections);
+        assert!(!report.retry_required);
+        assert!(report.deleted_files > 0);
+        assert!(!evidence.exists());
+        assert!(fixture.0.join("search_lexical.7.hawdb").exists());
+        assert_eq!(project.metrics().budget_rejections, 0);
         assert_eq!(project.metrics().open, 4 - available);
         assert_eq!(project.metrics().reserved, 0);
+        assert!(project.metrics().high_water > 4);
         assert_eq!(memory.ledger.snapshot().used_bytes, 0);
+        drop(held);
+        assert_eq!(project.metrics().open, 0);
     }
-    drop(held);
-    let (memory, task) = context(8 * 1024 * 1024);
-    let report = PreparedCleanup::prepare(&fixture.0, &memory, &task)
-        .unwrap()
-        .run(&fixture.0, generations(), Default::default(), &task);
-    assert!(!report.retry_required);
-    assert!(report.deleted_files > 0);
-    assert!(!evidence.exists());
-    assert!(fixture.0.join("search_lexical.7.hawdb").exists());
-    assert_eq!(project.metrics().open, 0);
-    assert_eq!(project.metrics().reserved, 0);
-    assert!(project.metrics().high_water <= 4);
-    assert_eq!(memory.ledger.snapshot().used_bytes, 0);
 }

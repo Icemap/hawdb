@@ -20,7 +20,8 @@ impl Fixture {
             "hawdb-captured-immutable-{}",
             hawdb_core::generate_uuidv7().unwrap()
         ));
-        let project = ProjectFileDescriptors::acquire(&root, limit).unwrap();
+        let project =
+            ProjectFileDescriptors::acquire_with_capacity_limit(&root, limit, true).unwrap();
         let bytes: Vec<_> = (0..100_003).map(|i| (i % 251) as u8).collect();
         let reference = ObjectReference::for_bytes(ObjectKind::CheckpointArtifact, 1, &bytes);
         Self {

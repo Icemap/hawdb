@@ -100,9 +100,11 @@ impl RelationalIndexMode {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WalReplayConfig {
-    /// Configured finite descriptor ceiling for the canonical project. Native
-    /// Unix observes OS capacity and can admit a smaller effective ceiling.
+    /// Descriptor capacity target for the canonical project. Native Unix
+    /// observes OS capacity and can install a smaller effective target.
     pub max_open_files: usize,
+    /// Enforce foreground descriptor capacity. Internal I/O is always non-strict.
+    pub strict_capacity_limit: bool,
     pub recovery_mode: RecoveryMode,
     pub max_entries: Option<usize>,
     pub max_bytes: Option<u64>,
@@ -135,6 +137,7 @@ impl Default for WalReplayConfig {
     fn default() -> Self {
         Self {
             max_open_files: crate::file_descriptors::DEFAULT_MAX_OPEN_FILES,
+            strict_capacity_limit: false,
             recovery_mode: RecoveryMode::default(),
             max_entries: Some(DEFAULT_MAX_WAL_REPLAY_ENTRIES),
             max_bytes: Some(DEFAULT_MAX_WAL_REPLAY_BYTES),

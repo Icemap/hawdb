@@ -1048,7 +1048,7 @@ fn foreign_registry_reinitializes_only_after_the_new_projection_is_complete() {
 }
 
 #[test]
-fn initializer_descriptor_rejection_preserves_typed_cause_and_source() {
+fn initializer_resource_error_preserves_typed_cause_and_source() {
     use hawdb_storage::file_io as counted;
     let fixture = Fixture::new();
     let root = fixture.0.join("database");
@@ -1056,6 +1056,7 @@ fn initializer_descriptor_rejection_preserves_typed_cause_and_source() {
         &root,
         crate::DatabaseConfig {
             max_open_files: 32,
+            strict_capacity_limit: true,
             ..crate::DatabaseConfig::default()
         },
     )
@@ -1075,16 +1076,19 @@ fn initializer_descriptor_rejection_preserves_typed_cause_and_source() {
             assert!(stage.is_dir());
             let file = stage.join("unpublished");
             counted::write(&file, b"retain initializer evidence").unwrap();
-            let error = loop {
-                match counted::File::open(&file) {
-                    Ok(file) => held.push(file),
-                    Err(error) => break HawDBError::from(error),
-                }
-            };
-            assert!(matches!(error, HawDBError::FileDescriptors(_)));
+            for _ in project.metrics().open..32 {
+                held.push(counted::File::open(&file).unwrap());
+            }
             assert_eq!(project.metrics().open, 32);
             evidence = Some(file);
-            Err(error)
+            Err(HawDBError::FileDescriptors(
+                hawdb_core::error::FileDescriptorError::OsLimit {
+                    requested: 1,
+                    os_code: None,
+                    soft: None,
+                    hard: None,
+                },
+            ))
         })
         .unwrap_err();
     assert!(
@@ -1092,8 +1096,8 @@ fn initializer_descriptor_rejection_preserves_typed_cause_and_source() {
         "expected a typed FD failure, got {error:?}"
     );
     let evidence = evidence.unwrap();
-    // Failed initialization releases its publication lock before cleanup;
-    // that one returned descriptor lets the bounded walker remove the stage.
+    // The initializer supplies a resource error after occupying the target;
+    // internal cleanup still removes the unpublished producer stage.
     assert!(!evidence.exists());
     assert!(!destination.exists());
     assert!(db.file_descriptor_metrics().unwrap().open < 32);
@@ -1126,6 +1130,7 @@ fn initializer_descriptor_rejection_preserves_typed_cause_and_source() {
         &root,
         crate::DatabaseConfig {
             max_open_files: 32,
+            strict_capacity_limit: true,
             ..crate::DatabaseConfig::default()
         },
     )

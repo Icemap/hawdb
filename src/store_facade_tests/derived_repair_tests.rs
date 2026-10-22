@@ -74,6 +74,7 @@ fn branch_repair_recovers_mixed_schema_and_data_wal_under_the_host_descriptor_li
         &path,
         crate::DatabaseConfig {
             max_open_files: 32,
+            strict_capacity_limit: true,
             ..Default::default()
         },
     )
@@ -123,6 +124,7 @@ fn branch_repair_recovers_mixed_schema_and_data_wal_under_the_host_descriptor_li
         &path,
         crate::DatabaseConfig {
             max_open_files: 32,
+            strict_capacity_limit: true,
             ..Default::default()
         },
     )
@@ -289,6 +291,7 @@ fn branch_repair_does_not_open_closed_siblings_under_the_project_descriptor_limi
         &path,
         crate::DatabaseConfig {
             max_open_files: 32,
+            strict_capacity_limit: true,
             ..Default::default()
         },
     )

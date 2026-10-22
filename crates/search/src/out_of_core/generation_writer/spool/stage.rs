@@ -213,6 +213,8 @@ pub(in crate::out_of_core) fn retry_staging_cleanup_with_context(
     max_attempts: usize,
     task: &RuntimeTaskContext,
 ) -> Result<SearchStagingCleanupReport> {
+    let _descriptor_operation =
+        hawdb_storage::file_descriptors::FileOpenContext::for_path(root)?.internal_operation()?;
     let memory = BuildMemory::new(task)?;
     let root = OwnedPath::absolute(root, &memory, task)?;
     // The original absolute spelling also needs no descriptor. In particular,

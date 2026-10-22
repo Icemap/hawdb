@@ -17,8 +17,10 @@ impl Fixture {
             "hawdb-recorder-root-walk-{}",
             hawdb_core::generate_uuidv7().unwrap()
         ));
-        let project =
-            crate::file_descriptors::ProjectFileDescriptors::acquire(&root, limit).unwrap();
+        let project = crate::file_descriptors::ProjectFileDescriptors::acquire_with_capacity_limit(
+            &root, limit, true,
+        )
+        .unwrap();
         Self { root, project }
     }
 }

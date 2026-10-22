@@ -296,6 +296,7 @@ Alongside the models, the repository keeps differential fuzzing, crash-recovery 
 | [`docs/specs/EMBEDDED_RUNTIME_SPEC.md`](docs/specs/EMBEDDED_RUNTIME_SPEC.md) | Concurrency, durability, resources, telemetry |
 | [`docs/STORAGE.md`](docs/STORAGE.md) | On-disk generations, WAL, and checkpoints |
 | [`docs/ALLOCATORS.md`](docs/ALLOCATORS.md) | Host-owned global allocator contract |
+| [`docs/FILE_DESCRIPTOR_CAPACITY.md`](docs/FILE_DESCRIPTOR_CAPACITY.md) | Descriptor capacity, pins, internal progress and Windows probe isolation |
 | [`docs/specs/README.md`](docs/specs/README.md) | Index of normative contracts |
 | [`docs/WASM.md`](docs/WASM.md) | In-tree experimental browser runtime |
 | [hawdb.ai](https://hawdb.ai) | Public site and playground. Source: [hawdb-website](https://github.com/nowledge-co/hawdb-website) |
