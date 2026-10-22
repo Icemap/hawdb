@@ -31,10 +31,12 @@ explicit INSERT targets are adapted, identically on both engines. These passes
 do not establish native INT/DECIMAL/implicit-column compatibility or full SSI
 outcome equivalence. The current scheduler does not model blocking/waiting steps.
 
-Local harness controls: nine Python tests passed, including deliberate changes
-to multiplicity, order, type kinds, affected rows, column associations, mapped
-errors and a corrupted upstream file. An actual PostgreSQL 18.6 server was
-refused before any test case ran (exit 2, version number 180006).
+Local harness controls are now native Rust tests for result comparisons,
+libpq decoding and provenance. They deliberately change multiplicity, order,
+value kinds, column associations, affected counts and typed errors, and corrupt
+an upstream input. The pure Rust CLI reproduced the matrix above. An actual
+PostgreSQL 18.6 server was refused before any case ran (exit 2, version 180006).
+No Python scheduler or subprocess backend is used.
 
 Reproduce the live comparison using the commands in [README.md](README.md).
 Use `--case adapted/isolation/` for the bounded passing MVCC selection, or the

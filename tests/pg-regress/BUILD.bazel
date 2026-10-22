@@ -2,8 +2,8 @@ load("@rules_rust//rust:defs.bzl", "rust_binary")
 
 rust_binary(
     name = "hawdb_pg_regress_worker",
-    srcs = glob(["src/**/*.rs"]),
-    crate_root = "src/main.rs",
+    srcs = ["src/embedded.rs", "src/worker.rs"],
+    crate_root = "src/worker.rs",
     edition = "2024",
     tags = ["manual"],
     visibility = ["//visibility:public"],

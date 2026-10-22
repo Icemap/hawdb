@@ -213,11 +213,12 @@ Python exceptions restored.
 
 | Family | Purpose and owner | Lane and known limits |
 | --- | --- | --- |
-| PostgreSQL upstream SQL comparison | [`tests/pg-regress`](../tests/pg-regress/README.md), `make pg-regress`; typed rows, NULL, duplicate multiplicity, ordering and DML counts against a real 18.0 server | Manual only; pinned selected Boolean/int8 cases; unsupported source statements are not coverage. Stock expected files are provenance, not substituted for live reference execution. |
+| PostgreSQL upstream SQL comparison | [`tests/pg-regress`](../tests/pg-regress/README.md), `make pg-regress`; Rust `libpq` reference client; typed rows, NULL, duplicate multiplicity, ordering and DML counts against a real 18.0 server | Manual only; pinned selected Boolean/int8 cases; unsupported source statements are not coverage. Stock expected files are provenance, not substituted for live reference execution. |
 | PostgreSQL isolation schedules | Same runner and embedded transaction worker; selected `simple-write-skew.spec` step permutations with explicit Serializable options and first-statement snapshot capture | Manual only; synchronous nonblocking steps. SSI victim/timing divergence is reported as a strict comparison mismatch, not proof of a HawDB isolation defect. Lock-wait scheduling, numeric fixtures and full PG equivalence remain outside this slice. |
-| Harness negative controls | `python3 -m unittest discover -s tests/pg-regress/src -p 'test_*.py'` | Local comparator/provenance controls; no production CI registration. Independent Rust fmt/Clippy and actual PG 18.0 execution remain additional evidence. |
+| Harness negative controls | `cargo test --locked --manifest-path tests/pg-regress/Cargo.toml --all-targets --all-features` | Local comparator/provenance controls; no production CI registration. Independent Rust fmt/Clippy and actual PG 18.0 execution remain additional evidence. |
 
-The standalone worker has a manual Bazel binary target
+The pure Rust comparison CLI calls both the embedded library and Rust `libpq`
+in-process. The additional embedded fixture has a manual Bazel binary target
 `//tests/pg-regress:hawdb_pg_regress_worker`; no new crate is added to the library
 workspace or package archive. The report records the source SHA/checksums,
 working-tree state, first differing SQL, both observations and incomplete runs.
