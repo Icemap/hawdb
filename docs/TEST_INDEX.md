@@ -215,7 +215,8 @@ Python exceptions restored.
 
 The `registered_consumer_embedded` cases in
 `tests/support/embedded_consumer_coverage.rs` belong to `mvcc_staging_session`
-and its existing `registered_consumer` native-platform selection. They cover
+and its existing `registered_consumer` native-platform selection. Both default
+and minimal Bazel targets declare this helper in their `srcs`. They cover
 #1171 one-operation private progress, cancellation/restart, complete pinned
 rebuild comparison, prepared-drop/conflict recovery, original embedded owner
 lifetime, and legacy full-residency/incremental interval compatibility.
