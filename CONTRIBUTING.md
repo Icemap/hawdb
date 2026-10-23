@@ -147,8 +147,8 @@ prek run --all-files
 ```
 
 The hooks in `prek.toml` first check staged license headers using HawkEye 7.2.0
-and `licenserc.toml`, then check formatting and run strict Clippy for the
-whole workspace with all targets and features. The Rust checks run on every commit,
+and `licenserc.toml` through `scripts/check-license-headers.py`, then check
+formatting and run strict Clippy for the whole workspace with all targets and features. The Rust checks run on every commit,
 including documentation-only commits; a failure blocks the commit. They use
 the repository's pinned Rust toolchain and do not rewrite files. Fix formatting
 with `cargo fmt --all`, resolve Clippy diagnostics (including existing ones),
@@ -157,10 +157,19 @@ WASM Clippy and the regression/fuzz checks below remain required when applicable
 
 HawkEye is pinned by commit in an isolated prek environment; it does not require
 upgrading a globally installed binary. The hook checks files without rewriting
-them. `prek run hawkeye-format --files path/to/file.rs` checks an explicit set.
+them. Full Apache headers and canonical `Copyright 2026 Nowledge` plus
+`SPDX-License-Identifier: Apache-2.0` short headers are accepted using the same
+HawkEye file/style rules. The wrapper retries rejected files with the short
+template; only a clean alternative passes. Missing, foreign, or incomplete
+headers fail. `prek run hawkeye-format --files path/to/file.rs` checks an explicit set.
+Markdown has no built-in rule and is unsupported (not checked); Python and
+Shell are checked, including their shebangs. TOML/YAML/JSON/lock/SQL/BUILD/bzl
+exclusions remain defined by `licenserc.toml`.
+Run `python scripts/check-license-headers.test.py` with pinned HawkEye on PATH
+for the positive/negative read-only fixture checks.
 Full-tree `prek run --all-files` currently exposes historical license-header
-debt (missing and conflicting headers); do not interpret a staged-file pass as
-a clean full-tree audit or replace existing copyright notices mechanically.
+debt beyond the accepted SPDX form (missing and conflicting headers); do not
+interpret a staged-file pass as a clean full-tree audit or replace existing copyright notices mechanically.
 
 Use the toolchain pinned in [rust-toolchain.toml](rust-toolchain.toml), locked
 dependencies, and the default Bazel configuration. The [README](README.md#building)

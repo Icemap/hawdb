@@ -82,3 +82,12 @@ def windows_native_features(package, default_features):
     }
     choices["//conditions:default"] = default_features
     return select(choices)
+
+def windows_native_feature_dependencies(package, feature, dependencies):
+    """Link optional dependencies only when their Cargo feature is selected."""
+    choices = {
+        "//:windows_native_profile_" + profile: dependencies if feature in features[package] else []
+        for profile, features in WINDOWS_NATIVE_FEATURE_PROFILES.items()
+    }
+    choices["//conditions:default"] = []
+    return select(choices)

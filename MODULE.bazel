@@ -33,6 +33,20 @@ crate.from_cargo(
 )
 use_repo(crate, "crate_index")
 
+# Keep optional telemetry resolution out of the default Cargo lockfile graph.
+crate.spec(
+    package = "opentelemetry",
+    repositories = ["telemetry_crates"],
+    version = "=0.33.1",
+    default_features = False,
+    features = ["metrics"],
+)
+crate.from_specs(
+    name = "telemetry_crates",
+    cargo_lockfile = "//crates/telemetry:Cargo.Bazel.lock",
+)
+use_repo(crate, "telemetry_crates")
+
 # Resolve the standalone C binding's extra dependency without duplicating the
 # engine or running Cargo's source-tree header generator inside Bazel.
 crate.spec(

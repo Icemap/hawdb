@@ -30,5 +30,5 @@ rev = "12072370b89c4472ff8074e9e99582de1bfb696e" # v7.2.0
 [[repos.hooks]]
 id = "hawkeye-format"
 name = "HawkEye license header check (7.2.0)"
-entry = "hawkeye check --config licenserc.toml --"
+entry = "python scripts/check-license-headers.py"
 priority = 0

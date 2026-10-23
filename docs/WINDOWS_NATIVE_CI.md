@@ -30,7 +30,9 @@ these ceilings are not run durations.
 
 `windows_native_features.bzl` maps Cargo selections onto the same shared Bazel
 libraries. It changes feature cfgs, never optimization or assertion settings.
-The default `bazel` profile preserves existing targets. The Python 3.11+
+The default `bazel` profile preserves existing targets. The optional telemetry
+crate is explicitly resolved and linked only for the opentelemetry feature;
+feature cfg parity alone does not prove optional dependency linkage. The Python 3.11+
 manifest audit rejects feature inventory and forwarding drift, including root
 default/minimal selections, Search defaults and storage dev dependencies.
 

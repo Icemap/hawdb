@@ -326,3 +326,16 @@ cases with the selected 1/2/4/8-thread setting. No fuzz campaign is added.
   scheduled registration. See [workload, results and limits](STRICT_APPEND_PREPARE_BENCHMARK.md).
   These are preparation timings without WAL synchronization, not committed
   throughput or durable p99 measurements.
+
+## License hook and subprocess lease handshake
+
+- `scripts/check-license-headers.test.py` is a local pinned-HawkEye fixture
+  check for full/SPDX forms, Python/Shell shebangs, excluded/unsupported files,
+  mixed valid/invalid batches, wrong owners/licenses and byte preservation.
+  The staged-file hook uses the same HawkEye rules for both header templates.
+- `//crates/storage:hawdb_storage_tests` owns the cross-process directory lease
+  case `ownership::tests::rejects_lease_held_by_another_process`. The child keeps
+  the lease until a parent pipe notification, avoiding its former ten-second
+  self-expiry under CPU contention. Parent exit closes the pipe; the ordinary
+  finite test deadline remains the outer bound. Native Cargo/Windows ownership
+  lanes retain the same exclusion assertion.
