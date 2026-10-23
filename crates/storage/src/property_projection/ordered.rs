@@ -4,6 +4,7 @@
 //! Admitted ordered composite reads over existing immutable block ordinals.
 
 use super::*;
+use crate::cache::{RepresentationKind, SegmentBytes, SegmentCacheError, SegmentCacheKey};
 use crate::canonical::standalone_value_allocation_bytes;
 use std::cmp::Ordering;
 
@@ -487,92 +488,206 @@ impl PersistentPropertyProjectionReader {
         )
             -> Result<CanonicalScanControl, PersistentPropertyProjectionError>,
     ) -> Result<CanonicalScanControl, PersistentPropertyProjectionError> {
-        let read = self.read_block(block)?;
-        add(&mut report.blocks_read, 1)?;
-        add(&mut report.bytes_read, read.payload.len() as u64)?;
-        add(&mut report.cache_hits, u64::from(read.cache_hit))?;
-        add(&mut report.cache_misses, u64::from(read.cache_miss))?;
-        let mut max_key_memory = 0;
-        walk_entries(
-            &read.payload,
-            self.manifest.generation,
-            block,
-            order.properties.len(),
-            |_, value| {
-                max_key_memory = max_key_memory.max(standalone_value_allocation_bytes(value)?);
-                Ok(())
-            },
-        )?;
-        let offset_memory = if order.descending {
-            (block.entry_count as usize)
-                .checked_mul(std::mem::size_of::<usize>())
-                .ok_or_else(overflow)?
-        } else {
-            0
-        };
-        let bytes = max_key_memory
-            .checked_mul(6)
-            .and_then(|bytes| bytes.checked_add(offset_memory))
-            .and_then(|bytes| bytes.checked_add(block.property.len().checked_mul(4)?))
-            .and_then(|bytes| {
-                bytes.checked_add(
-                    order
-                        .properties
-                        .len()
-                        .checked_mul(4 * std::mem::size_of::<String>())?,
-                )
-            })
-            .ok_or_else(overflow)?;
-        let _block_memory = admit(bytes)?;
-        if !order.descending {
-            let mut control = CanonicalScanControl::Continue;
-            decode_projection_block(
-                &read.payload,
-                self.manifest.generation,
-                block,
-                |value, id| {
-                    add(&mut report.entries_decoded, 1)?;
-                    if control == CanonicalScanControl::Continue {
-                        control = consumer(&value, id)?;
-                    }
-                    Ok(())
-                },
-            )?;
-            return Ok(control);
-        }
-        let mut offsets = Vec::new();
-        offsets
-            .try_reserve_exact(block.entry_count as usize)
-            .map_err(|_| {
-                PersistentPropertyProjectionError::Source(
-                    "ordered block offset allocation failed".into(),
-                )
-            })?;
-        walk_entries(
-            &read.payload,
-            self.manifest.generation,
-            block,
-            order.properties.len(),
-            |offset, _| {
-                offsets.push(offset);
-                Ok(())
-            },
-        )?;
-        // Validate the entire bounded block before delivering its reverse prefix.
-        decode_projection_block(&read.payload, self.manifest.generation, block, |_, _| {
-            add(&mut report.entries_decoded, 1)
-        })?;
-        for offset in offsets.into_iter().rev() {
-            let mut cursor = Cursor::new(&read.payload[offset..]);
-            let length = cursor.read_u32()? as usize;
-            let value = decode_standalone_value(cursor.read_exact(length)?)?;
+        let (view, _workspace) =
+            self.ordered_block_view(block, order.properties.len(), report, admit)?;
+        let count = block.entry_count as usize;
+        let physical = usize::try_from(block.length.get()).map_err(|_| overflow())?;
+        let read = |index: usize, report: &mut PersistentPropertyProjectionReadReport| {
+            let offset = physical
+                .checked_add(index.checked_mul(8).ok_or_else(overflow)?)
+                .ok_or_else(overflow)?;
+            let encoded = view
+                .get(offset..offset.checked_add(8).ok_or_else(overflow)?)
+                .ok_or_else(overflow)?;
+            let offset = usize::try_from(u64::from_le_bytes(
+                encoded.try_into().expect("checked offset"),
+            ))
+            .map_err(|_| overflow())?;
+            let bytes = view.get(offset..physical).ok_or_else(overflow)?;
+            let mut cursor = Cursor::new(bytes);
+            let len = cursor.read_u32()? as usize;
+            let value = decode_standalone_value(cursor.read_exact(len)?)?;
             let id = NodeId(cursor.read_u64()?);
+            order.values(&value)?;
             add(&mut report.entries_decoded, 1)?;
+            Ok::<_, PersistentPropertyProjectionError>((value, id))
+        };
+        // Selection metadata remains authoritative on warm representations too.
+        let first = read(0, report)?;
+        let last = read(count.checked_sub(1).ok_or_else(overflow)?, report)?;
+        if first.0 != block.min_key || last.0 != block.max_key {
+            return Err(PersistentPropertyProjectionError::Corrupt(
+                "ordered cached block bounds disagree with descriptor".into(),
+            ));
+        }
+        drop((first, last));
+        let mut low = 0;
+        let mut high = count;
+        while low < high {
+            let middle = low + (high - low) / 2;
+            let (value, _) = read(middle, report)?;
+            let compare = order.probe_order(&value)?;
+            let skip = if order.descending {
+                compare.is_lt() || (order.after.is_none() && compare.is_eq())
+            } else {
+                compare.is_lt() || (order.after.is_some() && compare.is_eq())
+            };
+            if skip {
+                low = middle + 1;
+            } else {
+                high = middle;
+            }
+        }
+        let mut next = if order.descending {
+            low.checked_sub(1)
+        } else {
+            (low < count).then_some(low)
+        };
+        while let Some(index) = next {
+            let (value, id) = read(index, report)?;
+            let prefix = order.prefix_order(&value)?;
+            if if order.descending {
+                prefix.is_lt()
+            } else {
+                prefix.is_gt()
+            } {
+                break;
+            }
             if consumer(&value, id)? == CanonicalScanControl::Stop {
                 return Ok(CanonicalScanControl::Stop);
             }
+            next = if order.descending {
+                index.checked_sub(1)
+            } else {
+                index.checked_add(1).filter(|index| *index < count)
+            };
         }
         Ok(CanonicalScanControl::Continue)
+    }
+
+    fn ordered_block_view<A>(
+        &self,
+        block: &PersistentPropertyProjectionBlockDescriptor,
+        arity: usize,
+        report: &mut PersistentPropertyProjectionReadReport,
+        admit: &mut impl FnMut(usize) -> Result<A, PersistentPropertyProjectionError>,
+    ) -> Result<(SegmentBytes, A), PersistentPropertyProjectionError> {
+        let physical = usize::try_from(block.length.get()).map_err(|_| overflow())?;
+        if block.length.get() > self.max_block_bytes.get() {
+            return Err(PersistentPropertyProjectionError::BlockTooLarge {
+                block_bytes: block.length.get(),
+                max_bytes: self.max_block_bytes.get(),
+            });
+        }
+        let view_len = physical
+            .checked_add(
+                (block.entry_count as usize)
+                    .checked_mul(8)
+                    .ok_or_else(overflow)?,
+            )
+            .and_then(|bytes| bytes.checked_add(16))
+            .ok_or_else(overflow)?;
+        let key = SegmentCacheKey {
+            store_id: self.store_id,
+            manifest_generation: self.manifest.generation,
+            segment_id: block.block_id,
+            content_digest: block.content_digest,
+            representation: RepresentationKind::PropertyProjectionOrderedBlock,
+        };
+        // Bind the reusable structural proof to the exact checksum-validated
+        // immutable source bytes, not merely the containing manifest identity.
+        // This bounded byte hash remains work on warm reads; key decoding does not.
+        let read = self.read_block(block)?;
+        let tag = *hawdb_integrity::sha256(&read.payload).as_bytes();
+        add(&mut report.blocks_read, 1)?;
+        add(&mut report.bytes_read, block.length.get())?;
+        let workspace_bytes = |max_key: usize| {
+            max_key
+                .checked_mul(6)
+                .and_then(|bytes| bytes.checked_add(block.property.len().checked_mul(4)?))
+                .and_then(|bytes| {
+                    bytes.checked_add(arity.checked_mul(4 * std::mem::size_of::<String>())?)
+                })
+                .ok_or_else(overflow)
+        };
+        if let Some(cached) = self.ordered_cache.get_verified(&key, tag) {
+            let view = cached.into_bytes();
+            if view.len() != view_len {
+                return Err(PersistentPropertyProjectionError::Corrupt(
+                    "ordered cached view has invalid length".into(),
+                ));
+            }
+            let footer = &view[view.len() - 16..];
+            let stored_physical = u64::from_le_bytes(footer[..8].try_into().expect("fixed footer"));
+            if stored_physical != block.length.get() {
+                return Err(PersistentPropertyProjectionError::Corrupt(
+                    "ordered cached physical extent disagrees".into(),
+                ));
+            }
+            block_cursor(&view[..physical], self.manifest.generation, block)?;
+            let max_key = usize::try_from(u64::from_le_bytes(
+                footer[8..].try_into().expect("fixed footer"),
+            ))
+            .map_err(|_| overflow())?;
+            let workspace = admit(workspace_bytes(max_key)?)?;
+            add(&mut report.cache_hits, 1)?;
+            return Ok((view, workspace));
+        }
+        add(&mut report.cache_misses, 1)?;
+        let mut max_key = 0;
+        walk_entries(
+            &read.payload,
+            self.manifest.generation,
+            block,
+            arity,
+            |_, value| {
+                max_key = max_key.max(standalone_value_allocation_bytes(value)?);
+                Ok(())
+            },
+        )?;
+        let workspace = admit(
+            workspace_bytes(max_key)?
+                .checked_add(view_len)
+                .ok_or_else(overflow)?,
+        )?;
+        // Validate full ordering, arity and descriptor bounds before any row or
+        // reusable proof is published. Cold validation work remains observable.
+        decode_projection_block(&read.payload, self.manifest.generation, block, |_, _| {
+            add(&mut report.entries_decoded, 1)
+        })?;
+        let mut view = Vec::new();
+        view.try_reserve_exact(view_len).map_err(|_| {
+            PersistentPropertyProjectionError::Source("ordered block view allocation failed".into())
+        })?;
+        view.extend_from_slice(&read.payload);
+        walk_entries(
+            &read.payload,
+            self.manifest.generation,
+            block,
+            arity,
+            |offset, _| {
+                view.extend_from_slice(&(offset as u64).to_le_bytes());
+                Ok(())
+            },
+        )?;
+        view.extend_from_slice(&block.length.get().to_le_bytes());
+        view.extend_from_slice(&(max_key as u64).to_le_bytes());
+        let view = match self.ordered_cache.insert_verified(key, tag, view) {
+            Ok(lease) => lease.into_bytes(),
+            Err(error) => {
+                let (reason, bytes) = error.into_parts();
+                match reason {
+                    SegmentCacheError::EntryTooLarge { .. }
+                    | SegmentCacheError::PinnedCapacity { .. } => bytes.into(),
+                    error => {
+                        return Err(PersistentPropertyProjectionError::Corrupt(format!(
+                            "ordered view cache identity refused: {error}"
+                        )))
+                    }
+                }
+            }
+        };
+        Ok((view, workspace))
     }
 }
 
@@ -583,31 +698,8 @@ fn walk_entries(
     arity: usize,
     mut consume: impl FnMut(usize, &[u8]) -> Result<(), PersistentPropertyProjectionError>,
 ) -> Result<(), PersistentPropertyProjectionError> {
-    let mut cursor = Cursor::new(payload);
-    if cursor.read_exact(8)? != BLOCK_HEADER {
-        return Err(PersistentPropertyProjectionError::Corrupt(
-            "ordered block has an invalid header".into(),
-        ));
-    }
-    let stored_generation = cursor.read_u64()?;
-    let id = cursor.read_u64()?;
-    let kind = cursor.read_u8()?;
-    let label = cursor.read_u32()?;
-    let property_length = cursor.read_u32()? as usize;
-    let property = cursor.read_exact(property_length)?;
-    let count = cursor.read_u32()?;
-    if stored_generation != generation.0
-        || id != block.block_id
-        || kind != kind_tag(block.kind)
-        || label != block.label_id.0
-        || property != block.property.as_bytes()
-        || count != block.entry_count
-        || count as usize > payload.len() / 13
-    {
-        return Err(PersistentPropertyProjectionError::Corrupt(
-            "ordered block header disagrees with its selected descriptor".into(),
-        ));
-    }
+    let mut cursor = block_cursor(payload, generation, block)?;
+    let count = block.entry_count;
     for _ in 0..count {
         let offset = cursor.offset;
         let length = cursor.read_u32()? as usize;
@@ -634,4 +726,37 @@ fn walk_entries(
         ));
     }
     Ok(())
+}
+
+fn block_cursor<'a>(
+    payload: &'a [u8],
+    generation: ManifestGeneration,
+    block: &PersistentPropertyProjectionBlockDescriptor,
+) -> Result<Cursor<'a>, PersistentPropertyProjectionError> {
+    let mut cursor = Cursor::new(payload);
+    if cursor.read_exact(8)? != BLOCK_HEADER {
+        return Err(PersistentPropertyProjectionError::Corrupt(
+            "ordered block has an invalid header".into(),
+        ));
+    }
+    let stored_generation = cursor.read_u64()?;
+    let id = cursor.read_u64()?;
+    let kind = cursor.read_u8()?;
+    let label = cursor.read_u32()?;
+    let property_length = cursor.read_u32()? as usize;
+    let property = cursor.read_exact(property_length)?;
+    let count = cursor.read_u32()?;
+    if stored_generation != generation.0
+        || id != block.block_id
+        || kind != kind_tag(block.kind)
+        || label != block.label_id.0
+        || property != block.property.as_bytes()
+        || count != block.entry_count
+        || count as usize > payload.len() / 13
+    {
+        return Err(PersistentPropertyProjectionError::Corrupt(
+            "ordered block header disagrees with its selected descriptor".into(),
+        ));
+    }
+    Ok(cursor)
 }

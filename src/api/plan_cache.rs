@@ -241,6 +241,7 @@ pub(super) struct OptimizerEnvironmentKey {
     statistics_generation: Option<u64>,
     ordered_range_indexes: Vec<(String, String)>,
     ordered_composite_indexes: Vec<OrderedCompositeCapability>,
+    tracks_composite_ordering: bool,
     node_index_size_classes: Vec<(LabelId, bool)>,
 }
 
@@ -496,7 +497,8 @@ impl OptimizerEnvironmentKey {
     ) -> bool {
         self.schema == OptimizerSchemaKey::from_catalog(catalog)
             && self.ordered_range_indexes == ordered_range_indexes(catalog, store)
-            && self.ordered_composite_indexes == ordered_composite_indexes(catalog, store)
+            && (!self.tracks_composite_ordering
+                || self.ordered_composite_indexes == ordered_composite_indexes(catalog, store))
     }
 }
 
@@ -516,6 +518,7 @@ impl OptimizerPlanningCache {
         catalog: &Catalog,
         store: &R,
         query_local_statistics: bool,
+        tracks_composite_ordering: bool,
     ) -> OptimizerEnvironmentKey {
         // A cache lookup must retain the last published statistics generation:
         // ordinary data commits do not make a physical plan illegal. A cache
@@ -531,7 +534,12 @@ impl OptimizerPlanningCache {
             schema: OptimizerSchemaKey::from_catalog(catalog),
             statistics_generation: (!query_local_statistics).then_some(self.statistics_generation),
             ordered_range_indexes: ordered_range_indexes(catalog, store),
-            ordered_composite_indexes: ordered_composite_indexes(catalog, store),
+            tracks_composite_ordering,
+            ordered_composite_indexes: if tracks_composite_ordering {
+                ordered_composite_indexes(catalog, store)
+            } else {
+                Vec::new()
+            },
             node_index_size_classes: node_index_size_classes(catalog, store),
         }
     }
@@ -584,6 +592,7 @@ impl OptimizerPlanningCache {
         catalog: &Catalog,
         store: &R,
         statistics_commit_lag: Option<u64>,
+        tracks_composite_ordering: bool,
     ) -> OptimizerCatalogAccess {
         let mut decisions = Vec::new();
         // This path is reached only after the physical-plan cache missed or
@@ -629,7 +638,12 @@ impl OptimizerPlanningCache {
             schema: OptimizerSchemaKey::from_catalog(catalog),
             statistics_generation: Some(self.statistics_generation),
             ordered_range_indexes: ordered_range_indexes(catalog, store),
-            ordered_composite_indexes: ordered_composite_indexes(catalog, store),
+            tracks_composite_ordering,
+            ordered_composite_indexes: if tracks_composite_ordering {
+                ordered_composite_indexes(catalog, store)
+            } else {
+                Vec::new()
+            },
             node_index_size_classes: node_index_size_classes(catalog, store),
         };
         // The catalog depends on runtime capabilities as well as schema and
@@ -725,6 +739,9 @@ pub(super) fn optimized_query_plan_for<S: crate::executor::ExecutionStore>(
             context.catalog,
             context.store,
             point_statistics.is_some(),
+            parameterized
+                .as_ref()
+                .is_some_and(|plan| ordered_query_shape(plan.logical())),
         )
     });
     let mut key = parameterized.as_ref().map(|parameterized| PlanCacheKey {
@@ -955,7 +972,7 @@ fn optimizer_catalog_access_for_logical<S: crate::executor::ExecutionStore>(
             operation: BatchMutationOperation::CreateNode { .. },
             ..
         } => "UnwindCreateNode",
-        _ => return optimizer_catalog_access(context),
+        _ => return optimizer_catalog_access(context, ordered_query_shape(logical)),
     };
     // These bound leaves have no graph input or competing access path. Keep
     // schema and maintained counts current without scanning data or publishing
@@ -968,7 +985,8 @@ fn optimizer_catalog_access_for_logical<S: crate::executor::ExecutionStore>(
         schema: OptimizerSchemaKey::from_catalog(context.catalog),
         statistics_generation: Some(context.planning_cache.borrow().statistics_generation),
         ordered_range_indexes: ordered_range_indexes(context.catalog, context.store),
-        ordered_composite_indexes: ordered_composite_indexes(context.catalog, context.store),
+        ordered_composite_indexes: Vec::new(),
+        tracks_composite_ordering: false,
         // Mutation plans bypass the physical cache and have no graph input.
         // Do not add a second basic-count clone to their planning path.
         node_index_size_classes: Vec::new(),
@@ -989,11 +1007,13 @@ fn optimizer_catalog_access_for_logical<S: crate::executor::ExecutionStore>(
 
 fn optimizer_catalog_access<S: crate::executor::ExecutionStore>(
     context: &PlanCacheContext<'_, S>,
+    tracks_composite_ordering: bool,
 ) -> OptimizerCatalogAccess {
     context.planning_cache.borrow_mut().optimizer_catalog(
         context.catalog,
         context.store,
         context.config.optimizer_statistics_inline_commit_lag,
+        tracks_composite_ordering,
     )
 }
 
@@ -1007,7 +1027,7 @@ fn refresh_plan_trace<S: crate::executor::ExecutionStore>(
     match trace_mode {
         PlanTraceMode::Template => refresh_materialized_plan_trace(trace, physical_plan),
         PlanTraceMode::Bound => {
-            let catalog = optimizer_catalog_access(context).catalog;
+            let catalog = optimizer_catalog_access(context, true).catalog;
             optimizer.refresh_trace_for_physical_plan(trace, physical_plan, &catalog);
             trace.decisions.push(
                 "selected physical plan estimates refreshed for bound parameters".to_string(),
@@ -2183,7 +2203,7 @@ mod tests {
         let mut cache = OptimizerPlanningCache::default();
         store.create_node(&mut catalog, "T", node_props(0)).unwrap();
 
-        let access = cache.optimizer_catalog(&catalog, &store, Some(8));
+        let access = cache.optimizer_catalog(&catalog, &store, Some(8), false);
         assert!(
             access
                 .decisions
@@ -2194,7 +2214,7 @@ mod tests {
         );
 
         store.create_node(&mut catalog, "T", node_props(1)).unwrap();
-        let access = cache.optimizer_catalog(&catalog, &store, Some(8));
+        let access = cache.optimizer_catalog(&catalog, &store, Some(8), false);
         assert!(
             access
                 .decisions

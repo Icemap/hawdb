@@ -2137,6 +2137,8 @@ pub struct PersistentPropertyProjectionReader {
     manifest: Arc<PersistentPropertyProjectionManifest>,
     descriptor_reader: GraphDescriptorTreeDemandReader,
     range_reader: FileSegmentRangeReader,
+    ordered_cache: Arc<SegmentCache>,
+    store_id: StoreId,
     max_block_bytes: NonZeroU64,
     poisoned: Arc<AtomicBool>,
 }
@@ -2199,14 +2201,19 @@ impl PersistentPropertyProjectionReader {
             Arc::clone(&cache),
             store_id,
         )?;
-        let mut range_reader =
-            FileSegmentRangeReader::new().with_cache(cache, store_id, manifest.generation);
+        let mut range_reader = FileSegmentRangeReader::new().with_cache(
+            Arc::clone(&cache),
+            store_id,
+            manifest.generation,
+        );
         range_reader.register(manifest.artifact_id, path.clone());
         Ok(Self {
             path,
             manifest: Arc::new(manifest),
             descriptor_reader,
             range_reader,
+            ordered_cache: cache,
+            store_id,
             max_block_bytes,
             poisoned: Arc::new(AtomicBool::new(false)),
         })

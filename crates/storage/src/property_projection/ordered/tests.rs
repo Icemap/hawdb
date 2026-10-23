@@ -21,6 +21,10 @@ impl Drop for FixtureRoot {
 
 impl Fixture {
     fn new() -> Self {
+        Self::with_block_bytes(256, 1024 * 1024)
+    }
+
+    fn with_block_bytes(target: u64, cache_bytes: u64) -> Self {
         let root = std::env::temp_dir().join(format!(
             "hawdb-ordered-composite-{}",
             hawdb_core::generate_uuidv7().unwrap()
@@ -42,12 +46,12 @@ impl Fixture {
             },
         ];
         let paths = GraphDescriptorTreePaths::new(
-            root.join("descriptors.pages"),
-            root.join("descriptors.root"),
+            root.join("projection-descriptors.pages"),
+            root.join("projection-root.root"),
         );
         let path = root.join("projection.hawdb");
         let output = PersistentPropertyProjectionWriter::new(PersistentPropertyProjectionConfig {
-            target_block_bytes: NonZeroU64::new(256).unwrap(),
+            target_block_bytes: NonZeroU64::new(target).unwrap(),
             ..Default::default()
         })
         .write_fallible(
@@ -75,7 +79,9 @@ impl Fixture {
             ),
         )
         .unwrap();
-        assert!(output.manifest.block_count > 100);
+        if target == 256 {
+            assert!(output.manifest.block_count > 100);
+        }
         let reader = PersistentPropertyProjectionReader::open(
             &path,
             output.manifest,
@@ -83,7 +89,7 @@ impl Fixture {
                 paths,
                 GraphDescriptorTreeBuildConfig::default(),
             ),
-            Arc::new(SegmentCache::new(1024 * 1024)),
+            Arc::new(SegmentCache::new(cache_bytes)),
             StoreId(27),
             NonZeroU64::new(1024 * 1024).unwrap(),
         )
@@ -231,4 +237,161 @@ fn ordered_composite_refusal_and_early_stop_release_scratch_without_poisoning() 
     assert_eq!(control, CanonicalScanControl::Stop);
     assert_eq!(current.get(), 0);
     assert!(!fixture.reader.is_poisoned());
+}
+
+#[test]
+fn ordered_composite_warm_block_seek_reuses_full_validation_without_prefix_decode() {
+    for descending in [false, true] {
+        let fixture = Fixture::with_block_bytes(1024 * 1024, 1024 * 1024);
+        let after = [Value::Int(100), Value::String("item-0400".into())];
+        let mut reports = Vec::new();
+        for _ in 0..2 {
+            let mut actual = Vec::new();
+            let (report, control) = fixture
+                .reader
+                .scan_composite_ordered_entries(
+                    fixture.order(descending, Some(&after)),
+                    |_| Ok(()),
+                    |_, id| {
+                        actual.push(id.0);
+                        Ok(if actual.len() == 5 {
+                            CanonicalScanControl::Stop
+                        } else {
+                            CanonicalScanControl::Continue
+                        })
+                    },
+                )
+                .unwrap();
+            assert_eq!(control, CanonicalScanControl::Stop);
+            assert_eq!(
+                actual,
+                if descending {
+                    vec![399, 398, 397, 396, 395]
+                } else {
+                    vec![401, 402, 403, 404, 405]
+                }
+            );
+            reports.push(report);
+        }
+        assert!(
+            reports[0].entries_decoded >= 512,
+            "cold validation must stay visible: {:?}",
+            reports[0]
+        );
+        assert!(
+            reports[1].entries_decoded < 32,
+            "warm work must locate within the block: {:?}",
+            reports[1]
+        );
+        assert_eq!(reports[1].cache_hits, 1);
+        assert_eq!(reports[1].cache_misses, 0);
+    }
+}
+
+#[test]
+fn ordered_composite_verified_view_cache_refusal_remains_complete_and_healthy() {
+    let fixture = Fixture::with_block_bytes(1024 * 1024, 1);
+    let after = [Value::Int(100), Value::String("item-0400".into())];
+    for _ in 0..2 {
+        let mut ids = Vec::new();
+        let (report, _) = fixture
+            .reader
+            .scan_composite_ordered_entries(
+                fixture.order(false, Some(&after)),
+                |_| Ok(()),
+                |_, id| {
+                    ids.push(id.0);
+                    Ok(if ids.len() == 5 {
+                        CanonicalScanControl::Stop
+                    } else {
+                        CanonicalScanControl::Continue
+                    })
+                },
+            )
+            .unwrap();
+        assert_eq!(ids, vec![401, 402, 403, 404, 405]);
+        assert!(report.entries_decoded >= 512);
+        assert!(!fixture.reader.is_poisoned());
+    }
+}
+
+fn first_block(fixture: &Fixture) -> PersistentPropertyProjectionBlockDescriptor {
+    let identity = persistent_composite_property_identity(&fixture.properties).unwrap();
+    let route = Route {
+        order: fixture.order(false, None),
+        prefix: property_projection_descriptor_prefix(
+            PersistentPropertyProjectionKind::CompositeEquality,
+            LabelId(1),
+            &identity,
+        ),
+        identity,
+    };
+    fixture
+        .reader
+        .ordered_descriptor(
+            &route,
+            Probe::First,
+            &mut PersistentPropertyProjectionReadReport::default(),
+            &mut |_| Ok(()),
+        )
+        .unwrap()
+        .unwrap()
+        .0
+}
+
+#[test]
+fn ordered_composite_block_proof_requires_admission_and_rechecks_selecting_metadata() {
+    let fixture = Fixture::with_block_bytes(1024 * 1024, 1024 * 1024);
+    let block = first_block(&fixture);
+    let mut report = PersistentPropertyProjectionReadReport::default();
+    let error = fixture
+        .reader
+        .ordered_block_view(&block, 3, &mut report, &mut |_| {
+            Err::<(), _>(PersistentPropertyProjectionError::Source(
+                "view workspace refused".into(),
+            ))
+        })
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        PersistentPropertyProjectionError::Source(_)
+    ));
+    assert_eq!(
+        report.entries_decoded, 0,
+        "refuse before copying/decoding a block view"
+    );
+    assert!(!fixture.reader.is_poisoned());
+
+    let mut wrong_bounds = block.clone();
+    wrong_bounds.max_key = Value::List(vec![
+        Value::String("note".into()),
+        Value::Int(999),
+        Value::String("wrong".into()),
+    ]);
+    let mut report = PersistentPropertyProjectionReadReport::default();
+    assert!(matches!(
+        fixture
+            .reader
+            .ordered_block_view(&wrong_bounds, 3, &mut report, &mut |_| Ok(())),
+        Err(PersistentPropertyProjectionError::Corrupt(_))
+    ));
+    let mut report = PersistentPropertyProjectionReadReport::default();
+    let _view = fixture
+        .reader
+        .ordered_block_view(&block, 3, &mut report, &mut |_| Ok(()))
+        .unwrap();
+    assert_eq!(
+        report.cache_misses, 1,
+        "failed validation must not publish a proof"
+    );
+
+    let mut wrong_identity = block;
+    wrong_identity.label_id = LabelId(99);
+    let mut report = PersistentPropertyProjectionReadReport::default();
+    assert!(matches!(
+        fixture
+            .reader
+            .ordered_block_view(&wrong_identity, 3, &mut report, &mut |_| Ok(())),
+        Err(PersistentPropertyProjectionError::Corrupt(_))
+    ));
 }

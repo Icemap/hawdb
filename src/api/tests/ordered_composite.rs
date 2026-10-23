@@ -14,14 +14,25 @@ fn populate(db: &mut Database, nullable: bool, indexed: bool) {
     }
     db.query("CREATE CONSTRAINT ON :Item(id) ASSERT UNIQUE")
         .unwrap();
-    for id in 0..96 {
-        db.query(&format!(
-            "CREATE (:Item {{kind: '{}', rank: {}, id: 'item-{id:04}'}})",
-            if id % 5 == 0 { "archive" } else { "note" },
-            id / 4
-        ))
-        .unwrap();
-    }
+    let rows = (0..96)
+        .map(|id| {
+            Value::Map(BTreeMap::from([
+                (
+                    "kind".into(),
+                    Value::String(if id % 5 == 0 { "archive" } else { "note" }.into()),
+                ),
+                ("rank".into(), Value::Int(id / 4)),
+                ("id".into(), Value::String(format!("item-{id:04}"))),
+            ]))
+        })
+        .collect();
+    // Load one bounded fixture transaction so native-path assertions do not
+    // depend on intermediate per-row statistics publication/cost choices.
+    db.query_with_params(
+        "UNWIND $rows AS r CREATE (:Item {kind: r.kind, rank: r.rank, id: r.id})",
+        &BTreeMap::from([("rows".into(), Value::List(rows))]),
+    )
+    .unwrap();
     if indexed {
         db.query("CREATE INDEX ON :Item(kind, rank, id)").unwrap();
     }
@@ -195,7 +206,28 @@ fn ordered_composite_cache_types_and_runtime_projection_capability_are_fenced() 
         .physical_plan
         .explain(0);
     assert!(!plan.contains("IndexNodeCompositeOrderedSeek"), "{plan}");
+    let old = db.runtime_planning_snapshot().unwrap();
+    let ordered_prepared = old.prepare(first.clone(), &params).unwrap();
+    let point_params = BTreeMap::from([("lookup".into(), Value::String("item-0001".into()))]);
+    let point_prepared = old
+        .prepare(
+            "MATCH (n:Item) WHERE n.id = $lookup RETURN n.rank AS rank".into(),
+            &point_params,
+        )
+        .unwrap();
     db.checkpoint().unwrap();
+    let runtime = db.runtime.get().unwrap();
+    let (_, stale_ordered) = ordered_prepared.into_execution(&runtime.catalog, &runtime.store);
+    assert!(
+        stale_ordered.optimized.is_none(),
+        "ordered capability gain must invalidate the old plan"
+    );
+    let (_, point) = point_prepared.into_execution(&runtime.catalog, &runtime.store);
+    assert!(
+        point.optimized.is_some(),
+        "point legality does not depend on unused composite ordering"
+    );
+    drop(runtime);
     assert_native_plan(&mut db);
     for rank in [Value::Int(12), Value::Float(12.5), Value::Int(8)] {
         params.insert("rank".into(), rank.clone());

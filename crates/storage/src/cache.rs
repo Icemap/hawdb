@@ -59,6 +59,7 @@ pub enum RepresentationKind {
     CanonicalSegmentDescriptorPage,
     CanonicalAdjacencyDescriptorPage,
     PropertyProjectionDescriptorPage,
+    PropertyProjectionOrderedBlock,
     PropertySpillDescriptorPage,
 }
 

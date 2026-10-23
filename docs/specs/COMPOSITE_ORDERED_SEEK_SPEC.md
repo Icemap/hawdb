@@ -72,8 +72,18 @@ Resident COW indexes use a borrowed double-ended key interval and exclusive tupl
 filtering. Canonical data uses existing immutable composite blocks. Descriptor
 endpoints and block min/max keys locate the starting block with binary probes;
 forward or reverse descriptor traversal continues from that block. There is no
-full-prefix collection or sort. Reverse decoding reserves one bounded block's
-offset workspace before allocation. Canonical and local sorted streams merge
+full-prefix collection or sort. A bounded cache representation contains fully
+validated immutable block bytes, entry offsets and the decoder workspace bound.
+Cold construction admits the complete representation before copying and validates
+all ordering/bounds before publishing a reusable proof. Warm reads bind the same
+artifact/generation/block identity and SHA-256 of the checksum-validated immutable
+source bytes, recheck selecting metadata and seek within the
+block by binary probes. They decode visited keys rather than the skipped prefix. Integrity hashing still
+visits the bounded encoded block; logarithmic key decoding is not a claim of
+logarithmic total byte work.
+The existing global SegmentCache owns capacity and eviction; capacity refusal
+uses an admitted uncached view and preserves complete results. Cold validation
+remains linear in a bounded block and is counted. Canonical and local sorted streams merge
 incrementally, masking replaced and tombstoned canonical IDs and validating each
 hydrated key against its canonical node.
 
@@ -103,7 +113,7 @@ changes. Existing CI lanes own ordinary regressions; see `docs/TEST_INDEX.md`.
 
 The opt-in `composite_ordered_seek` Cargo benchmark compares the same filter and
 scalar projection with inference-disabled sorting, alternates path order and
-retains every measured sample. It records setup cost, latency, index work and
+retains every sample, including a labelled initial warmup excluded from latency summaries. It records setup cost, latency, index work and
 admitted memory for first, middle and near-end pages in both directions. Its
 persistent fixture checkpoints and reopens without flushing device caches.
 Timings from that mode are not device-cold results, and index bytes exclude

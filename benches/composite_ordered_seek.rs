@@ -1,7 +1,7 @@
 // Copyright 2026 Nowledge
 // SPDX-License-Identifier: Apache-2.0
 
-//! Manual read-only comparisons; fixture writes and one warmup are not timed.
+//! Manual read-only comparisons; fixture writes are outside the timed region.
 //! A reopened handle is not a device-cold cache. Raw samples retain regressions.
 
 use hawdb::{Database, DatabaseConfig, QueryRequest, StorageResidencyMode, Value};
@@ -131,15 +131,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         "index_candidates":reads.property_candidates_returned,
                         "query_peak_bytes":profile.pipeline_memory_report.query_memory_peak_bytes,
                         "blocking_peak_bytes":profile.blocking_operator_memory_reports.iter().map(|report| report.peak_tracked_bytes).max().unwrap_or(0),
-                        "scan_reports":format!("{:?}", profile.scan_pruning_reports)}));
+                        "scan_reports":profile.scan_pruning_reports.iter().map(|report| json!({"strategy":format!("{:?}", report.strategy), "candidates_before_filter":report.candidate_count_before_filter, "output_rows":report.output_count, "filtered_rows":report.filtered_out_count})).collect::<Vec<_>>()}));
                 }
                 assert_eq!(outputs[0], outputs[1]);
-                if run > 0 {
-                    println!(
-                        "{}",
-                        json!({"rows":rows,"backend":if persistent {"reopened-out-of-core"} else {"resident"},"setup_ns":setup_ns,"descending":descending,"depth":depth,"page_size":32,"run":run,"output_rows":outputs[0].len(),"samples":samples})
-                    );
-                }
+                println!(
+                    "{}",
+                    json!({"rows":rows,"backend":if persistent {"reopened-out-of-core"} else {"resident"},"setup_ns":setup_ns,"descending":descending,"depth":depth,"page_size":32,"run":run,"warmup":run==0,"output_rows":outputs[0].len(),"samples":samples})
+                );
             }
         }
     }
