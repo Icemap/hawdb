@@ -1428,17 +1428,19 @@ impl NowledgeMemGraph {
         task_context: &RuntimeTaskContext,
     ) -> Result<NowledgeMemQueryOutput> {
         self.check_runtime_context(task_context)?;
-        let (permit, is_mutation) = self.admit_materialized_query(cypher, parameters)?;
+        let (permit, prepared) = self.admit_materialized_query(cypher, parameters)?;
+        let is_mutation = prepared.admission().is_mutation;
         let execution_task_context = permit.bind_task_context(task_context.clone());
         let started = Instant::now();
-        let result = self.db.query_with_params_trace_and_external_with_context(
-            cypher,
-            parameters,
-            options.capture_physical_plan,
-            external,
-            None,
-            Some(&execution_task_context),
-        );
+        let result = self
+            .db
+            .query_prepared_with_params_trace_and_external_context(
+                prepared,
+                parameters,
+                options.capture_physical_plan,
+                external,
+                &execution_task_context,
+            );
         self.record_runtime_cancellation(result.as_ref().err(), task_context);
         let (output, execution_trace) = result?;
         if !is_mutation {
@@ -1462,9 +1464,9 @@ impl NowledgeMemGraph {
         &self,
         cypher: &str,
         parameters: &BTreeMap<String, Value>,
-    ) -> Result<(RuntimePermit, bool)> {
-        let admission = self.db.runtime_admission_plan(cypher, parameters)?;
-        let is_mutation = admission.is_mutation;
+    ) -> Result<(RuntimePermit, crate::api::PreparedRuntimeQuery)> {
+        let prepared = self.prepare_admitted_query(cypher, parameters)?;
+        let admission = prepared.admission();
         let governor_budget = self.runtime_governor.snapshot().limits.result_budget_bytes;
         let result_budget = if admission.is_mutation {
             governor_budget
@@ -1489,9 +1491,30 @@ impl NowledgeMemGraph {
         };
         self.try_admit_runtime(
             admission
-                .runtime_work_request_for_snapshot(result_budget, self.runtime_governor.snapshot()),
+                .runtime_work_request_for_snapshot(result_budget, self.runtime_governor.snapshot())
+                .with_retained_memory_bytes(prepared.planning_memory_bytes()),
         )
-        .map(|permit| (permit, is_mutation))
+        .map(|permit| (permit, prepared))
+    }
+
+    fn prepare_admitted_query(
+        &self,
+        cypher: &str,
+        parameters: &BTreeMap<String, Value>,
+    ) -> Result<crate::api::PreparedRuntimeQuery> {
+        let request = crate::api::runtime_planning_request(
+            cypher.len(),
+            hawdb_qos::RuntimeWorkPriority::Foreground,
+        );
+        let permit = self.try_admit_runtime(request)?;
+        let prepared = self
+            .db
+            .prepare_runtime_query(cypher.to_string(), parameters)?;
+        Ok(prepared.with_planning_memory(
+            permit
+                .into_retained_memory()
+                .expect("control work owns a fixed memory reservation"),
+        ))
     }
 
     fn admit_streaming_query(
@@ -1499,17 +1522,23 @@ impl NowledgeMemGraph {
         cypher: &str,
         parameters: &BTreeMap<String, Value>,
         result_budget_bytes: usize,
-    ) -> Result<RuntimePermit> {
-        let admission = self.db.runtime_admission_plan(cypher, parameters)?;
+    ) -> Result<(RuntimePermit, crate::api::PreparedRuntimeQuery)> {
+        let prepared = self.prepare_admitted_query(cypher, parameters)?;
+        let admission = prepared.admission();
         if admission.is_mutation {
             return Err(HawDBError::Execution(
                 "admitted streaming query must be read-only".to_string(),
             ));
         }
-        self.try_admit_runtime(admission.runtime_work_request_for_snapshot(
-            u64::try_from(result_budget_bytes).unwrap_or(u64::MAX),
-            self.runtime_governor.snapshot(),
-        ))
+        self.try_admit_runtime(
+            admission
+                .runtime_work_request_for_snapshot(
+                    u64::try_from(result_budget_bytes).unwrap_or(u64::MAX),
+                    self.runtime_governor.snapshot(),
+                )
+                .with_retained_memory_bytes(prepared.planning_memory_bytes()),
+        )
+        .map(|permit| (permit, prepared))
     }
 
     fn try_admit_runtime(&self, request: hawdb_qos::RuntimeWorkRequest) -> Result<RuntimePermit> {
@@ -1627,18 +1656,20 @@ impl NowledgeMemGraph {
     ) -> Result<QueryStreamReport> {
         self.check_runtime_context(task_context)?;
         let max_payload_bytes = self.admitted_streaming_result_bytes(options)?;
-        let permit = self.admit_streaming_query(cypher, parameters, max_payload_bytes)?;
+        let (permit, prepared) =
+            self.admit_streaming_query(cypher, parameters, max_payload_bytes)?;
         let execution_task_context = permit.bind_task_context(task_context.clone());
         let result = self
             .db
             .begin_read_transaction()?
-            .query_with_params_streaming_context(
-                cypher,
+            .query_prepared_with_params_streaming_context(
+                prepared,
                 parameters,
                 QueryStreamOptions {
                     max_rows: options.max_rows,
                     max_payload_bytes: Some(max_payload_bytes),
                 },
+                crate::executor::StreamDelivery::Validated,
                 &execution_task_context,
                 consumer,
             );
@@ -1646,22 +1677,33 @@ impl NowledgeMemGraph {
         result
     }
 
-    /// Collects host-owned rows through the streaming consumer boundary.
-    /// This retains the legacy `NowledgeMemReadOutput` shape while ensuring
-    /// bounded results are validated before any row crosses into the host.
+    /// Collects compact owned rows with the same limits as streaming reads.
+    /// No result becomes observable before complete execution and validation.
     pub fn read_query_with_params_streaming_collect(
         &self,
         cypher: &str,
         parameters: &BTreeMap<String, Value>,
         options: &NowledgeMemReadOptions,
     ) -> Result<NowledgeMemReadOutput> {
-        let mut rows = Vec::new();
-        let streamed =
-            self.read_query_with_params_streaming(cypher, parameters, options, |row| {
-                rows.push(row);
-                Ok(())
-            })?;
-        streamed_nowledge_mem_read_output(self.mode, rows, streamed, options)
+        let max_payload_bytes = self.admitted_streaming_result_bytes(options)?;
+        let (permit, prepared) =
+            self.admit_streaming_query(cypher, parameters, max_payload_bytes)?;
+        let task_context = permit.bind_task_context(RuntimeTaskContext::default());
+        let bounded = self
+            .db
+            .begin_read_transaction()?
+            .query_prepared_with_params_profiled_context(
+                prepared,
+                parameters,
+                QueryStreamOptions {
+                    max_rows: options.max_rows,
+                    max_payload_bytes: Some(max_payload_bytes),
+                },
+                &task_context,
+            )?;
+        let mut output = bounded_nowledge_mem_read_output(self.mode, bounded, options)?;
+        output.report.streaming = true;
+        Ok(output)
     }
 
     pub fn graph_rag_schema_context(
@@ -3486,7 +3528,7 @@ impl NowledgeMemEmbeddedStoreHandle {
         expected_identity: crate::ProductionQualificationIdentity,
     ) -> Result<StorageResourceProfileReport> {
         let store = self.read_store()?;
-        let permit = store.graph.admit_streaming_query(
+        let (permit, prepared) = store.graph.admit_streaming_query(
             &statement.cypher,
             &statement.parameters,
             limits.max_output_payload_bytes,
@@ -3496,7 +3538,7 @@ impl NowledgeMemEmbeddedStoreHandle {
             .graph
             .database()
             .storage_resource_profile_for_production_with_context(
-                &statement.cypher,
+                prepared,
                 &statement.parameters,
                 limits,
                 evidence_binding,
@@ -6011,23 +6053,6 @@ fn bounded_nowledge_mem_read_output(
         output: bounded.output,
         report,
     })
-}
-
-fn streamed_nowledge_mem_read_output(
-    mode: NowledgeMemGraphMode,
-    rows: Vec<BTreeMap<String, Value>>,
-    streamed: QueryStreamReport,
-    options: &NowledgeMemReadOptions,
-) -> Result<NowledgeMemReadOutput> {
-    let output = QueryOutput { rows: rows.into() };
-    let mut report = nowledge_mem_read_report(mode, &output, options, &streamed.execution_profile);
-    report.streaming = true;
-    debug_assert_eq!(report.row_count, streamed.output_rows);
-    debug_assert_eq!(
-        report.estimated_payload_bytes,
-        streamed.output_payload_bytes
-    );
-    Ok(NowledgeMemReadOutput { output, report })
 }
 
 fn legacy_nowledge_mem_read_error(

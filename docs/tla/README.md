@@ -2160,3 +2160,10 @@ invariants in `mutants/mutants.txt` and run through
 `//docs/tla:consumer_incarnation_custody_controls` and `--check-mutants`. The model
 adds no runtime publication authority; the stationary Consumer implementation
 remains open under #1092 and draft #1039.
+
+## Prepared query admission
+
+[`HawDBPreparedAdmission.tla`](HawDBPreparedAdmission.tla) covers fixed planning
+memory transfer, single-CPU admission, cancellation ownership, and the retained
+memory floor that prevents self-wait. See the
+[implementation correspondence and negative controls](PREPARED_ADMISSION_PROOF.md).

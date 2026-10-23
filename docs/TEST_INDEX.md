@@ -282,3 +282,15 @@ publication after registry-cache reload, and a scoped mapper that follows a
 relationship to an out-of-scope label whose post-E mutation must invalidate
 publication. Storage units check immutable reservation predecessors, missing
 registration policy, and direct history pruning without staging compaction.
+
+### Prepared query admission reuse
+
+The runtime retained-memory tests cover fixed-reservation transfer, exact capacity,
+shared process accounting, non-retryable self-wait refusal, and changed capacity.
+`hawdb-runtime-tokio` tests cover single-CPU preparation/execution, queued future
+drop and cancellation, and failed/panicking preparation. API runtime tests check
+schema, branch and configuration revalidation and verify that a prepared object
+does not retain a reader pin. Embedded template-cache tests require one lookup per
+request, including disabled caches and non-deterministic bypasses. The
+`HawDBPreparedAdmission` model and four negative controls cover the ownership
+transition independently of query execution.

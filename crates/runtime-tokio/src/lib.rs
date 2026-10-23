@@ -15,7 +15,7 @@
 use hawdb_core::{RuntimeCancellationReason, RuntimeTaskContext};
 use hawdb_qos::{
     RuntimeAdmissionCode, RuntimeAdmissionError, RuntimeGovernor, RuntimeGovernorSnapshot,
-    RuntimeWorkKind, RuntimeWorkRequest,
+    RuntimeRetainedMemory, RuntimeWorkKind, RuntimeWorkPriority, RuntimeWorkRequest,
 };
 use std::error::Error;
 use std::fmt::{self, Debug, Display, Formatter};
@@ -328,6 +328,42 @@ impl TokioRuntimeAdapter {
             .await
     }
 
+    /// Prepares reusable state under a fixed memory reservation.
+    ///
+    /// The returned memory token retains the preparation charge without CPU,
+    /// blocking-task or I/O slots. Keep it alive until the prepared state is
+    /// consumed or dropped; execution requires its own admission. Failed,
+    /// cancelled and panicking preparation releases the entire reservation.
+    pub async fn prepare_blocking<T, E, F>(
+        &self,
+        priority: RuntimeWorkPriority,
+        memory_bytes: u64,
+        context: RuntimeTaskContext,
+        operation: F,
+    ) -> Result<(T, RuntimeRetainedMemory), TokioTaskError<E>>
+    where
+        T: Send + 'static,
+        E: Send + 'static,
+        F: FnOnce(&RuntimeTaskContext) -> Result<T, E> + Send + 'static,
+    {
+        let request = RuntimeWorkRequest::new(priority, RuntimeWorkKind::Control)
+            .with_cpu_slots(1)
+            .with_blocking(true)
+            .with_memory_bytes(memory_bytes);
+        let permit = self.acquire(request, &context).await?;
+        let task_context = permit.bind_task_context(context);
+        let join = self.handle.spawn_blocking(move || {
+            task_context.checkpoint().map_err(TokioTaskError::Stopped)?;
+            let result = operation(&task_context);
+            let value = finish_operation(&task_context, result, true)?;
+            let memory = permit
+                .into_retained_memory()
+                .expect("control work owns a fixed memory reservation");
+            Ok((value, memory))
+        });
+        self.await_join(join).await
+    }
+
     /// Executes blocking work with a request recomputed after every admission wake.
     ///
     /// The factory must preserve request priority across calls. It may reduce or
@@ -387,6 +423,46 @@ impl TokioRuntimeAdapter {
         self.await_join(join).await
     }
 
+    /// Reuses owned preparation when execution can be admitted immediately.
+    ///
+    /// On a retryable refusal, drops the rebuildable state before waiting. This
+    /// prevents several queued preparations from retaining all memory while each
+    /// waits for execution capacity. The operation receives `None` in that case
+    /// and must rebuild under its execution reservation. The factory must include
+    /// retained state in hard-capacity checks and reserve enough to rebuild it.
+    pub async fn execute_blocking_with_reusable_state<T, E, S, F, R>(
+        &self,
+        state: S,
+        mut request_for_snapshot: R,
+        context: RuntimeTaskContext,
+        operation: F,
+    ) -> Result<T, TokioTaskError<E>>
+    where
+        T: Send + 'static,
+        E: Send + 'static,
+        S: Send + 'static,
+        F: FnOnce(Option<S>, &RuntimeTaskContext) -> Result<T, E> + Send + 'static,
+        R: FnMut(RuntimeGovernorSnapshot, Option<&S>) -> RuntimeWorkRequest + Send,
+    {
+        let mut state = Some(state);
+        let permit = self
+            .acquire_with_state(
+                &mut state,
+                move |snapshot, state| request_for_snapshot(snapshot, state).with_blocking(true),
+                &context,
+            )
+            .await?;
+        let observe_cancellation = permit.request().kind != RuntimeWorkKind::Mutation;
+        let task_context = permit.bind_task_context(context);
+        let join = self.handle.spawn_blocking(move || {
+            let _permit = permit;
+            task_context.checkpoint().map_err(TokioTaskError::Stopped)?;
+            let result = operation(state, &task_context);
+            finish_operation(&task_context, result, observe_cancellation)
+        });
+        self.await_join(join).await
+    }
+
     async fn acquire<E>(
         &self,
         request: RuntimeWorkRequest,
@@ -403,9 +479,27 @@ impl TokioRuntimeAdapter {
     where
         R: FnMut(RuntimeGovernorSnapshot) -> RuntimeWorkRequest + Send,
     {
+        self.acquire_with_state(
+            &mut None::<()>,
+            move |snapshot, _| request_for_snapshot(snapshot),
+            context,
+        )
+        .await
+    }
+
+    async fn acquire_with_state<E, S, R>(
+        &self,
+        state: &mut Option<S>,
+        mut request_for_snapshot: R,
+        context: &RuntimeTaskContext,
+    ) -> Result<hawdb_qos::RuntimePermit, TokioTaskError<E>>
+    where
+        S: Send,
+        R: FnMut(RuntimeGovernorSnapshot, Option<&S>) -> RuntimeWorkRequest + Send,
+    {
         let mut wait = None;
         self.refresh_resources_if_due();
-        let mut request = request_for_snapshot(self.governor.snapshot());
+        let mut request = request_for_snapshot(self.governor.snapshot(), state.as_ref());
         let mut waiter = self.governor.admission_waiter(request.priority);
         loop {
             if let Err(reason) = context.checkpoint() {
@@ -424,6 +518,11 @@ impl TokioRuntimeAdapter {
                 }
                 Err(error) => {
                     wait.get_or_insert_with(|| (Instant::now(), error.code));
+                    if let Some(rebuildable) = state.take() {
+                        drop(rebuildable);
+                        request = request_for_snapshot(self.governor.snapshot(), None);
+                        continue;
+                    }
                 }
             }
             if let Err(reason) = self.wait_for_admission_event(&mut waiter, context).await {
@@ -432,7 +531,7 @@ impl TokioRuntimeAdapter {
                 return Err(TokioTaskError::Stopped(reason));
             }
             self.refresh_resources_if_due();
-            request = request_for_snapshot(self.governor.snapshot());
+            request = request_for_snapshot(self.governor.snapshot(), state.as_ref());
         }
     }
 
@@ -629,6 +728,228 @@ mod tests {
                 Some(current),
             ),
         )
+    }
+
+    #[test]
+    fn prepared_state_releases_the_single_cpu_slot_and_keeps_memory_until_execution() {
+        let governor = RuntimeGovernor::new(
+            RuntimeGovernorConfig {
+                memory_budget_bytes: Some(100),
+                ..RuntimeGovernorConfig::shared_host()
+            },
+            runtime_resources(1),
+            IoConcurrencyBudget::new(1, 1),
+        );
+        let adapter = TokioRuntimeAdapter::owned(
+            governor.clone(),
+            TokioRuntimeConfig::from_governor(&governor),
+        )
+        .unwrap();
+        adapter
+            .block_on(async {
+                let (value, memory) = adapter
+                    .prepare_blocking(
+                        RuntimeWorkPriority::Foreground,
+                        40,
+                        RuntimeTaskContext::default(),
+                        |_| Ok::<_, Infallible>(42),
+                    )
+                    .await
+                    .unwrap();
+                let prepared = governor.snapshot();
+                assert_eq!(prepared.active_cpu_slots, 0);
+                assert_eq!(prepared.active_blocking_tasks, 0);
+                assert_eq!(prepared.admitted_memory_bytes, 40);
+                let observed = governor.clone();
+                let result = adapter
+                    .execute_blocking_with_reusable_state(
+                        memory,
+                        |_, memory| {
+                            RuntimeWorkRequest::foreground_query(60, 0).with_retained_memory_bytes(
+                                memory.map_or(0, |memory| memory.bytes()),
+                            )
+                        },
+                        RuntimeTaskContext::with_timeout(Duration::from_secs(5)),
+                        move |memory, _| {
+                            assert!(
+                                memory.is_some(),
+                                "immediate admission must reuse preparation"
+                            );
+                            assert_eq!(observed.snapshot().admitted_memory_bytes, 100);
+                            drop(memory);
+                            Ok::<_, Infallible>(value)
+                        },
+                    )
+                    .await
+                    .unwrap();
+                assert_eq!(result, 42);
+            })
+            .unwrap();
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+        assert_eq!(governor.snapshot().active_cpu_slots, 0);
+    }
+
+    #[test]
+    fn dropping_or_cancelling_queued_execution_releases_prepared_memory() {
+        for cancel in [false, true] {
+            let governor = governor(1);
+            let adapter = TokioRuntimeAdapter::owned(
+                governor.clone(),
+                TokioRuntimeConfig::from_governor(&governor),
+            )
+            .unwrap();
+            adapter
+                .block_on(async {
+                    let (_, memory) = adapter
+                        .prepare_blocking(
+                            RuntimeWorkPriority::Foreground,
+                            40,
+                            RuntimeTaskContext::default(),
+                            |_| Ok::<_, Infallible>(()),
+                        )
+                        .await
+                        .unwrap();
+                    let held = governor
+                        .try_admit(RuntimeWorkRequest::foreground_query(0, 0))
+                        .unwrap();
+                    let token = RuntimeCancellationToken::new();
+                    let mut execution = Box::pin(adapter.execute_blocking_with_reusable_state(
+                        memory,
+                        |_, memory| {
+                            RuntimeWorkRequest::foreground_query(60, 0).with_retained_memory_bytes(
+                                memory.map_or(0, |memory| memory.bytes()),
+                            )
+                        },
+                        RuntimeTaskContext::without_deadline(token.clone()),
+                        move |memory, _| -> Result<(), Infallible> {
+                            drop(memory);
+                            panic!("execution must not start while the only CPU is held");
+                        },
+                    ));
+                    std::future::poll_fn(|context| {
+                        assert!(execution.as_mut().poll(context).is_pending());
+                        std::task::Poll::Ready(())
+                    })
+                    .await;
+                    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+                    if cancel {
+                        token.cancel();
+                        assert!(matches!(
+                            execution.await,
+                            Err(TokioTaskError::Stopped(
+                                RuntimeCancellationReason::Cancelled
+                            ))
+                        ));
+                    } else {
+                        drop(execution);
+                    }
+                    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+                    assert_eq!(governor.snapshot().queued_admission_waiters, 0);
+                    drop(held);
+                })
+                .unwrap();
+        }
+    }
+
+    #[test]
+    fn failed_or_panicking_preparation_releases_all_resources() {
+        let governor = governor(1);
+        let adapter =
+            TokioRuntimeAdapter::owned(governor.clone(), TokioRuntimeConfig::default()).unwrap();
+        for panic in [false, true] {
+            let result = adapter
+                .block_on(adapter.prepare_blocking(
+                    RuntimeWorkPriority::Foreground,
+                    40,
+                    RuntimeTaskContext::default(),
+                    move |_| -> Result<(), &'static str> {
+                        assert!(!panic, "preparation panic");
+                        Err("preparation failed")
+                    },
+                ))
+                .unwrap();
+            assert!(result.is_err());
+            let after = governor.snapshot();
+            assert_eq!(after.admitted_memory_bytes, 0);
+            assert_eq!(after.active_cpu_slots, 0);
+            assert_eq!(after.active_blocking_tasks, 0);
+        }
+    }
+
+    #[test]
+    fn concurrent_preparations_cannot_hold_all_memory_while_waiting_for_each_other() {
+        let governor = RuntimeGovernor::new(
+            RuntimeGovernorConfig {
+                memory_budget_bytes: Some(100),
+                ..RuntimeGovernorConfig::shared_host()
+            },
+            runtime_resources(1),
+            IoConcurrencyBudget::new(1, 1),
+        );
+        let adapter = TokioRuntimeAdapter::owned(
+            governor.clone(),
+            TokioRuntimeConfig::from_governor(&governor),
+        )
+        .unwrap();
+        adapter
+            .block_on(async {
+                let mut states = Vec::new();
+                for _ in 0..2 {
+                    let (_, memory) = adapter
+                        .prepare_blocking(
+                            RuntimeWorkPriority::Foreground,
+                            40,
+                            RuntimeTaskContext::default(),
+                            |_| Ok::<_, Infallible>(()),
+                        )
+                        .await
+                        .unwrap();
+                    states.push(memory);
+                }
+                assert_eq!(governor.snapshot().admitted_memory_bytes, 80);
+                let execute = |state| {
+                    adapter.execute_blocking_with_reusable_state(
+                        state,
+                        |_, memory: Option<&RuntimeRetainedMemory>| {
+                            RuntimeWorkRequest::foreground_query(40, 0).with_retained_memory_bytes(
+                                memory.map_or(0, |memory| memory.bytes()),
+                            )
+                        },
+                        RuntimeTaskContext::default(),
+                        |memory, _| Ok::<_, Infallible>(memory.is_some()),
+                    )
+                };
+                let mut first = Box::pin(execute(states.pop().unwrap()));
+                let mut second = Box::pin(execute(states.pop().unwrap()));
+                let mut first_result = None;
+                let mut second_result = None;
+                let both = std::future::poll_fn(|context| {
+                    if first_result.is_none()
+                        && let Poll::Ready(result) = first.as_mut().poll(context)
+                    {
+                        first_result = Some(result);
+                    }
+                    if second_result.is_none()
+                        && let Poll::Ready(result) = second.as_mut().poll(context)
+                    {
+                        second_result = Some(result);
+                    }
+                    if first_result.is_some() && second_result.is_some() {
+                        Poll::Ready((first_result.take().unwrap(), second_result.take().unwrap()))
+                    } else {
+                        Poll::Pending
+                    }
+                });
+                let (first, second) = tokio::time::timeout(Duration::from_secs(5), both)
+                    .await
+                    .expect("prepared queries must not form a memory wait cycle");
+                let first_reused = first.unwrap();
+                let second_reused = second.unwrap();
+                assert!(!first_reused || !second_reused);
+            })
+            .unwrap();
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+        assert_eq!(governor.snapshot().queued_admission_waiters, 0);
     }
 
     #[test]

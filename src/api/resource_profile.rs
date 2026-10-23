@@ -26,14 +26,9 @@ impl Database {
         parameters: &BTreeMap<String, Value>,
         limits: StorageResourceProfileLimits,
     ) -> Result<StorageResourceProfileReport> {
-        self.storage_resource_profile_with_binding(
-            cypher_text,
-            parameters,
-            limits,
-            None,
-            None,
-            None,
-        )
+        limits.validate()?;
+        let prepared = self.prepare_runtime_query(cypher_text.to_string(), parameters)?;
+        self.storage_resource_profile_with_binding(prepared, parameters, limits, None, None, None)
     }
 
     pub fn storage_resource_profile_for_production(
@@ -52,8 +47,10 @@ impl Database {
                 evidence_binding.identity.canonical_graph_commit_epoch
             )));
         }
+        limits.validate()?;
+        let prepared = self.prepare_runtime_query(cypher_text.to_string(), parameters)?;
         self.storage_resource_profile_with_binding(
-            cypher_text,
+            prepared,
             parameters,
             limits,
             Some(evidence_binding),
@@ -64,7 +61,7 @@ impl Database {
 
     pub(crate) fn storage_resource_profile_for_production_with_context(
         &self,
-        cypher_text: &str,
+        prepared: super::query_runtime::PreparedRuntimeQuery,
         parameters: &BTreeMap<String, Value>,
         limits: StorageResourceProfileLimits,
         evidence_binding: crate::ProductionEvidenceBinding,
@@ -80,7 +77,7 @@ impl Database {
             )));
         }
         self.storage_resource_profile_with_binding(
-            cypher_text,
+            prepared,
             parameters,
             limits,
             Some(evidence_binding),
@@ -91,7 +88,7 @@ impl Database {
 
     fn storage_resource_profile_with_binding(
         &self,
-        cypher_text: &str,
+        prepared: super::query_runtime::PreparedRuntimeQuery,
         parameters: &BTreeMap<String, Value>,
         limits: StorageResourceProfileLimits,
         evidence_binding: Option<crate::ProductionEvidenceBinding>,
@@ -107,21 +104,15 @@ impl Database {
             max_rows: Some(limits.max_output_rows),
             max_payload_bytes: Some(limits.max_output_payload_bytes),
         };
-        let query = match task_context {
-            Some(task_context) => read.query_with_params_streaming_context(
-                cypher_text,
-                parameters,
-                stream_options,
-                task_context,
-                |_| Ok(()),
-            ),
-            None => read.query_with_params_streaming(
-                cypher_text,
-                parameters,
-                stream_options,
-                |_| Ok(()),
-            ),
-        }?;
+        let default_context = hawdb_core::RuntimeTaskContext::default();
+        let query = read.query_prepared_with_params_streaming_context(
+            prepared,
+            parameters,
+            stream_options,
+            executor::StreamDelivery::Validated,
+            task_context.unwrap_or(&default_context),
+            |_| Ok(()),
+        )?;
         drop(read);
         let after = self.storage_residency_report()?;
 

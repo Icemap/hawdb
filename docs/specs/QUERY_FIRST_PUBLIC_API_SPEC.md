@@ -93,6 +93,31 @@ Application mutations MUST use parameterized Cypher inside
 The transaction owns read-your-own-writes behavior and the single canonical
 WAL publication boundary.
 
+## Preparation and admission ownership
+
+Admission and execution SHOULD reuse one internally prepared statement when its
+execution environment remains compatible. The prepared object MUST NOT retain
+a database snapshot or generation pin across an admission wait. Reuse MUST
+revalidate branch identity, schema/execution compatibility, database configuration
+and system query settings; execution still applies request authorization and
+cancellation. Ordinary data commits alone do not invalidate read preparation.
+
+Preparation memory MUST remain charged until the prepared AST and plan are
+consumed or dropped. Transferring that reservation MUST release preparation's
+CPU, blocking-task and I/O slots without a memory release/reacquire gap. Execution
+requires a separate admission. Hard capacity checks MUST include any separately
+charged memory that the caller cannot release while waiting, but MUST NOT charge
+those bytes again. An impossible combined reservation fails non-retryably rather
+than waiting for its own retained state. Rejection, cancellation, future drop,
+error and panic MUST release the associated ownership. An adapter that queues
+execution MUST release rebuildable preparation on a retryable admission refusal,
+then reprepare under the execution reservation. This prevents multiple prepared
+queries from holding all available memory while waiting for one another.
+
+This transition is modeled by
+[`HawDBPreparedAdmission`](../tla/PREPARED_ADMISSION_PROOF.md). It does not introduce
+a public prepared-statement API or a persistent snapshot cache.
+
 ## Removed business facades
 
 Release builds MUST NOT expose application-specific entity, relationship,

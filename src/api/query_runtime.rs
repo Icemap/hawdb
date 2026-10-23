@@ -24,6 +24,9 @@ pub(crate) struct PreparedRuntimeQuery {
     optimizer_environment: Option<OptimizerEnvironmentKey>,
     admission: RuntimeAdmissionPlan,
     parse_metrics: hawdb_cypher::ParseMetrics,
+    config: DatabaseConfig,
+    system_variables: QuerySystemVariables,
+    planning_memory: Option<hawdb_qos::RuntimeRetainedMemory>,
 }
 
 #[cfg_attr(not(feature = "tokio-runtime"), allow(dead_code))]
@@ -51,6 +54,18 @@ struct RuntimePlanningContext<'a> {
 
 #[cfg_attr(not(feature = "tokio-runtime"), allow(dead_code))]
 impl RuntimePlanningSnapshot {
+    pub(crate) fn accepts_prepared(&self, prepared: &PreparedRuntimeQuery) -> bool {
+        self.branch_id == prepared.branch_id
+            && self.config == prepared.config
+            && self.system_variables == prepared.system_variables
+            && prepared
+                .optimizer_environment
+                .as_ref()
+                .is_none_or(|environment| {
+                    environment.is_execution_compatible(&self.catalog, &self.store)
+                })
+    }
+
     pub(crate) fn is_current_for(
         &self,
         database: &Database,
@@ -98,6 +113,7 @@ pub(super) struct PreparedRuntimeExecution {
     pub(super) optimized: Option<OptimizedQueryPlan>,
     pub(super) parse_metrics: hawdb_cypher::ParseMetrics,
     pub(super) statement_started: Option<hawdb_core::time::Instant>,
+    pub(super) planning_memory: Option<hawdb_qos::RuntimeRetainedMemory>,
 }
 
 #[derive(Clone, Copy)]
@@ -151,11 +167,23 @@ pub(super) fn parse_runtime_execution(cypher_text: &str) -> Result<PreparedRunti
         optimized: None,
         parse_metrics: parsed.metrics,
         statement_started: Some(statement_started),
+        planning_memory: None,
     })
 }
 
 #[cfg_attr(not(feature = "tokio-runtime"), allow(dead_code))]
 impl PreparedRuntimeQuery {
+    pub(crate) fn with_planning_memory(mut self, memory: hawdb_qos::RuntimeRetainedMemory) -> Self {
+        self.planning_memory = Some(memory);
+        self
+    }
+
+    pub(crate) fn planning_memory_bytes(&self) -> u64 {
+        self.planning_memory
+            .as_ref()
+            .map_or(0, |memory| memory.bytes())
+    }
+
     pub(crate) fn admission(&self) -> &RuntimeAdmissionPlan {
         &self.admission
     }
@@ -202,6 +230,7 @@ impl PreparedRuntimeQuery {
                 optimized: environment_matches.then_some(self.optimized).flatten(),
                 parse_metrics: self.parse_metrics,
                 statement_started: None,
+                planning_memory: self.planning_memory,
             },
         )
     }
@@ -275,22 +304,7 @@ impl Database {
         cypher_text: &str,
         parameters: &BTreeMap<String, Value>,
     ) -> Result<RuntimeAdmissionPlan> {
-        let plan_cache = SharedState::new(PlanCache::new(self.config.max_plan_cache_entries));
-        let planning_cache = SharedState::new(
-            self.runtime
-                .get()?
-                .optimizer_planning_cache
-                .borrow()
-                .clone(),
-        );
-        let runtime = self.runtime.get()?;
-        self.runtime_planning_context(&runtime)?
-            .prepare(
-                cypher_text.to_string(),
-                parameters,
-                &plan_cache,
-                &planning_cache,
-            )
+        self.prepare_runtime_query(cypher_text.to_string(), parameters)
             .map(|prepared| prepared.admission)
     }
 
@@ -453,6 +467,9 @@ impl RuntimePlanningContext<'_> {
                 max_parallelism,
             },
             parse_metrics,
+            config: self.config.clone(),
+            system_variables: self.system_variables.clone(),
+            planning_memory: None,
         })
     }
 
@@ -580,25 +597,41 @@ impl Database {
         parameters: &BTreeMap<String, Value>,
         task_context: &hawdb_core::RuntimeTaskContext,
     ) -> Result<QueryOutput> {
+        self.query_prepared_with_params_trace_and_external_context(
+            prepared,
+            parameters,
+            false,
+            &mut executor::NoExternalReadOperator,
+            task_context,
+        )
+        .map(|(output, _)| output)
+    }
+
+    pub(crate) fn query_prepared_with_params_trace_and_external_context(
+        &mut self,
+        prepared: PreparedRuntimeQuery,
+        parameters: &BTreeMap<String, Value>,
+        capture_trace: bool,
+        external: &mut dyn executor::ExternalReadOperator,
+        task_context: &hawdb_core::RuntimeTaskContext,
+    ) -> Result<(QueryOutput, QueryExecutionTrace)> {
         self.validate_prepared_branch(&prepared)?;
         let runtime = self.runtime.get()?;
         let (cypher_text, prepared) = prepared.into_execution(&runtime.catalog, &runtime.store);
         drop(runtime);
-        let mut external = executor::NoExternalReadOperator;
         self.query_with_params_trace_and_external_prepared(
             &cypher_text,
             prepared,
             parameters,
-            &mut external,
+            external,
             QueryExecutionOptions {
-                capture_trace: false,
+                capture_trace,
                 access_control: None,
                 task_context: Some(task_context),
                 scoring: None,
                 output_limits: QueryStreamOptions::default(),
             },
         )
-        .map(|(output, _)| output)
     }
 
     pub fn query_with_params_access_control(
@@ -664,11 +697,12 @@ impl Database {
     fn query_with_params_trace_and_external_prepared(
         &mut self,
         cypher_text: &str,
-        prepared: PreparedRuntimeExecution,
+        mut prepared: PreparedRuntimeExecution,
         parameters: &BTreeMap<String, Value>,
         external: &mut dyn executor::ExternalReadOperator,
         options: QueryExecutionOptions<'_>,
     ) -> Result<(QueryOutput, QueryExecutionTrace)> {
+        let _planning_memory = prepared.planning_memory.take();
         let QueryExecutionOptions {
             capture_trace,
             access_control,
@@ -684,6 +718,7 @@ impl Database {
             optimized: prepared_optimized,
             parse_metrics,
             statement_started,
+            ..
         } = prepared;
         let started = statement_started.unwrap_or(execution_started);
         let body = statement_body(&statement);
@@ -1239,6 +1274,60 @@ mod tests {
     }
 
     #[test]
+    fn preparation_reuse_revalidates_execution_context_without_retaining_a_reader_pin() {
+        let mut db = Database::new();
+        db.query("CREATE (:Sample {id: 'first'})").unwrap();
+        let query = "MATCH (n:Sample) RETURN n.id AS id ORDER BY id";
+        let parameters = BTreeMap::new();
+        let prepared = {
+            let planning = db.runtime_planning_snapshot().unwrap();
+            planning.prepare(query.to_string(), &parameters).unwrap()
+        };
+        assert!(db
+            .runtime
+            .get()
+            .unwrap()
+            .reader_pins
+            .lock()
+            .unwrap()
+            .active_views
+            .is_empty());
+        db.query("CREATE (:Sample {id: 'second'})").unwrap();
+        let mut current = db.runtime_planning_snapshot().unwrap();
+        assert!(current.accepts_prepared(&prepared));
+        current.config.max_read_result_rows = Some(1);
+        assert!(!current.accepts_prepared(&prepared));
+        current.config = prepared.config.clone();
+        current.system_variables.estimated_operations += 1;
+        assert!(!current.accepts_prepared(&prepared));
+        current.system_variables = prepared.system_variables.clone();
+        current.branch_id = Some(hawdb_core::Uuid::nil());
+        assert!(!current.accepts_prepared(&prepared));
+        drop(current);
+        let output = db
+            .begin_read_transaction()
+            .unwrap()
+            .query_prepared_with_params_owned_context(
+                prepared,
+                &parameters,
+                QueryStreamOptions::default(),
+                &hawdb_core::RuntimeTaskContext::default(),
+            )
+            .unwrap();
+        assert_eq!(output.rows.len(), 2);
+
+        let prepared = db
+            .prepare_runtime_query(query.to_string(), &parameters)
+            .unwrap();
+        db.query("CREATE (:OtherLabel {id: 'schema-change'})")
+            .unwrap();
+        assert!(!db
+            .runtime_planning_snapshot()
+            .unwrap()
+            .accepts_prepared(&prepared));
+    }
+
+    #[test]
     fn explain_analyze_reserves_the_inner_plan_memory() {
         let mut db = Database::new();
         db.query("CREATE (:Memory {id: 'explain-admission'})")
@@ -1282,9 +1371,10 @@ mod tests {
         let mut read = db.begin_read_transaction().unwrap();
 
         let output = read
-            .query_prepared_with_params_context(
+            .query_prepared_with_params_owned_context(
                 prepared,
                 &parameters,
+                QueryStreamOptions::default(),
                 &hawdb_core::RuntimeTaskContext::default(),
             )
             .unwrap();

@@ -22284,44 +22284,39 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
             .output)
     }
 
-    pub(crate) fn query_with_params_owned_context(
+    pub(crate) fn query_prepared_with_params_owned_context(
         &mut self,
-        cypher_text: &str,
+        prepared: PreparedRuntimeQuery,
         parameters: &BTreeMap<String, Value>,
         options: QueryStreamOptions,
         task_context: &hawdb_core::RuntimeTaskContext,
     ) -> Result<QueryOutput> {
-        self.store.ensure_usable()?;
-        Ok(self
-            .query_with_params_bounded_profile_prepared_output_internal(
-                cypher_text,
-                query_runtime::parse_runtime_execution(cypher_text)?,
-                parameters,
-                options,
-                None,
-                Some(task_context),
-            )?
-            .output)
+        self.query_prepared_with_params_profiled_context(
+            prepared,
+            parameters,
+            options,
+            task_context,
+        )
+        .map(|result| result.output)
     }
 
-    #[cfg_attr(not(feature = "tokio-runtime"), allow(dead_code))]
-    pub(crate) fn query_prepared_with_params_context(
+    pub(crate) fn query_prepared_with_params_profiled_context(
         &mut self,
         prepared: PreparedRuntimeQuery,
         parameters: &BTreeMap<String, Value>,
+        options: QueryStreamOptions,
         task_context: &hawdb_core::RuntimeTaskContext,
-    ) -> Result<QueryOutput> {
+    ) -> Result<BoundedReadQueryOutput> {
+        self.store.ensure_usable()?;
         let (cypher_text, prepared) = prepared.into_execution(&self.catalog, &self.store);
-        Ok(self
-            .query_with_params_bounded_profile_prepared_internal(
-                &cypher_text,
-                prepared,
-                parameters,
-                self.read_result_row_limit(),
-                None,
-                Some(task_context),
-            )?
-            .output)
+        self.query_with_params_bounded_profile_prepared_output_internal(
+            &cypher_text,
+            prepared,
+            parameters,
+            options,
+            None,
+            Some(task_context),
+        )
     }
 
     pub(super) fn query_prepared_with_params_bounded_profile(
@@ -22498,12 +22493,13 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
     fn query_with_params_streaming_prepared_external_internal(
         &mut self,
         cypher_text: &str,
-        prepared: query_runtime::PreparedRuntimeExecution,
+        mut prepared: query_runtime::PreparedRuntimeExecution,
         parameters: &BTreeMap<String, Value>,
         options: QueryStreamOptions,
         context: ReadStreamingExecutionContext<'_>,
         consumer: &mut impl FnMut(Row) -> Result<()>,
     ) -> Result<QueryStreamReport> {
+        let _planning_memory = prepared.planning_memory.take();
         self.store.ensure_usable()?;
         let max_rows = restrictive_query_limit(self.read_result_row_limit(), options.max_rows);
         let max_payload_bytes = restrictive_query_limit(
@@ -22665,11 +22661,12 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
     fn query_prepared_request_profiled(
         &mut self,
         cypher_text: &str,
-        prepared: query_runtime::PreparedRuntimeExecution,
+        mut prepared: query_runtime::PreparedRuntimeExecution,
         parameters: &BTreeMap<String, Value>,
         options: query_runtime::QueryExecutionOptions<'_>,
         external: &mut dyn executor::ExternalReadOperator,
     ) -> Result<BoundedReadQueryOutput> {
+        let _planning_memory = prepared.planning_memory.take();
         let task_context = options.task_context;
         self.store.ensure_usable()?;
         query_runtime::query_runtime_checkpoint(task_context)?;

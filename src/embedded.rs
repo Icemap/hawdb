@@ -466,31 +466,35 @@ impl HawDBEmbedded {
             cypher_text.len(),
             hawdb_qos::RuntimeWorkPriority::Foreground,
         );
-        let admission = {
-            let _planning_permit = self.try_admit_query(planning_request)?;
-            // Share templates and their generation owner with execution. Drop
-            // the bound plan before releasing its planning reservation.
+        let prepared = {
+            let planning_permit = self.try_admit_query(planning_request)?;
             let prepared = self
                 .database
                 .prepare_runtime_query(cypher_text.to_string(), parameters)?;
-            prepared.admission().clone()
+            prepared.with_planning_memory(
+                planning_permit
+                    .into_retained_memory()
+                    .expect("control work owns a fixed memory reservation"),
+            )
         };
+        let admission = prepared.admission();
         self.check_admitted_query_context(task_context)?;
         let result_budget_bytes = self.admitted_result_budget_bytes();
-        let request = admission.clone().runtime_work_request_for_snapshot(
+        let request = admission.runtime_work_request_for_snapshot(
             result_budget_bytes,
             self.runtime_governor.snapshot(),
         );
-        let request =
-            request.with_memory_bytes(request.memory_bytes.max(planning_request.memory_bytes));
+        let request = request
+            .with_memory_bytes(request.memory_bytes.max(planning_request.memory_bytes))
+            .with_retained_memory_bytes(prepared.planning_memory_bytes());
         let is_mutation = admission.is_mutation;
         let streaming_eligible = admission.streaming_eligible;
         let permit = self.try_admit_query(request)?;
         let execution_task_context = permit.bind_task_context(task_context.clone());
         let _permit = permit;
         let result = if is_mutation || !streaming_eligible {
-            self.database.query_with_params_context(
-                cypher_text,
+            self.database.query_prepared_with_params_context(
+                prepared,
                 parameters,
                 &execution_task_context,
             )
@@ -499,8 +503,8 @@ impl HawDBEmbedded {
             let max_payload_bytes = usize::try_from(request.result_bytes).unwrap_or(usize::MAX);
             self.database
                 .begin_read_transaction_with_shared_plan_cache()?
-                .query_with_params_owned_context(
-                    cypher_text,
+                .query_prepared_with_params_owned_context(
+                    prepared,
                     parameters,
                     QueryStreamOptions {
                         max_rows,
@@ -1203,7 +1207,7 @@ mod tests {
             assert_eq!(output.rows[0].get("score"), Some(&Value::Int(id * 3)));
             let cache = engine.database().plan_cache_stats().unwrap();
             assert_eq!(cache.misses, before.misses + 1);
-            assert_eq!(cache.hits, before.hits + 1 + 2 * iteration as u64);
+            assert_eq!(cache.hits, before.hits + iteration as u64);
         }
 
         let mut old = engine
@@ -1235,7 +1239,7 @@ mod tests {
         assert_eq!(output.rows[0].get("score"), Some(&Value::Int(93)));
         let after_schema_read = engine.database().plan_cache_stats().unwrap();
         assert_eq!(after_schema_read.misses, before_schema_read.misses + 1);
-        assert_eq!(after_schema_read.hits, before_schema_read.hits + 1);
+        assert_eq!(after_schema_read.hits, before_schema_read.hits);
         let old_output = old
             .query_with_params(query, &BTreeMap::from([("id".into(), Value::Int(5))]))
             .unwrap();
@@ -1262,7 +1266,7 @@ mod tests {
         assert_eq!(output.rows[0].get("id"), Some(&Value::Int(1)));
         let cache = engine.database().plan_cache_stats().unwrap();
         assert_eq!(cache.entries, 0);
-        assert_eq!(cache.disabled_misses, before.disabled_misses + 2);
+        assert_eq!(cache.disabled_misses, before.disabled_misses + 1);
         assert!(matches!(
             engine.query_with_params_admitted(query, &BTreeMap::new()),
             Err(EmbeddedQueryError::Database(_))
@@ -1298,7 +1302,7 @@ mod tests {
         assert_eq!(output.rows[0].get("id"), Some(&Value::Int(3)));
         let after_growth = engine.database().plan_cache_stats().unwrap();
         assert_eq!(after_growth.misses, before_growth.misses + 1);
-        assert_eq!(after_growth.hits, before_growth.hits + 1);
+        assert_eq!(after_growth.hits, before_growth.hits);
         let governor = engine.runtime_governor().snapshot();
         assert_eq!(governor.admissions, governor.completions);
         assert_eq!(governor.admitted_memory_bytes, 0);
@@ -1317,7 +1321,7 @@ mod tests {
         }
         let after = engine.database().plan_cache_stats().unwrap();
         assert_eq!(after.entries, before.entries);
-        assert_eq!(after.bypasses, before.bypasses + 6);
+        assert_eq!(after.bypasses, before.bypasses + 3);
         let governor = engine.runtime_governor().snapshot();
         assert_eq!(governor.admissions, governor.completions);
         assert_eq!(governor.admitted_memory_bytes, 0);

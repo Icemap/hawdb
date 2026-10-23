@@ -47,13 +47,20 @@ impl RuntimeQueryInput {
     fn prepare_for_execution(
         &self,
         planning: &crate::api::RuntimePlanningSnapshot,
+        prepared: Option<crate::api::PreparedRuntimeQuery>,
         admitted: &crate::api::RuntimeAdmissionPlan,
         context: &RuntimeTaskContext,
     ) -> Result<crate::api::PreparedRuntimeQuery, HawDBError> {
         context
             .checkpoint()
             .map_err(|reason| HawDBError::Execution(format!("runtime task stopped: {reason}")))?;
-        let prepared = planning.prepare(self.cypher_text.clone(), &self.parameters)?;
+        let prepared = match prepared {
+            Some(prepared) if planning.accepts_prepared(&prepared) => prepared,
+            stale => {
+                drop(stale);
+                planning.prepare(self.cypher_text.clone(), &self.parameters)?
+            }
+        };
         if prepared.admission() != admitted {
             return Err(HawDBError::Execution(
                 "query admission changed during preparation; retry the query".to_string(),
@@ -299,20 +306,21 @@ impl HawDBTokioEmbedded {
             cypher_text: cypher_text.into(),
             parameters,
         });
-        let admission = self
-            .prepare_admission(
+        let prepared = self
+            .prepare_query(
                 Arc::clone(&input),
                 RuntimeWorkPriority::Foreground,
                 task_context.clone(),
             )
             .await?;
+        let admission = prepared.admission();
         let result_budget_bytes = self.with_embedded(HawDBEmbedded::admitted_result_budget_bytes);
         let snapshot = self.with_embedded(|embedded| embedded.runtime_governor().snapshot());
         let request = admission.runtime_work_request_for_snapshot(result_budget_bytes, snapshot);
         let request_admission = admission.clone();
         self.execute_query_with_request_factory(
             input,
-            admission,
+            prepared,
             request,
             move |snapshot| {
                 request_admission.runtime_work_request_for_snapshot(result_budget_bytes, snapshot)
@@ -333,9 +341,10 @@ impl HawDBTokioEmbedded {
             cypher_text: cypher_text.into(),
             parameters,
         });
-        let admission = self
-            .prepare_admission(Arc::clone(&input), request.priority, task_context.clone())
+        let prepared = self
+            .prepare_query(Arc::clone(&input), request.priority, task_context.clone())
             .await?;
+        let admission = prepared.admission();
         let request = if admission.is_mutation {
             request
                 .with_kind(RuntimeWorkKind::Mutation)
@@ -361,7 +370,7 @@ impl HawDBTokioEmbedded {
         };
         self.execute_query_with_request_factory(
             input,
-            admission,
+            prepared,
             request,
             move |_| request,
             task_context,
@@ -424,13 +433,14 @@ impl HawDBTokioEmbedded {
             cypher_text: cypher_text.into(),
             parameters,
         });
-        let admission = self
-            .prepare_admission(
+        let prepared = self
+            .prepare_query(
                 Arc::clone(&input),
                 RuntimeWorkPriority::Foreground,
                 task_context.clone(),
             )
             .await?;
+        let admission = prepared.admission().clone();
         if admission.is_mutation {
             return Err(HawDBTokioEmbeddedError::StreamingMutation);
         }
@@ -470,18 +480,23 @@ impl HawDBTokioEmbedded {
         let request_memory = Arc::clone(&selected_executor_memory);
         let request_admission = admission.clone();
         let planning_memory_bytes = input.planning_request(request.priority).memory_bytes;
-        let request_for_snapshot = move |snapshot| {
-            let request =
-                request_admission.runtime_work_request_for_snapshot(result_budget_bytes, snapshot);
-            request_memory.store(request.memory_bytes, std::sync::atomic::Ordering::Release);
-            request.with_memory_bytes(
+        let request_for_snapshot =
+            move |snapshot, prepared: Option<&crate::api::PreparedRuntimeQuery>| {
+                let retained_memory_bytes =
+                    prepared.map_or(0, |prepared| prepared.planning_memory_bytes());
+                let request = request_admission
+                    .runtime_work_request_for_snapshot(result_budget_bytes, snapshot);
+                request_memory.store(request.memory_bytes, std::sync::atomic::Ordering::Release);
                 request
-                    .memory_bytes
-                    .max(planning_memory_bytes)
-                    .saturating_add(buffered_payload_bytes),
-            )
-        };
-        let execute_stream = move |task_context: &RuntimeTaskContext| {
+                    .with_memory_bytes(
+                        request
+                            .memory_bytes
+                            .max(planning_memory_bytes)
+                            .saturating_add(buffered_payload_bytes),
+                    )
+                    .with_retained_memory_bytes(retained_memory_bytes)
+            };
+        let execute_stream = move |prepared, task_context: &RuntimeTaskContext| {
             let task_context = task_context.clone().with_memory_reservation(
                 hawdb_core::RuntimeMemoryReservation::new(
                     selected_executor_memory.load(std::sync::atomic::Ordering::Acquire),
@@ -496,7 +511,8 @@ impl HawDBTokioEmbedded {
                     database.begin_read_transaction()?,
                 )
             };
-            let prepared = input.prepare_for_execution(&planning, &admission, &task_context)?;
+            let prepared =
+                input.prepare_for_execution(&planning, prepared, &admission, &task_context)?;
             drop(planning);
             let mut batch = Vec::with_capacity(batch_rows);
             let mut batch_bytes = 0usize;
@@ -535,7 +551,8 @@ impl HawDBTokioEmbedded {
         };
         handle.spawn(async move {
             let result = runtime
-                .execute_blocking_with_request_factory(
+                .execute_blocking_with_reusable_state(
+                    prepared,
                     request_for_snapshot,
                     producer_context,
                     execute_stream,
@@ -555,39 +572,37 @@ impl HawDBTokioEmbedded {
         })
     }
 
-    async fn prepare_admission(
+    async fn prepare_query(
         &self,
         input: Arc<RuntimeQueryInput>,
         priority: RuntimeWorkPriority,
         task_context: RuntimeTaskContext,
-    ) -> Result<crate::api::RuntimeAdmissionPlan, HawDBTokioEmbeddedError> {
+    ) -> Result<crate::api::PreparedRuntimeQuery, HawDBTokioEmbeddedError> {
         let embedded = Arc::clone(&self.embedded);
         self.runtime
-            .execute_blocking(
-                input.planning_request(priority),
+            .prepare_blocking(
+                priority,
+                input.planning_request(priority).memory_bytes,
                 task_context,
                 move |context| {
                     let planning = lock_embedded(&embedded)
                         .database()
                         .runtime_planning_snapshot()?;
-                    // Only this fixed-size descriptor may outlive the planning permit.
-                    // Parsed and optimized state is dropped before the operation returns.
                     context.checkpoint().map_err(|reason| {
                         HawDBError::Execution(format!("runtime task stopped: {reason}"))
                     })?;
-                    let prepared =
-                        planning.prepare(input.cypher_text.clone(), &input.parameters)?;
-                    Ok(prepared.admission().clone())
+                    planning.prepare(input.cypher_text.clone(), &input.parameters)
                 },
             )
             .await
+            .map(|(prepared, memory)| prepared.with_planning_memory(memory))
             .map_err(HawDBTokioEmbeddedError::Task)
     }
 
     async fn execute_query_with_request_factory<R>(
         &self,
         input: Arc<RuntimeQueryInput>,
-        admission: crate::api::RuntimeAdmissionPlan,
+        prepared: crate::api::PreparedRuntimeQuery,
         request: RuntimeWorkRequest,
         mut request_for_snapshot: R,
         task_context: RuntimeTaskContext,
@@ -595,26 +610,40 @@ impl HawDBTokioEmbedded {
     where
         R: FnMut(hawdb_qos::RuntimeGovernorSnapshot) -> RuntimeWorkRequest + Send,
     {
+        let admission = prepared.admission().clone();
         let embedded = Arc::clone(&self.embedded);
         let planning_memory_bytes = input.planning_request(request.priority).memory_bytes;
-        let request_for_snapshot = move |snapshot| {
-            let request = request_for_snapshot(snapshot);
-            request
-                .with_cpu_slots(request.cpu_slots.max(1))
-                .with_memory_bytes(request.memory_bytes.max(planning_memory_bytes))
-        };
+        let request_for_snapshot =
+            move |snapshot, prepared: Option<&crate::api::PreparedRuntimeQuery>| {
+                let retained_memory_bytes =
+                    prepared.map_or(0, |prepared| prepared.planning_memory_bytes());
+                let request = request_for_snapshot(snapshot);
+                request
+                    .with_cpu_slots(request.cpu_slots.max(1))
+                    .with_memory_bytes(request.memory_bytes.max(planning_memory_bytes))
+                    .with_retained_memory_bytes(
+                        request
+                            .retained_memory_bytes
+                            .saturating_add(retained_memory_bytes),
+                    )
+            };
         if request.kind == RuntimeWorkKind::Mutation {
             self.runtime
-                .execute_blocking_with_request_factory(
+                .execute_blocking_with_reusable_state(
+                    prepared,
                     request_for_snapshot,
                     task_context,
-                    move |task_context| {
+                    move |mut prepared, task_context| {
                         for _ in 0..MAX_MUTATION_PLANNING_ATTEMPTS {
                             let planning = lock_embedded(&embedded)
                                 .database()
                                 .runtime_planning_snapshot()?;
-                            let prepared =
-                                input.prepare_for_execution(&planning, &admission, task_context)?;
+                            let prepared = input.prepare_for_execution(
+                                &planning,
+                                prepared.take(),
+                                &admission,
+                                task_context,
+                            )?;
                             let mut embedded = lock_embedded(&embedded);
                             if planning.is_current_for(embedded.database(), &prepared)? {
                                 return embedded.database_mut().query_prepared_with_params_context(
@@ -638,10 +667,11 @@ impl HawDBTokioEmbedded {
                 self.with_embedded(|embedded| embedded.database().config().read_result_row_limit());
             let max_payload_bytes = usize::try_from(request.result_bytes).unwrap_or(usize::MAX);
             self.runtime
-                .execute_blocking_with_request_factory(
+                .execute_blocking_with_reusable_state(
+                    prepared,
                     request_for_snapshot,
                     task_context,
-                    move |task_context| {
+                    move |prepared, task_context| {
                         let (planning, mut read_transaction) = {
                             let embedded = lock_embedded(&embedded);
                             let database = embedded.database();
@@ -650,8 +680,12 @@ impl HawDBTokioEmbedded {
                                 database.begin_read_transaction()?,
                             )
                         };
-                        let prepared =
-                            input.prepare_for_execution(&planning, &admission, task_context)?;
+                        let prepared = input.prepare_for_execution(
+                            &planning,
+                            prepared,
+                            &admission,
+                            task_context,
+                        )?;
                         drop(planning);
                         if !prepared.uses_read_snapshot() {
                             // Procedures such as project_graph return rows but
@@ -666,29 +700,15 @@ impl HawDBTokioEmbedded {
                                     task_context,
                                 );
                         }
-                        if !admission.streaming_eligible {
-                            return read_transaction.query_prepared_with_params_context(
-                                prepared,
-                                &input.parameters,
-                                task_context,
-                            );
-                        }
-                        let mut rows = Vec::new();
-                        read_transaction.query_prepared_with_params_streaming_context(
+                        read_transaction.query_prepared_with_params_owned_context(
                             prepared,
                             &input.parameters,
                             QueryStreamOptions {
                                 max_rows,
                                 max_payload_bytes: Some(max_payload_bytes),
                             },
-                            crate::executor::StreamDelivery::Incremental,
                             task_context,
-                            |row| {
-                                rows.push(row);
-                                Ok(())
-                            },
-                        )?;
-                        Ok(QueryOutput { rows: rows.into() })
+                        )
                     },
                 )
                 .await

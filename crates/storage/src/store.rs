@@ -69,6 +69,7 @@ impl hawdb_storage::background::BackgroundWorkAdmission for RuntimeGovernorBackg
                 kind: hawdb_qos::RuntimeWorkKind::Control,
                 cpu_slots: request.cpu_slots,
                 memory_bytes: request.memory_bytes,
+                retained_memory_bytes: 0,
                 io_slots: request.io_slots,
                 io_reservation_scope: hawdb_qos::RuntimeIoReservationScope::Task,
                 result_bytes: 0,
