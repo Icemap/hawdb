@@ -366,26 +366,32 @@ mod tests {
 
     #[derive(Debug)]
     struct ReportWriter {
+        statement_kind: &'static str,
         armed: AtomicBool,
         completed: AtomicBool,
+        failure: Mutex<Option<String>>,
         start: mpsc::Sender<()>,
-        done: Mutex<mpsc::Receiver<bool>>,
+        done: Mutex<mpsc::Receiver<Result<bool>>>,
     }
 
     impl crate::TelemetrySink for ReportWriter {
         fn record_query(&self, event: crate::QueryTelemetry<'_>) {
-            if event.statement_kind == "match_return" && self.armed.swap(false, Ordering::SeqCst) {
+            if event.statement_kind == self.statement_kind
+                && self.armed.swap(false, Ordering::SeqCst)
+            {
                 assert!(event.success);
                 assert_eq!(event.row_count, 1);
                 self.start.send(()).unwrap();
-                self.completed.store(
-                    self.done
-                        .lock()
-                        .unwrap()
-                        .recv_timeout(Duration::from_secs(5))
-                        .unwrap_or(false),
-                    Ordering::SeqCst,
-                );
+                let progress = self
+                    .done
+                    .lock()
+                    .unwrap()
+                    .recv_timeout(Duration::from_secs(5));
+                let completed = matches!(progress, Ok(Ok(true)));
+                if !completed {
+                    *self.failure.lock().unwrap() = Some(format!("{progress:?}"));
+                }
+                self.completed.store(completed, Ordering::SeqCst);
             }
         }
     }
@@ -434,10 +440,15 @@ mod tests {
     #[test]
     fn report_observation_allows_writer_commit_and_a_fresh_read() {
         const TEXT: &str = "CALL text_search($text, topK := 2) YIELD id, score MATCH (m:Memory) RETURN m.title AS title";
-        for (handle, query, expected_title) in [
-            (graph_only_handle(), READ, "App thread"),
-            (app_read_handle(), READ, "App thread"),
-            (app_read_handle(), TEXT, "Nearest memory"),
+        for (handle, query, statement_kind, expected_title) in [
+            (graph_only_handle(), READ, "match_return", "App thread"),
+            (app_read_handle(), READ, "match_return", "App thread"),
+            (
+                app_read_handle(),
+                TEXT,
+                "text_graph_search",
+                "Nearest memory",
+            ),
         ] {
             let writer_handle = handle.clone();
             let (start, started) = mpsc::channel();
@@ -452,12 +463,14 @@ mod tests {
                                 == Value::String("Updated thread".into()),
                         )
                     })();
-                    let _ = finished.send(result.unwrap_or(false));
+                    let _ = finished.send(result);
                 }
             });
             let sink = Arc::new(ReportWriter {
+                statement_kind,
                 armed: AtomicBool::new(true),
                 completed: AtomicBool::new(false),
+                failure: Mutex::new(None),
                 start,
                 done: Mutex::new(done),
             });
@@ -472,12 +485,15 @@ mod tests {
             );
             handle.set_telemetry_sink(None).unwrap();
             let completed = sink.completed.load(Ordering::SeqCst);
+            let observed = !sink.armed.load(Ordering::SeqCst);
+            let failure = sink.failure.lock().unwrap().clone();
             drop(sink);
             writer.join().unwrap();
             let result = result.unwrap();
+            assert!(observed, "missing {statement_kind} observation for {query}");
             assert!(
                 completed,
-                "report observation blocked writer or fresh reader"
+                "report observation failed writer or fresh reader for {query}: {failure:?}"
             );
             assert_eq!(
                 result.output.rows[0]["title"],
@@ -677,6 +693,68 @@ mod tests {
                 .active_foreground_io_slots,
             0
         );
+    }
+
+    #[test]
+    fn search_admission_releases_its_source_and_revalidates_projection_capacity() {
+        for change_io in [false, true] {
+            let handle = app_read_handle();
+            let writer_handle = handle.clone();
+            let (start, started) = mpsc::channel();
+            let (finished, done) = mpsc::channel();
+            let writer = std::thread::spawn(move || {
+                if started.recv().is_ok() {
+                    let result = (|| {
+                        let mut store = writer_handle.write_store()?;
+                        let projection = store.search_projection.as_mut().unwrap();
+                        if change_io {
+                            let mut config = projection.index().range_read_config();
+                            config.io_depth =
+                                std::num::NonZeroUsize::new(config.io_depth.get() + 1).unwrap();
+                            projection.set_range_read_config(config);
+                        } else {
+                            let mut document = projection
+                                .index()
+                                .document("memory:nearest")
+                                .unwrap()
+                                .clone();
+                            document.title = "Admitted generation".into();
+                            projection.index_mut().upsert(document)?;
+                        }
+                        Ok::<_, HawDBError>(())
+                    })();
+                    let _ = finished.send(result.is_ok());
+                }
+            });
+            let sink = Arc::new(AdmissionWriter {
+                armed: AtomicBool::new(false),
+                prior_view: Mutex::new(Weak::new()),
+                prior_released: AtomicBool::new(false),
+                start,
+                done: Mutex::new(done),
+            });
+            handle.set_telemetry_sink(Some(sink.clone())).unwrap();
+            *sink.prior_view.lock().unwrap() =
+                Arc::downgrade(&handle.lock_published_read().unwrap().as_ref().unwrap().view);
+            sink.armed.store(true, Ordering::SeqCst);
+            let result = handle.search_projection_documents(&["memory:nearest".into()], 1);
+            handle.set_telemetry_sink(None).unwrap();
+            let prior_released = sink.prior_released.load(Ordering::SeqCst);
+            drop(sink);
+            writer.join().unwrap();
+            assert!(prior_released, "search admission retained its publication");
+            if change_io {
+                assert!(result
+                    .unwrap_err()
+                    .to_string()
+                    .contains("search source changed during admission"));
+            } else {
+                assert_eq!(result.unwrap()[0].title, "Admitted generation");
+            }
+            let counters = handle.runtime_governor_snapshot().unwrap();
+            assert_eq!(counters.admitted_memory_bytes, 0);
+            assert_eq!(counters.active_foreground_io_slots, 0);
+        }
     }
 
     #[derive(Clone, Copy, Debug)]

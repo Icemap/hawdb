@@ -490,6 +490,15 @@ the positive model. Its manual-only `TornPair`, `UnchargedRead`, `PinnedWait` an
 and report tests above establish the host correspondence; the finite model does
 not establish allocator capacity bounds or throughput.
 
+The existing Mem `app_read_snapshot_tests` and `read_execution` runtime lanes
+also cover detached candidate search, hydration and retrieval: resident and
+out-of-core readers keep the old graph/projection pair while writer publication
+and fresh public helpers advance; admission callbacks retire old publications,
+accept data updates and reject changed I/O requirements. Retrieval checks zero
+admitted working/result ceilings and a successful bounded control. Report
+observation checks both `match_return` and `text_graph_search` event kinds and
+preserves worker errors separately from a missing callback or timeout.
+
 ### Windows power-loss partitions
 
 The weekly Branch Power Loss lane runs each of the four automatic checkpoint cut
@@ -512,7 +521,8 @@ LF so filters and `--exact`/`--skip` reach libtest unchanged. The test also reje
 duplicate, missing, unexpected and empty discovery. Candidate `92681f67` exposed
 this transport bug before the selected qualification cases could start; those
 failed jobs are not recovery-test results.
-Manual dispatch with `power_loss_only=true` runs the same complete power-loss
+Manual dispatch with `scope=power-loss` runs the same complete power-loss
 platform matrix in a separate concurrency group, preserving an ongoing full run.
-It does not qualify the skipped runtime, vector, storage or crash-recovery lanes.
-Scheduled and default manual runs continue to include every lane.
+`scope=runtime` selects both runtime platforms in another independent group for
+query/adapter changes. Partial runs do not qualify their skipped lanes.
+Scheduled and default `scope=all` manual runs continue to include every lane.

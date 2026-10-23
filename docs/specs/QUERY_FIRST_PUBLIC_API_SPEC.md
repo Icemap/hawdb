@@ -214,8 +214,18 @@ Read generations preserve an already captured RaBitQ index. If an in-memory
 query lazily builds a missing index, that build remains operation-local and is
 not installed into the fixed-capacity generation. Repeated lazy-build cost still
 requires qualification; this change does not claim a latency improvement.
-Remaining mutation/generated-read and standalone search helper entrypoints must
-complete the same concurrency audit before the overall adapter gate is met.
+Standalone candidate search, hydration, retrieval and candidate-evidence helpers
+also capture a published pair after admission and execute outside the owner lock.
+Admission retains only instance/configuration/capability metadata. Configuration,
+projection kind or required memory/I/O changes reject the admitted attempt;
+ordinary data publications are accepted and captured after admission. Resident
+owners use the same retained generation funding. Retrieval uses the captured
+graph through the existing pipeline and intersects its memory/result ceilings
+with the admitted context. Search uses the admitted vector execution context.
+Hydration retains its explicit document and payload limits.
+
+Remaining mutation/generated-read and qualification/diagnostic entrypoints must
+complete the concurrency audit before the overall adapter gate is met.
 
 Admission and execution SHOULD reuse one internally prepared statement when its
 execution environment remains compatible. The prepared object MUST NOT retain

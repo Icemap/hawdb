@@ -21,6 +21,164 @@ use crate::{Database, DatabaseConfig, SearchIndex, Value};
 use hawdb_core::{RuntimeCancellationToken, RuntimeTaskContext};
 use std::collections::BTreeMap;
 
+#[test]
+fn retrieval_from_search_preserves_admitted_memory_and_result_ceilings() {
+    let mut database = Database::new();
+    database
+        .query("CREATE (:Memory {id: 'bounded', title: 'Budgeted memory'})")
+        .unwrap();
+    let mut index = SearchIndex::in_memory();
+    index
+        .upsert_projection_row(SearchProjectionRow {
+            kind: SearchProjectionKind::Memory,
+            external_id: "bounded".into(),
+            title: "Budgeted memory".into(),
+            body: "search budget".into(),
+            embedding: None,
+            source_id: None,
+            metadata: BTreeMap::new(),
+        })
+        .unwrap();
+    let request = crate::KnowledgeRetrievalRequest::nowledge_deep(
+        "Budgeted",
+        None,
+        crate::search::SearchMode::Text,
+        1,
+        0,
+        BTreeMap::new(),
+    );
+    for (memory, result, expected_error) in [
+        (0, 4096, Some("requires admitted working memory")),
+        (
+            1 << 20,
+            0,
+            Some("requires a positive result payload budget"),
+        ),
+        (1 << 20, 4096, None),
+    ] {
+        let context = RuntimeTaskContext::default()
+            .with_memory_reservation(hawdb_core::RuntimeMemoryReservation::new(memory, result));
+        let read = database
+            .begin_read_transaction_with_context(&context)
+            .unwrap();
+        let search = index
+            .search_with_report("Budgeted", None, crate::search::SearchMode::Text, 1)
+            .unwrap();
+        let output =
+            read.try_retrieve_knowledge_from_search(search, index.projection_freshness(), &request);
+        if let Some(message) = expected_error {
+            assert!(output.unwrap_err().to_string().contains(message));
+        } else {
+            assert_eq!(output.unwrap().search.hits.len(), 1);
+        }
+    }
+}
+
+#[test]
+fn search_helpers_preserve_their_pair_while_writers_and_fresh_helpers_advance() {
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    for out_of_core in [false, true] {
+        let root = SnapshotTestRoot::new();
+        let handle = app_read_handle();
+        if out_of_core {
+            let mut store = handle.write_store().unwrap();
+            let resident = store.search_projection.take().unwrap();
+            let path = root.0.join("search");
+            let mut writer =
+                crate::SearchOutOfCoreGenerationWriter::create(&path, Default::default()).unwrap();
+            for id in ["memory:nearest", "memory:farther"] {
+                writer
+                    .push(resident.index().document(id).unwrap().clone())
+                    .unwrap();
+            }
+            writer.finish().unwrap();
+            store.out_of_core_search_projection = Some(
+                super::NowledgeMemOutOfCoreSearchProjection::open_incremental(
+                    &path,
+                    Default::default(),
+                )
+                .unwrap(),
+            );
+        }
+        let request = crate::KnowledgeRetrievalRequest::nowledge_deep(
+            "App",
+            None,
+            crate::SearchMode::Text,
+            1,
+            0,
+            BTreeMap::from([("space_id".into(), "default".into())]),
+        );
+        let documents = vec!["memory:nearest".into()];
+        let (start, started) = mpsc::channel();
+        let (finished, done) = mpsc::channel();
+        let writer_handle = handle.clone();
+        let writer = std::thread::spawn(move || {
+            if started.recv().is_ok() {
+                let result = (|| {
+                    writer_handle.with_transaction(|tx| {
+                        tx.query("MATCH (m:Memory) SET m.title = 'Updated memory'")?;
+                        Ok(())
+                    })?;
+                    writer_handle.apply_search_projection_delta_and_checkpoint(
+                        crate::SearchProjectionDelta {
+                            upserts: vec![SearchProjectionRow {
+                                kind: SearchProjectionKind::Memory,
+                                external_id: "nearest".into(),
+                                title: "Updated projection".into(),
+                                body: "App search candidate".into(),
+                                embedding: Some(vec![1.0, 0.0]),
+                                source_id: None,
+                                metadata: BTreeMap::from([("space_id".into(), "default".into())]),
+                            }],
+                            ..Default::default()
+                        },
+                    )?;
+                    Ok::<_, crate::HawDBError>(())
+                })();
+                let _ = finished.send(result);
+            }
+        });
+        let result = handle.with_admitted_search(|old| {
+            let before = old.retrieve(&request)?;
+            assert_eq!(before.output.search.hits.len(), 1);
+            assert_eq!(old.hydrate(&documents)?.documents[0].title, "nearest");
+            start.send(()).unwrap();
+            done.recv_timeout(Duration::from_secs(10)).map_err(|_| {
+                crate::HawDBError::Execution("search helper blocked writer publication".into())
+            })??;
+            let fresh = handle.retrieve_knowledge_with_report(&request)?;
+            assert!(fresh.output.graph_commit_epoch > before.output.graph_commit_epoch);
+            assert_eq!(fresh.output.search.hits.len(), 1);
+            assert_eq!(
+                handle.search_projection_documents(&documents, 1)?[0].title,
+                "Updated projection",
+            );
+            assert_eq!(old.hydrate(&documents)?.documents[0].title, "nearest");
+            assert_eq!(
+                old.retrieve(&request)?.output.graph_commit_epoch,
+                before.output.graph_commit_epoch
+            );
+            let candidates = super::NowledgeMemSearchCandidateRequest::text("App", 1)
+                .with_metadata_filters(BTreeMap::from([("space_id".into(), "default".into())]));
+            assert_eq!(handle.search_candidates(&candidates)?.hits.len(), 1);
+            assert_eq!(old.search_candidates(&candidates)?.result.hits.len(), 1,);
+            Ok(())
+        });
+        drop(start);
+        writer.join().unwrap();
+        result.unwrap();
+        assert_eq!(
+            handle
+                .runtime_governor_snapshot()
+                .unwrap()
+                .admitted_memory_bytes,
+            0
+        );
+    }
+}
+
 #[path = "nowledge_mem_snapshot_scoring_tests.rs"]
 mod scoring_tests;
 

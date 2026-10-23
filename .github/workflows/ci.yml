@@ -3,16 +3,17 @@ name: Weekly Platform CI
 on:
   workflow_dispatch:
     inputs:
-      power_loss_only:
-        description: Run only the complete branch power-loss platform matrix
-        type: boolean
-        default: false
+      scope:
+        description: Qualification lanes to run; partial scopes do not qualify other lanes
+        type: choice
+        options: [all, runtime, power-loss]
+        default: all
   schedule:
     # Scheduled workflows run the latest revision of the default branch (main).
     - cron: "37 3 * * 1"
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}${{ inputs.power_loss_only && '-power-loss' || '' }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}${{ inputs.scope && inputs.scope != 'all' && format('-{0}', inputs.scope) || '' }}
   cancel-in-progress: true
 
 defaults:
@@ -22,7 +23,7 @@ defaults:
 
 jobs:
   runtime-platform:
-    if: ${{ !inputs.power_loss_only }}
+    if: ${{ inputs.scope != 'power-loss' }}
     name: Runtime Platform (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
@@ -114,7 +115,7 @@ jobs:
           cargo test --locked -p hawdb --features tokio-runtime --lib nowledge_mem::app_read_snapshot_tests
 
   vector-projection-platform:
-    if: ${{ !inputs.power_loss_only }}
+    if: ${{ !inputs.scope || inputs.scope == 'all' }}
     name: Vector Projection (${{ matrix.target }})
     runs-on: ${{ matrix.runner }}
     strategy:
@@ -177,7 +178,7 @@ jobs:
         run: cargo test -p hawdb-qualification production_vector
 
   storage-platform:
-    if: ${{ !inputs.power_loss_only }}
+    if: ${{ !inputs.scope || inputs.scope == 'all' }}
     name: Storage Platform (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
@@ -266,6 +267,7 @@ jobs:
           if-no-files-found: error
 
   branch-power-loss:
+    if: ${{ inputs.scope != 'runtime' }}
     name: Branch Power Loss (${{ matrix.os }}, ${{ matrix.shard }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
@@ -396,7 +398,7 @@ jobs:
           if-no-files-found: error
 
   storage-crash-recovery:
-    if: ${{ !inputs.power_loss_only }}
+    if: ${{ !inputs.scope || inputs.scope == 'all' }}
     name: Storage Crash Recovery (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:

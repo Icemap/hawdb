@@ -58,6 +58,15 @@ callbacks and reject schema/instance changes; the model does not prove host
 callback reentrancy or resident allocation sizes. `HawDBResidentReadLease` checks
 the additional paired-capture/shared-funding/drop-order protocol.
 
+Standalone Mem search/hydration/retrieval helpers use the same resident lease
+protocol: admission retains scalar/configuration metadata, `Capture` selects
+the current pair, and funding happens after unlocking. They do not prepare a
+Cypher template, so the preparation transfer transitions do not apply. Native
+tests cover an old resident/out-of-core helper alongside writer publication and
+fresh helper reads, and an admission callback that retires the old publication
+or changes the projection I/O requirement. These add concrete correspondence
+for existing model transitions, not new modeled states or throughput evidence.
+
 Recommended verification:
 
 ```console

@@ -71,6 +71,7 @@ mod concurrent_owner;
 mod incremental_search;
 mod read_execution;
 mod resident_read;
+mod search_read;
 use resident_read::ResidentProjectionRef;
 mod registered_search;
 use hawdb_optimizer::AdaptiveVectorBackendPolicy;
@@ -2466,6 +2467,7 @@ struct PublishedCanonicalRead {
     mode: NowledgeMemGraphMode,
     resident_projection: Option<crate::search::SearchIndexReadSnapshot>,
     external_seed_io_slots: usize,
+    retrieval_projection_advisor: NowledgeMemRetrievalProjectionAdvisor,
     out_of_core_projection: Option<NowledgeMemOutOfCoreSearchProjection>,
 }
 
@@ -2483,6 +2485,7 @@ impl PublishedCanonicalRead {
                 .as_ref()
                 .map(|projection| projection.index().read_snapshot()),
             external_seed_io_slots: store.external_seed_io_slots(),
+            retrieval_projection_advisor: store.retrieval_projection_advisor.clone(),
             out_of_core_projection: store
                 .out_of_core_search_projection
                 .as_ref()
@@ -2936,69 +2939,7 @@ impl NowledgeMemEmbeddedStoreHandle {
                 document_ids.len()
             )));
         }
-        let _permit = self.admit_typed_search()?;
-        let store = self.read_store()?;
-        let max_payload_bytes = store
-            .graph
-            .database()
-            .config()
-            .max_read_result_payload_bytes
-            .ok_or_else(|| {
-                HawDBError::Execution(
-                    "admitted search hydration requires max_read_result_payload_bytes".to_string(),
-                )
-            })?;
-        match (
-            store.search_projection.as_ref(),
-            store.out_of_core_search_projection.as_ref(),
-        ) {
-            (Some(projection), None) => {
-                let mut documents = Vec::with_capacity(document_ids.len());
-                let mut payload_bytes = 0usize;
-                for id in document_ids {
-                    let Some(document) = projection.index().document(id) else {
-                        continue;
-                    };
-                    payload_bytes =
-                        payload_bytes.saturating_add(search_document_payload_bytes(document));
-                    if payload_bytes > max_payload_bytes {
-                        return Err(HawDBError::read_budget_exceeded(
-                            ReadBudgetResource::PayloadBytes,
-                            max_payload_bytes,
-                            format!(
-                                "search projection document hydration produced {payload_bytes} payload bytes, limit is {max_payload_bytes}"
-                            ),
-                        ));
-                    }
-                    documents.push(document.clone());
-                }
-                Ok(NowledgeMemSearchHydrationOutput {
-                    documents,
-                    out_of_core_metrics: None,
-                })
-            }
-            (None, Some(projection)) => {
-                let output = projection.hydrate_documents(document_ids)?;
-                if output.metrics.hydrated_bytes
-                    > u64::try_from(max_payload_bytes).unwrap_or(u64::MAX)
-                {
-                    return Err(HawDBError::read_budget_exceeded(
-                        ReadBudgetResource::PayloadBytes,
-                        max_payload_bytes,
-                        format!(
-                            "search projection document hydration produced {} payload bytes, limit is {max_payload_bytes}",
-                            output.metrics.hydrated_bytes
-                        ),
-                    ));
-                }
-                Ok(NowledgeMemSearchHydrationOutput {
-                    documents: output.documents,
-                    out_of_core_metrics: Some(output.metrics),
-                })
-            }
-            (None, None) => Err(missing_search_projection_error()),
-            (Some(_), Some(_)) => Err(ambiguous_search_projection_error()),
-        }
+        self.with_admitted_search(|read| read.hydrate(document_ids))
     }
 }
 
@@ -3431,16 +3372,14 @@ impl NowledgeMemEmbeddedStoreHandle {
         &self,
         request: &NowledgeMemSearchCandidateRequest,
     ) -> Result<SearchResultSet> {
-        let _permit = self.admit_typed_search()?;
-        Ok(self.read_store()?.search_candidates(request)?.result)
+        Ok(self.search_candidates_with_report(request)?.result)
     }
 
     pub fn search_candidates_with_report(
         &self,
         request: &NowledgeMemSearchCandidateRequest,
     ) -> Result<NowledgeMemSearchCandidateOutput> {
-        let _permit = self.admit_typed_search()?;
-        self.read_store()?.search_candidates(request)
+        self.with_admitted_search(|read| read.search_candidates(request))
     }
 
     pub fn validate_sampled_vector_recall(
@@ -3468,16 +3407,14 @@ impl NowledgeMemEmbeddedStoreHandle {
         &self,
         request: &KnowledgeRetrievalRequest,
     ) -> Result<KnowledgeRetrievalOutput> {
-        let _permit = self.admit_typed_search()?;
-        self.read_store()?.retrieve_knowledge(request)
+        Ok(self.retrieve_knowledge_with_report(request)?.output)
     }
 
     pub fn retrieve_knowledge_with_report(
         &self,
         request: &KnowledgeRetrievalRequest,
     ) -> Result<NowledgeMemRetrievalOutput> {
-        let _permit = self.admit_typed_search()?;
-        self.read_store()?.retrieve_knowledge_with_report(request)
+        self.with_admitted_search(|read| read.retrieve(request))
     }
 
     pub fn search_candidate_readiness(
@@ -3485,9 +3422,9 @@ impl NowledgeMemEmbeddedStoreHandle {
         request: &NowledgeMemSearchCandidateRequest,
         options: &NowledgeMemSearchCandidateReadinessOptions,
     ) -> Result<NowledgeMemSearchCandidateReadinessReport> {
-        let _permit = self.admit_typed_search()?;
-        self.read_store()?
-            .search_candidate_readiness(request, options)
+        Ok(self
+            .search_candidates_with_report(request)?
+            .readiness_report(options))
     }
 
     pub fn search_candidate_shadow_evidence_json<I, S>(
@@ -3499,9 +3436,7 @@ impl NowledgeMemEmbeddedStoreHandle {
         I: IntoIterator<Item = S>,
         S: AsRef<str>,
     {
-        let _permit = self.admit_typed_search()?;
-        self.read_store()?
-            .search_candidate_shadow_evidence_json(request, primary_candidate_ids)
+        self.with_admitted_search(|read| read.shadow_evidence_json(request, primary_candidate_ids))
     }
 
     pub fn slow_query_report(&self) -> Result<NowledgeMemSlowQueryReport> {
@@ -4032,35 +3967,6 @@ impl NowledgeMemEmbeddedStoreHandle {
             )
             .with_io_slots(io_slots)
             .with_blocking(true),
-        )
-    }
-
-    fn admit_typed_search(&self) -> Result<RuntimePermit> {
-        let store = self.read_store()?;
-        let config = store.graph.database().config();
-        let result_bytes = config
-            .max_read_result_payload_bytes
-            .ok_or_else(|| {
-                HawDBError::Execution(
-                    "admitted typed search requires max_read_result_payload_bytes".to_string(),
-                )
-            })
-            .and_then(|bytes| {
-                u64::try_from(bytes).map_err(|_| {
-                    HawDBError::Execution(
-                        "admitted typed search result budget exceeds u64".to_string(),
-                    )
-                })
-            })?;
-        let working_memory_bytes =
-            u64::try_from(config.execution_memory.blocking_operator_bytes.get())
-                .unwrap_or(u64::MAX);
-        let memory_bytes = store.search_memory_bytes(working_memory_bytes, result_bytes)?;
-        let io_slots = store.search_io_slots()?;
-        store.graph.try_admit_runtime(
-            RuntimeWorkRequest::foreground_query(memory_bytes, result_bytes)
-                .with_io_slots(io_slots)
-                .with_blocking(true),
         )
     }
 
@@ -5386,54 +5292,15 @@ impl NowledgeMemEmbeddedStore {
             .max(usize::from(self.out_of_core_search_projection.is_some()))
     }
 
-    fn search_io_slots(&self) -> Result<usize> {
-        match (
-            self.search_projection.as_ref(),
-            self.out_of_core_search_projection.as_ref(),
-        ) {
-            (Some(projection), None) => Ok(projection.index().range_read_config().io_depth.get()),
-            (None, Some(_)) => Ok(1),
-            (None, None) => Err(missing_search_projection_error()),
-            (Some(_), Some(_)) => Err(ambiguous_search_projection_error()),
-        }
-    }
-
-    fn search_memory_bytes(
-        &self,
-        working_memory_bytes: u64,
-        result_budget_bytes: u64,
-    ) -> Result<u64> {
-        match (
-            self.search_projection.as_ref(),
-            self.out_of_core_search_projection.as_ref(),
-        ) {
-            (Some(_), None) => Ok(working_memory_bytes),
-            (None, Some(projection)) => Ok(projection
-                .runtime_admission_memory_bytes(working_memory_bytes, result_budget_bytes)),
-            (None, None) => Err(missing_search_projection_error()),
-            (Some(_), Some(_)) => Err(ambiguous_search_projection_error()),
-        }
-    }
-
     fn search_request_for_retrieval(
         &self,
         request: &KnowledgeRetrievalRequest,
     ) -> NowledgeMemSearchCandidateRequest {
-        let config = self.graph.database().config();
-        NowledgeMemSearchCandidateRequest {
-            query_text: request.query_text.clone(),
-            query_embedding: request.query_embedding.clone(),
-            mode: request.mode,
-            limit: request.limit,
-            offset: request.offset,
-            rank_window: request.rank_window,
-            fusion_weights: request.search_fusion_weights,
-            metadata_filters: request.metadata_filters.clone(),
-            compressed_vector_search_mode: config.compressed_vector_search_mode,
-            adaptive_vector_backend_policy: config.adaptive_vector_backend_policy,
-            recall_validation_probe: false,
-            retrieval_projection_advisor: self.retrieval_projection_advisor.clone(),
-        }
+        search_read::retrieval_request(
+            self.graph.database().config(),
+            &self.retrieval_projection_advisor,
+            request,
+        )
     }
 
     fn require_search_projection(&self) -> Result<&NowledgeMemSearchProjection> {

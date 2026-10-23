@@ -23483,6 +23483,48 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
         .try_retrieve_knowledge(search_index, request)
     }
 
+    pub(crate) fn try_retrieve_knowledge_from_search(
+        &self,
+        search: SearchResultSet,
+        projection_freshness: SearchProjectionFreshness,
+        request: &KnowledgeRetrievalRequest,
+    ) -> Result<KnowledgeRetrievalOutput> {
+        if let Some(context) = &self.task_context {
+            context
+                .checkpoint()
+                .map_err(|reason| HawDBError::Execution(format!("runtime task {reason}")))?;
+        }
+        let configured_memory = self.config.execution_memory.query_memory_bytes.get();
+        let configured_result = self
+            .config
+            .max_read_result_payload_bytes
+            .unwrap_or(DEFAULT_MAX_READ_RESULT_PAYLOAD_BYTES);
+        let (memory, result) = self
+            .task_context
+            .as_ref()
+            .and_then(hawdb_core::RuntimeTaskContext::memory_reservation)
+            .map_or((configured_memory, configured_result), |reservation| {
+                (
+                    configured_memory
+                        .min(usize::try_from(reservation.memory_bytes()).unwrap_or(usize::MAX)),
+                    configured_result
+                        .min(usize::try_from(reservation.result_bytes()).unwrap_or(usize::MAX)),
+                )
+            });
+        let query_memory_budget = NonZeroUsize::new(memory).ok_or_else(|| {
+            HawDBError::Execution("knowledge retrieval requires admitted working memory".into())
+        })?;
+        KnowledgeRetrievalGraphContext {
+            catalog: &self.catalog,
+            store: &self.store,
+            compressed_vector_search_mode: self.config.compressed_vector_search_mode,
+            adaptive_vector_backend_policy: self.config.adaptive_vector_backend_policy,
+            query_memory_budget,
+            result_payload_budget: result,
+        }
+        .retrieve_knowledge_from_search(search, projection_freshness, request)
+    }
+
     #[cfg(test)]
     pub(crate) fn statistics(&self) -> GraphStatistics {
         <S as hawdb_storage::graph_engine::GraphReadEngine>::statistics(&self.store, &self.catalog)
