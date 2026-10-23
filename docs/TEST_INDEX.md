@@ -293,3 +293,14 @@ publication after registry-cache reload, and a scoped mapper that follows a
 relationship to an out-of-scope label whose post-E mutation must invalidate
 publication. Storage units check immutable reservation predecessors, missing
 registration policy, and direct history pruning without staging compaction.
+
+## Bf-Tree MVCC adapter (manual experiment)
+
+| Family | Purpose and owner | Lane and known limits |
+| --- | --- | --- |
+| Adapter correctness and recovery | [`experiments/bftree-mvcc`](../experiments/bftree-mvcc/README.md); `cargo test --locked --manifest-path experiments/bftree-mvcc/Cargo.toml --all-targets --all-features` | Manual independent workspace, no CI. Snapshot/atomic-pair visibility, conflict/rollback, binary-key model, page splits/history/ranges, bounds/ownership, exact retry, uncertain/unwind and subprocess crash replay. The ignored child is exercised by the parent crash test. Process exit does not qualify power-loss safety. |
+| Layout comparison | Same workspace, `bench <new-directory> 16 2` and `bench <new-directory> 512 24` under the global release profile | Manual only. Rotated fresh-process versioned/hybrid/COW comparisons with identical synchronized journal; current/old read and write percentiles, reopen, journal and RSS. Memory working indexes; not a production engine or out-of-memory benchmark. |
+
+The experiment is binary-only, unpublished and excluded from library archives.
+See its README for independent formatting/Clippy and demo commands. Its journal
+and Bf-Tree dependency do not change canonical storage or production test scope.
