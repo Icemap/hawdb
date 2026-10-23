@@ -36,6 +36,7 @@ impl BatchExternalRead for TextSource {
 
 fn seed(window: usize) -> PhysicalPlan {
     PhysicalPlan::TextSeedScan {
+        complete: false,
         query_parameter: "text".into(),
         top_k: window,
         output_external_id: true,

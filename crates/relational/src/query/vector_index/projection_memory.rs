@@ -7,6 +7,20 @@
 use super::*;
 use hawdb_sql::ExprKind;
 
+pub(super) fn admit_predicate(
+    predicate: &SqlExpression,
+    row: &BoundRow<'_>,
+    parameters: &[Value],
+    account: &hawdb_executor::QueryMemoryAccount,
+) -> Result<QueryMemoryLease> {
+    account.reserve(
+        expression_bytes(predicate, row, parameters)?
+            .saturating_mul(4)
+            .saturating_add(1024)
+            .saturating_add(predicate_scratch_bytes(predicate, row, parameters)?),
+    )
+}
+
 pub(super) fn admit(
     select: &SelectStatement,
     row: &BoundRow<'_>,
@@ -45,12 +59,12 @@ pub(super) fn admit(
         };
         bytes = bytes.saturating_add(512).saturating_add(payload);
     }
-    if let Some(predicate) = &select.selection {
+    if let Some(predicate) = residual_selection(select) {
         bytes = bytes.saturating_add(expression_bytes(predicate, row, parameters)?);
     }
     // Each scalar leaf may coexist with its evaluated relational value, output
     // value and sort-key copy. Map/slot/name overhead is included per occurrence.
-    let scratch = select.selection.as_ref().map_or(Ok(0), |predicate| {
+    let scratch = residual_selection(select).map_or(Ok(0), |predicate| {
         predicate_scratch_bytes(predicate, row, parameters)
     })?;
     account.reserve(bytes.saturating_mul(4).saturating_add(scratch))

@@ -18,7 +18,7 @@
 use super::*;
 use crate::read_view::{
     AdmittedKeySet, AdmittedNodeRecord, AdmittedProjectedNode, ControlledGraphReadAllocator,
-    GraphReadAdmission, GraphReadAllocation,
+    GraphReadAllocation, GraphReadAllocator, GraphReadWork,
 };
 use std::cell::{Cell, RefCell};
 use std::ops::Deref;
@@ -39,11 +39,12 @@ pub(super) struct ProjectionAdmission<'a> {
     admission: ProjectionAllocationPolicy<'a>,
     error: RefCell<Option<HawDBError>>,
     stopped: Cell<bool>,
+    work: GraphReadWork<'a>,
 }
 
 enum ProjectionAllocationPolicy<'a> {
-    Required(GraphReadAdmission<'a>),
-    Controlled(RefCell<&'a mut ControlledGraphReadAllocator<'a>>),
+    Required(RefCell<GraphReadAllocator<'a>>),
+    Controlled(RefCell<ControlledGraphReadAllocator<'a>>),
 }
 
 pub(super) struct UnaccountedReadAllocation(pub(super) usize);
@@ -58,21 +59,23 @@ impl GraphReadAllocation for UnaccountedReadAllocation {
 }
 
 impl<'a> ProjectionAdmission<'a> {
-    pub(super) fn new(
-        admit: &'a mut dyn FnMut(usize) -> Result<Box<dyn GraphReadAllocation>>,
-    ) -> Self {
+    pub(super) fn new(admit: &'a mut GraphReadAllocator<'_>) -> Self {
+        let work = admit.work();
         Self {
-            admission: ProjectionAllocationPolicy::Required(GraphReadAdmission::new(admit)),
+            admission: ProjectionAllocationPolicy::Required(RefCell::new(admit.reborrow())),
             error: RefCell::new(None),
             stopped: Cell::new(false),
+            work,
         }
     }
 
-    fn new_controlled(admit: &'a mut ControlledGraphReadAllocator<'a>) -> Self {
+    fn new_controlled(admit: &'a mut ControlledGraphReadAllocator<'_>) -> Self {
+        let work = admit.work();
         Self {
-            admission: ProjectionAllocationPolicy::Controlled(RefCell::new(admit)),
+            admission: ProjectionAllocationPolicy::Controlled(RefCell::new(admit.reborrow())),
             error: RefCell::new(None),
             stopped: Cell::new(false),
+            work,
         }
     }
 
@@ -81,8 +84,10 @@ impl<'a> ProjectionAdmission<'a> {
         bytes: usize,
     ) -> std::result::Result<Box<dyn GraphReadAllocation>, CanonicalSegmentError> {
         let result = match &self.admission {
-            ProjectionAllocationPolicy::Required(admission) => admission.reserve(bytes).map(Some),
-            ProjectionAllocationPolicy::Controlled(admit) => (admit.borrow_mut())(bytes),
+            ProjectionAllocationPolicy::Required(admission) => {
+                admission.borrow_mut().reserve(bytes).map(Some)
+            }
+            ProjectionAllocationPolicy::Controlled(admit) => admit.borrow_mut().reserve(bytes),
         };
         match result {
             Ok(Some(allocation)) if allocation.bytes() >= bytes => Ok(allocation),
@@ -97,6 +102,16 @@ impl<'a> ProjectionAdmission<'a> {
             }
             Err(error) => Err(self.refusal(error)),
         }
+    }
+
+    pub(super) fn has_work_limit(&self) -> bool {
+        self.work.has_work_limit()
+    }
+
+    fn charge_work(&self, units: usize) -> std::result::Result<(), CanonicalSegmentError> {
+        self.work
+            .charge_work(units)
+            .map_err(|error| self.refusal(error))
     }
 
     fn refusal(&self, error: HawDBError) -> CanonicalSegmentError {
@@ -317,7 +332,7 @@ impl GraphStore {
         &self,
         label_id: Option<LabelId>,
         properties: &BTreeSet<String>,
-        admit: &mut dyn FnMut(usize) -> Result<Box<dyn GraphReadAllocation>>,
+        admit: &mut GraphReadAllocator<'_>,
         consumer: &mut dyn FnMut(ProjectedNodeRecord) -> Result<GraphScanControl>,
     ) -> Result<GraphScanControl> {
         let admission = ProjectionAdmission::new(admit);
@@ -333,7 +348,7 @@ impl GraphStore {
         label_id: LabelId,
         access: &hawdb_plan_cypher::NodeProjectionAccess,
         properties: &BTreeSet<String>,
-        admit: &mut dyn FnMut(usize) -> Result<Box<dyn GraphReadAllocation>>,
+        admit: &mut GraphReadAllocator<'_>,
         consumer: &mut dyn FnMut(ProjectedNodeRecord) -> Result<GraphScanControl>,
     ) -> Result<GraphScanControl> {
         let admission = ProjectionAdmission::new(admit);
@@ -353,7 +368,7 @@ impl GraphStore {
         property: &str,
         values: &[Value],
         properties: &BTreeSet<String>,
-        admit: &mut dyn FnMut(usize) -> Result<Box<dyn GraphReadAllocation>>,
+        admit: &mut GraphReadAllocator<'_>,
         consumer: &mut dyn FnMut(ProjectedNodeRecord) -> Result<GraphScanControl>,
     ) -> Result<GraphScanControl> {
         let admission = ProjectionAdmission::new(admit);
@@ -387,6 +402,7 @@ impl GraphStore {
     ) -> Result<GraphScanControl> {
         let Some(reader) = &self.canonical_base else {
             for node in self.nodes.values() {
+                admission.charge_work(1).map_err(canonical_segment_error)?;
                 if self.node_matches_label(node, label_id)
                     && admission.visit_live_selection(node, properties, &mut consumer)
                         == GraphScanControl::Stop
@@ -400,8 +416,10 @@ impl GraphStore {
         let mut graph_control = GraphScanControl::Continue;
         let (_, control) = reader
             .scan_node_inputs_control(|base| {
+                admission.charge_work(1)?;
                 while delta.peek().is_some_and(|(id, _)| **id <= base.id()) {
                     let (id, node) = delta.next().expect("peeked delta node exists");
+                    admission.charge_work(1)?;
                     if !self.node_tombstones.contains(id)
                         && self.node_matches_label(node, label_id)
                         && admission.visit_live_selection(node, properties, &mut consumer)
@@ -434,6 +452,7 @@ impl GraphStore {
             return Ok(graph_control);
         }
         for (id, node) in delta {
+            admission.charge_work(1).map_err(canonical_segment_error)?;
             if !self.node_tombstones.contains(id)
                 && self.node_matches_label(node, label_id)
                 && admission.visit_live_selection(node, properties, &mut consumer)
@@ -461,6 +480,7 @@ impl GraphStore {
                 let mut graph_control = GraphScanControl::Continue;
                 let (_, control) = reader
                     .scan_node_inputs_by_property_control(label, property, value, |input| {
+                        admission.charge_work(1)?;
                         if self.node_tombstones.contains(&input.id())
                             || self.nodes.contains_key(&input.id())
                             || seen.contains(&input.id())
@@ -489,6 +509,7 @@ impl GraphStore {
             }
         }
         for node in self.nodes.values() {
+            admission.charge_work(1).map_err(canonical_segment_error)?;
             if node.labels.contains(&label)
                 && node
                     .properties
@@ -514,6 +535,7 @@ impl GraphStore {
         // Resident predicates borrow storage values before selected hydration.
         if self.canonical_base.is_none() {
             for node in self.nodes.values() {
+                admission.charge_work(1).map_err(canonical_segment_error)?;
                 if node.labels.contains(&label_id)
                     && matches(&node.properties)
                     && admission.visit_live_selection(node, properties, &mut consumer)
@@ -531,5 +553,43 @@ impl GraphStore {
                 GraphScanControl::Continue
             }
         })
+    }
+}
+
+#[cfg(test)]
+mod work_tests {
+    use super::*;
+
+    #[test]
+    fn projection_work_admission_never_reserves_payload_and_preserves_refusal() {
+        for bounded in [false, true] {
+            let calls = Cell::new(0);
+            let task = if bounded {
+                hawdb_core::RuntimeTaskContext::default().with_work_limit(100)
+            } else {
+                hawdb_core::RuntimeTaskContext::default()
+            };
+            let mut allocate = |bytes| -> Result<Box<dyn GraphReadAllocation>> {
+                assert_eq!(bytes, 0);
+                calls.set(calls.get() + 1);
+                panic!("work accounting must not request payload")
+            };
+            let mut policy = GraphReadAllocator::new(&mut allocate, Some(&task));
+            let admission = ProjectionAdmission::new(&mut policy);
+            assert_eq!(admission.has_work_limit(), bounded);
+            for _ in 0..100 {
+                admission.charge_work(1).unwrap();
+            }
+            assert_eq!(calls.get(), 0);
+            assert_eq!(task.work_units(), if bounded { 100 } else { 0 });
+            if bounded {
+                assert!(admission.charge_work(1).is_err());
+                assert!(matches!(
+                    admission.finish(Ok(GraphScanControl::Continue)),
+                    Err(HawDBError::ResourceBudgetExceeded(ref error))
+                        if error.resource == hawdb_core::ResourceBudgetKind::WorkUnits
+                ));
+            }
+        }
     }
 }

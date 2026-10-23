@@ -38,17 +38,43 @@ pub fn plan_parsed_pipeline_query(
     let plan = bind_pipeline(query, parameters)?;
     // Multi-WITH statements already had a public generic-plan contract before
     // default MATCH routing. Keep their EXPLAIN shape and exact-parameter cache
-    // variants; normalize the newly migrated statement shapes after admission.
-    if query
-        .clauses
-        .iter()
-        .filter(|clause| matches!(clause.kind, ClauseKind::With(_)))
-        .nth(1)
-        .is_some()
+    // variants. Ranked evidence normalizes its input at the aggregate boundary;
+    // retain its outer aliases so final ORDER BY/LIMIT can select bounded TopN.
+    let ranked_evidence = query.clauses.iter().any(|clause| match &clause.kind {
+        ClauseKind::With(projection) | ClauseKind::Return(projection) => projection
+            .items
+            .iter()
+            .any(|item| contains_ranked_evidence(&item.expression)),
+        _ => false,
+    });
+    if ranked_evidence
+        || query
+            .clauses
+            .iter()
+            .filter(|clause| matches!(clause.kind, ClauseKind::With(_)))
+            .nth(1)
+            .is_some()
     {
         Ok(plan)
     } else {
         Ok(normalize::normalize(plan))
+    }
+}
+
+pub(super) fn normalize_ranked_input(plan: LogicalPlan) -> LogicalPlan {
+    normalize::normalize(plan)
+}
+
+fn contains_ranked_evidence(expression: &ReturnExpression) -> bool {
+    match &expression.kind {
+        ReturnExpressionKind::Aggregate(AggregateExpression::CollectTop { .. }) => true,
+        ReturnExpressionKind::Arithmetic { first, rest } => {
+            contains_ranked_evidence(first)
+                || rest
+                    .iter()
+                    .any(|(_, child)| contains_ranked_evidence(child))
+        }
+        _ => false,
     }
 }
 
@@ -1084,6 +1110,18 @@ fn bind_read_clauses(
 ) -> Result<LogicalPlan> {
     for clause in clauses {
         match &clause.kind {
+            ClauseKind::Call { procedure, yields } => {
+                let hawdb_cypher::ProcedureCallKind::VectorIndexSearch(search) = &procedure.kind
+                else {
+                    return Err(HawDBError::Semantic(
+                        "only eligible vector search accepts upstream query rows".into(),
+                    ));
+                };
+                let (next, next_scope) =
+                    procedure::bind_vector_index(search, yields, input.take(), scope, parameters)?;
+                input = Some(next);
+                scope = next_scope;
+            }
             ClauseKind::Match {
                 optional,
                 patterns,

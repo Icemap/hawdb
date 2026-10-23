@@ -38,6 +38,8 @@ pub fn read_execution_profile(
         scan_pruning_reports: Vec::new(),
         vector_execution_reports: Vec::new(),
         graph_expansion_reports: Vec::new(),
+        text_seed_execution_reports: Vec::new(),
+        grouped_evidence_reports: Vec::new(),
         blocking_operator_memory_reports: Vec::new(),
         pipeline_memory_report: PipelineMemoryReport::default(),
     })
@@ -67,6 +69,8 @@ impl ExecutionProfileBuilder {
             scan_pruning,
             vector_execution,
             graph_expansion,
+            text_seed_execution,
+            grouped_evidence,
             blocking_memory,
             mut pipeline_memory,
         } = observer.into_reports();
@@ -74,6 +78,8 @@ impl ExecutionProfileBuilder {
         self.profile.scan_pruning_reports = scan_pruning;
         self.profile.vector_execution_reports = vector_execution;
         self.profile.graph_expansion_reports = graph_expansion;
+        self.profile.text_seed_execution_reports = text_seed_execution;
+        self.profile.grouped_evidence_reports = grouped_evidence;
         self.profile.blocking_operator_memory_reports = blocking_memory;
 
         pipeline_memory.output_rows = output.rows;

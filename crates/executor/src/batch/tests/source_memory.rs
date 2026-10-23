@@ -652,7 +652,10 @@ fn source_memory_ordered_adjacency_keys_keep_the_retained_cap() {
             None,
             AdjacencyDirection::Outgoing,
             64 * 1024,
-            &mut |bytes| crate::store::admit_graph_read(&source_account, None, bytes).map(Some),
+            &mut hawdb_storage::read_view::ControlledGraphReadAllocator::new(
+                &mut |bytes| crate::store::admit_graph_read(&source_account, None, bytes).map(Some),
+                None,
+            ),
             |_| {
                 rows += 1;
                 Ok(GraphScanControl::Continue)

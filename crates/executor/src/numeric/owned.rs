@@ -130,20 +130,23 @@ pub fn stream_owned_numeric_nodes<'plan>(
     context.store.visit_projected_nodes_with_allocation(
         Some(label_id),
         &properties,
-        &mut |bytes| {
-            runtime_checkpoint(context.task_context)?;
-            let mut state = state.borrow_mut();
-            if !state.stopped
-                && state.buffered_bytes.saturating_add(bytes)
-                    > context.memory.batch_payload_bytes.get()
-            {
-                state.flush()?;
-            }
-            if state.stopped {
-                return Ok(None);
-            }
-            admit_graph_read(&input_account, context.task_context, bytes).map(Some)
-        },
+        &mut hawdb_storage::read_view::ControlledGraphReadAllocator::new(
+            &mut |bytes| {
+                runtime_checkpoint(context.task_context)?;
+                let mut state = state.borrow_mut();
+                if !state.stopped
+                    && state.buffered_bytes.saturating_add(bytes)
+                        > context.memory.batch_payload_bytes.get()
+                {
+                    state.flush()?;
+                }
+                if state.stopped {
+                    return Ok(None);
+                }
+                admit_graph_read(&input_account, context.task_context, bytes).map(Some)
+            },
+            context.task_context,
+        ),
         &mut |input| {
             let mut state = state.borrow_mut();
             let node = AdmittedNumericNode::from(input);
@@ -208,7 +211,10 @@ pub fn stream_owned_typed_numeric_nodes(
     context.store.visit_projected_nodes_with_allocation(
         Some(label_id),
         &properties,
-        &mut |bytes| admit_graph_read(&input_account, context.task_context, bytes).map(Some),
+        &mut hawdb_storage::read_view::ControlledGraphReadAllocator::new(
+            &mut |bytes| admit_graph_read(&input_account, context.task_context, bytes).map(Some),
+            context.task_context,
+        ),
         &mut |input| {
             let node = AdmittedNumericNode::from(input);
             // The remaining allocation field lives through scalar extraction,

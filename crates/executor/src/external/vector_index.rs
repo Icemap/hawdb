@@ -10,6 +10,8 @@ pub struct VectorIndexExecutionRequest<'a> {
     pub embedding: VectorRef<'a>,
     pub candidate_limit: usize,
     pub top_k: usize,
+    pub mode: hawdb_core::VectorIndexQueryMode,
+    pub eligible: Option<&'a crate::vector_eligibility::VectorEligibleDomain<'a>>,
     pub resources: ExternalReadResourceContract<'a>,
 }
 

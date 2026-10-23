@@ -144,6 +144,8 @@ pub struct GraphSeedSearch {
 pub struct TextSearch {
     pub query: ValueExpression,
     pub top_k: Option<ValueExpression>,
+    pub complete: Option<ValueExpression>,
+    pub max_candidates: Option<ValueExpression>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -152,12 +154,15 @@ pub struct VectorSearch {
     pub top_k: Option<ValueExpression>,
 }
 
-/// An explicit approximate index window, separate from legacy relevance search.
+/// Explicit index retrieval semantics, separate from legacy relevance search.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VectorIndexSearch {
     pub index: ValueExpression,
     pub embedding: ValueExpression,
-    pub candidates: ValueExpression,
+    pub mode: hawdb_core::VectorIndexQueryMode,
+    pub eligible: Option<String>,
+    pub candidates: Option<ValueExpression>,
+    pub max_work: Option<ValueExpression>,
     pub top_k: ValueExpression,
 }
 
@@ -531,6 +536,14 @@ pub enum ArithmeticOp {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AggregateExpression {
     CountAll,
+    MaxVariable {
+        variable: String,
+    },
+    CollectTop {
+        document_id: String,
+        score: String,
+        limit: ValueExpression,
+    },
     CountVariable {
         variable: String,
         distinct: bool,

@@ -116,6 +116,9 @@ pub fn apply_node_visibility_predicates(
             input: Box::new(apply_node_visibility_predicates(*input, predicate_for)),
         },
         LogicalPlan::VectorIndexSearch(mut scan) => {
+            scan.input = scan
+                .input
+                .map(|input| Box::new(apply_node_visibility_predicates(*input, predicate_for)));
             let visibility = predicate_for(&scan.variable);
             scan.node_visibility_predicate = Some(match scan.node_visibility_predicate {
                 Some(existing) => Predicate::And(vec![existing, visibility]),

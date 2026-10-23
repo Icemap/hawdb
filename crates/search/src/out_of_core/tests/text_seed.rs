@@ -117,6 +117,42 @@ fn assert_producer_parity(reader: &SearchOutOfCoreReader, documents: &[SearchDoc
             }
         }
     }
+    for text in ["GRAPH storage", "中国 Graph", "missingterm"] {
+        for excluded in [None, Some(documents[0].id.as_str())] {
+            let (expected, matches) =
+                expected_scores(reader, documents, text, usize::MAX, excluded);
+            for ceiling in [matches, usize::MAX] {
+                let actual = reader
+                    .complete_text_seed_scores_with_context(text, ceiling, &account, &task, |id| {
+                        Ok(excluded != Some(id))
+                    })
+                    .unwrap();
+                let actual_bits = actual
+                    .scores()
+                    .iter()
+                    .map(|(id, score)| (id, score.to_bits()))
+                    .collect::<BTreeMap<_, _>>();
+                let expected_bits = expected
+                    .iter()
+                    .map(|(id, score)| (id, score.to_bits()))
+                    .collect::<BTreeMap<_, _>>();
+                assert_eq!(
+                    actual_bits, expected_bits,
+                    "complete text={text} excluded={excluded:?} ceiling={ceiling}"
+                );
+                assert_eq!(actual.report.matching_document_count, matches);
+                assert_eq!(actual.report.returned_count, matches);
+                drop(actual);
+                assert_eq!(ledger.snapshot().used_bytes, 0);
+            }
+            if matches > 0 {
+                assert!(matches!(reader.complete_text_seed_scores_with_context(
+                    text, matches - 1, &account, &task, |id| Ok(excluded != Some(id)),
+                ), Err(HawDBError::ResourceBudgetExceeded(cause)) if cause.budget_option == "text_search.maxCandidates"));
+                assert_eq!(ledger.snapshot().used_bytes, 0);
+            }
+        }
+    }
 }
 
 #[test]
@@ -355,6 +391,103 @@ fn out_of_core_text_seed_retains_pinned_generation_across_replacement_and_delete
         .scores()
         .is_empty());
     assert_eq!(ledger.snapshot().used_bytes, 0);
+}
+
+#[test]
+fn text_seed_metadata_routes_sparse_overlapping_layers_by_exact_membership() {
+    let root = OwnedRoot::new("sparse-metadata-route");
+    let row = |id: &str, space: &str| crate::SearchProjectionRow {
+        kind: crate::SearchProjectionKind::Memory,
+        external_id: id.into(),
+        title: "graph".into(),
+        body: "storage sharedterm".into(),
+        embedding: None,
+        source_id: None,
+        metadata: BTreeMap::from([("space_id".into(), space.into())]),
+    };
+    let mut writer = SearchOutOfCoreGenerationWriter::create(&root.0, Default::default()).unwrap();
+    for id in ["a", "b", "c"] {
+        writer.push(row(id, "base").into_document()).unwrap();
+    }
+    writer.finish().unwrap();
+    let pinned = SearchOutOfCoreReader::open(&root.0).unwrap();
+    SearchOutOfCoreGenerationWriter::prepare_delta(
+        &pinned,
+        crate::SearchProjectionDelta {
+            upserts: vec![row("a", "delta"), row("z", "delta")],
+            ..Default::default()
+        },
+        Default::default(),
+    )
+    .unwrap()
+    .finish()
+    .unwrap();
+    let current = SearchOutOfCoreReader::open(&root.0).unwrap();
+    assert_eq!(current.segments.len(), 2);
+    let documents = [
+        row("a", "delta"),
+        row("b", "base"),
+        row("c", "base"),
+        row("z", "delta"),
+    ]
+    .into_iter()
+    .map(crate::SearchProjectionRow::into_document)
+    .collect::<Vec<_>>();
+    let budget = NonZeroUsize::new(64 * 1024 * 1024).unwrap();
+    let ledger = QueryMemoryLedger::new(budget);
+    let account = ledger.account(QueryMemoryClass::ExternalRead, "sparse metadata", budget);
+    let task = crate::RuntimeTaskContext::default();
+    for complete in [false, true] {
+        for space in [None, Some("base"), Some("delta")] {
+            let filters = space.map_or_else(BTreeMap::new, |space| {
+                BTreeMap::from([("space_id".into(), space.into())])
+            });
+            let output = if complete {
+                current.complete_text_seed_scores_with_metadata_filters(
+                    "graph", &filters, 4, &account, &task,
+                )
+            } else {
+                current
+                    .text_seed_scores_with_metadata_filters("graph", &filters, 4, &account, &task)
+            }
+            .unwrap();
+            let (mut expected, _) = expected_scores(&current, &documents, "graph", 4, None);
+            expected.retain(|id, _| {
+                space.is_none_or(|space| {
+                    documents
+                        .iter()
+                        .find(|document| &document.id == id)
+                        .unwrap()
+                        .metadata["space_id"]
+                        == space
+                })
+            });
+            assert_eq!(
+                output.scores(),
+                &expected,
+                "complete={complete} space={space:?}"
+            );
+            for id in expected.keys() {
+                assert_eq!(output.external_id(id), id.strip_prefix("memory:"));
+            }
+            drop(output);
+            assert_eq!(ledger.snapshot().used_bytes, 0);
+        }
+    }
+    let tiny = NonZeroUsize::new(256).unwrap();
+    let tiny_ledger = QueryMemoryLedger::new(tiny);
+    let tiny_account =
+        tiny_ledger.account(QueryMemoryClass::ExternalRead, "refused metadata", tiny);
+    assert!(current
+        .complete_text_seed_scores_with_metadata_filters(
+            "graph",
+            &BTreeMap::new(),
+            4,
+            &tiny_account,
+            &task
+        )
+        .is_err());
+    assert_eq!(tiny_ledger.snapshot().used_bytes, 0);
 }
 
 #[test]

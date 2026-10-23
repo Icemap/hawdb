@@ -246,6 +246,7 @@ pub enum PhysicalPlan {
     TextSeedScan {
         query_parameter: String,
         top_k: usize,
+        complete: bool,
         output_external_id: bool,
         metadata_filters: BTreeMap<String, String>,
         resource_profile: crate::VectorExecutionResourceProfile,
@@ -257,7 +258,7 @@ pub enum PhysicalPlan {
         vector_plan: crate::VectorPhysicalPlan,
         resource_profile: crate::VectorExecutionResourceProfile,
     },
-    VectorIndexScan(Box<crate::VectorIndexScan>),
+    VectorIndexScan(Box<crate::VectorIndexScan<PhysicalPlan>>),
     CreateNode {
         label: String,
         properties: BTreeMap<String, Value>,

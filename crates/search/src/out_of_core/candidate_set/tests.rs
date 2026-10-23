@@ -16,7 +16,7 @@ impl Drop for Directory {
     }
 }
 
-fn with_query(
+pub(super) fn with_query(
     work: impl FnOnce(&Path, &ProjectFileDescriptors, &BuildMemory, QueryContext<'_>, &ScratchDirectory),
 ) {
     let directory = Directory(crate::test_temp_dir().join(format!(

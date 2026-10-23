@@ -252,7 +252,11 @@ fn find_node_by_id_property(
             Ok(ScanControl::Continue)
         }
     };
-    store.visit_nodes_with_allocation(label_id, &mut admit, &mut visit)?;
+    store.visit_nodes_with_allocation(
+        label_id,
+        &mut hawdb_storage::read_view::ControlledGraphReadAllocator::new(&mut admit, task_context),
+        &mut visit,
+    )?;
     Ok(matched)
 }
 
@@ -319,7 +323,14 @@ fn shortest_path_binding(
                     |bytes| crate::store::admit_graph_read(account, task_context, bytes).map(Some);
                 for node_id in path {
                     runtime_checkpoint(task_context)?;
-                    match store.node_with_allocation(*node_id, None, &mut admit)? {
+                    match store.node_with_allocation(
+                        *node_id,
+                        None,
+                        &mut hawdb_storage::read_view::ControlledGraphReadAllocator::new(
+                            &mut admit,
+                            task_context,
+                        ),
+                    )? {
                         AdmittedNodeRead::Node(input) => {
                             let (node, _allocation) = input.into_parts();
                             let value = node.properties.get(property).unwrap_or(&Value::Null);
@@ -420,6 +431,9 @@ fn visit_one_hop_relationships_selected(
             return Ok(ScanControl::Continue);
         }
         if metadata_only {
+            if let Some(task) = task_context {
+                task.charge_work(1)?;
+            }
             let mut allocation = None;
             let target =
                 store.projected_node_owned_admitted(target_id, &BTreeSet::new(), &mut |bytes| {
@@ -453,7 +467,14 @@ fn visit_one_hop_relationships_selected(
                 )
                 .map(Some)
         };
-        match store.node_with_allocation(target_id, spec.target_label_ids, &mut admit_node)? {
+        match store.node_with_allocation(
+            target_id,
+            spec.target_label_ids,
+            &mut hawdb_storage::read_view::ControlledGraphReadAllocator::new(
+                &mut admit_node,
+                task_context,
+            ),
+        )? {
             AdmittedNodeRead::Node(target) => {
                 let (target, _allocation) = target.into_parts();
                 consumer(relationship, target)
@@ -481,7 +502,10 @@ fn visit_one_hop_relationships_selected(
                 (spec.source, spec.rel_type_id, adjacency_direction),
                 filter,
                 memory,
-                &mut |bytes| memory.admit_node(bytes, 0, task_context).map(Some),
+                &mut hawdb_storage::read_view::ControlledGraphReadAllocator::new(
+                    &mut |bytes| memory.admit_node(bytes, 0, task_context).map(Some),
+                    task_context,
+                ),
                 &mut visit,
             )?;
             if let Some(report) = report {
@@ -494,7 +518,10 @@ fn visit_one_hop_relationships_selected(
                 spec.rel_type_id,
                 adjacency_direction,
                 memory,
-                &mut |bytes| memory.admit_node(bytes, 0, task_context).map(Some),
+                &mut hawdb_storage::read_view::ControlledGraphReadAllocator::new(
+                    &mut |bytes| memory.admit_node(bytes, 0, task_context).map(Some),
+                    task_context,
+                ),
                 &mut visit,
             )
         }
@@ -619,7 +646,14 @@ fn visit_bounded_expand_targets_inner(
                     .admit_node(bytes, std::mem::size_of::<usize>(), task_context)
                     .map(Some)
             };
-            match store.node_with_allocation(current, spec.target_label_ids, &mut admit_node)? {
+            match store.node_with_allocation(
+                current,
+                spec.target_label_ids,
+                &mut hawdb_storage::read_view::ControlledGraphReadAllocator::new(
+                    &mut admit_node,
+                    task_context,
+                ),
+            )? {
                 AdmittedNodeRead::Node(node) => {
                     let (node, _allocation) = node.into_parts();
                     if consumer(node, depth)? == ScanControl::Stop {
@@ -653,7 +687,10 @@ fn visit_bounded_expand_targets_inner(
             Some(rel_type_id),
             AdjacencyDirection::Outgoing,
             memory,
-            &mut |bytes| memory.admit_node(bytes, 0, task_context).map(Some),
+            &mut hawdb_storage::read_view::ControlledGraphReadAllocator::new(
+                &mut |bytes| memory.admit_node(bytes, 0, task_context).map(Some),
+                task_context,
+            ),
             &mut visit,
         )
     }
@@ -878,7 +915,10 @@ fn visit_thread_repair_nodes(
         store.visit_projected_nodes_with_allocation(
             label_id,
             properties,
-            &mut admit,
+            &mut hawdb_storage::read_view::ControlledGraphReadAllocator::new(
+                &mut admit,
+                task_context,
+            ),
             &mut |input| {
                 let (node, _allocation) = input.into_parts();
                 runtime_checkpoint(task_context)?;

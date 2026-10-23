@@ -73,9 +73,14 @@ pub(super) fn node(
     labels: Option<&[crate::schema::LabelId]>,
     account: &QueryMemoryAccount,
 ) -> Result<Option<KnowledgeReadNode>> {
-    match store.node_with_allocation(id, labels, &mut |bytes| {
-        admit_graph_read(account, None, bytes).map(Some)
-    })? {
+    match store.node_with_allocation(
+        id,
+        labels,
+        &mut hawdb_storage::read_view::ControlledGraphReadAllocator::new(
+            &mut |bytes| admit_graph_read(account, None, bytes).map(Some),
+            None,
+        ),
+    )? {
         AdmittedNodeRead::Node(node) => {
             let (node, allocation) = node.into_parts();
             Ok(Some(KnowledgeReadNode {
@@ -137,7 +142,10 @@ pub(super) fn seed_by_external_id(
         "id",
         values,
         &properties,
-        &mut |bytes| admit_graph_read(account, None, bytes),
+        &mut hawdb_storage::read_view::GraphReadAllocator::new(
+            &mut |bytes| admit_graph_read(account, None, bytes),
+            None,
+        ),
         &mut |projected| {
             // Keep the projected read's permit while admitting full ownership.
             if let Some(candidate) = node(store, projected.id, Some(&[label_id]), account)?
@@ -171,9 +179,13 @@ pub(super) fn relationship(
     id: RelId,
     account: &QueryMemoryAccount,
 ) -> Result<Option<KnowledgeReadRelationship>> {
-    match store.relationship_with_allocation(id, &mut |bytes| {
-        admit_graph_read(account, None, bytes).map(Some)
-    })? {
+    match store.relationship_with_allocation(
+        id,
+        &mut hawdb_storage::read_view::ControlledGraphReadAllocator::new(
+            &mut |bytes| admit_graph_read(account, None, bytes).map(Some),
+            None,
+        ),
+    )? {
         hawdb_storage::read_view::AdmittedRelationshipRead::Relationship(relationship) => {
             let (relationship, allocation) = relationship.into_parts();
             Ok(Some(KnowledgeReadRelationship {
@@ -212,7 +224,10 @@ pub(super) fn visit_expansion_edges(
                 budget_bytes,
                 account: Some(account),
             },
-            &mut |bytes| admit_graph_read(account, None, bytes).map(Some),
+            &mut hawdb_storage::read_view::ControlledGraphReadAllocator::new(
+                &mut |bytes| admit_graph_read(account, None, bytes).map(Some),
+                None,
+            ),
             &mut |relationship| {
                 let (relationship, allocation) = relationship.into_parts();
                 let next_node = match direction {

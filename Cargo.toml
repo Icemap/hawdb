@@ -26,7 +26,6 @@ hawdb-ddl = { path = "crates/ddl", version = "0.12.0" }
 hawdb-evidence = { path = "crates/evidence", version = "0.12.0" }
 hawdb-explain = { path = "crates/explain", version = "0.12.0" }
 hawdb-executor = { path = "crates/executor", version = "0.12.0" }
-hawdb-expression = { path = "crates/expression", version = "0.12.0" }
 hawdb-fuzz-contracts = { path = "crates/fuzz-contracts", version = "0.12.0" }
 hawdb-integrity = { path = "crates/integrity", version = "0.12.0" }
 hawdb-optimizer = { path = "crates/optimizer", version = "0.12.0" }
@@ -305,4 +304,12 @@ harness = false
 
 [[bench]]
 name = "mixed_point_growth"
+harness = false
+
+[[bench]]
+name = "grouped_evidence"
+harness = false
+
+[[bench]]
+name = "grouped_evidence_native"
 harness = false

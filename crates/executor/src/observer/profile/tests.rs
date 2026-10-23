@@ -142,6 +142,8 @@ fn initial_profile(max_rows: Option<usize>) -> ReadExecutionProfile<ScanPruningR
         scan_pruning_reports: Vec::new(),
         vector_execution_reports: Vec::new(),
         graph_expansion_reports: Vec::new(),
+        text_seed_execution_reports: Vec::new(),
+        grouped_evidence_reports: Vec::new(),
         blocking_operator_memory_reports: Vec::new(),
         pipeline_memory_report: PipelineMemoryReport::default(),
     }

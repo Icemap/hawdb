@@ -633,7 +633,10 @@ pub(crate) fn adjacency_exists_with_memory(
             Some(rel_type_id),
             adjacency_direction,
             memory,
-            &mut |bytes| memory.admit_node(bytes, 0, task_context).map(Some),
+            &mut hawdb_storage::read_view::ControlledGraphReadAllocator::new(
+                &mut |bytes| memory.admit_node(bytes, 0, task_context).map(Some),
+                task_context,
+            ),
             &mut visit,
         )
     };
@@ -694,7 +697,10 @@ pub fn stream_node_projection_scan_batches(
     let property_filter = spec
         .predicate
         .and_then(|predicate| property_filter_from_predicate(predicate).ok());
-    let mut resident_scan = if spec.access.is_label_scan()
+    let mut resident_scan = if !context
+        .task_context
+        .is_some_and(RuntimeTaskContext::has_work_limit)
+        && spec.access.is_label_scan()
         && !context.store.is_out_of_core()
         && let Some(label_id) = exact_label
         && context
@@ -854,7 +860,10 @@ pub fn stream_node_projection_scan_batches(
         };
     let indexed_nodes = match (exact_label_id, spec.access) {
         (Some(label_id), NodeProjectionAccess::PropertyValues { property, values })
-            if !context.store.is_out_of_core()
+            if !context
+                .task_context
+                .is_some_and(RuntimeTaskContext::has_work_limit)
+                && !context.store.is_out_of_core()
                 && context
                     .catalog
                     .has_scalar_property_index(label_id, property) =>
@@ -895,7 +904,10 @@ pub fn stream_node_projection_scan_batches(
             (_, NodeProjectionAccess::LabelScan) => context.store.visit_projected_nodes_admitted(
                 exact_label_id,
                 &required_properties,
-                &mut admit,
+                &mut hawdb_storage::read_view::GraphReadAllocator::new(
+                    &mut admit,
+                    context.task_context,
+                ),
                 &mut visit,
             )?,
             (Some(label_id), NodeProjectionAccess::PropertyUnion { branches }) => {
@@ -913,7 +925,10 @@ pub fn stream_node_projection_scan_batches(
                         &branch.property,
                         &branch.values,
                         &required_properties,
-                        &mut admit,
+                        &mut hawdb_storage::read_view::GraphReadAllocator::new(
+                            &mut admit,
+                            context.task_context,
+                        ),
                         &mut |node| {
                             if !seen.try_insert(node.id)? {
                                 return Ok(ScanControl::Continue);
@@ -931,7 +946,10 @@ pub fn stream_node_projection_scan_batches(
                 label_id,
                 access,
                 &required_properties,
-                &mut admit,
+                &mut hawdb_storage::read_view::GraphReadAllocator::new(
+                    &mut admit,
+                    context.task_context,
+                ),
                 &mut visit,
             )?,
             (None, _) => ScanControl::Continue,
@@ -1378,12 +1396,23 @@ pub(crate) fn execute_node_column_lookup_owned(
                     values: vec![expected.clone()],
                 };
                 context.store.visit_nodes_by_access_with_allocation(
-                    label_id, &access, &mut admit, &mut visit,
+                    label_id,
+                    &access,
+                    &mut hawdb_storage::read_view::ControlledGraphReadAllocator::new(
+                        &mut admit,
+                        context.task_context,
+                    ),
+                    &mut visit,
                 )?;
             } else {
-                context
-                    .store
-                    .visit_nodes_with_allocation(None, &mut admit, &mut visit)?;
+                context.store.visit_nodes_with_allocation(
+                    None,
+                    &mut hawdb_storage::read_view::ControlledGraphReadAllocator::new(
+                        &mut admit,
+                        context.task_context,
+                    ),
+                    &mut visit,
+                )?;
             }
         }
         if spec.optional && !matched && !context.execution_limit.is_reached(output.len()) {
@@ -1632,7 +1661,8 @@ mod tests {
             if !crate::predicate::node_matches_label_pattern(&node, label_ids) {
                 return Ok(AdmittedNodeRead::Missing);
             }
-            let Some(allocation) = admit(hawdb_core::ids::node_allocation_bytes(&node))? else {
+            let Some(allocation) = admit.reserve(hawdb_core::ids::node_allocation_bytes(&node))?
+            else {
                 return Ok(AdmittedNodeRead::Stopped);
             };
             AdmittedNodeRecord::clone_admitted(&node, allocation).map(AdmittedNodeRead::Node)
@@ -1776,7 +1806,7 @@ mod tests {
             ) -> Result<ScanControl>,
         ) -> Result<ScanControl> {
             let _ = memory;
-            let Some(_source) = admit(2048)? else {
+            let Some(_source) = admit.reserve(2048)? else {
                 return Ok(ScanControl::Stop);
             };
             self.visit_adjacent_relationships_owned(
@@ -1784,9 +1814,9 @@ mod tests {
                 rel_type,
                 direction,
                 &mut |relationship| {
-                    let Some(allocation) = admit(hawdb_core::ids::relationship_allocation_bytes(
-                        &relationship,
-                    ))?
+                    let Some(allocation) = admit.reserve(
+                        hawdb_core::ids::relationship_allocation_bytes(&relationship),
+                    )?
                     else {
                         return Ok(ScanControl::Stop);
                     };

@@ -172,9 +172,13 @@ pub(super) fn stream_optional_relationship_count_sum_batches(
     let mut admit = |bytes| {
         crate::store::admit_graph_read(&count_account, context.task_context, bytes).map(Some)
     };
-    context
-        .store
-        .visit_nodes_with_allocation(None, &mut admit, &mut |input| {
+    context.store.visit_nodes_with_allocation(
+        None,
+        &mut hawdb_storage::read_view::ControlledGraphReadAllocator::new(
+            &mut admit,
+            context.task_context,
+        ),
+        &mut |input| {
             let (node, _allocation) = input.into_parts();
             nodes_since_checkpoint += 1;
             if nodes_since_checkpoint == context.memory.batch_rows.get() {
@@ -202,7 +206,8 @@ pub(super) fn stream_optional_relationship_count_sum_batches(
                 total = total.saturating_add(count);
             }
             Ok(ScanControl::Continue)
-        })?;
+        },
+    )?;
     emit(vec![Binding {
         values: BTreeMap::from([(output.to_owned(), Value::Int(total as i64))]),
         nodes: BTreeMap::new(),

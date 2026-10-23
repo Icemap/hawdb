@@ -415,12 +415,17 @@ fn marker_use_in_logical_plan(plan: &LogicalPlan, name: &str) -> MarkerUse {
             }
             marker_use
         }
-        LogicalPlan::VectorIndexSearch(scan) => scan
-            .node_visibility_predicate
-            .as_ref()
-            .map_or(MarkerUse::None, |predicate| {
-                marker_use_in_predicate(predicate, name)
-            }),
+        LogicalPlan::VectorIndexSearch(scan) => {
+            let visibility = scan
+                .node_visibility_predicate
+                .as_ref()
+                .map_or(MarkerUse::None, |predicate| {
+                    marker_use_in_predicate(predicate, name)
+                });
+            visibility.combine(scan.input.as_deref().map_or(MarkerUse::None, |input| {
+                marker_use_in_logical_plan(input, name)
+            }))
+        }
         LogicalPlan::GraphAlgorithmOutput(output) => output
             .node_visibility_predicate
             .as_ref()
@@ -612,6 +617,9 @@ fn bind_physical_plan(plan: &mut PhysicalPlan, parameters: &BTreeMap<String, Val
     match plan {
         PhysicalPlan::VectorIndexScan(scan) => {
             bind_optional_predicate(&mut scan.node_visibility_predicate, parameters)?;
+            if let Some(input) = &mut scan.input {
+                bind_physical_plan(input, parameters)?;
+            }
         }
         PhysicalPlan::GraphAlgorithmOutput(output) => {
             bind_optional_predicate(&mut output.node_visibility_predicate, parameters)?
@@ -852,7 +860,10 @@ fn bind_composite_range_seek(
 fn bind_logical_plan(plan: &mut LogicalPlan, parameters: &BTreeMap<String, Value>) -> Result<()> {
     match plan {
         LogicalPlan::VectorIndexSearch(scan) => {
-            bind_optional_predicate(&mut scan.node_visibility_predicate, parameters)?
+            bind_optional_predicate(&mut scan.node_visibility_predicate, parameters)?;
+            if let Some(input) = &mut scan.input {
+                bind_logical_plan(input, parameters)?;
+            }
         }
         LogicalPlan::GraphAlgorithmOutput(output) => {
             bind_optional_predicate(&mut output.node_visibility_predicate, parameters)?

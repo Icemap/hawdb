@@ -485,6 +485,7 @@ mod tests {
                         unreachable!()
                     };
                     **input = PhysicalPlan::TextSeedScan {
+                        complete: false,
                         query_parameter: "text".into(),
                         top_k: 1,
                         output_external_id: true,

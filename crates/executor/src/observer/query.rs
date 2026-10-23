@@ -27,6 +27,8 @@ pub struct QueryExecutionReports {
     pub scan_pruning: Vec<ScanPruningReport>,
     pub vector_execution: Vec<crate::VectorExecutionReport>,
     pub graph_expansion: Vec<crate::GraphExpansionExecutionReport>,
+    pub text_seed_execution: Vec<crate::TextSeedExecutionReport>,
+    pub grouped_evidence: Vec<crate::GroupedEvidenceExecutionReport>,
     pub blocking_memory: Vec<crate::BlockingOperatorMemoryReport>,
     pub pipeline_memory: crate::PipelineMemoryReport,
 }
@@ -37,6 +39,7 @@ pub struct QueryExecutionObserver {
     reports: RefCell<QueryExecutionReports>,
     seed_graph_input: Option<hawdb_plan_cypher::ScoringSeedGraphInput>,
     operator_ids: BTreeMap<usize, PhysicalOperatorId>,
+    grouped_input_ids: BTreeMap<usize, PhysicalOperatorId>,
 }
 
 impl Default for QueryExecutionObserver {
@@ -45,6 +48,7 @@ impl Default for QueryExecutionObserver {
             reports: RefCell::new(QueryExecutionReports::default()),
             seed_graph_input: None,
             operator_ids: BTreeMap::new(),
+            grouped_input_ids: BTreeMap::new(),
         }
     }
 }
@@ -53,9 +57,41 @@ impl QueryExecutionObserver {
     pub fn new(plan: &PhysicalPlan) -> Self {
         let mut reports = QueryExecutionReports::default();
         let mut operator_ids = BTreeMap::new();
+        let mut grouped_input_ids = BTreeMap::new();
         visit_plan_with_ids(plan, &mut |operator_id, operator| {
             let previous = operator_ids.insert(plan_address(operator), operator_id);
             debug_assert!(previous.is_none());
+            match operator {
+                PhysicalPlan::TextSeedScan {
+                    complete, top_k, ..
+                } => {
+                    reports
+                        .text_seed_execution
+                        .push(crate::TextSeedExecutionReport {
+                            operator_id: Some(operator_id),
+                            complete_requested: *complete,
+                            candidate_limit: *top_k,
+                            ..Default::default()
+                        });
+                }
+                PhysicalPlan::AggregateExec { items, input, .. }
+                    if items.iter().any(|item| {
+                        matches!(
+                            item.target,
+                            hawdb_plan_cypher::AggregateTarget::Ranked { .. }
+                        )
+                    }) =>
+                {
+                    grouped_input_ids.insert(plan_address(input), operator_id);
+                    reports
+                        .grouped_evidence
+                        .push(crate::GroupedEvidenceExecutionReport {
+                            operator_id: Some(operator_id),
+                            ..Default::default()
+                        });
+                }
+                _ => {}
+            }
             reports
                 .operator_cardinality
                 .push(crate::OperatorCardinalityProfile {
@@ -76,6 +112,42 @@ impl QueryExecutionObserver {
                 _ => None,
             },
             operator_ids,
+            grouped_input_ids,
+        }
+    }
+
+    pub(crate) fn operator_id(&self, plan: &PhysicalPlan) -> Option<PhysicalOperatorId> {
+        self.operator_ids.get(&plan_address(plan)).copied()
+    }
+
+    pub(crate) fn record_text_seed_execution(&self, report: crate::TextSeedExecutionReport) {
+        let mut reports = self.reports.borrow_mut();
+        if let Some(current) = reports
+            .text_seed_execution
+            .iter_mut()
+            .find(|current| current.operator_id == report.operator_id)
+        {
+            *current = report;
+        } else {
+            reports.text_seed_execution.push(report);
+        }
+    }
+
+    fn record_grouped_evidence(
+        &self,
+        input: &PhysicalPlan,
+        mut report: crate::GroupedEvidenceExecutionReport,
+    ) {
+        report.operator_id = self.grouped_input_ids.get(&plan_address(input)).copied();
+        let mut reports = self.reports.borrow_mut();
+        if let Some(current) = reports
+            .grouped_evidence
+            .iter_mut()
+            .find(|current| current.operator_id == report.operator_id)
+        {
+            *current = report;
+        } else {
+            reports.grouped_evidence.push(report);
         }
     }
 
@@ -200,6 +272,14 @@ impl ExecutionObserver for QueryExecutionObserver {
 
     fn seed_graph_scoring_input(&self) -> Option<&hawdb_plan_cypher::ScoringSeedGraphInput> {
         self.seed_graph_input.as_ref()
+    }
+
+    fn record_grouped_evidence_report(
+        &self,
+        input: &PhysicalPlan,
+        report: crate::GroupedEvidenceExecutionReport,
+    ) {
+        self.record_grouped_evidence(input, report);
     }
 
     fn record_borrowed_node_projection_rows(&self, rows: usize) {

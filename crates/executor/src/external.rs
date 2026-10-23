@@ -119,6 +119,19 @@ impl VectorSeedExecutionOutput {
 }
 
 pub trait ExternalReadOperator {
+    /// Caller admits MAX_VECTOR_INDEX_DESCRIPTOR_BYTES before requesting a copy.
+    fn vector_index_definition(
+        &mut self,
+        _index: &str,
+    ) -> Result<(
+        hawdb_core::VectorIndexDescriptor,
+        hawdb_core::VectorIndexReadIdentity,
+    )> {
+        Err(HawDBError::Execution(
+            "vector eligibility requires a bound index definition".into(),
+        ))
+    }
+
     fn execute_vector_index(
         &mut self,
         request: VectorIndexExecutionRequest<'_>,
@@ -126,6 +139,16 @@ pub trait ExternalReadOperator {
         request.resources.checkpoint()?;
         Err(HawDBError::Execution(
             "vector index search requires a bound canonical/index read domain".into(),
+        ))
+    }
+
+    fn execute_complete_text_seed(
+        &mut self,
+        request: TextSeedExecutionRequest<'_>,
+    ) -> Result<TextSeedExecutionOutput> {
+        request.resources.checkpoint()?;
+        Err(HawDBError::Execution(
+            "complete text search requires a provider with source-exhaustion support".into(),
         ))
     }
 

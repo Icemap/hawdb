@@ -78,12 +78,13 @@ impl Drop for OwnedRoot {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 enum OutputMode {
     Healthy,
     ForeignAccount,
     FailedBuilder,
     CancelAfterRead,
+    MissingCompleteReceipt,
 }
 
 struct TextSeeds {
@@ -159,6 +160,56 @@ impl ExternalReadOperator for TextSeeds {
         _request: VectorSeedExecutionRequest<'_>,
     ) -> Result<VectorSeedExecutionOutput> {
         panic!("text query dispatched to the vector producer")
+    }
+
+    fn execute_complete_text_seed(
+        &mut self,
+        request: TextSeedExecutionRequest<'_>,
+    ) -> Result<TextSeedExecutionOutput> {
+        request.resources.checkpoint()?;
+        assert!(
+            request.metadata_filters.is_empty(),
+            "canonical filters changed the complete source domain"
+        );
+        self.calls += 1;
+        self.admitted_rows.push(request.resources.result.max_rows);
+        let fallback = RuntimeTaskContext::default();
+        let task = request.resources.task_context.unwrap_or(&fallback);
+        let scored = self
+            .reader
+            .complete_text_seed_scores_with_metadata_filters(
+                request.query_text,
+                request.metadata_filters,
+                request.resources.result.max_rows,
+                request.working_account,
+                task,
+            )?;
+        let foreign_ledger = QueryMemoryLedger::new(request.resources.result.max_memory_bytes);
+        let foreign = foreign_ledger.account(
+            QueryMemoryClass::ExternalRead,
+            "foreign complete output",
+            request.resources.result.max_memory_bytes,
+        );
+        let account = if matches!(self.mode, OutputMode::ForeignAccount) {
+            &foreign
+        } else {
+            request.result_account
+        };
+        let mut output = TextSeedExecutionOutput::new_complete(account, request.resources.result)?;
+        for (id, score) in scored.scores() {
+            output.push(id, Some(&self.canonical_ids[id]), *score)?;
+        }
+        if matches!(self.mode, OutputMode::FailedBuilder) {
+            assert!(output.push("invalid", Some("a"), f64::NAN).is_err());
+        }
+        if matches!(self.mode, OutputMode::CancelAfterRead) {
+            task.cancellation().cancel();
+        }
+        if matches!(self.mode, OutputMode::MissingCompleteReceipt) {
+            Ok(output)
+        } else {
+            output.finish_complete()
+        }
     }
 
     fn execute_text_seed(
@@ -858,4 +909,150 @@ fn cypher_lookup_visibility_preserves_optional_nulls_and_rebinds_cached_actor_sc
     assert!(rows
         .iter()
         .all(|row| matches!(&row["id"], Value::String(id) if id == "a" || id == "b")));
+}
+
+#[test]
+fn complete_text_search_exhausts_before_canonical_filter_and_final_limit() {
+    let database = fixture();
+    let mut seeds = TextSeeds::new();
+    let query = "CALL text_search($text, complete := true, maxCandidates := $window) YIELD id AS document_id, score MATCH (seed:Memory) WHERE seed.id = 'a' RETURN seed.id AS id, score LIMIT 1";
+    for cap in [1, 2, 1_000_000] {
+        let parameters = params("graph", cap);
+        let mut rows = Vec::new();
+        let result = database
+            .begin_read_transaction()
+            .unwrap()
+            .query_request_streaming_with_external(
+                QueryRequest::new(query).with_params(&parameters),
+                &mut seeds,
+                |row| {
+                    rows.push(row);
+                    Ok(())
+                },
+            );
+        assert_eq!(seeds.admitted_rows.last(), Some(&(cap as usize)));
+        if cap == 1 {
+            assert!(
+                matches!(result, Err(HawDBError::ResourceBudgetExceeded(cause)) if cause.budget_option == "text_search.maxCandidates")
+            );
+            assert!(rows.is_empty());
+        } else {
+            let report = result.unwrap();
+            let text = &report.execution_profile.text_seed_execution_reports;
+            assert_eq!(text.len(), 1);
+            assert_eq!(text[0].status(), "complete");
+            assert_eq!(text[0].candidate_count, 2);
+            assert_eq!(text[0].candidate_limit, cap as usize);
+            assert_eq!(text[0].source, None);
+            assert_eq!(rows.len(), 1);
+            assert_eq!(rows[0]["id"], Value::String("a".into()));
+            assert_eq!(
+                report
+                    .execution_profile
+                    .pipeline_memory_report
+                    .query_memory_completion_bytes,
+                0
+            );
+        }
+    }
+}
+
+#[test]
+fn complete_text_search_refuses_missing_receipts_and_wrong_resource_owners() {
+    let database = fixture();
+    let query = "CALL text_search($text, complete := true, maxCandidates := 2) YIELD id, score RETURN id, score";
+    let parameters = params("graph", 2);
+    for mode in [
+        OutputMode::MissingCompleteReceipt,
+        OutputMode::ForeignAccount,
+        OutputMode::FailedBuilder,
+        OutputMode::CancelAfterRead,
+    ] {
+        let mut seeds = TextSeeds::new();
+        seeds.mode = mode;
+        let mut delivered = 0;
+        let task = RuntimeTaskContext::default();
+        let result = database
+            .begin_read_transaction()
+            .unwrap()
+            .query_request_streaming_with_external(
+                QueryRequest::new(query)
+                    .with_params(&parameters)
+                    .with_task_context(&task),
+                &mut seeds,
+                |_| {
+                    delivered += 1;
+                    Ok(())
+                },
+            );
+        assert!(result.is_err(), "mode {mode:?}: {result:?}");
+        assert_eq!(delivered, 0);
+        seeds.mode = OutputMode::Healthy;
+        database
+            .begin_read_transaction()
+            .unwrap()
+            .query_request_streaming_with_external(
+                QueryRequest::new(query).with_params(&parameters),
+                &mut seeds,
+                |_| Ok(()),
+            )
+            .unwrap();
+    }
+}
+
+#[test]
+fn complete_text_search_checks_empty_domains_and_rejects_ambiguous_limits() {
+    let database = fixture();
+    let mut seeds = TextSeeds::new();
+    let parameters = params("absent", 0);
+    let query = "CALL text_search($text, complete := true, maxCandidates := 0) YIELD id RETURN id";
+    database
+        .begin_read_transaction()
+        .unwrap()
+        .query_request_streaming_with_external(
+            QueryRequest::new(query).with_params(&parameters),
+            &mut seeds,
+            |_| panic!("empty domain"),
+        )
+        .unwrap();
+    assert_eq!(seeds.calls, 1);
+    for options in [
+        "complete := true",
+        "complete := true, topK := 2, maxCandidates := 2",
+        "maxCandidates := 2",
+        "complete := 1, maxCandidates := 2",
+        "complete := true, maxCandidates := -1",
+    ] {
+        let query = format!("CALL text_search($text, {options}) YIELD id RETURN id");
+        let before = seeds.calls;
+        assert!(database
+            .begin_read_transaction()
+            .unwrap()
+            .query_request_streaming_with_external(
+                QueryRequest::new(&query).with_params(&parameters),
+                &mut seeds,
+                |_| panic!("invalid binding"),
+            )
+            .is_err());
+        assert_eq!(seeds.calls, before);
+    }
+    let parameters = params("graph", 1);
+    let query = "CALL text_search($text, complete := true, maxCandidates := $window) YIELD id RETURN id LIMIT 0";
+    let before = seeds.calls;
+    let report = database
+        .begin_read_transaction()
+        .unwrap()
+        .query_request_streaming_with_external(
+            QueryRequest::new(query).with_params(&parameters),
+            &mut seeds,
+            |_| panic!("LIMIT 0"),
+        )
+        .unwrap();
+    assert_eq!(seeds.calls, before);
+    let text = &report.execution_profile.text_seed_execution_reports;
+    // The optimizer may erase the producer entirely for a constant zero LIMIT.
+    assert!(text.iter().all(|report| report.status() == "skipped"
+        && !report.executed
+        && !report.source_exhausted
+        && report.source.is_none()));
 }

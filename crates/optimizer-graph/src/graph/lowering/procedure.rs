@@ -21,7 +21,6 @@ pub(super) fn lower(
     optimizer_context: &OptimizerContext,
 ) -> Option<PhysicalPlan> {
     match logical {
-        LogicalPlan::VectorIndexSearch(scan) => Some(PhysicalPlan::VectorIndexScan(scan.clone())),
         LogicalPlan::ProjectGraph {
             name,
             node_labels,
@@ -69,12 +68,14 @@ pub(super) fn lower(
         LogicalPlan::TextSeed {
             query_parameter,
             top_k,
+            complete,
             output_external_id,
         } => {
             let hints = optimizer_context.resource_hints();
             Some(PhysicalPlan::TextSeedScan {
                 query_parameter: query_parameter.clone(),
                 top_k: *top_k,
+                complete: *complete,
                 output_external_id: *output_external_id,
                 metadata_filters: Default::default(),
                 resource_profile: hawdb_plan_cypher::VectorExecutionResourceProfile {

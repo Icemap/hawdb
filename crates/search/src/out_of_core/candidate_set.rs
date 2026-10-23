@@ -12,20 +12,37 @@ use hawdb_executor::QueryMemoryLease;
 
 mod spill_file;
 use spill_file::SpillFile;
+mod eligibility;
+use eligibility::EligibleMapping;
 
 #[cfg(test)]
 mod tests;
 
+pub(super) struct CandidateFilter<'a> {
+    pub(super) predicates: &'a hawdb_optimizer_predicate::SearchPredicateSet,
+    pub(super) eligible: Option<&'a hawdb_executor::vector_eligibility::VectorEligibleDomain<'a>>,
+}
+
 impl SearchOutOfCoreReader {
     pub(super) fn build_candidate_set<'a>(
         &self,
-        predicates: &hawdb_optimizer_predicate::SearchPredicateSet,
+        filter: CandidateFilter<'_>,
         report: &mut SearchPredicatePushdownReport,
         metrics: &mut SearchOutOfCoreMetrics,
         context: Option<QueryContext<'a>>,
         scratch: Option<&'a ScratchDirectory>,
         output: super::query_output::Memory<'_>,
     ) -> Result<CandidateSet<'a>> {
+        let predicates = filter.predicates;
+        let mut eligibility = filter
+            .eligible
+            .map(|domain| {
+                let context = context.ok_or_else(|| {
+                    HawDBError::Execution("eligible mapping requires admitted query memory".into())
+                })?;
+                EligibleMapping::new(domain, context.memory)
+            })
+            .transpose()?;
         report.segment_count = self
             .segments
             .iter()
@@ -35,7 +52,7 @@ impl SearchOutOfCoreReader {
         report.persisted_segment_descriptor_used = true;
         let mut field_pruning = super::query_output::report::Fields::new(predicates, context)?;
 
-        if predicates.is_empty() && self.visibility.is_empty() {
+        if predicates.is_empty() && self.visibility.is_empty() && eligibility.is_none() {
             report.field_summaries = field_pruning.into_reports(output)?;
             return Ok(CandidateSet::All(self.manifest.document_count));
         }
@@ -98,6 +115,9 @@ impl SearchOutOfCoreReader {
                 let mut encoded = Vec::new();
                 let mut block_cardinality = 0usize;
                 let mut append = |document: &SearchMetadataDocument| {
+                    if let Some(eligibility) = &eligibility {
+                        eligibility.charge_visit()?;
+                    }
                     if !self
                         .visibility
                         .is_visible(artifact.content_segment_id, &document.id)
@@ -109,6 +129,11 @@ impl SearchOutOfCoreReader {
                         &document.metadata,
                         predicates,
                     ) {
+                        return Ok(());
+                    }
+                    if let Some(eligibility) = &mut eligibility
+                        && !eligibility.admit(document)?
+                    {
                         return Ok(());
                     }
                     let id_len = u32::try_from(document.id.len()).map_err(|_| {
@@ -191,6 +216,9 @@ impl SearchOutOfCoreReader {
                 offset = offset.saturating_add(encoded.len() as u64);
                 cardinality = cardinality.saturating_add(block_cardinality);
             }
+        }
+        if let Some(eligibility) = eligibility {
+            eligibility.finish()?;
         }
         file.sync_all()?;
         metrics.candidate_spill_bytes = offset.saturating_sub(CANDIDATE_FILE_HEADER.len() as u64);

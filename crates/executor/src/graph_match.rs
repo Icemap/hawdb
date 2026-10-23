@@ -217,9 +217,14 @@ impl MatchRuntime<'_> {
                         )
                         .map(Some)
                     };
-                    let AdmittedNodeRead::Node(node) =
-                        self.store
-                            .node_with_allocation(NodeId(id), None, &mut admit_node)?
+                    let AdmittedNodeRead::Node(node) = self.store.node_with_allocation(
+                        NodeId(id),
+                        None,
+                        &mut hawdb_storage::read_view::ControlledGraphReadAllocator::new(
+                            &mut admit_node,
+                            self.context.task_context,
+                        ),
+                    )?
                     else {
                         return Err(HawDBError::Execution(
                             "bound node disappeared during MATCH".to_string(),
@@ -238,16 +243,19 @@ impl MatchRuntime<'_> {
                             None,
                             AdjacencyDirection::Outgoing,
                             self.adjacency_memory(),
-                            &mut |bytes| {
-                                admit_graph_read(
-                                    self.source_account,
-                                    self.context.task_context,
-                                    bytes
-                                        .saturating_add(import.variable.len())
-                                        .saturating_add(1024),
-                                )
-                                .map(Some)
-                            },
+                            &mut hawdb_storage::read_view::ControlledGraphReadAllocator::new(
+                                &mut |bytes| {
+                                    admit_graph_read(
+                                        self.source_account,
+                                        self.context.task_context,
+                                        bytes
+                                            .saturating_add(import.variable.len())
+                                            .saturating_add(1024),
+                                    )
+                                    .map(Some)
+                                },
+                                self.context.task_context,
+                            ),
                             &mut |input| {
                                 let (relationship, allocation) = input.into_parts();
                                 runtime_checkpoint(self.context.task_context)?;
@@ -319,16 +327,19 @@ impl MatchRuntime<'_> {
                 });
                 self.store.visit_nodes_with_allocation(
                     label,
-                    &mut |bytes| {
-                        crate::store::admit_graph_read(
-                            self.source_account,
-                            self.context.task_context,
-                            bytes
-                                .saturating_add(binding_memory_bytes(row))
-                                .saturating_add(1024 + pattern.variable.len()),
-                        )
-                        .map(Some)
-                    },
+                    &mut hawdb_storage::read_view::ControlledGraphReadAllocator::new(
+                        &mut |bytes| {
+                            crate::store::admit_graph_read(
+                                self.source_account,
+                                self.context.task_context,
+                                bytes
+                                    .saturating_add(binding_memory_bytes(row))
+                                    .saturating_add(1024 + pattern.variable.len()),
+                            )
+                            .map(Some)
+                        },
+                        self.context.task_context,
+                    ),
                     &mut |input| {
                         let (node, _allocation) = input.into_parts();
                         runtime_checkpoint(self.context.task_context)?;

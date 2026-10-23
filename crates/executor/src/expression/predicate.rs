@@ -64,6 +64,9 @@ pub(crate) fn evaluate_predicate_with_context(
     task_context: Option<&RuntimeTaskContext>,
 ) -> Result<bool> {
     crate::pipeline::runtime_checkpoint(task_context)?;
+    if let Some(task) = task_context {
+        task.charge_work(1)?;
+    }
     let context = PredicateEvaluationContext {
         catalog,
         store,

@@ -2055,26 +2055,64 @@ struct SearchProjectionExternalReadOperator<'a> {
     vector_seed_execution_count: usize,
 }
 
-impl crate::executor::ExternalReadOperator for SearchProjectionExternalReadOperator<'_> {
-    fn execute_text_seed(
-        &mut self,
+impl SearchProjectionExternalReadOperator<'_> {
+    fn execute_text_seed_mode(
+        &self,
         request: crate::executor::TextSeedExecutionRequest<'_>,
+        complete: bool,
     ) -> Result<crate::executor::TextSeedExecutionOutput> {
         request.resources.checkpoint()?;
-        let mut output = crate::executor::TextSeedExecutionOutput::new(
-            request.result_account,
-            request.resources.result,
-        )?;
+        let mut output = if complete {
+            crate::executor::TextSeedExecutionOutput::new_complete(
+                request.result_account,
+                request.resources.result,
+            )
+        } else {
+            crate::executor::TextSeedExecutionOutput::new(
+                request.result_account,
+                request.resources.result,
+            )
+        }?;
         if let (Some(projection), None) = (self.projection, self.out_of_core_projection) {
             let default_task = RuntimeTaskContext::default();
             let task = request.resources.task_context.unwrap_or(&default_task);
-            let scored = projection.index().text_seed_scores_with_context(
-                request.query_text,
-                request.metadata_filters,
-                request.resources.result.max_rows,
-                request.working_account,
-                task,
-            )?;
+            let scored = if complete {
+                projection.index().complete_text_seed_scores_with_context(
+                    request.query_text,
+                    request.metadata_filters,
+                    request.resources.result.max_rows,
+                    request.working_account,
+                    task,
+                )
+            } else {
+                projection.index().text_seed_scores_with_context(
+                    request.query_text,
+                    request.metadata_filters,
+                    request.resources.result.max_rows,
+                    request.working_account,
+                    task,
+                )
+            }?;
+            output = output.with_source_report(crate::executor::TextSeedSourceReport {
+                corpus_documents: Some(scored.corpus_document_count),
+                matching_documents: Some(scored.matching_document_count),
+                ..Default::default()
+            });
+            if complete {
+                for (id, score) in scored.scores() {
+                    request.resources.checkpoint()?;
+                    let document = projection.index().document(id).ok_or_else(|| {
+                        HawDBError::Storage(format!("text seed document {id} is missing"))
+                    })?;
+                    output.push(
+                        id,
+                        document.metadata.get("external_id").map(String::as_str),
+                        *score,
+                    )?;
+                }
+                request.resources.checkpoint()?;
+                return output.finish_complete();
+            }
             let ranked_bytes = scored
                 .scores()
                 .len()
@@ -2103,13 +2141,42 @@ impl crate::executor::ExternalReadOperator for SearchProjectionExternalReadOpera
         if let (None, Some(projection)) = (self.projection, self.out_of_core_projection) {
             let default_task = RuntimeTaskContext::default();
             let task = request.resources.task_context.unwrap_or(&default_task);
-            let scored = projection.reader().text_seed_scores_with_metadata_filters(
-                request.query_text,
-                request.metadata_filters,
-                request.resources.result.max_rows,
-                request.working_account,
-                task,
-            )?;
+            let scored = if complete {
+                projection
+                    .reader()
+                    .complete_text_seed_scores_with_metadata_filters(
+                        request.query_text,
+                        request.metadata_filters,
+                        request.resources.result.max_rows,
+                        request.working_account,
+                        task,
+                    )
+            } else {
+                projection.reader().text_seed_scores_with_metadata_filters(
+                    request.query_text,
+                    request.metadata_filters,
+                    request.resources.result.max_rows,
+                    request.working_account,
+                    task,
+                )
+            }?;
+            output = output.with_source_report(crate::executor::TextSeedSourceReport {
+                generation: Some(scored.report.generation),
+                source_commit_epoch: scored.report.source_graph_commit_epoch,
+                corpus_documents: Some(scored.report.corpus_document_count),
+                matching_documents: Some(scored.report.matching_document_count),
+                postings_visited: Some(scored.report.postings_visited),
+                bytes_read: Some(scored.report.bytes_read),
+                document_bytes_read: Some(scored.report.document_bytes_read),
+            });
+            if complete {
+                for (id, score) in scored.scores() {
+                    request.resources.checkpoint()?;
+                    output.push(id, scored.external_id(id), *score)?;
+                }
+                request.resources.checkpoint()?;
+                return output.finish_complete();
+            }
             let ranked_bytes = scored
                 .scores()
                 .len()
@@ -2134,6 +2201,22 @@ impl crate::executor::ExternalReadOperator for SearchProjectionExternalReadOpera
             ));
         }
         Err(missing_search_projection_error())
+    }
+}
+
+impl crate::executor::ExternalReadOperator for SearchProjectionExternalReadOperator<'_> {
+    fn execute_complete_text_seed(
+        &mut self,
+        request: crate::executor::TextSeedExecutionRequest<'_>,
+    ) -> Result<crate::executor::TextSeedExecutionOutput> {
+        self.execute_text_seed_mode(request, true)
+    }
+
+    fn execute_text_seed(
+        &mut self,
+        request: crate::executor::TextSeedExecutionRequest<'_>,
+    ) -> Result<crate::executor::TextSeedExecutionOutput> {
+        self.execute_text_seed_mode(request, false)
     }
 
     fn execute_vector_seed(
@@ -13393,5 +13476,405 @@ mod tests {
             std::process::id(),
             nanos
         ))
+    }
+
+    #[test]
+    fn complete_text_native_projection_queries_preserve_scores_and_candidate_coverage() {
+        fn populate(index: &mut SearchIndex) {
+            for (id, title, space) in [("a", "graph graph", "team"), ("b", "graph", "other")] {
+                index
+                    .upsert_projection_row(SearchProjectionRow {
+                        kind: SearchProjectionKind::Memory,
+                        external_id: id.into(),
+                        title: title.into(),
+                        body: "storage graph".into(),
+                        embedding: None,
+                        source_id: None,
+                        metadata: BTreeMap::from([("space_id".into(), space.into())]),
+                    })
+                    .unwrap();
+            }
+        }
+        let path = unique_nowledge_mem_test_dir("complete-text-native");
+        let mut raw = SearchIndex::in_memory();
+        populate(&mut raw);
+        let mut persisted = SearchIndex::open(&path).unwrap();
+        populate(&mut persisted);
+        persisted.checkpoint().unwrap();
+        drop(persisted);
+        let raw = NowledgeMemSearchProjection::from_index(raw);
+        let resident = NowledgeMemSearchProjection::open(&path).unwrap();
+        let disk = NowledgeMemOutOfCoreSearchProjection::open(&path).unwrap();
+        let mut database = Database::new();
+        database
+            .query("CREATE (:Memory {id: 'a', space_id: 'team'})")
+            .unwrap();
+        database
+            .query("CREATE (:Memory {id: 'b', space_id: 'other'})")
+            .unwrap();
+        let query = "CALL text_search($text, complete := true, maxCandidates := $cap) YIELD id AS document_id, score MATCH (seed:Memory) WHERE seed.space_id = 'team' RETURN seed.id AS id, score LIMIT 1";
+        let mut successful_scores = Vec::new();
+        for (projection, out_of_core_projection) in [
+            (Some(&raw), None),
+            (Some(&resident), None),
+            (None, Some(&disk)),
+        ] {
+            let mut external = super::SearchProjectionExternalReadOperator {
+                projection,
+                out_of_core_projection,
+                vector_seed_execution_count: 0,
+            };
+            for cap in [1, 2, 1_000_000] {
+                let parameters = BTreeMap::from([
+                    ("text".into(), Value::String("graph".into())),
+                    ("cap".into(), Value::Int(cap)),
+                ]);
+                let mut rows = Vec::new();
+                let result = database
+                    .begin_read_transaction()
+                    .unwrap()
+                    .query_request_streaming_with_external(
+                        crate::QueryRequest::new(query).with_params(&parameters),
+                        &mut external,
+                        |row| {
+                            rows.push(row);
+                            Ok(())
+                        },
+                    );
+                if cap == 1 {
+                    assert!(
+                        matches!(result, Err(HawDBError::ResourceBudgetExceeded(cause)) if cause.budget_option == "text_search.maxCandidates")
+                    );
+                    assert!(rows.is_empty());
+                } else {
+                    let report = result.unwrap();
+                    let text = &report.execution_profile.text_seed_execution_reports;
+                    assert_eq!(text.len(), 1);
+                    assert_eq!(text[0].status(), "complete");
+                    assert_eq!(text[0].candidate_count, 2);
+                    let source = text[0].source.unwrap();
+                    assert_eq!(source.corpus_documents, Some(2));
+                    assert_eq!(source.matching_documents, Some(2));
+                    if out_of_core_projection.is_some() {
+                        assert!(source.generation.is_some());
+                        assert!(source.postings_visited.unwrap() > 0);
+                        assert!(source.bytes_read.unwrap() > 0);
+                    } else {
+                        assert_eq!(source.generation, None);
+                        assert_eq!(source.bytes_read, None);
+                    }
+
+                    assert_eq!(
+                        report
+                            .execution_profile
+                            .pipeline_memory_report
+                            .query_memory_completion_bytes,
+                        0
+                    );
+                    assert_eq!(rows.len(), 1);
+                    assert_eq!(rows[0]["id"], Value::String("a".into()));
+                    let Value::Float(score) = rows[0]["score"] else {
+                        panic!("missing BM25 score");
+                    };
+                    successful_scores.push(score);
+                }
+            }
+        }
+        assert!(successful_scores
+            .iter()
+            .all(|score| (*score - successful_scores[0]).abs() < 1e-12));
+        drop(raw);
+        drop(resident);
+        drop(disk);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    #[test]
+    fn grouped_evidence_complete_text_preserves_graph_eligibility_and_retained_reads() {
+        let mut reference_rows: Option<Vec<crate::Row>> = None;
+        for backend in ["raw", "resident", "disk"] {
+            let path = unique_nowledge_mem_test_dir(&format!("grouped-complete-{backend}"));
+            let mut database = Database::new();
+            database
+                .query("CREATE (:Scope {id: 'allowed', visible: true})")
+                .unwrap();
+            database
+                .query("CREATE (:Scope {id: 'hidden', visible: false})")
+                .unwrap();
+            let mut index = if backend == "resident" {
+                SearchIndex::open(&path).unwrap()
+            } else {
+                SearchIndex::in_memory()
+            };
+            for (id, group, visible, repeats) in [
+                ("a1", "A", true, 5),
+                ("a2", "A", true, 5),
+                ("a3", "A", true, 5),
+                ("a4", "A", true, 5),
+                ("a5", "A", true, 5),
+                ("b1", "B", true, 1),
+                ("c1", "C", true, 1),
+                ("d1", "D", false, 30),
+            ] {
+                let parameters = BTreeMap::from([
+                    ("id".into(), Value::String(id.into())),
+                    ("g".into(), Value::String(group.into())),
+                    (
+                        "scope".into(),
+                        Value::String(if visible { "allowed" } else { "hidden" }.into()),
+                    ),
+                ]);
+                database
+                    .query_with_params("CREATE (:Memory {id: $id, group_id: $g})", &parameters)
+                    .unwrap();
+                database.query_with_params("MATCH (m:Memory {id: $id}), (s:Scope {id: $scope}) CREATE (m)-[:VISIBLE_IN]->(s)", &parameters).unwrap();
+                index
+                    .upsert_projection_row(SearchProjectionRow {
+                        kind: SearchProjectionKind::Memory,
+                        external_id: id.into(),
+                        title: "graph ".repeat(repeats),
+                        body: "graph".into(),
+                        embedding: None,
+                        source_id: None,
+                        metadata: BTreeMap::new(),
+                    })
+                    .unwrap();
+            }
+            let (projection, out_of_core_projection) = match backend {
+                "raw" => (Some(NowledgeMemSearchProjection::from_index(index)), None),
+                "resident" => {
+                    index.checkpoint().unwrap();
+                    drop(index);
+                    (
+                        Some(NowledgeMemSearchProjection::open(&path).unwrap()),
+                        None,
+                    )
+                }
+                "disk" => {
+                    let mut writer =
+                        crate::SearchOutOfCoreGenerationWriter::create(&path, Default::default())
+                            .unwrap();
+                    for id in [
+                        "memory:a1",
+                        "memory:a2",
+                        "memory:a3",
+                        "memory:a4",
+                        "memory:a5",
+                        "memory:b1",
+                        "memory:c1",
+                        "memory:d1",
+                    ] {
+                        writer.push(index.document(id).unwrap().clone()).unwrap();
+                    }
+                    writer
+                        .push(
+                            SearchProjectionRow {
+                                kind: SearchProjectionKind::Memory,
+                                external_id: "zombie".into(),
+                                title: "graph".into(),
+                                body: "graph".into(),
+                                embedding: None,
+                                source_id: None,
+                                metadata: BTreeMap::new(),
+                            }
+                            .into_document(),
+                        )
+                        .unwrap();
+                    writer.finish().unwrap();
+                    let mut pinned = crate::SearchOutOfCoreReader::open(&path).unwrap();
+                    crate::SearchOutOfCoreGenerationWriter::prepare_delta(
+                        &pinned,
+                        SearchProjectionDelta {
+                            upserts: vec![SearchProjectionRow {
+                                kind: SearchProjectionKind::Memory,
+                                external_id: "a1".into(),
+                                title: "graph ".repeat(5),
+                                body: "graph".into(),
+                                embedding: None,
+                                source_id: None,
+                                metadata: BTreeMap::new(),
+                            }],
+                            deletes: vec!["memory:zombie".into()],
+                            ..Default::default()
+                        },
+                        Default::default(),
+                    )
+                    .unwrap()
+                    .finish()
+                    .unwrap();
+                    let refresh = pinned.refresh().unwrap();
+                    assert!(refresh.generation_changed);
+                    assert_eq!(refresh.opened_content_segments, 1);
+                    assert_eq!(refresh.reused_content_segments, 1);
+                    assert!(refresh.validated_retractions >= 2);
+                    drop(pinned);
+                    (
+                        None,
+                        Some(NowledgeMemOutOfCoreSearchProjection::open(&path).unwrap()),
+                    )
+                }
+                _ => unreachable!(),
+            };
+            let mut external = super::SearchProjectionExternalReadOperator {
+                projection: projection.as_ref(),
+                out_of_core_projection: out_of_core_projection.as_ref(),
+                vector_seed_execution_count: 0,
+            };
+            let query = "CALL text_search($text, complete := true, maxCandidates := $cap) YIELD id AS document_id, score MATCH (seed:Memory) MATCH (seed)-[:VISIBLE_IN]->(scope:Scope) WHERE scope.visible = true WITH seed.group_id AS g, MAX(score) AS best, collect_top(document_id, score, $m) AS evidence RETURN g, best, evidence ORDER BY best DESC, g ASC LIMIT $k";
+            let parameters = BTreeMap::from([
+                ("text".into(), Value::String("graph".into())),
+                ("cap".into(), Value::Int(8)),
+                ("m".into(), Value::Int(2)),
+                ("k".into(), Value::Int(3)),
+            ]);
+            let mut old = database.begin_read_transaction().unwrap();
+            let mut rows = Vec::new();
+            let report = old
+                .query_request_streaming_with_external(
+                    crate::QueryRequest::new(query).with_params(&parameters),
+                    &mut external,
+                    |row| {
+                        rows.push(row);
+                        Ok(())
+                    },
+                )
+                .unwrap();
+            assert_eq!(
+                rows.iter().map(|row| row["g"].clone()).collect::<Vec<_>>(),
+                [
+                    Value::String("A".into()),
+                    Value::String("B".into()),
+                    Value::String("C".into())
+                ]
+            );
+            assert_eq!(
+                rows[0]["evidence"],
+                Value::List(vec![
+                    Value::String("memory:a1".into()),
+                    Value::String("memory:a2".into())
+                ])
+            );
+            assert_eq!(
+                report
+                    .execution_profile
+                    .pipeline_memory_report
+                    .query_memory_completion_bytes,
+                0
+            );
+            if let Some(reference) = &reference_rows {
+                assert_eq!(rows.len(), reference.len());
+                for (actual, expected) in rows.iter().zip(reference) {
+                    assert_eq!(actual["g"], expected["g"]);
+                    assert_eq!(actual["evidence"], expected["evidence"]);
+                    let (Value::Float(actual), Value::Float(expected)) =
+                        (&actual["best"], &expected["best"])
+                    else {
+                        panic!("missing Float score")
+                    };
+                    assert!(
+                        (actual - expected).abs() < 1e-12,
+                        "{backend}: {actual} != {expected}"
+                    );
+                }
+            } else {
+                reference_rows = Some(rows.clone());
+            }
+            let text_reports = &report.execution_profile.text_seed_execution_reports;
+            assert_eq!(text_reports.len(), 1);
+            let text = &text_reports[0];
+            assert_eq!(text.status(), "complete");
+            assert!(text.operator_id.is_some());
+            assert_eq!(text.candidate_count, 8);
+            assert_eq!(text.candidate_limit, 8);
+            let source = text.source.unwrap();
+            assert_eq!(source.corpus_documents, Some(8));
+            assert_eq!(source.matching_documents, Some(8));
+            if backend == "disk" {
+                assert!(source.generation.is_some());
+                assert!(source.postings_visited.unwrap() > 0);
+                assert!(source.bytes_read.unwrap() > 0);
+            } else {
+                assert_eq!(source.generation, None);
+            }
+            let grouped = &report.execution_profile.grouped_evidence_reports;
+            assert_eq!(grouped.len(), 1);
+            assert!(grouped[0].operator_id.is_some());
+            assert!(grouped[0].executed && grouped[0].input_exhausted);
+            assert_eq!(grouped[0].input_rows, 7);
+            assert_eq!(grouped[0].groups_considered, 3);
+            assert_eq!(grouped[0].retained_evidence, 4);
+            assert_eq!(grouped[0].output_groups, 3);
+            assert!(grouped[0].peak_state_bytes > 0);
+            assert_eq!(grouped[0].spilled_bytes, 0);
+            assert!(!report.execution_profile.graph_expansion_reports.is_empty());
+            assert!(report
+                .execution_profile
+                .graph_expansion_reports
+                .iter()
+                .all(|report| !report.truncated()));
+            let window = query.replace("complete := true, maxCandidates := $cap", "topK := 3");
+            let mut window_groups = Vec::new();
+            old.query_request_streaming_with_external(
+                crate::QueryRequest::new(&window).with_params(&parameters),
+                &mut external,
+                |row| {
+                    window_groups.push(row["g"].clone());
+                    Ok(())
+                },
+            )
+            .unwrap();
+            assert_eq!(
+                window_groups,
+                [Value::String("A".into())],
+                "fixture must distinguish a fixed document prefix from complete grouping"
+            );
+            let mut narrow = parameters.clone();
+            narrow.insert("cap".into(), Value::Int(7));
+            assert!(matches!(
+                old.query_request_streaming_with_external(
+                    crate::QueryRequest::new(query).with_params(&narrow),
+                    &mut external,
+                    |_| panic!("incomplete domain cannot be delivered")
+                ),
+                Err(HawDBError::ResourceBudgetExceeded(_))
+            ));
+            database
+                .query("MATCH (m:Memory {id: 'b1'}) DETACH DELETE m")
+                .unwrap();
+            let mut retained = Vec::new();
+            old.query_request_streaming_with_external(
+                crate::QueryRequest::new(query).with_params(&parameters),
+                &mut external,
+                |row| {
+                    retained.push(row);
+                    Ok(())
+                },
+            )
+            .unwrap();
+            assert_eq!(retained, rows);
+            let mut current = Vec::new();
+            database
+                .begin_read_transaction()
+                .unwrap()
+                .query_request_streaming_with_external(
+                    crate::QueryRequest::new(query).with_params(&parameters),
+                    &mut external,
+                    |row| {
+                        current.push(row["g"].clone());
+                        Ok(())
+                    },
+                )
+                .unwrap();
+            assert_eq!(
+                current,
+                [Value::String("A".into()), Value::String("C".into())]
+            );
+            drop(old);
+            drop(projection);
+            drop(out_of_core_projection);
+            if backend != "raw" {
+                std::fs::remove_dir_all(path).unwrap();
+            }
+        }
     }
 }

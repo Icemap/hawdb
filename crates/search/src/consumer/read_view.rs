@@ -191,6 +191,23 @@ impl ConsumerReadPin {
         self.version.reservation.generation.get()
     }
 
+    pub fn vector_index_read_identity(&self) -> hawdb_core::VectorIndexReadIdentity {
+        let binding = self.version.reservation;
+        hawdb_core::VectorIndexReadIdentity {
+            database: binding.database_uuid,
+            branch: binding.source_branch,
+            consumer_id_hash: *binding.consumer_id_hash.as_bytes(),
+            target_locator_hash: *binding.target_locator_hash.as_bytes(),
+            registration: binding.registration_uuid,
+            projection: binding.projection_uuid,
+            checkpoint: binding.checkpoint_uuid,
+            target_incarnation: binding.target_incarnation,
+            generation: binding.generation,
+            operation: binding.operation,
+            source_epoch: self.version.report.source_epoch,
+        }
+    }
+
     /// Internal index execution; the facade additionally resolves the field and
     /// validates source epoch before composing canonical query operators.
     pub fn query_vector_index(
@@ -207,6 +224,14 @@ impl ConsumerReadPin {
         }
         if task.has_resource_controllers() {
             return Err(invalid("vector query task already has a resource controller").into());
+        }
+        if request
+            .eligible
+            .is_some_and(|domain| domain.identity() != self.vector_index_read_identity())
+        {
+            return Err(
+                invalid("vector eligible domain belongs to another source or publication").into(),
+            );
         }
         let task = permit.bind_task_context(task);
         self.version.reader.vector_index_query(

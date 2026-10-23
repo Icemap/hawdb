@@ -282,6 +282,35 @@ pub(super) struct ScanOptions<'a> {
 
 impl SearchOutOfCoreReader {
     #[cfg(feature = "vector-search")]
+    pub(super) fn rank_exact_index_domain(
+        &self,
+        request: crate::VectorIndexQuery<'_>,
+        query: QueryContext<'_>,
+    ) -> Result<VectorScoreScan> {
+        let domain = request.eligible.ok_or_else(|| {
+            HawDBError::Semantic("exact vector search requires a complete eligible domain".into())
+        })?;
+        let mut collector = BoundedScoreCollector::with_context(
+            Some(request.top_k.get()),
+            self.config.max_score_entries.get(),
+            Some(query),
+        )?;
+        for entry in domain.distances() {
+            let (id, distance) = entry?;
+            query.checkpoint()?;
+            collector.push_borrowed(id, -distance)?;
+        }
+        let scores = collector.finish()?;
+        Ok(VectorScoreScan {
+            scores: scores.values,
+            _memory: scores.memory,
+            generated_candidate_count: domain.report().eligible_vectors,
+            reranked_candidate_count: domain.report().scored_vectors,
+            ..Default::default()
+        })
+    }
+
+    #[cfg(feature = "vector-search")]
     pub(super) fn scan_index_distances(
         &self,
         request: crate::VectorIndexQuery<'_>,

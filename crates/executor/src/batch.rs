@@ -796,13 +796,16 @@ fn dispatch_batch_operator<D: BatchDispatch>(plan: &PhysicalPlan, dispatch: D) -
         PhysicalPlan::TextSeedScan {
             query_parameter,
             top_k,
+            complete,
             output_external_id,
             metadata_filters,
             resource_profile,
         } => dispatch.supported(|context, execution_limit, emit| {
             TextSeedScanSpec {
+                operator_id: context.observer.operator_id(plan),
                 query_parameter,
                 top_k: *top_k,
+                complete: *complete,
                 output_external_id: *output_external_id,
                 metadata_filters,
                 resource_profile: *resource_profile,

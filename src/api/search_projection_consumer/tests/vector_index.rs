@@ -65,6 +65,8 @@ fn initialize_bound_index(
 fn request(binding: &VectorIndexDescriptor) -> VectorIndexQuery<'_> {
     VectorIndexQuery {
         descriptor: binding,
+        mode: hawdb_core::VectorIndexQueryMode::AnnWindow,
+        eligible: None,
         embedding: &[1.0, 0.0],
         candidate_limit: NonZeroUsize::new(8).unwrap(),
         top_k: NonZeroUsize::new(8).unwrap(),

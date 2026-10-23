@@ -681,3 +681,246 @@ fn converging_relationship_pattern_counts_distinct_source_nodes() {
         Some(&Value::Int(2))
     );
 }
+
+#[test]
+fn grouped_evidence_preserves_all_groups_before_top_k_and_deduplicates_ids() {
+    let query = "MATCH (r:EvidenceInput) WHERE r.eligible = true WITH r.group_id AS g, r.document_id AS doc, r.score AS score WITH g, MAX(score) AS best, collect_top(doc, score, $m) AS evidence RETURN g, best, evidence ORDER BY best DESC, g ASC LIMIT $k";
+    let rows = [
+        ("A", "a1", 100.0, true),
+        ("A", "a2", 99.0, true),
+        ("A", "a3", 98.0, true),
+        ("A", "a4", 97.0, true),
+        ("A", "a5", 96.0, true),
+        ("B", "b1", 95.0, true),
+        ("C", "c1", 94.0, true),
+        ("A", "a2", 99.5, true),
+        ("D", "d1", 1000.0, false),
+    ];
+    for reverse in [false, true] {
+        let mut database = Database::new();
+        let mut rows = rows.to_vec();
+        if reverse {
+            rows.reverse();
+        }
+        for (group, id, score, eligible) in rows {
+            database.query_with_params("CREATE (:EvidenceInput {group_id: $g, document_id: $id, score: $score, eligible: $eligible})", &BTreeMap::from([
+                ("g".into(), Value::String(group.into())), ("id".into(), Value::String(id.into())),
+                ("score".into(), Value::Float(score)), ("eligible".into(), Value::Bool(eligible)),
+            ])).unwrap();
+        }
+        for evidence in [1, 2, 3] {
+            let parameters = BTreeMap::from([
+                ("m".into(), Value::Int(evidence)),
+                ("k".into(), Value::Int(3)),
+            ]);
+            let explain = database
+                .query_with_params(&format!("EXPLAIN {query}"), &parameters)
+                .unwrap();
+            let Value::String(plan) = &explain.rows[0]["plan"] else {
+                panic!("missing plan")
+            };
+            assert!(plan.contains("NodeProjectionScanExec"), "{plan}");
+            assert!(!plan.contains("GraphMatchExec"), "{plan}");
+            assert!(plan.contains("TopNExec"), "{plan}");
+            assert!(!plan.contains("SortExec"), "{plan}");
+            let output = database.query_with_params(query, &parameters).unwrap();
+            assert_eq!(output.rows.len(), 3);
+            for (row, group, score, documents) in [
+                (&output.rows[0], "A", 100.0, vec!["a1", "a2", "a3"]),
+                (&output.rows[1], "B", 95.0, vec!["b1"]),
+                (&output.rows[2], "C", 94.0, vec!["c1"]),
+            ] {
+                assert_eq!(row["g"], Value::String(group.into()));
+                assert_eq!(row["best"], Value::Float(score));
+                assert_eq!(
+                    row["evidence"],
+                    Value::List(
+                        documents
+                            .into_iter()
+                            .take(evidence as usize)
+                            .map(|id| Value::String(id.into()))
+                            .collect()
+                    )
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn grouped_evidence_scalar_max_empty_null_and_ties_preserve_query_semantics() {
+    let mut database = Database::new();
+    for score in [Value::Null, Value::Int(1), Value::Int(4), Value::Int(2)] {
+        database
+            .query_with_params(
+                "CREATE (:ScoreInput {score: $score})",
+                &BTreeMap::from([("score".into(), score)]),
+            )
+            .unwrap();
+    }
+    for (query, expected) in [
+        (
+            "MATCH (n:ScoreInput) WITH n.score AS score RETURN MAX(score) AS best",
+            Value::Int(4),
+        ),
+        (
+            "MATCH (n:Absent) WITH n.score AS score RETURN MAX(score) AS best",
+            Value::Null,
+        ),
+    ] {
+        assert_eq!(database.query(query).unwrap().rows[0]["best"], expected);
+    }
+    let empty = database.query("MATCH (n:Absent) WITH n.id AS doc, n.score AS score RETURN MAX(score) AS best, collect_top(doc, score, 2) AS evidence").unwrap();
+    assert_eq!(empty.rows.len(), 1);
+    assert_eq!(empty.rows[0]["best"], Value::Null);
+    assert_eq!(empty.rows[0]["evidence"], Value::List(Vec::new()));
+    for id in ["z", "a", "b", "a"] {
+        database
+            .query_with_params(
+                "CREATE (:TieInput {id: $id, score: 1.0})",
+                &BTreeMap::from([("id".into(), Value::String(id.into()))]),
+            )
+            .unwrap();
+    }
+    let tied = database.query("MATCH (n:TieInput) WITH n.id AS doc, n.score AS score, n.missing AS g RETURN g, MAX(score) AS best, collect_top(doc, score, 2) AS evidence").unwrap();
+    assert_eq!(tied.rows.len(), 1);
+    assert_eq!(tied.rows[0]["g"], Value::Null);
+    assert_eq!(
+        tied.rows[0]["evidence"],
+        Value::List(vec![Value::String("a".into()), Value::String("b".into())])
+    );
+}
+
+#[test]
+fn grouped_evidence_rejects_invalid_shapes_and_never_delivers_a_successful_prefix() {
+    let mut database = Database::new();
+    database.query("CREATE (:One {id: 'a'})").unwrap();
+    for tail in [
+        "WITH 'a' AS doc, 1.0 AS score RETURN collect_top(doc, score, 0)",
+        "WITH 'a' AS doc, 1.0 AS score RETURN collect_top(doc, score, -1)",
+        "WITH NULL AS doc, 1.0 AS score RETURN collect_top(doc, score, 1)",
+        "WITH 'a' AS doc, NULL AS score RETURN collect_top(doc, score, 1)",
+        "WITH 'a' AS doc, 1 AS score RETURN collect_top(doc, score, 1)",
+        "WITH 'a' AS doc, 1.0 AS score, 1.0 AS g RETURN g, collect_top(doc, score, 1)",
+    ] {
+        let query = format!("MATCH (n:One) {tail}");
+        assert!(
+            matches!(database.query(&query), Err(crate::HawDBError::Semantic(message)) if message.contains("collect_top")),
+            "{query}"
+        );
+    }
+    assert_eq!(database.query("MATCH (n:One) WITH n.id AS doc, 1.0 AS score RETURN collect_top(doc, score, 1000000) AS evidence").unwrap().rows[0]["evidence"], Value::List(vec![Value::String("a".into())]));
+}
+
+#[test]
+fn grouped_evidence_matches_full_id_reference_for_mixed_keys_and_permutations() {
+    let query = "MATCH (r:EvidenceInput) WHERE r.eligible = true WITH r.group_id AS g, r.document_id AS doc, r.score AS score WITH g, MAX(score) AS best, collect_top(doc, score, $m) AS evidence RETURN g, best, evidence ORDER BY best DESC, g ASC LIMIT $k";
+    let mut seed = 1119u64;
+    for case in 0..12 {
+        let mut rows = Vec::new();
+        let mut reference = BTreeMap::<Value, BTreeMap<String, f64>>::new();
+        for ordinal in 0..96 {
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+            let group = match (seed >> 32) % 7 {
+                0 => None,
+                1 => Some(Value::Null),
+                2 => Some(Value::Bool(false)),
+                3 => Some(Value::Bool(true)),
+                4 => Some(Value::Int(-7)),
+                5 => Some(Value::String("group".into())),
+                _ => Some(Value::Uuid(crate::Uuid::from_u128(7))),
+            };
+            let id = format!("document-{}", (seed >> 24) % 13);
+            let score = if case == 0 {
+                if ordinal % 2 == 0 {
+                    -0.0f64
+                } else {
+                    0.0f64
+                }
+            } else {
+                ((seed >> 16) % 9) as f64 / 2.0 - 3.0
+            };
+            let eligible = ordinal % 4 != 0;
+            if eligible {
+                reference
+                    .entry(group.clone().unwrap_or(Value::Null))
+                    .or_default()
+                    .entry(id.clone())
+                    .and_modify(|old| {
+                        if score.total_cmp(old).is_gt() {
+                            *old = score;
+                        }
+                    })
+                    .or_insert(score);
+            }
+            rows.push((group, id, score, eligible));
+        }
+        let mut expected = reference
+            .into_iter()
+            .map(|(group, scores)| {
+                let mut scores = scores.into_iter().collect::<Vec<_>>();
+                scores.sort_unstable_by(|a, b| b.1.total_cmp(&a.1).then(a.0.cmp(&b.0)));
+                (group, scores[0].1, scores)
+            })
+            .collect::<Vec<_>>();
+        expected.sort_unstable_by(|a, b| b.1.total_cmp(&a.1).then(a.0.cmp(&b.0)));
+        for reverse in [false, true] {
+            let mut database = Database::new();
+            let mut present = Vec::new();
+            let mut missing = Vec::new();
+            let ordered = if reverse {
+                rows.iter().rev().collect::<Vec<_>>()
+            } else {
+                rows.iter().collect()
+            };
+            for (group, id, score, eligible) in ordered {
+                let mut row = BTreeMap::from([
+                    ("id".into(), Value::String(id.clone())),
+                    ("score".into(), Value::Float(*score)),
+                    ("eligible".into(), Value::Bool(*eligible)),
+                ]);
+                if let Some(group) = group {
+                    row.insert("g".into(), group.clone());
+                    present.push(Value::Map(row));
+                } else {
+                    missing.push(Value::Map(row));
+                }
+            }
+            for (fixture, statement) in [
+                (present, "UNWIND $rows AS r CREATE (:EvidenceInput {group_id: r.g, document_id: r.id, score: r.score, eligible: r.eligible})"),
+                (missing, "UNWIND $rows AS r CREATE (:EvidenceInput {document_id: r.id, score: r.score, eligible: r.eligible})"),
+            ] {
+                database.query_with_params(statement, &BTreeMap::from([("rows".into(), Value::List(fixture))])).unwrap();
+            }
+            for m in [1, 3, 17] {
+                for k in [1, 2, 20] {
+                    let parameters =
+                        BTreeMap::from([("m".into(), Value::Int(m)), ("k".into(), Value::Int(k))]);
+                    let actual = database.query_with_params(query, &parameters).unwrap();
+                    assert_eq!(
+                        actual.rows.len(),
+                        expected.len().min(k as usize),
+                        "case {case}, reverse {reverse}, M {m}, K {k}"
+                    );
+                    for (row, (group, best, documents)) in actual.rows.iter().zip(&expected) {
+                        assert_eq!(&row["g"], group);
+                        let Value::Float(score) = row["best"] else {
+                            panic!("expected Float maximum")
+                        };
+                        assert_eq!(score.to_bits(), best.to_bits());
+                        assert_eq!(
+                            row["evidence"],
+                            Value::List(
+                                documents
+                                    .iter()
+                                    .take(m as usize)
+                                    .map(|(id, _)| Value::String(id.clone()))
+                                    .collect()
+                            )
+                        );
+                    }
+                }
+            }
+        }
+    }
+}

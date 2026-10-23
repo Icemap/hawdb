@@ -275,11 +275,12 @@ impl PhysicalPlan {
             PhysicalPlan::TextSeedScan {
                 query_parameter,
                 top_k,
+                complete,
                 output_external_id,
                 metadata_filters,
                 resource_profile,
             } => {
-                output.push_str(&format!("TextSeedScan(query=${query_parameter},top_k={top_k},external_id={output_external_id},metadata_filters={metadata_filters:?},resources={resource_profile:?})"));
+                output.push_str(&format!("TextSeedScan(query=${query_parameter},top_k={top_k},complete={complete},external_id={output_external_id},metadata_filters={metadata_filters:?},resources={resource_profile:?})"));
             }
             PhysicalPlan::VectorSeedScan {
                 embedding_parameter,
@@ -329,7 +330,16 @@ impl PhysicalPlan {
                     output.push(':');
                 }
                 output.push_str(&format!("{}:{}:", scan.candidate_limit, scan.top_k));
+                output.push_str(&scan.max_work.to_string());
+                output.push_str(scan.mode.as_str());
+                output.push(':');
+                if let Some(variable) = &scan.eligible_variable {
+                    write_identifier(output, variable);
+                }
                 write_optional_predicate(output, scan.node_visibility_predicate.as_ref());
+                if let Some(input) = &scan.input {
+                    input.write_instance_fingerprint(output);
+                }
                 output.push(')');
             }
             PhysicalPlan::CreateNode { label, properties } => {

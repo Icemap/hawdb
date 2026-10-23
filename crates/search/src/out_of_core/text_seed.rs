@@ -68,6 +68,37 @@ impl SearchOutOfCoreReader {
         task: &crate::RuntimeTaskContext,
         mut allowed: impl FnMut(&str) -> Result<bool>,
     ) -> Result<SearchTextSeedOutput> {
+        self.text_seed_scores(
+            query_text,
+            max_candidates,
+            memory,
+            task,
+            &mut allowed,
+            false,
+        )
+    }
+
+    /// Exhaust the pinned lexical source without applying a document Top-K floor.
+    pub fn complete_text_seed_scores_with_context(
+        &self,
+        query_text: &str,
+        max_candidates: usize,
+        memory: &QueryMemoryAccount,
+        task: &crate::RuntimeTaskContext,
+        allowed: impl FnMut(&str) -> Result<bool>,
+    ) -> Result<SearchTextSeedOutput> {
+        self.text_seed_scores(query_text, max_candidates, memory, task, allowed, true)
+    }
+
+    fn text_seed_scores(
+        &self,
+        query_text: &str,
+        max_candidates: usize,
+        memory: &QueryMemoryAccount,
+        task: &crate::RuntimeTaskContext,
+        mut allowed: impl FnMut(&str) -> Result<bool>,
+        complete: bool,
+    ) -> Result<SearchTextSeedOutput> {
         let context = QueryContext {
             io_scope: None,
             execution: None,
@@ -76,7 +107,7 @@ impl SearchOutOfCoreReader {
         };
         context.checkpoint()?;
         self.require_search_capabilities(SearchMode::Text)?;
-        if max_candidates > self.config.max_score_entries.get() {
+        if !complete && max_candidates > self.config.max_score_entries.get() {
             return Err(HawDBError::Storage(format!(
                 "text seed window exceeds the admitted {} score entries",
                 self.config.max_score_entries
@@ -93,7 +124,7 @@ impl SearchOutOfCoreReader {
             bytes_read: 0,
             document_bytes_read: 0,
         };
-        if max_candidates == 0 {
+        if !complete && max_candidates == 0 {
             return Ok(SearchTextSeedOutput {
                 scores: BTreeMap::new(),
                 external_ids: BTreeMap::new(),
@@ -133,7 +164,7 @@ impl SearchOutOfCoreReader {
         report.bytes_read = statistics.statistics.bytes_read();
         let delta = crate::LexicalMiniDelta::default();
         let mut collector = ScoreCollector::new(
-            Some(max_candidates),
+            (!complete).then_some(max_candidates),
             self.config.max_score_entries.get(),
             Some(context),
         )?;
@@ -142,9 +173,11 @@ impl SearchOutOfCoreReader {
             let scored = segment.lexical_projection.score_terms_accounted(
                 &terms.terms,
                 ScoringInputs {
+                    complete_candidate_limit: complete
+                        .then_some(max_candidates.saturating_sub(report.matching_document_count)),
                     delta: &delta,
                     max_term_bytes,
-                    retained_score_limit: Some(max_candidates),
+                    retained_score_limit: (!complete).then_some(max_candidates),
                     global_statistics: Some(&statistics.statistics),
                     prune_blocks: false,
                     context: Some(context),
@@ -168,6 +201,12 @@ impl SearchOutOfCoreReader {
             report.document_bytes_read = report
                 .document_bytes_read
                 .saturating_add(scored.report.document_bytes_read);
+            if complete && report.matching_document_count > max_candidates {
+                return Err(crate::resident_text_seed::complete_candidate_budget_error(
+                    max_candidates,
+                    report.matching_document_count,
+                ));
+            }
             for (id, score) in &scored.report.scores {
                 // The complete artifact result remains charged while the global
                 // collector admits its copy, including replacement overlap.
@@ -218,6 +257,44 @@ impl SearchOutOfCoreReader {
         task: &crate::RuntimeTaskContext,
         mut observe_candidate: impl FnMut(&str) -> Result<()>,
     ) -> Result<SearchTextSeedOutput> {
+        self.text_seed_scores_with_metadata_filters_mode(
+            query_text,
+            metadata_filters,
+            max_candidates,
+            memory,
+            task,
+            (false, &mut observe_candidate),
+        )
+    }
+
+    /// Exhaust every visible matching document, or refuse the complete request.
+    pub fn complete_text_seed_scores_with_metadata_filters(
+        &self,
+        query_text: &str,
+        metadata_filters: &BTreeMap<String, String>,
+        max_candidates: usize,
+        memory: &QueryMemoryAccount,
+        task: &crate::RuntimeTaskContext,
+    ) -> Result<SearchTextSeedOutput> {
+        self.text_seed_scores_with_metadata_filters_mode(
+            query_text,
+            metadata_filters,
+            max_candidates,
+            memory,
+            task,
+            (true, |_| Ok(())),
+        )
+    }
+
+    fn text_seed_scores_with_metadata_filters_mode(
+        &self,
+        query_text: &str,
+        metadata_filters: &BTreeMap<String, String>,
+        max_candidates: usize,
+        memory: &QueryMemoryAccount,
+        task: &crate::RuntimeTaskContext,
+        (complete, mut observe_candidate): (bool, impl FnMut(&str) -> Result<()>),
+    ) -> Result<SearchTextSeedOutput> {
         let predicates = super::query_memory::Predicates::new(
             metadata_filters,
             Some(QueryContext {
@@ -228,11 +305,17 @@ impl SearchOutOfCoreReader {
             }),
         )?;
         let mut metadata = AdmittedMetadataLookup::new(self, memory, task);
-        let mut output =
-            self.text_seed_scores_with_context(query_text, max_candidates, memory, task, |id| {
+        let mut output = self.text_seed_scores(
+            query_text,
+            max_candidates,
+            memory,
+            task,
+            |id| {
                 observe_candidate(id)?;
                 metadata.matches(id, &predicates.predicates)
-            })?;
+            },
+            complete,
+        )?;
         let mut external_ids_memory = memory.reserve(0)?;
         for id in output.scores.keys() {
             let external_id = metadata
@@ -316,30 +399,23 @@ impl<'a> AdmittedMetadataLookup<'a> {
 
     fn get(&mut self, id: &str) -> Result<&SearchMetadataDocument> {
         crate::query_control::checkpoint(self.task)?;
-        let (layer, segment_id) = self
+        // Descriptor bounds are only a routing hint: a sparse newer artifact
+        // can span IDs that still belong to an older layer. Use the existing
+        // admitted exact-membership route before decoding any metadata.
+        let route = self
             .reader
-            .segments
-            .iter()
-            .enumerate()
-            .rev()
-            .find_map(|(layer, artifact)| {
-                self.reader
-                    .visibility
-                    .is_visible(artifact.content_segment_id, id)
-                    .then(|| {
-                        artifact
-                            .descriptor
-                            .segments
-                            .iter()
-                            .find(|segment| {
-                                segment.first_document_id.as_str() <= id
-                                    && id <= segment.last_document_id.as_str()
-                            })
-                            .map(|segment| (layer, segment.segment_id))
-                    })
-                    .flatten()
-            })
+            .segment_for_document_with_context(
+                id,
+                Some(QueryContext {
+                    memory: self.memory,
+                    task: self.task,
+                    execution: None,
+                    io_scope: None,
+                }),
+            )?
             .ok_or_else(|| HawDBError::Storage(format!("text seed document {id} is missing")))?;
+        let layer = route.artifact_index;
+        let segment_id = route.segment.segment_id;
         if self
             .cached
             .as_ref()

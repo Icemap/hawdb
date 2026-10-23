@@ -405,6 +405,16 @@ fn write_aggregation(output: &mut String, item: &Aggregation) {
         output.push_str("distinct ");
     }
     match &item.target {
+        AggregateTarget::Ranked {
+            document_id,
+            score,
+            limit,
+        } => {
+            output.push_str("ranked:");
+            write_identifier(output, document_id);
+            write_identifier(output, score);
+            output.push_str(&limit.to_string());
+        }
         AggregateTarget::Column(column) => {
             output.push_str("column:");
             write_identifier(output, column);

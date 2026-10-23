@@ -44,6 +44,18 @@ pub struct SeedReadContext<'a> {
 pub type VectorSeedContext<'a> = SeedReadContext<'a>;
 
 pub trait BatchExternalRead {
+    fn vector_index_definition(
+        &self,
+        _index: &str,
+    ) -> Result<(
+        hawdb_core::VectorIndexDescriptor,
+        hawdb_core::VectorIndexReadIdentity,
+    )> {
+        Err(HawDBError::Execution(
+            "vector eligibility requires a bound index definition".into(),
+        ))
+    }
+
     fn execute_vector_index(
         &self,
         request: VectorIndexExecutionRequest<'_>,
@@ -51,6 +63,16 @@ pub trait BatchExternalRead {
         request.resources.checkpoint()?;
         Err(HawDBError::Execution(
             "vector index search requires a bound canonical/index read domain".into(),
+        ))
+    }
+
+    fn execute_complete_text_seed(
+        &self,
+        request: TextSeedExecutionRequest<'_>,
+    ) -> Result<TextSeedExecutionOutput> {
+        request.resources.checkpoint()?;
+        Err(HawDBError::Execution(
+            "complete text search requires a provider with source-exhaustion support".into(),
         ))
     }
 
@@ -83,11 +105,30 @@ impl<'a> BatchExternalReadAdapter<'a> {
 }
 
 impl BatchExternalRead for BatchExternalReadAdapter<'_> {
+    fn vector_index_definition(
+        &self,
+        index: &str,
+    ) -> Result<(
+        hawdb_core::VectorIndexDescriptor,
+        hawdb_core::VectorIndexReadIdentity,
+    )> {
+        self.external.borrow_mut().vector_index_definition(index)
+    }
+
     fn execute_vector_index(
         &self,
         request: VectorIndexExecutionRequest<'_>,
     ) -> Result<Box<dyn VectorIndexExecutionOutput>> {
         self.external.borrow_mut().execute_vector_index(request)
+    }
+
+    fn execute_complete_text_seed(
+        &self,
+        request: TextSeedExecutionRequest<'_>,
+    ) -> Result<TextSeedExecutionOutput> {
+        self.external
+            .borrow_mut()
+            .execute_complete_text_seed(request)
     }
 
     fn execute_text_seed(

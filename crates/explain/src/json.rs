@@ -16,7 +16,8 @@ use hawdb_core::Value;
 use hawdb_executor::{
     observer::{
         blocking_operator_memory_report_value, graph_expansion_report_value,
-        pipeline_memory_report_value, scan_pruning_report_value, vector_execution_report_value,
+        grouped_evidence_report_value, pipeline_memory_report_value, scan_pruning_report_value,
+        text_seed_execution_report_value, vector_execution_report_value,
     },
     PipelineMemoryReport, ReadExecutionProfile, Row,
 };
@@ -190,6 +191,26 @@ pub fn explain_analyze_output_row(
         ),
     );
     row.insert(
+        "text_seed_execution_reports".into(),
+        Value::List(
+            profile
+                .text_seed_execution_reports
+                .iter()
+                .map(text_seed_execution_report_value)
+                .collect(),
+        ),
+    );
+    row.insert(
+        "grouped_evidence_reports".into(),
+        Value::List(
+            profile
+                .grouped_evidence_reports
+                .iter()
+                .map(grouped_evidence_report_value)
+                .collect(),
+        ),
+    );
+    row.insert(
         "blocking_operator_memory_reports".to_string(),
         Value::List(
             profile
@@ -227,6 +248,8 @@ pub fn empty_read_execution_profile() -> ReadExecutionProfile<ScanPruningReport>
         scan_pruning_reports: Vec::new(),
         vector_execution_reports: Vec::new(),
         graph_expansion_reports: Vec::new(),
+        text_seed_execution_reports: Vec::new(),
+        grouped_evidence_reports: Vec::new(),
         blocking_operator_memory_reports: Vec::new(),
         pipeline_memory_report: PipelineMemoryReport::default(),
     }

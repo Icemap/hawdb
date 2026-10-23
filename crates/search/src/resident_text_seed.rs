@@ -14,7 +14,7 @@
 
 use super::*;
 use crate::analyzer_memory::Memory;
-use crate::analyzer_stream::{visit_admitted_token_list, Control};
+use crate::analyzer_stream::{visit_admitted_field_token_list, visit_admitted_token_list, Control};
 use crate::lexical_projection::{QueryContext, ScoreCollector, ScoringInputs};
 use hawdb_executor::{QueryMemoryAccount, QueryMemoryLease};
 use std::mem::size_of;
@@ -46,6 +46,45 @@ impl SearchIndex {
         memory: &QueryMemoryAccount,
         task: &RuntimeTaskContext,
     ) -> Result<SearchResidentTextSeedOutput> {
+        self.text_seed_scores(
+            query_text,
+            metadata_filters,
+            max_candidates,
+            memory,
+            task,
+            false,
+        )
+    }
+
+    /// Exhaust the visible lexical domain; the ceiling is an admission bound,
+    /// never a ranking window. Scores use full live-corpus BM25 statistics.
+    pub fn complete_text_seed_scores_with_context(
+        &self,
+        query_text: &str,
+        metadata_filters: &BTreeMap<String, String>,
+        max_candidates: usize,
+        memory: &QueryMemoryAccount,
+        task: &RuntimeTaskContext,
+    ) -> Result<SearchResidentTextSeedOutput> {
+        self.text_seed_scores(
+            query_text,
+            metadata_filters,
+            max_candidates,
+            memory,
+            task,
+            true,
+        )
+    }
+
+    fn text_seed_scores(
+        &self,
+        query_text: &str,
+        metadata_filters: &BTreeMap<String, String>,
+        max_candidates: usize,
+        memory: &QueryMemoryAccount,
+        task: &RuntimeTaskContext,
+        complete: bool,
+    ) -> Result<SearchResidentTextSeedOutput> {
         let context = QueryContext {
             io_scope: None,
             memory,
@@ -54,13 +93,13 @@ impl SearchIndex {
         };
         context.checkpoint()?;
         self.require_search_capabilities(SearchMode::Text)?;
-        if max_candidates > self.lexical_config.max_query_score_entries.get() {
+        if !complete && max_candidates > self.lexical_config.max_query_score_entries.get() {
             return Err(HawDBError::Storage(format!(
                 "text seed window exceeds the admitted {} score entries",
                 self.lexical_config.max_query_score_entries
             )));
         }
-        if max_candidates == 0 {
+        if !complete && max_candidates == 0 {
             return Ok(SearchResidentTextSeedOutput {
                 scores: BTreeMap::new(),
                 corpus_document_count: 0,
@@ -128,9 +167,10 @@ impl SearchIndex {
             let scored = projection.score_terms_accounted(
                 &terms,
                 ScoringInputs {
+                    complete_candidate_limit: complete.then_some(max_candidates),
                     delta: &delta,
                     max_term_bytes: self.lexical_config.max_term_bytes,
-                    retained_score_limit: Some(max_candidates),
+                    retained_score_limit: (!complete).then_some(max_candidates),
                     global_statistics: None,
                     prune_blocks: false,
                     context: Some(context),
@@ -143,6 +183,12 @@ impl SearchIndex {
                 },
             )?;
             context.checkpoint()?;
+            if complete && scored.report.scores.len() > max_candidates {
+                return Err(complete_candidate_budget_error(
+                    max_candidates,
+                    scored.report.scores.len(),
+                ));
+            }
             return Ok(SearchResidentTextSeedOutput {
                 scores: scored.report.scores,
                 corpus_document_count: self.documents.len(),
@@ -162,7 +208,8 @@ impl SearchIndex {
         let mut corpus_token_count = 0usize;
         for document in self.documents.values() {
             context.checkpoint()?;
-            if !admitted_filter_match(document, &predicates, metadata_filters, memory)? {
+            if !complete && !admitted_filter_match(document, &predicates, metadata_filters, memory)?
+            {
                 continue;
             }
             frequencies.fill(0);
@@ -188,7 +235,7 @@ impl SearchIndex {
         };
 
         let mut collector = ScoreCollector::new(
-            Some(max_candidates),
+            (!complete).then_some(max_candidates),
             self.lexical_config.max_query_score_entries.get(),
             Some(context),
         )?;
@@ -224,6 +271,12 @@ impl SearchIndex {
                 score += idf * (frequency * (BM25_K1 + 1.0)) / denominator;
             }
             if score > 0.0 {
+                if complete && matching_document_count == max_candidates {
+                    return Err(complete_candidate_budget_error(
+                        max_candidates,
+                        matching_document_count.saturating_add(1),
+                    ));
+                }
                 matching_document_count += 1;
                 collector.push(&document.id, score)?;
             }
@@ -239,6 +292,21 @@ impl SearchIndex {
     }
 }
 
+pub(crate) fn complete_candidate_budget_error(limit: usize, requested: usize) -> HawDBError {
+    hawdb_core::ResourceBudgetError {
+        resource: hawdb_core::ResourceBudgetKind::MetadataEntries,
+        scope: hawdb_core::ResourceBudgetScope::Operator,
+        owner: "complete lexical candidates".into(),
+        memory_class: None,
+        requested: requested as u64,
+        used: 0,
+        budget: limit as u64,
+        budget_option: "text_search.maxCandidates",
+        message: "complete lexical domain exceeds its candidate ceiling".into(),
+    }
+    .into()
+}
+
 fn count_document_tokens(
     document: &SearchDocument,
     analyzer: &SearchAnalyzerLexicon,
@@ -248,7 +316,7 @@ fn count_document_tokens(
 ) -> Result<usize> {
     let mut document_len = 0usize;
     for (field, weight) in document_token_fields(document) {
-        visit_admitted_token_list(field, analyzer, control, |term, _| {
+        visit_admitted_field_token_list(field, analyzer, control, |term| {
             document_len = document_len.saturating_add(weight);
             if let Some(index) = query_terms.get(term.as_str()) {
                 frequencies[*index] = frequencies[*index].saturating_add(weight);
@@ -294,6 +362,130 @@ mod tests {
     use super::*;
     use hawdb_executor::{QueryMemoryClass, QueryMemoryLedger};
     use std::num::NonZeroUsize;
+
+    #[test]
+    fn raw_text_seed_scores_preserve_repeated_field_phrase_aliases() {
+        let mut index = SearchIndex::in_memory();
+        for (id, repeats) in [("a", 5), ("b", 1), ("c", 30)] {
+            index
+                .upsert_projection_row(SearchProjectionRow {
+                    kind: SearchProjectionKind::Memory,
+                    external_id: id.into(),
+                    title: "graph ".repeat(repeats),
+                    body: "graph".into(),
+                    embedding: None,
+                    source_id: None,
+                    metadata: BTreeMap::new(),
+                })
+                .unwrap();
+        }
+        let corpus =
+            TextCorpusStats::from_documents(index.documents.values(), &index.analyzer_lexicon);
+        let terms = BTreeSet::from(["graph".to_string()]);
+        let expected = index
+            .documents
+            .values()
+            .map(|document| {
+                (
+                    document.id.clone(),
+                    bm25_score(&terms, document, &corpus, &index.analyzer_lexicon),
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
+        let budget = NonZeroUsize::new(1 << 20).unwrap();
+        let ledger = QueryMemoryLedger::new(budget);
+        let account = ledger.account(
+            QueryMemoryClass::ExternalRead,
+            "field phrase parity",
+            budget,
+        );
+        let task = RuntimeTaskContext::default();
+        for complete in [false, true] {
+            let actual = if complete {
+                index.complete_text_seed_scores_with_context(
+                    "graph",
+                    &BTreeMap::new(),
+                    3,
+                    &account,
+                    &task,
+                )
+            } else {
+                index.text_seed_scores_with_context("graph", &BTreeMap::new(), 3, &account, &task)
+            }
+            .unwrap();
+            assert_eq!(actual.scores().len(), 3);
+            for (id, score) in actual.scores() {
+                assert!(
+                    (score - expected[id]).abs() < 1e-12,
+                    "{id}: {score} != {}",
+                    expected[id]
+                );
+            }
+        }
+        assert_eq!(ledger.snapshot().used_bytes, 0);
+    }
+
+    #[test]
+    fn complete_text_seeds_use_full_corpus_scores_and_refuse_incomplete_domains() {
+        let mut index = SearchIndex::in_memory();
+        for (id, title, content, space) in [
+            ("a", "graph graph", "storage", "eligible"),
+            ("b", "graph", "graph graph", "eligible"),
+            ("c", "storage", "graph", "other"),
+            ("d", "unrelated", "longer unrelated document body", "other"),
+        ] {
+            index
+                .upsert(SearchDocument {
+                    id: id.into(),
+                    title: title.into(),
+                    content: content.into(),
+                    metadata: BTreeMap::from([("space_id".into(), space.into())]),
+                    embedding: None,
+                })
+                .unwrap();
+        }
+        let bytes = NonZeroUsize::new(1 << 20).unwrap();
+        let ledger = QueryMemoryLedger::new(bytes);
+        let memory = ledger.account(QueryMemoryClass::ExternalRead, "complete reference", bytes);
+        let task = RuntimeTaskContext::default();
+        let reference = index
+            .text_seed_scores_with_context("graph", &BTreeMap::new(), 4, &memory, &task)
+            .unwrap();
+        let filters = BTreeMap::from([("space_id".into(), "eligible".into())]);
+        for cap in [2, 100_000_000, usize::MAX] {
+            let actual = index
+                .complete_text_seed_scores_with_context("graph", &filters, cap, &memory, &task)
+                .unwrap();
+            assert_eq!(actual.matching_document_count, 2);
+            assert_eq!(actual.corpus_document_count, 4);
+            assert_eq!(actual.scores().len(), 2);
+            for id in ["a", "b"] {
+                assert_eq!(
+                    actual.scores()[id].to_bits(),
+                    reference.scores()[id].to_bits()
+                );
+            }
+        }
+        for cap in [0, 1] {
+            assert!(
+                matches!(index.complete_text_seed_scores_with_context("graph", &filters, cap, &memory, &task),
+                Err(HawDBError::ResourceBudgetExceeded(cause)) if cause.budget_option == "text_search.maxCandidates" && cause.budget == cap as u64)
+            );
+        }
+        assert!(index
+            .complete_text_seed_scores_with_context("absent", &filters, 0, &memory, &task)
+            .unwrap()
+            .scores()
+            .is_empty());
+        drop(reference);
+        assert_eq!(ledger.snapshot().used_bytes, 0);
+        assert!(ledger.snapshot().peak_bytes < bytes.get());
+        task.cancellation().cancel();
+        assert!(index
+            .complete_text_seed_scores_with_context("graph", &filters, 2, &memory, &task)
+            .is_err());
+        assert_eq!(ledger.snapshot().used_bytes, 0);
+    }
 
     #[test]
     fn resident_text_seed_preserves_filtered_bm25_scores_and_releases_budget() {

@@ -2,6 +2,7 @@ use super::*;
 use hawdb_cypher::{OrderExpression as CypherOrderExpression, ProcedureCallKind, YieldItem};
 
 mod vector_index;
+pub(super) use vector_index::bind_vector_index;
 use vector_index::bind_vector_index_pipeline;
 
 pub(super) fn bind_procedure_pipeline(
@@ -475,7 +476,14 @@ fn collect_algorithm_return_columns(
         }
         ReturnExpressionKind::Aggregate(aggregate) => match aggregate {
             AggregateExpression::CountAll => {}
-            AggregateExpression::CountVariable { variable, .. }
+            AggregateExpression::CollectTop {
+                document_id, score, ..
+            } => {
+                names.insert(document_id.clone());
+                names.insert(score.clone());
+            }
+            AggregateExpression::MaxVariable { variable }
+            | AggregateExpression::CountVariable { variable, .. }
             | AggregateExpression::CountProperty { variable, .. }
             | AggregateExpression::CollectProperty { variable, .. }
             | AggregateExpression::CollectVariable { variable, .. }

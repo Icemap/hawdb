@@ -7,6 +7,8 @@ use hawdb_qos::RuntimeWorkRequest;
 use std::num::NonZeroU64;
 use std::path::PathBuf;
 
+mod eligibility;
+
 struct Fixture(PathBuf);
 impl Fixture {
     fn new() -> Self {
@@ -380,28 +382,65 @@ fn vector_index_rebuild_replaces_updates_deletes_and_nulls_without_mixing_old_pi
             index_working_bytes: NonZeroUsize::new(32 << 20).unwrap(),
             index_result_bytes: NonZeroUsize::new(1 << 20).unwrap(),
         };
-        let embedding = Value::Vector(Vector::new(&[1.0, 0.0]).unwrap());
-        let mut rows = Vec::new();
-        let mut collect = |row: crate::executor::Row| {
-            rows.push((row["id"].clone(), row["distance"].clone()));
-            Ok(())
-        };
-        let (epoch, generation) = if graph {
-            let parameters = BTreeMap::from([("q".into(), embedding)]);
-            let report = read.query_cypher_streaming(permit, budget,
-                QueryRequest::new("CALL vector_index_search('index', $q, candidates := 10, topK := 10) YIELD node AS n, distance RETURN n.id AS id, distance ORDER BY distance, id").with_params(&parameters), &mut collect).unwrap();
-            let report = report.index().unwrap();
-            (report.source_epoch, report.generation)
-        } else {
-            let report = read.query_sql_streaming(permit, budget, VectorIndexSqlRequest {
-                sql: "SELECT id, distance FROM vector_index_search('index', $1, candidates => 10, top_k => 10) ORDER BY distance, id",
-                parameters: &[embedding], output_limits: QueryStreamOptions::default(), task: Default::default(),
-            }, &mut collect).unwrap();
-            (report.index().source_epoch, report.index().generation)
-        };
-        assert_eq!(epoch, read.source_epoch());
-        assert_eq!(generation, read.generation());
-        rows
+        let mut expected = None;
+        for mode in [
+            hawdb_core::VectorIndexQueryMode::AnnWindow,
+            hawdb_core::VectorIndexQueryMode::Exact,
+            hawdb_core::VectorIndexQueryMode::FilteredAnn,
+        ] {
+            let sql = match mode {
+                hawdb_core::VectorIndexQueryMode::AnnWindow => "SELECT id, distance FROM vector_index_search('index', $1, candidates => 10, top_k => 10) ORDER BY distance, id",
+                hawdb_core::VectorIndexQueryMode::Exact => "SELECT id, distance FROM vector_index_search('index', $1, mode => 'exact', top_k => 10, max_work => 100) ORDER BY distance, id",
+                hawdb_core::VectorIndexQueryMode::FilteredAnn => "SELECT id, distance FROM vector_index_search('index', $1, mode => 'filtered_ann', candidates => 10, top_k => 10, max_work => 100) ORDER BY distance, id",
+            };
+            let cypher = match mode {
+                hawdb_core::VectorIndexQueryMode::AnnWindow => "CALL vector_index_search('index', $q, candidates := 10, topK := 10) YIELD node AS n, distance RETURN n.id AS id, distance ORDER BY distance, id",
+                hawdb_core::VectorIndexQueryMode::Exact => "MATCH (d:Document) CALL vector_index_search('index', $q, mode := 'exact', eligible := d, topK := 10, maxWork := 100) YIELD node AS n, distance RETURN n.id AS id, distance ORDER BY distance, id",
+                hawdb_core::VectorIndexQueryMode::FilteredAnn => "MATCH (d:Document) CALL vector_index_search('index', $q, mode := 'filtered_ann', eligible := d, candidates := 10, topK := 10, maxWork := 100) YIELD node AS n, distance RETURN n.id AS id, distance ORDER BY distance, id",
+            };
+            let embedding = Value::Vector(Vector::new(&[1.0, 0.0]).unwrap());
+            let mut rows = Vec::new();
+            let mut collect = |row: crate::executor::Row| {
+                rows.push((row["id"].clone(), row["distance"].clone()));
+                Ok(())
+            };
+            let (epoch, generation) = if graph {
+                let parameters = BTreeMap::from([("q".into(), embedding)]);
+                let report = read
+                    .query_cypher_streaming(
+                        permit,
+                        budget,
+                        QueryRequest::new(cypher).with_params(&parameters),
+                        &mut collect,
+                    )
+                    .unwrap();
+                let report = report.index().unwrap();
+                (report.source_epoch, report.generation)
+            } else {
+                let report = read
+                    .query_sql_streaming(
+                        permit,
+                        budget,
+                        VectorIndexSqlRequest {
+                            sql,
+                            parameters: &[embedding],
+                            output_limits: QueryStreamOptions::default(),
+                            task: Default::default(),
+                        },
+                        &mut collect,
+                    )
+                    .unwrap();
+                (report.index().source_epoch, report.index().generation)
+            };
+            assert_eq!(epoch, read.source_epoch());
+            assert_eq!(generation, read.generation());
+            if let Some(expected) = &expected {
+                assert_eq!(&rows, expected);
+            } else {
+                expected = Some(rows);
+            }
+        }
+        expected.unwrap()
     }
     for graph in [false, true] {
         let fixture = Fixture::new();
@@ -549,7 +588,66 @@ fn vector_index_rebuild_replaces_updates_deletes_and_nulls_without_mixing_old_pi
             language_rows(&mut current, &permit, graph),
             expected_current
         );
-        let generation = current.generation();
+        let definition = current.definition().clone();
+        let query_vector = Vector::new(&[1.0, 0.0]).unwrap();
+        let memory = hawdb_executor::ExecutionMemoryConfig::default();
+        let ledger = hawdb_executor::QueryMemoryLedger::for_query(&memory, None).unwrap();
+        let account = ledger.account(
+            hawdb_executor::QueryMemoryClass::BlockingState,
+            "same-epoch vector domain",
+            memory.blocking_operator_bytes,
+        );
+        let mut domain = hawdb_executor::vector_eligibility::VectorEligibleDomain::new(
+            &definition,
+            current.pin.vector_index_read_identity(),
+            query_vector.as_ref(),
+            hawdb_core::VectorIndexQueryMode::FilteredAnn,
+            0,
+            &account,
+            None,
+        )
+        .unwrap();
+        domain.finish().unwrap();
+        db.rebuild_vector_index(&mut consumer, Default::default())
+            .unwrap();
+        let mut same_epoch = db
+            .begin_read_transaction()
+            .unwrap()
+            .bind_vector_index(&consumer, &permit)
+            .unwrap();
+        assert_eq!(same_epoch.source_epoch(), current.source_epoch());
+        assert!(same_epoch.generation() > current.generation());
+        let error = same_epoch
+            .pin
+            .query_vector_index(
+                &permit,
+                Default::default(),
+                hawdb_search::VectorIndexQuery {
+                    descriptor: &definition,
+                    embedding: &[1.0, 0.0],
+                    candidate_limit: NonZeroUsize::MIN,
+                    top_k: NonZeroUsize::MIN,
+                    mode: hawdb_core::VectorIndexQueryMode::FilteredAnn,
+                    eligible: Some(&domain),
+                },
+            )
+            .unwrap_err();
+        assert!(
+            error.to_string().contains("another source or publication"),
+            "{error}"
+        );
+        drop(domain);
+        assert_eq!(ledger.snapshot().used_bytes, 0);
+        assert_eq!(
+            language_rows(&mut current, &permit, graph),
+            expected_current
+        );
+        assert_eq!(
+            language_rows(&mut same_epoch, &permit, graph),
+            expected_current
+        );
+        let generation = same_epoch.generation();
+        drop(same_epoch);
         drop(current);
         drop(old);
         drop(consumer);

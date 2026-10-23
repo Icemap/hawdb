@@ -253,6 +253,9 @@ pub(super) fn search_shortest_paths(
         }
         if found_target {
             paths = dag.materialize(&search, next_depth, result_limit, &mut tracker, || {
+                if let Some(task) = task_context {
+                    task.charge_work(1)?;
+                }
                 runtime_checkpoint(task_context)
             })?;
             if !paths.is_empty() {

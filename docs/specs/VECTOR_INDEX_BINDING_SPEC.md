@@ -1,8 +1,8 @@
 # Schema-bound vector indexes
 
-Implementation tracked by https://github.com/nowledge-co/hawdb/issues/1157.
-This document records the phase-one contract; delivery remains incomplete until
-the query, persistence and resource acceptance tests listed below pass.
+Index binding is tracked by https://github.com/nowledge-co/hawdb/issues/1157.
+Filtered-domain execution is tracked by https://github.com/nowledge-co/hawdb/issues/1172.
+Delivery requires the query, persistence and resource acceptance evidence below.
 
 ## Scope and ownership
 
@@ -27,10 +27,13 @@ not part of the persistent algorithm definition.
 
 ## Query semantics
 
-An index query is explicit: bounded approximate candidates followed by exact
-cosine-distance reranking. Both language frontends must lower to that same
-contract. Ordinary filtered distance queries remain exact and cannot be
-silently rewritten to approximate index access.
+The query mode is explicit and shared by SQL and Cypher. The default
+`ann_window` mode generates bounded approximate candidates and reranks that
+window by exact cosine distance. `exact` exhausts the declared eligible domain
+before selecting its nearest k records. `filtered_ann` restricts approximate
+candidate generation to the complete eligible domain and exactly reranks the
+selected candidates. Ordinary filtered distance queries remain exact; the
+optimizer cannot silently substitute approximate access.
 
 Canonical vectors and raw projection vectors use the same core distance
 implementation. The result is `1 - cosine_similarity` in [0, 2], including
@@ -41,11 +44,18 @@ lexicographic encoded identity, which is not necessarily SQL primary-key order.
 Use an explicit `ORDER BY distance, id` (or the corresponding graph property)
 when the query requires that ordering.
 
-The candidate budget and final k are separate. Results are exact only within
-the generated candidate set. An exhausted candidate window does not establish
-global exact recall. Residual query predicates apply after that explicit window;
-graph-aware eligibility before candidate generation is a separate delivery
-related to https://github.com/nowledge-co/hawdb/issues/1119.
+In approximate modes, the candidate budget and final k are separate. Exact
+reranking does not establish global exact recall. In `ann_window`, residual
+query predicates apply after the explicit window; filtering cannot refill it.
+In `filtered_ann`, eligibility applies before approximate candidate generation.
+Outer ORDER BY reorders selected records and cannot change membership at an
+equal-distance Top-K boundary.
+
+| Mode | Execution order | Filter position |
+| --- | --- | --- |
+| `ann_window` (default) | ANN window, exact rerank, canonical residual filter | `after_window` |
+| `exact` | Complete eligibility, exact distance, Top-K | `before_ranking` |
+| `filtered_ann` | Complete eligibility, same-generation allowlist, ANN, exact rerank | `before_candidates` |
 
 ## Language entrypoints
 
@@ -103,6 +113,160 @@ node candidate, including nodes outside the target label. A sparse target label
 can therefore exhaust the explicit feed-work budget; the build fails instead
 of publishing a partial source. Label-aware source capture and plan/report cost
 improvements remain subsequent work.
+
+## Exact eligible domains
+
+Both frontends accept a static `mode` literal. Exact mode requires `top_k` /
+`topK` and a nonnegative `max_work` / `maxWork`; it rejects `candidates`. The
+work option is not accepted in `ann_window`. Mode selection is part of plan
+identity, not a runtime backend heuristic.
+
+```sql
+SELECT d.id, distance
+FROM vector_index_search('documents', $1,
+     mode => 'exact', top_k => 20, max_work => 10000) AS d
+WHERE d.active = true
+ORDER BY distance, d.id;
+```
+
+SQL binds WHERE against the canonical source schema before collection and
+ranking, including when the source is empty. The generated `distance` column
+is not available in this predicate. Projection, ORDER BY, LIMIT and OFFSET run
+on the selected Top-K. Single-source restrictions still apply. Final hydration
+uses the same canonical snapshot and does not evaluate the input predicate a
+second time.
+
+```cypher
+MATCH (origin:Origin)-[:RELATED]->(candidate:Document)
+WHERE candidate.active = true
+WITH candidate LIMIT 100
+CALL vector_index_search('documents', $embedding,
+     mode := 'exact', eligible := candidate, topK := 20, maxWork := 10000)
+YIELD node AS document, distance
+RETURN document.id AS id, distance ORDER BY distance, id
+```
+
+This CALL is setwise: all upstream rows define one domain and one global Top-K.
+It resets scope to the YIELD columns; it is not a per-row correlated CALL.
+`eligible` must resolve to a bound node variable. Upstream LIMIT applies before
+identity deduplication, so `[A, A, B] LIMIT 2` contains only A. Optional NULL
+nodes, nodes outside the bound index table, and NULL vector fields contribute
+no eligible vector. Canonical visibility applies to upstream reads and to the
+eligible output node before ranking. No predicate may move across an existing
+ANN window or upstream LIMIT. This delivery accepts canonical graph inputs;
+GraphAlgorithm and external seed operators are refused within the eligible
+subtree because their complete internal work is not yet metered.
+
+The shared domain retains encoded identities and, only in exact mode, exact
+scores. It does not retain complete rows or vector payloads. Exact collection
+uses the core distance operator while the canonical vector is borrowed. It binds database, branch, Consumer registration,
+projection, checkpoint, target incarnation, operation, publication generation
+and source epoch, together with the query mode. A pin rejects a domain from a different binding even when
+the descriptor and query vector are identical. A domain must be complete;
+invalid query dimensions/norms and invalid bindings are errors for empty
+inputs as well.
+
+`max_work` bounds admitted source-candidate visits, point probes, graph
+predicate evaluation, cached shortest-path enumeration and domain input rows.
+Work units are execution operations, not physical I/O, unique records or output
+rows. Repeated paths and probes consume work. SQL charges each canonical row
+before evaluating its input predicate. The Cypher eligible subtree uses a
+scoped canonical fallback for scan/index shortcuts that do not yet expose work
+admission; ordinary queries retain those shortcuts. This can scan more records
+and refuse a narrow budget even when a selective index exists. The eligible
+optimizer scope clears ordered range-index properties to preserve an explicit
+ORDER BY before LIMIT under canonical fallback. Work exhaustion
+and cancellation fail without delivering a successful partial domain.
+
+This is not a bound on every executor operation or CPU time. UNWIND/list
+expansion, Cartesian/hash-join combinations, and Sort/Aggregate/Distinct
+internal work are not charged individually. An aggregate can consume many
+join combinations while emitting few charged domain rows. Deadline and
+cancellation checks still apply; use them alongside the work and memory
+limits. Graph-read work accounting is separate from payload admission and
+does not reserve memory or invoke batch flush/Stop callbacks.
+
+Reports expose `mode`, `filter_position`, source epoch and generation. Exact
+reports name backend `exact`, set ANN `candidate_limit` to zero and include
+`input_rows`, `eligible_vectors`, `scored_vectors`, `work_units`, `max_work`,
+`source_strategy = bounded_canonical`, and completion. Input rows are counted
+before identity deduplication and are distinct from visited-source work.
+Exact source collection and final SQL hydration use the canonical allowance in
+successive phases: the eligible domain is dropped after Top-K selection and
+before output projection/sort allocates. Both phases use the same canonical
+ledger, so overlapping lifetimes cannot each spend the complete allowance.
+
+## Filtered approximate eligible domains
+
+`filtered_ann` requires a static mode literal, explicit `candidates`, `top_k` /
+`topK`, and nonnegative `max_work` / `maxWork`. Cypher also requires the same
+upstream `eligible` node binding as exact mode. Both approximate modes enforce
+`0 < top_k <= candidates` and the native configured candidate cap.
+
+```sql
+SELECT d.id, distance
+FROM vector_index_search('documents', $1,
+     mode => 'filtered_ann', candidates => 100, top_k => 20,
+     max_work => 10000) AS d
+WHERE d.active = true
+ORDER BY distance, d.id;
+```
+
+```cypher
+MATCH (origin:Origin)-[:RELATED]->(candidate:Document)
+WHERE candidate.active = true
+WITH candidate LIMIT 100
+CALL vector_index_search('documents', $embedding,
+     mode := 'filtered_ann', eligible := candidate,
+     candidates := 100, topK := 20, maxWork := 10000)
+YIELD node AS document, distance
+RETURN document.id AS id, distance ORDER BY distance, id
+```
+
+The eligibility, canonical visibility, NULL, deduplication and upstream LIMIT
+rules above apply unchanged. SQL WHERE is evaluated while collecting eligibility
+and is not repeated after the approximate window. Cypher remains setwise; an
+explicit predicate after YIELD is a separate downstream filter.
+
+Collection retains identities without calculating their distances. Before ANN,
+the pin verifies the complete source/publication identity, and native metadata
+visitation maps each eligible identity to its layer-local ordinal. The existing
+metadata reader validates ordering, bounds, vector counts and ordinal bases
+against that pinned layer layout. Every eligible non-NULL vector must have
+exactly one visible mapping; missing, ambiguous or NULL-ordinal mappings fail
+before ANN. No mapping is cached across requests or reused after a rebuild,
+including a rebuild at the same source epoch.
+
+Mapping charges every visited metadata record to the eligibility work scope,
+including rejected records. For a non-empty eligible domain, `max_work` /
+`maxWork` must budget for canonical collection plus the index's metadata size.
+Each non-empty query visits the full index metadata in this delivery, so a
+small eligible set over a large index can exhaust the work limit during mapping
+alone.
+
+Existing index memory, file-descriptor, I/O and
+spill admission remains separate from that work counter. The mapping proof and
+candidate blocks are admitted before allocation. Non-empty explicit eligibility
+uses the native custody-owned scratch stage even without a visibility mask.
+Failure releases temporary mappings, spills and I/O ownership; exhaustion is
+an error, never a partial allowlist.
+
+Completed empty eligibility returns no candidates after query, binding and
+window validation. It never becomes an unrestricted search. The non-empty path
+reuses native per-layer ordinal allowlists and the existing RaBitQ scan. Only
+the retained global candidate window is exactly reranked, at most `candidates`
+records. Generated candidate counts may sum per-layer candidates and therefore
+exceed that retained window. Filtering is exact, while recall remains approximate.
+
+Reports identify mode `filtered_ann`, backend `rabitq`, and
+`filter_position = before_candidates`. Eligibility reports retain
+`scored_vectors = 0`; `reranked_candidate_count` reports the separate exact
+rerank work. `work_units` includes canonical collection and metadata mapping,
+while `input_rows` still counts canonical input rows before deduplication.
+Empty eligibility has zero generated/reranked candidates and no candidate spill
+or vector scan. The existing work-limit exclusions for list/join expansion and
+operator-internal CPU work still apply; ANN execution also retains its native
+candidate, memory, I/O, deadline and cancellation limits.
 
 ## Identity and lifecycle refinement
 
@@ -201,8 +365,8 @@ cancellation. Feature-disabled builds refuse unavailable index execution.
 Build, candidate selection, raw hydration, result retention and decoding must
 be admitted before allocation. Budget exhaustion is an error, not successful
 truncation. Query evidence identifies backend, candidate budget/count, exact
-rerank count, source epoch and generation; it does not claim filtered ANN or
-production Mem acceptance.
+rerank count, source epoch and generation; it does not claim exhaustive ANN
+recall or production Mem acceptance.
 
 The root vector-index unit family is owned by `//:hawdb_unit_test_binary` in
 the existing root presubmit lane; Search binding and producer-I/O cases are
@@ -221,5 +385,22 @@ https://github.com/nowledge-co/hawdb/issues/1160 and
 https://github.com/nowledge-co/hawdb/issues/1161. This vector-index qualification
 does not claim those independent paths are repaired.
 
-Mem App schema/import migration, runtime activation, the graph-eligibility
-planner, and FreshDiskANN evaluation remain subsequent roadmap phases.
+Exact eligibility acceptance additionally covers an ineligible nearest prefix,
+SQL/Cypher parity, duplicate paths and upstream LIMIT, NULL/empty domains,
+visibility before ranking, retained snapshots, mismatched domain bindings,
+all-rejected source-work exhaustion and cancellation/retry. Work-budget core
+and admitted source-read tests run in their existing crate lanes; no new CI
+lane is introduced.
+
+Filtered-ANN guards additionally cover zero collection scoring, an exact rerank
+window smaller than eligibility, empty-domain validation, missing/ambiguous
+mappings, rejected metadata work, typed mapping memory refusal/retry and mapping
+lease refunds. Root empty-index retries preserve the mapping error and permit
+reuse; they do not measure native file descriptors or scratch cleanup. The
+existing captured candidate-spill and Stage cleanup guards independently cover
+those resource owners. SQL/Cypher parity, upstream LIMIT, canonical visibility and
+update/delete/NULL/reopen cases exercise both eligible modes. Existing crate,
+root and Search feature lanes own these cases; no new CI lane is introduced.
+
+Mem App schema/import migration, runtime activation and FreshDiskANN evaluation
+remain subsequent roadmap phases.

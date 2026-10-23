@@ -24,7 +24,8 @@ mod report_value;
 #[doc(hidden)]
 pub use report_value::{
     blocking_operator_memory_report_value, graph_expansion_report_value,
-    pipeline_memory_report_value, scan_pruning_report_value, vector_execution_report_value,
+    grouped_evidence_report_value, pipeline_memory_report_value, scan_pruning_report_value,
+    text_seed_execution_report_value, vector_execution_report_value,
 };
 
 #[doc(hidden)]
@@ -43,6 +44,13 @@ pub trait ExecutionObserver {
     #[doc(hidden)]
     fn vector_graph_scoring_input(&self) -> Option<&hawdb_plan_cypher::ScoringVectorGraphInput> {
         None
+    }
+
+    fn record_grouped_evidence_report(
+        &self,
+        _input: &hawdb_plan_cypher::PhysicalPlan,
+        _report: crate::GroupedEvidenceExecutionReport,
+    ) {
     }
 
     fn record_scan_pruning_report(&self, _report: ScanPruningReport) {}

@@ -500,3 +500,17 @@ fn bounded_match_rejects_unrepresentable_relationship_shapes_before_normalizatio
         plan_normalized_pipeline_query(&query, &BTreeMap::new()).unwrap();
     }
 }
+
+#[test]
+fn ranked_evidence_normalizes_its_input_without_changing_legacy_multi_with_plans() {
+    let query = "MATCH (n:Node) WHERE n.visible = true WITH n.group_id AS g, n.id AS doc, n.score AS score WITH g, collect_top(doc, score, 2) AS evidence RETURN g, evidence";
+    let parsed = hawdb_cypher::parse_pipeline(query).unwrap();
+    let plan = plan_parsed_pipeline_query(&parsed, &BTreeMap::new()).unwrap();
+    let debug = format!("{plan:?}");
+    assert!(!debug.contains("GraphMatch {"), "{debug}");
+    assert!(debug.contains("Ranked {"));
+    let legacy = query.replace("collect_top(doc, score, 2)", "collect(doc)");
+    let parsed = hawdb_cypher::parse_pipeline(&legacy).unwrap();
+    let plan = plan_parsed_pipeline_query(&parsed, &BTreeMap::new()).unwrap();
+    assert!(format!("{plan:?}").contains("GraphMatch {"));
+}

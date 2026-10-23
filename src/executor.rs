@@ -104,10 +104,10 @@ use hawdb_executor::{pipeline::BindingBatch, QueryMemoryClass};
 pub use hawdb_executor::{ExecutionMemoryConfig, SpillPoolSnapshot};
 pub use hawdb_executor::{
     ExternalReadOperator, ExternalReadResourceContract, ExternalReadResultBudget,
-    OperatorCardinalityProfile, TextSeedExecutionOutput, TextSeedExecutionRequest,
-    TextSeedExecutionRow, VectorCompressionMode, VectorExecutionBackend, VectorExecutionReport,
-    VectorScoreSource, VectorSeedExecutionOutput, VectorSeedExecutionRequest,
-    VectorSeedExecutionRow,
+    GroupedEvidenceExecutionReport, OperatorCardinalityProfile, TextSeedExecutionOutput,
+    TextSeedExecutionReport, TextSeedExecutionRequest, TextSeedExecutionRow, TextSeedSourceReport,
+    VectorCompressionMode, VectorExecutionBackend, VectorExecutionReport, VectorScoreSource,
+    VectorSeedExecutionOutput, VectorSeedExecutionRequest, VectorSeedExecutionRow,
 };
 pub(crate) use mutation::project_staged_mutation_return_rows;
 pub use mutation::{
