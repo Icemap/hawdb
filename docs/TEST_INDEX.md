@@ -349,3 +349,25 @@ registration policy, and direct history pruning without staging compaction.
   scheduled registration. See [workload, results and limits](STRICT_APPEND_PREPARE_BENCHMARK.md).
   These are preparation timings without WAL synchronization, not committed
   throughput or durable p99 measurements.
+
+## Experimental read projection representation diagnostic
+
+Only the `qualification/1119-read-projection-*` experiment refs replace the
+manual scheduled-quality writer job with this diagnostic; main and ordinary
+presubmits are unchanged. Invoke the existing workflow dispatch with
+`run_writer_gate=true`. The owning script is
+`scripts/run-projection-representation-diagnostic.py`; its
+`--prepare-only --work <fresh-directory> --fixture-parent <fresh-directory>
+--output <fresh-directory>` mode verifies source preparation without building
+or timing. See [the experiment protocol](../scripts/projection-representation/README.md).
+
+It compares the original mapping, rejected fixed-stack prototype and compact
+vector using the same 823e8e9c anchor, temporary stage instrumentation, query,
+full row oracles and global bench profile. All three builds complete before
+six balanced blocks of four writer/reader/profile cohorts. The 72 processes
+contain 432 cases, 110,592 commits, 248,832 reads and 288 durable reopens. The
+120-minute job deadline is unchanged; first-build and test execution costs are
+reported separately. A 1 Hz guest process inventory detects known compiler
+interference; this is not a physical hardware exclusivity claim or the strict
+40-pair acceptance gate. No fuzz target, scheduled execution, default lane,
+profile, fixture assertion, budget or performance margin is changed.

@@ -11,7 +11,7 @@ on:
         type: boolean
         default: false
       run_writer_gate:
-        description: Run only the fixed 40-pair reader/writer qualification
+        description: Run only the isolated projection representation diagnostic on this experiment ref
         required: false
         type: boolean
         default: false
@@ -219,8 +219,8 @@ jobs:
 
 
   strict-writer-gate:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_writer_gate }}
-    name: Concurrent Reader and Writer Qualification
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_writer_gate && startsWith(github.ref, 'refs/heads/qualification/1119-read-projection-') }}
+    name: Manual Read Projection Representation Diagnostic
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
@@ -230,51 +230,20 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.97.1
 
-      - name: Install separate syscall tracing tool
-        if: ${{ inputs.writer_include_captured_wal }}
+      - name: Build all representations, then run the fixed diagnostic
         shell: bash
         run: |
           set -euo pipefail
-          if ! command -v strace >/dev/null; then
-            sudo apt-get update
-            sudo apt-get install -y strace
-          fi
+          python3 scripts/run-projection-representation-diagnostic.py \
+            --work "$RUNNER_TEMP/read-projection-work" \
+            --fixture-parent "$RUNNER_TEMP/read-projection-fixtures" \
+            --output artifacts/read-projection-representations
 
-      - name: Build both revisions and measure the fixed protocol
-        shell: bash
-        env:
-          WRITER_BASELINE_REVISION: ${{ inputs.writer_baseline_revision }}
-          WRITER_INCLUDE_CAPTURED_WAL: ${{ inputs.writer_include_captured_wal }}
-          WRITER_CONCURRENCY_MATRIX: ${{ inputs.writer_concurrency_matrix }}
-          WRITER_COUNTS: ${{ inputs.writer_counts }}
-          READER_COUNTS: ${{ inputs.reader_counts }}
-        run: |
-          set -euo pipefail
-          options=()
-          if [[ "$WRITER_INCLUDE_CAPTURED_WAL" == "true" ]]; then
-            options+=(--include-captured-wal)
-          fi
-          if [[ "$WRITER_CONCURRENCY_MATRIX" == "true" ]]; then
-            options+=(--concurrency-matrix)
-          fi
-          if [[ -n "$WRITER_COUNTS" ]]; then
-            options+=(--writer-counts "$WRITER_COUNTS")
-          fi
-          if [[ -n "$READER_COUNTS" ]]; then
-            options+=(--reader-counts "$READER_COUNTS")
-          fi
-          python3 scripts/run-concurrent-writer-gate.py \
-            "${options[@]}" \
-            --baseline-revision "$WRITER_BASELINE_REVISION" \
-            --work "$RUNNER_TEMP/writer-gate" \
-            --fixture-parent "$RUNNER_TEMP/writer-fixtures" \
-            --output artifacts/strict-writer-gate
-
-      - name: Retain build and measurement evidence
+      - name: Retain diagnostic evidence including failures
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: strict-writer-gate-${{ github.sha }}-${{ github.run_attempt }}
-          path: artifacts/strict-writer-gate
+          name: read-projection-representations-${{ github.sha }}-${{ github.run_attempt }}
+          path: artifacts/read-projection-representations
           if-no-files-found: error
           retention-days: 30
