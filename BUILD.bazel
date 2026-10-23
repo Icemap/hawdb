@@ -755,8 +755,6 @@ rust_test(
             "tests/support/mvcc_fixture.rs",
         ],
         edition = "2024",
-        # Isolate the complete synchronous I/O matrix from other test binaries.
-        tags = ["exclusive"],
         deps = [library],
     )
     for suffix, library in [
