@@ -8,7 +8,14 @@ description = "An embedded Rust graph database for local data-plane workloads"
 repository = "https://github.com/nowledge-co/hawdb"
 homepage = "https://hawdb.ai"
 readme = "README.md"
-exclude = ["/tools/mvcc-fuzz/**", "/tools/shiro/**", "/tests/pg-regress/**", "/crates/fuzz/**"]
+exclude = [
+  "/tools/mvcc-fuzz/**",
+  "/tools/shiro/**",
+  "/tests/pg-regress/**",
+  "/crates/fuzz/**",
+  # Benchmark evidence stays in the repository, outside the crates.io archive.
+  "/docs/benchmarks/**",
+]
 
 [dependencies]
 chrono = { version = "0.4", default-features = false, features = ["std"] }
