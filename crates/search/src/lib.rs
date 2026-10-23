@@ -3541,11 +3541,16 @@ impl SearchIndex {
         let lexical_report = lexical_snapshot
             .as_ref()
             .map(|(projection, delta)| {
-                projection.score(&query_terms, delta, retained_text_score_limit, |id| {
-                    Ok(filtered_documents
-                        .binary_search_by(|document| document.id.as_str().cmp(id))
-                        .is_ok())
-                })
+                projection.score_with_stable_filter(
+                    &query_terms,
+                    delta,
+                    retained_text_score_limit,
+                    |id| {
+                        Ok(filtered_documents
+                            .binary_search_by(|document| document.id.as_str().cmp(id))
+                            .is_ok())
+                    },
+                )
             })
             .transpose()?;
         let (

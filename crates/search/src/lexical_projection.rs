@@ -1516,6 +1516,30 @@ impl LexicalProjectionReader {
         })
     }
 
+    pub(super) fn score_with_stable_filter(
+        &self,
+        query_terms: &BTreeSet<String>,
+        delta: &LexicalMiniDelta,
+        retained_score_limit: Option<usize>,
+        allowed: impl FnMut(&str) -> Result<bool>,
+    ) -> Result<LexicalQueryReport> {
+        self.score_terms_with_stable_filter(
+            query_terms,
+            ScoringInputs {
+                complete_candidate_limit: None,
+                delta,
+                max_term_bytes: self.config.max_term_bytes,
+                retained_score_limit,
+                global_statistics: None,
+                prune_blocks: false,
+                context: None,
+            },
+            allowed,
+        )
+        .map(|output| output.report)
+    }
+
+    #[cfg(test)]
     pub(super) fn score(
         &self,
         query_terms: &BTreeSet<String>,
@@ -1532,6 +1556,7 @@ impl LexicalProjectionReader {
         )
     }
 
+    #[cfg(test)]
     pub(super) fn score_with_term_limit(
         &self,
         query_terms: &BTreeSet<String>,
@@ -1577,6 +1602,7 @@ impl LexicalProjectionReader {
     }
 
     #[allow(clippy::too_many_arguments)]
+    #[cfg(test)]
     fn score_with_term_limit_and_statistics(
         &self,
         query_terms: &BTreeSet<String>,
@@ -1603,6 +1629,7 @@ impl LexicalProjectionReader {
         .map(|output| output.report)
     }
 
+    #[cfg(test)]
     fn score_accounted(
         &self,
         query_terms: &BTreeSet<String>,

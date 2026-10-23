@@ -37,6 +37,15 @@ fn stable_filters_reuse_results_without_changing_scores_or_ownership() {
             .unwrap();
         assert_eq!(actual.report, expected);
         assert_eq!((repeated, calls), (5, 3));
+        let mut ordinary_calls = 0;
+        let ordinary = reader
+            .score_with_stable_filter(&terms, &delta, limit, |id| {
+                ordinary_calls += 1;
+                Ok(id != "c")
+            })
+            .unwrap();
+        assert_eq!(ordinary, expected);
+        assert_eq!(ordinary_calls, 3);
         eprintln!("filter limit={limit:?}: repeated calls={repeated}, stable calls={calls}");
         drop(actual);
         assert_eq!(ledger.snapshot().used_bytes, 0);
