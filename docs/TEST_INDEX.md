@@ -213,17 +213,33 @@ vector_only, background_only, text_vector, text_background and vector_background
 | `hawdb_search_streamed_lifecycle_tests` and FTS profile variants | 32-MiB streamed bodies through projection update, replay, compaction/retraction and budget refusal | Five complete FTS feature profiles. Reuse the same feature-profile library; compilation is uniform across the repo. |
 | Allocation-specific integration targets | Identifier, descriptor, segment, analyzer and related allocation accounting | Uses the same repository profile; preserve measurement assumptions and compare allocation evidence after profile changes. |
 
+Resident generation cases in the existing Search unit/feature matrix cover
+ordered COW ranges, writer progress with an old read view, body ownership after
+deletion, retained key/directory capacity, and old/new payload reads across
+checkpoint replacement. The text-enabled case requires physical range reads,
+checks old/new freshness, and checks final descriptor refund. The strict FD
+fixture now verifies that an already pinned read succeeds at capacity while a
+new generation open refuses with the typed cause and retries after release.
+Storage's existing range-reader family independently replaces and removes the
+pathname before the first captured read, retains digest rejection and checks
+final clone release. These use the existing native Search/Storage CI lanes;
+no local duplicate runtime execution or adapter lock/performance acceptance is
+implied. Local replay filters are `resident_documents::`, `resident_snapshot::`
+and `scan::reader::tests::captured_file_` in their owning Cargo packages.
+
 The power-loss publication fixtures select actual temporary manifest writes by
 filename prefix, preserving after-write, before/after-rename and torn/reordered
 fault schedules for both ordinary and partitioned mutations. Validation scratch
 written by later cleanup must not replace the observed publication boundary.
 The storage model unit family checks that this filter preserves path scope,
 skip/last selection and pre-sync torn bytes despite later writes and barriers.
-The branch-GC fixture checks balanced descriptor ownership after runtime closure;
-internal recovery/cleanup may exceed the strict foreground target, while the
-model's native root remains charged. Search-ancestry refusal/retry reserves the
-remaining capacity after that root charge; the captured two-level directory
-walk refuses with zero/one transient slots and retries with two.
+The branch-GC fixture checks balanced descriptor ownership after runtime closure
+and uses reservation pressure to evict the model-owned idle file cache before
+asserting return to the original native-root charge. Internal recovery/cleanup
+may exceed the strict foreground target. Search-ancestry refusal/retry reserves
+the remaining capacity after that root charge: this standalone writer synchronizes
+ancestors serially, refuses with zero free slots and retries with one. Governed
+Consumer staging uses its separate captured-directory inventory.
 These remain existing storage/root and native branch-power-loss CI families.
 
 ## CI benchmark smoke owners

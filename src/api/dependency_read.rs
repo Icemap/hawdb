@@ -658,7 +658,7 @@ mod tests {
         db.query("CREATE (:Record {id: 1})").unwrap();
         db.query_sql("CREATE TABLE records (id BIGINT PRIMARY KEY)")
             .unwrap();
-        db.query_sql("INSERT INTO records VALUES (1)").unwrap();
+        db.query_sql("INSERT INTO records (id) VALUES (1)").unwrap();
         for sql in [false, true] {
             for (result_bytes, cancelled) in [(0, false), (1, false), (4096, false), (4096, true)] {
                 let mut read = db

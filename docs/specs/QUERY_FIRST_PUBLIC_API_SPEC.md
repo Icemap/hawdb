@@ -181,6 +181,22 @@ required.
 
 ## Preparation and admission ownership
 
+Resident projection generations use `SearchIndex::read_snapshot()` to retain
+immutable document pages, analyzer configuration, descriptor metadata and native
+payload handles. Capturing or cloning a generation MUST NOT copy the corpus.
+Updating a shared page copies document references rather than document bodies;
+retired documents remain alive until their last generation is released.
+Range reads keep the captured file identity through pathname replacement and
+continue to validate payload checksums. A read snapshot exposes no checkpoint,
+marker or Consumer mutation entrypoints.
+
+`document_retained_capacity_bytes()` is a conservative bound for document
+buffers and page metadata, including allocated directory capacity after deletion.
+It is not an RSS measurement or the complete projection/query memory budget.
+Mem must additionally account retained projection owners and pair the generation
+with the graph publication after admission before removing its resident fallback.
+The standalone generation primitive alone does not satisfy that adapter gate.
+
 Admission and execution SHOULD reuse one internally prepared statement when its
 execution environment remains compatible. The prepared object MUST NOT retain
 a database snapshot or generation pin across an admission wait. Reuse MUST

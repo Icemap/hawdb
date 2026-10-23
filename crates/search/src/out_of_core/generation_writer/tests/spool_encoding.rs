@@ -54,7 +54,7 @@ fn public_generation_spools_without_record_materialization_and_reopens() {
     assert!(largest_read > 0);
     assert!(largest_read <= 8192, "unbounded spool read: {largest_read}");
     assert_eq!(report.documents_digest, digest.finish());
-    let expected_documents = documents
+    let expected_documents: std::collections::BTreeMap<_, _> = documents
         .iter()
         .map(|document| (document.id.clone(), document.clone()))
         .collect();

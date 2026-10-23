@@ -223,7 +223,7 @@ fn document_digest_contribution(checksum: u64, bytes: u64) -> u64 {
     value ^ (value >> 31)
 }
 
-pub(super) fn documents_digest(documents: &BTreeMap<String, SearchDocument>) -> u64 {
+pub(super) fn documents_digest(documents: &impl crate::resident_documents::DocumentView) -> u64 {
     let mut digest = DocumentsDigest::default();
     for document in documents.values() {
         digest.add_bytes(super::encode_search_document_line(document).as_bytes());

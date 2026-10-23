@@ -21,7 +21,7 @@ use std::fs;
 
 #[test]
 fn resident_projection_numbers_only_vector_documents_in_document_id_order() {
-    let documents = [
+    let documents: BTreeMap<_, _> = [
         ("z-vector", Some(vec![0.0, 1.0])),
         ("a-no-vector", None),
         ("b-vector", Some(vec![1.0, 0.0])),
@@ -587,11 +587,11 @@ fn descriptor_exhaustion_is_a_retryable_resource_error_and_never_quarantines_pro
     let project = ProjectFileDescriptors::acquire_with_capacity_limit(&root, 4, true).unwrap();
     let mut index = SearchIndex::in_memory();
     index.path = Some(root.clone());
-    index.documents = super::tests::sample_documents();
+    index.documents = super::tests::sample_documents().into();
     let identity = index.rabitq_projection_identity(1);
     let path = root.join(crate::rabitq_artifact_file(1));
     drop(
-        RaBitQCandidateProjection::write_from_documents(
+        RaBitQCandidateProjection::write_from_view(
             &path,
             &index.documents,
             identity.clone(),
@@ -631,7 +631,7 @@ fn descriptor_exhaustion_is_a_retryable_resource_error_and_never_quarantines_pro
     ));
     let rejected = root.join(crate::rabitq_artifact_file(2));
     assert!(matches!(
-        RaBitQCandidateProjection::write_from_documents(
+        RaBitQCandidateProjection::write_from_view(
             &rejected,
             &index.documents,
             identity,

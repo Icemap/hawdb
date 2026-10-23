@@ -482,18 +482,17 @@ fn retry_covers_existing_unsynchronized_component_ancestry() {
         baseline.open, 1,
         "the power-loss model owns its root anchor"
     );
-    for free_slots in 0..2 {
-        with_reserved_descriptors(&project, available - free_slots, || {
-            assert!(SearchOutOfCoreGenerationWriter::create(&root, Default::default()).is_err());
-        });
-        assert_eq!(project.metrics().open, baseline.open);
-        assert_eq!(project.metrics().reserved, baseline.reserved);
-    }
+    with_reserved_descriptors(&project, available, || {
+        let error = SearchOutOfCoreGenerationWriter::create(&root, Default::default()).unwrap_err();
+        assert!(matches!(error, HawDBError::FileDescriptors(_)), "{error:?}");
+    });
+    assert_eq!(project.metrics().open, baseline.open);
+    assert_eq!(project.metrics().reserved, baseline.reserved);
 
-    // The captured walk to interrupted/search needs an intermediate directory
-    // beside the pre-admitted final directory. Both are transient; the writer
-    // then retains only the spool beside the model's root anchor.
-    with_reserved_descriptors(&project, available - 2, || {
+    // This standalone writer synchronizes ancestors one at a time. The same
+    // single free slot then admits its spool beside the model's root anchor.
+    // Captured, governed Consumer staging has a separate directory inventory.
+    with_reserved_descriptors(&project, available - 1, || {
         let writer = SearchOutOfCoreGenerationWriter::create(&root, Default::default()).unwrap();
         assert_eq!(project.metrics().open, baseline.open + 1);
         drop(writer);

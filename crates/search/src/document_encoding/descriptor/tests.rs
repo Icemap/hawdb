@@ -266,7 +266,8 @@ fn seeded_descriptors_preserve_ranges_order_and_optional_fields() {
 
 #[test]
 fn multiple_segments_preserve_document_bounds_and_complete_field_summaries() {
-    let documents = (0..crate::SEARCH_FILTER_SEGMENT_TARGET_DOCUMENTS * 3 + 1)
+    let documents: std::collections::BTreeMap<_, _> = (0
+        ..crate::SEARCH_FILTER_SEGMENT_TARGET_DOCUMENTS * 3 + 1)
         .map(|index| {
             let id = format!("document-{index:05}");
             (

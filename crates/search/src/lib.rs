@@ -104,6 +104,10 @@ pub mod projection_consumer;
 #[cfg(feature = "vector-search")]
 pub mod rabitq_projection;
 mod range_io;
+mod resident_documents;
+mod resident_snapshot;
+use resident_documents::{DocumentView, ResidentDocuments};
+pub use resident_snapshot::SearchIndexReadSnapshot;
 mod recall_validation;
 mod snapshot_writer;
 #[cfg(test)]
@@ -1444,7 +1448,7 @@ pub struct SearchProjectionDeltaReport {
 
 #[derive(Debug)]
 pub struct SearchIndex {
-    documents: BTreeMap<String, SearchDocument>,
+    documents: ResidentDocuments,
     vector_index_descriptor: Option<hawdb_core::VectorIndexDescriptor>,
     consumer_binding: Option<consumer::ConsumerBinding>,
     consumer_binding_valid: bool,
@@ -1459,7 +1463,7 @@ pub struct SearchIndex {
     source_graph_commit_epoch: Option<u64>,
     durable_source_graph_commit_epoch: Mutex<Option<u64>>,
     marker_lines: Mutex<BTreeMap<String, Vec<String>>>,
-    analyzer_lexicon: SearchAnalyzerLexicon,
+    analyzer_lexicon: Arc<SearchAnalyzerLexicon>,
     lexical_projection: Mutex<Option<Arc<LexicalProjectionReader>>>,
     lexical_delta: Mutex<Arc<LexicalMiniDelta>>,
     lexical_config: LexicalProjectionConfig,
@@ -1467,7 +1471,8 @@ pub struct SearchIndex {
     rabitq_projection: Mutex<Option<Arc<RaBitQCandidateProjection>>>,
     #[cfg(feature = "vector-search")]
     rabitq_build_options: RaBitQCandidateProjectionBuildOptions,
-    segment_descriptor: Option<SearchSegmentDescriptor>,
+    segment_descriptor: Option<Arc<SearchSegmentDescriptor>>,
+    segment_payload_reader: Option<Arc<hawdb_storage::scan::FileSegmentRangeReader>>,
     range_read_config: SearchRangeReadConfig,
     cleanup_state: Mutex<SearchProjectionCleanupState>,
     runtime_capabilities: RuntimeCapabilities,
@@ -1555,6 +1560,7 @@ impl SearchIndex {
         } else {
             index.load_rabitq_projection()?;
         }
+        index.capture_segment_payload_reader(publication)?;
         index.retry_projection_cleanup_under_publication(
             SearchProjectionCleanupOptions::default(),
             publication,
@@ -1564,14 +1570,14 @@ impl SearchIndex {
 
     pub fn with_analyzer_lexicon(mut self, analyzer_lexicon: SearchAnalyzerLexicon) -> Self {
         let _consumer_mutation = self.mark_untracked_consumer_mutation();
-        self.analyzer_lexicon = analyzer_lexicon;
+        self.analyzer_lexicon = Arc::new(analyzer_lexicon);
         self.invalidate_lexical_projection();
         self
     }
 
     pub fn set_analyzer_lexicon(&mut self, analyzer_lexicon: SearchAnalyzerLexicon) {
         let _consumer_mutation = self.mark_untracked_consumer_mutation();
-        self.analyzer_lexicon = analyzer_lexicon;
+        self.analyzer_lexicon = Arc::new(analyzer_lexicon);
         self.invalidate_lexical_projection();
     }
 
@@ -1732,7 +1738,7 @@ impl SearchIndex {
         if let Some(projection) = self.rabitq_projection() {
             return Ok(Some(projection));
         }
-        let projection = RaBitQCandidateProjection::build_from_documents(
+        let projection = RaBitQCandidateProjection::build_from_view(
             &self.documents,
             self.rabitq_projection_identity(0),
             self.rabitq_build_options,
@@ -1840,6 +1846,7 @@ impl SearchIndex {
         #[cfg(feature = "vector-search")]
         self.invalidate_rabitq_projection();
         self.segment_descriptor = None;
+        self.segment_payload_reader = None;
         Ok(())
     }
 
@@ -1854,6 +1861,7 @@ impl SearchIndex {
         #[cfg(feature = "vector-search")]
         self.invalidate_rabitq_projection();
         self.segment_descriptor = None;
+        self.segment_payload_reader = None;
     }
 
     pub fn apply_projection_delta(
@@ -1926,6 +1934,7 @@ impl SearchIndex {
         self.invalidate_rabitq_projection();
 
         self.segment_descriptor = None;
+        self.segment_payload_reader = None;
         self.embedding_dimension = next_embedding_dimension;
         let source_graph_commit_epoch_updated = source_graph_commit_epoch.is_some();
         if let Some(epoch) = source_graph_commit_epoch {
@@ -2240,7 +2249,9 @@ impl SearchIndex {
                 Ok(())
             })?;
 
-            self.documents = next_documents;
+            self.documents = next_documents.into();
+            self.segment_descriptor = None;
+            self.segment_payload_reader = None;
             self.invalidate_lexical_projection();
             #[cfg(feature = "vector-search")]
             self.invalidate_rabitq_projection();
@@ -2431,6 +2442,8 @@ impl SearchIndex {
             for document in repaired_projection_documents {
                 self.documents.insert(document.id.clone(), document);
             }
+            self.segment_descriptor = None;
+            self.segment_payload_reader = None;
             if missing_documents > 0 {
                 self.mark_full_reindex_needed("metadata repair found missing projection rows")?;
             }
@@ -2714,7 +2727,7 @@ impl SearchIndex {
             .max(loaded_generation.saturating_add(1))
             .max(artifact_generation.saturating_add(1));
         let artifact_path = path.join(rabitq_artifact_file(generation));
-        let projection = RaBitQCandidateProjection::write_from_documents(
+        let projection = RaBitQCandidateProjection::write_from_view(
             &artifact_path,
             &self.documents,
             self.rabitq_projection_identity(generation),
@@ -3379,7 +3392,7 @@ impl SearchIndex {
             None => filter_search_documents_with_segment_pruning(
                 &self.documents,
                 &predicate_pushdown.predicates,
-                self.segment_descriptor.as_ref(),
+                self.segment_descriptor.as_deref(),
             ),
         };
         predicate_pushdown.report.segment_count = filtered.segment_count;
@@ -4172,7 +4185,7 @@ impl SearchIndex {
         let Some(path) = &self.path else {
             return Ok(());
         };
-        self.segment_descriptor = match read_search_segment_descriptor(path) {
+        self.segment_descriptor = (match read_search_segment_descriptor(path) {
             Ok(Some(descriptor))
                 if descriptor.matches_documents(&self.documents)
                     && descriptor.payload_artifact_is_available(path)? =>
@@ -4187,7 +4200,8 @@ impl SearchIndex {
                 let _ = write_search_segment_descriptor(path, &descriptor);
                 Some(descriptor)
             }
-        };
+        })
+        .map(Arc::new);
         Ok(())
     }
 
@@ -4275,7 +4289,7 @@ impl SearchIndex {
 impl Default for SearchIndex {
     fn default() -> Self {
         Self {
-            documents: BTreeMap::new(),
+            documents: ResidentDocuments::default(),
             consumer_binding: None,
             consumer_binding_valid: true,
             consumer_owner: std::sync::Weak::new(),
@@ -4290,7 +4304,7 @@ impl Default for SearchIndex {
             source_graph_commit_epoch: None,
             durable_source_graph_commit_epoch: Mutex::new(None),
             marker_lines: Mutex::new(BTreeMap::new()),
-            analyzer_lexicon: SearchAnalyzerLexicon::default(),
+            analyzer_lexicon: Arc::default(),
             lexical_projection: Mutex::new(None),
             lexical_delta: Mutex::new(Arc::default()),
             lexical_config: LexicalProjectionConfig::default(),
@@ -4299,6 +4313,7 @@ impl Default for SearchIndex {
             #[cfg(feature = "vector-search")]
             rabitq_build_options: RaBitQCandidateProjectionBuildOptions::default(),
             segment_descriptor: None,
+            segment_payload_reader: None,
             range_read_config: SearchRangeReadConfig::default(),
             cleanup_state: Mutex::new(SearchProjectionCleanupState::default()),
             runtime_capabilities: crate::compiled_runtime_capabilities(),
@@ -4388,7 +4403,7 @@ const NOWLEDGE_SEARCH_PROJECTION_TABLES: &[(&str, &str, bool)] = &[
 ];
 
 fn search_projection_probe_table_reports(
-    documents: &BTreeMap<String, SearchDocument>,
+    documents: &impl DocumentView,
     embedding_dimension: Option<usize>,
 ) -> Vec<serde_json::Value> {
     NOWLEDGE_SEARCH_PROJECTION_TABLES
@@ -4439,7 +4454,7 @@ fn search_projection_probe_table_reports(
 }
 
 fn search_projection_probe_document_identity_report(
-    documents: &BTreeMap<String, SearchDocument>,
+    documents: &impl DocumentView,
 ) -> serde_json::Value {
     let mut body = String::new();
     for document_id in documents.keys() {
@@ -4458,12 +4473,12 @@ fn search_projection_probe_document_identity_report(
 fn search_projection_probe_predicate_pushdown_report(index: &SearchIndex) -> serde_json::Value {
     let segment_descriptor_ready = index
         .segment_descriptor
-        .as_ref()
+        .as_deref()
         .is_some_and(|descriptor| descriptor.matches_documents(&index.documents));
     let transient_descriptor;
     let descriptor = match index
         .segment_descriptor
-        .as_ref()
+        .as_deref()
         .filter(|descriptor| descriptor.matches_documents(&index.documents))
     {
         Some(descriptor) => Some(descriptor),
@@ -4561,7 +4576,7 @@ fn search_projection_probe_production_filter_pruning_report(
 ) -> serde_json::Value {
     let Some(descriptor) = index
         .segment_descriptor
-        .as_ref()
+        .as_deref()
         .filter(|descriptor| descriptor.matches_documents(&index.documents))
     else {
         return serde_json::json!({
@@ -5559,9 +5574,9 @@ struct SearchSegmentFieldSummary {
 }
 
 fn filter_search_documents_with_segment_pruning<'a>(
-    documents: &'a BTreeMap<String, SearchDocument>,
+    documents: &'a impl DocumentView,
     predicates: &SearchPredicateSet,
-    descriptor: Option<&SearchSegmentDescriptor>,
+    descriptor: Option<&'a SearchSegmentDescriptor>,
 ) -> FilteredSearchDocuments<'a> {
     if predicates.is_empty() {
         return FilteredSearchDocuments {
@@ -5626,9 +5641,9 @@ fn filter_search_documents_with_segment_pruning<'a>(
 }
 
 fn filter_search_documents_with_persisted_segments<'a>(
-    documents: &'a BTreeMap<String, SearchDocument>,
+    documents: &'a impl DocumentView,
     predicates: &SearchPredicateSet,
-    descriptor: &SearchSegmentDescriptor,
+    descriptor: &'a SearchSegmentDescriptor,
 ) -> FilteredSearchDocuments<'a> {
     let mut filtered_documents = Vec::new();
     let mut pruned_segment_count = 0;
@@ -5648,7 +5663,7 @@ fn filter_search_documents_with_persisted_segments<'a>(
         scanned_document_count += segment.document_count;
         filtered_documents.extend(
             documents
-                .range(segment.first_document_id.clone()..=segment.last_document_id.clone())
+                .range_documents(&segment.first_document_id, &segment.last_document_id)
                 .map(|(_, document)| document)
                 .filter(|document| search_document_matches_predicates(document, predicates)),
         );
@@ -6112,7 +6127,7 @@ impl SearchTimestampRange {
 }
 
 impl SearchSegmentDescriptor {
-    fn build(documents: &BTreeMap<String, SearchDocument>) -> Self {
+    fn build(documents: &impl DocumentView) -> Self {
         let fields = search_segment_descriptor_fields(documents);
         let mut segments = Vec::new();
         let mut segment_documents = Vec::with_capacity(SEARCH_FILTER_SEGMENT_TARGET_DOCUMENTS);
@@ -6141,7 +6156,7 @@ impl SearchSegmentDescriptor {
         }
     }
 
-    fn matches_documents(&self, documents: &BTreeMap<String, SearchDocument>) -> bool {
+    fn matches_documents(&self, documents: &impl DocumentView) -> bool {
         self.target_documents == SEARCH_FILTER_SEGMENT_TARGET_DOCUMENTS
             && self.document_count == documents.len()
             && self
@@ -6457,9 +6472,7 @@ impl SearchSegmentFieldSummary {
     }
 }
 
-fn search_segment_descriptor_fields(
-    documents: &BTreeMap<String, SearchDocument>,
-) -> BTreeSet<String> {
+fn search_segment_descriptor_fields(documents: &impl DocumentView) -> BTreeSet<String> {
     let mut fields = documents
         .values()
         .flat_map(|document| document.metadata.keys().cloned())
@@ -7300,7 +7313,7 @@ fn decode_search_document_line(line: &str) -> Result<SearchDocument> {
 
 fn write_search_segment_payloads<T>(
     path: &Path,
-    documents: &BTreeMap<String, SearchDocument>,
+    documents: &impl DocumentView,
     descriptor: &mut SearchSegmentDescriptor,
     finish: impl FnOnce(&mut File) -> Result<T>,
 ) -> Result<T> {
@@ -7318,7 +7331,7 @@ fn write_search_segment_payloads<T>(
         for segment in &mut descriptor.segments {
             let mut body = String::from("HAWDB_SEARCH_SEGMENT_V1\n");
             for document in documents
-                .range(segment.first_document_id.clone()..=segment.last_document_id.clone())
+                .range_documents(&segment.first_document_id, &segment.last_document_id)
                 .map(|(_, document)| document)
             {
                 body.push_str(&encode_search_document_line(document));
@@ -11823,7 +11836,7 @@ mod tests {
 
     #[test]
     #[cfg(feature = "full-text-search")]
-    fn pruned_range_read_budget_rejection_is_typed_and_retryable() {
+    fn pinned_range_reads_survive_capacity_pressure_and_new_open_is_retryable() {
         use hawdb_core::error::FileDescriptorError;
         use hawdb_storage::file_descriptors::ProjectFileDescriptors;
 
@@ -11892,25 +11905,35 @@ mod tests {
             }
         }
         assert_eq!(project.metrics().open, 32);
-        let error = index
+        let pinned = index
             .try_search_with_options(
                 "bounded physical range",
                 None,
                 SearchMode::Text,
                 options.clone(),
             )
-            .unwrap_err();
+            .unwrap();
+        assert_eq!(pinned.hits.len(), 1);
+        assert_eq!(
+            pinned
+                .candidate_set
+                .metadata_predicate_pushdown
+                .physical_range_read_count,
+            1
+        );
+        let error = SearchIndex::open(&path).unwrap_err();
         assert!(
             matches!(
                 error,
                 HawDBError::FileDescriptors(FileDescriptorError::BudgetExceeded { .. })
             ),
-            "range-read rejection lost its resource cause: {error:?}"
+            "generation-open rejection lost its resource cause: {error:?}"
         );
         assert_eq!(project.metrics().open, 32);
         assert_eq!(project.metrics().reserved, 0);
         drop(held);
         assert_eq!(std::fs::read(&payload).unwrap(), original_payload);
+        drop(SearchIndex::open(&path).unwrap());
         let result = index
             .try_search_with_options("bounded physical range", None, SearchMode::Text, options)
             .unwrap();
@@ -12199,11 +12222,13 @@ mod tests {
             index.checkpoint().unwrap();
         }
         let mut index = SearchIndex::open(&path).unwrap();
-        for segment in &mut index
-            .segment_descriptor
-            .as_mut()
-            .expect("persisted segment descriptor")
-            .segments
+        for segment in &mut Arc::make_mut(
+            index
+                .segment_descriptor
+                .as_mut()
+                .expect("persisted segment descriptor"),
+        )
+        .segments
         {
             segment.payload_range = None;
         }
@@ -13554,6 +13579,18 @@ mod tests {
             .search("adjacency", None, SearchMode::Text, 10)
             .unwrap();
         assert_eq!(hits[0].id, "memory:mem_1");
+        index.segment_descriptor = Some(Arc::new(SearchSegmentDescriptor::build(&index.documents)));
+        let old = index.read_snapshot();
+        index
+            .rebuild_from_graph(
+                &catalog,
+                &TestProjectionSource::in_memory(),
+                SearchRebuildOptions::default(),
+            )
+            .unwrap();
+        assert!(index.segment_descriptor.is_none());
+        assert_eq!(index.document_count(), 0);
+        assert_eq!(old.document_count(), 2);
     }
 
     #[test]
@@ -14315,7 +14352,8 @@ mod tests {
             )
             .unwrap();
 
-        let mut index = SearchIndex::in_memory();
+        let path = unique_test_dir("metadata_repair_read_generation");
+        let mut index = SearchIndex::open(&path).unwrap();
         index
             .upsert(SearchDocument {
                 id: "memory:mem_1".to_string(),
@@ -14325,11 +14363,22 @@ mod tests {
                 metadata: BTreeMap::from([("kind".to_string(), "stale".to_string())]),
             })
             .unwrap();
+        index.checkpoint().unwrap();
+        drop(index);
+        let mut index = SearchIndex::open(&path).unwrap();
+        let old = index.read_snapshot();
+        assert!(index.segment_descriptor.is_some());
         let summary = index
             .repair_metadata_from_graph(&catalog, &store, MetadataRepairOptions::default())
             .unwrap();
 
         assert_eq!(summary.repaired_documents, 1);
+        assert!(index.segment_descriptor.is_none());
+        assert!(index.segment_payload_reader.is_none());
+        assert_eq!(
+            old.document("memory:mem_1").unwrap().metadata["kind"],
+            "stale"
+        );
         let document = index.document("memory:mem_1").unwrap();
         assert_eq!(document.title, "Old title");
         assert_eq!(document.content, "Old body should stay");
@@ -14346,6 +14395,9 @@ mod tests {
             document.metadata.get("space_id").map(String::as_str),
             Some("default")
         );
+        drop(old);
+        drop(index);
+        std::fs::remove_dir_all(path).unwrap();
     }
 
     #[test]

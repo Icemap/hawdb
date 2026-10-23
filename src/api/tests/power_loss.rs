@@ -895,15 +895,32 @@ fn deletion_and_gc_cuts_keep_an_unleased_nested_branch_recoverable() {
             }
             drop(objects);
             drop(database);
-            let metrics = fixture.model.project().metrics();
+            let project = fixture.model.project();
+            let metrics = project.metrics();
             // Internal recovery/publication/cleanup may exceed the foreground
-            // capacity target. They must still retire all charged ownership;
-            // the power-loss model alone retains its original native root.
+            // capacity target. The model also owns the shared idle-file cache.
+            // Demand its capacity back to distinguish evictable cache entries
+            // from leaked runtime or generation ownership.
             assert!(metrics.strict_capacity_limit);
             assert_eq!(metrics.limit, 32);
             assert_eq!(metrics.admitted_runtimes, baseline.admitted_runtimes);
-            assert_eq!(metrics.open, baseline.open, "{metrics:?}");
+            assert_eq!(
+                metrics.ownership_locks, baseline.ownership_locks,
+                "{metrics:?}"
+            );
+            assert_eq!(metrics.mutable_wals, baseline.mutable_wals, "{metrics:?}");
             assert_eq!(metrics.reserved, baseline.reserved, "{metrics:?}");
+            let pressure = project
+                .reserve(metrics.limit - baseline.open - baseline.reserved)
+                .unwrap();
+            let evicted = project.metrics();
+            assert_eq!(evicted.open, baseline.open, "{evicted:?}");
+            assert_eq!(
+                evicted.cached_handles, baseline.cached_handles,
+                "{evicted:?}"
+            );
+            drop(pressure);
+            assert_eq!(project.metrics().reserved, baseline.reserved);
 
             eprintln!("branch-power-gc-v1 durability={durability:?} cut={gc_cut:?} high_water={} retained_root_fds={}", metrics.high_water, baseline.open);
             let plans = publication_fault_plans(&cut)

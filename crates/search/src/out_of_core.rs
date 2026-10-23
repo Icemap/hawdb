@@ -33,6 +33,7 @@ use super::{
 };
 use crate::bounded_file::{read_bound_file, read_bounded_file};
 use crate::error::{HawDBError, Result};
+use crate::resident_documents::DocumentView;
 #[cfg(test)]
 use crate::{decode_search_segment_documents_bounded, validate_search_segment_documents};
 use crate::{
@@ -4614,7 +4615,7 @@ fn write_out_of_core_sidecars(
         for segment in &descriptor.segments {
             let documents = index
                 .documents
-                .range(segment.first_document_id.clone()..=segment.last_document_id.clone())
+                .range_documents(&segment.first_document_id, &segment.last_document_id)
                 .map(|(_, document)| document)
                 .collect::<Vec<_>>();
             if documents.len() != segment.document_count {

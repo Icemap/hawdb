@@ -24,6 +24,7 @@ use hawdb_storage::scan::{
 };
 use std::collections::BTreeMap;
 use std::num::{NonZeroU64, NonZeroUsize};
+use std::sync::Arc;
 
 const SHARED_HOST_SEARCH_RANGE_READ_MAX_WAVE_BYTES: u64 = 8 * 1024 * 1024;
 const MOBILE_SEARCH_RANGE_READ_MAX_WAVE_BYTES: u64 = 2 * 1024 * 1024;
@@ -73,6 +74,29 @@ impl Default for SearchRangeReadConfig {
 }
 
 impl SearchIndex {
+    pub(super) fn capture_segment_payload_reader(
+        &mut self,
+        publication: &crate::out_of_core::SearchProjectionPublishLease,
+    ) -> Result<()> {
+        if !self.segment_descriptor.as_ref().is_some_and(|descriptor| {
+            descriptor
+                .segments
+                .iter()
+                .any(|segment| segment.payload_range.is_some())
+        }) {
+            return Ok(());
+        }
+        let file = publication.open_captured_child(SEARCH_SEGMENT_PAYLOAD_FILE)?;
+        let mut reader = FileSegmentRangeReader::new();
+        reader.register_file(
+            SEARCH_SEGMENT_PAYLOAD_ARTIFACT_ID,
+            SEARCH_SEGMENT_PAYLOAD_FILE,
+            file,
+        );
+        self.segment_payload_reader = Some(Arc::new(reader));
+        Ok(())
+    }
+
     pub(super) fn read_pruned_search_segments(
         &self,
         predicates: &SearchPredicateSet,
@@ -127,14 +151,24 @@ impl SearchIndex {
                 .expect("independent segment coalescing limit is non-zero"),
         )
         .schedule_with_wave_budget(ranges, self.range_read_config.max_wave_bytes);
-        let mut reader = FileSegmentRangeReader::new();
-        reader.register(
-            SEARCH_SEGMENT_PAYLOAD_ARTIFACT_ID,
-            path.join(SEARCH_SEGMENT_PAYLOAD_FILE),
-        );
+        let fallback_reader;
+        let reader = match &self.segment_payload_reader {
+            Some(reader) => reader.as_ref(),
+            None => {
+                fallback_reader = {
+                    let mut reader = FileSegmentRangeReader::new();
+                    reader.register(
+                        SEARCH_SEGMENT_PAYLOAD_ARTIFACT_ID,
+                        path.join(SEARCH_SEGMENT_PAYLOAD_FILE),
+                    );
+                    reader
+                };
+                &fallback_reader
+            }
+        };
         let mut documents = BTreeMap::new();
         let report = SegmentReadExecutor::new(self.range_read_config.max_wave_bytes)
-            .execute(&reader, &schedule, |payload| {
+            .execute(reader, &schedule, |payload| {
                 let [segment_id] = payload.range.segment_ids.as_slice() else {
                     return Err(HawDBError::Storage(
                         "search range reader unexpectedly coalesced independent segment frames"

@@ -837,7 +837,7 @@ where
         || index
             .import_source_graph_commit_epoch
             .is_some_and(|source| source > epoch)
-        || index.analyzer_lexicon != crate::SearchAnalyzerLexicon::default()
+        || *index.analyzer_lexicon != crate::SearchAnalyzerLexicon::default()
     {
         return Err(invalid("initializer replaced the private Consumer builder or supplied an invalid binding/analyzer"));
     }

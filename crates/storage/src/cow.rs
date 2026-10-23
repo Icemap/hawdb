@@ -17,6 +17,7 @@
 
 use crate::{adjacency::AdjacencyPostingList, NodeId, NodeRecord, RelId, RelRecord};
 use hawdb_core::{IndexId, IndexStatisticsSample, LabelId, RelTypeId, Value};
+use std::borrow::Borrow;
 use std::collections::{BTreeMap, BTreeSet};
 use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, OnceLock};
@@ -469,29 +470,38 @@ impl<K: Ord, V> CowSegmentedMap<K, V> {
     }
 
     #[inline]
-    fn segment_index(&self, key: &K) -> Option<usize> {
+    fn segment_index<Q: Ord + ?Sized>(&self, key: &Q) -> Option<usize>
+    where
+        K: Borrow<Q>,
+    {
         if self.segments.is_empty() {
             return None;
         }
         let index = self.segments.partition_point(|segment| {
             segment
                 .last_key_value()
-                .is_some_and(|(last_key, _)| last_key < key)
+                .is_some_and(|(last_key, _)| last_key.borrow() < key)
         });
         Some(index.min(self.segments.len() - 1))
     }
 
     #[inline]
-    pub fn get(&self, key: &K) -> Option<&V> {
+    pub fn get<Q: Ord + ?Sized>(&self, key: &Q) -> Option<&V>
+    where
+        K: Borrow<Q>,
+    {
         self.segment_index(key)
             .and_then(|index| self.segments[index].get(key))
     }
 
-    pub fn contains_key(&self, key: &K) -> bool {
+    pub fn contains_key<Q: Ord + ?Sized>(&self, key: &Q) -> bool
+    where
+        K: Borrow<Q>,
+    {
         self.get(key).is_some()
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (&K, &V)> {
+    pub fn iter(&self) -> impl DoubleEndedIterator<Item = (&K, &V)> + Clone {
         self.segments.iter().flat_map(|segment| segment.iter())
     }
 
@@ -510,23 +520,31 @@ impl<K: Ord, V> CowSegmentedMap<K, V> {
     }
 
     /// Borrow a key interval without scanning unrelated immutable segments.
-    pub(crate) fn range<'a>(
+    pub fn range<'a, Q: Ord + ?Sized>(
         &'a self,
-        first: &'a K,
-        last: &'a K,
-    ) -> impl Iterator<Item = (&'a K, &'a V)> {
+        first: &'a Q,
+        last: &'a Q,
+    ) -> impl Iterator<Item = (&'a K, &'a V)>
+    where
+        K: Borrow<Q>,
+    {
         assert!(first <= last, "invalid segmented-map key interval");
         let start = self.segments.partition_point(|segment| {
-            segment.last_key_value().is_some_and(|(key, _)| key < first)
+            segment
+                .last_key_value()
+                .is_some_and(|(key, _)| key.borrow() < first)
         });
         let end = self.segments.partition_point(|segment| {
             segment
                 .first_key_value()
-                .is_some_and(|(key, _)| key <= last)
+                .is_some_and(|(key, _)| key.borrow() <= last)
         });
-        self.segments[start..end]
-            .iter()
-            .flat_map(move |segment| segment.range(first..=last))
+        self.segments[start..end].iter().flat_map(move |segment| {
+            segment.range::<Q, _>((
+                std::ops::Bound::Included(first),
+                std::ops::Bound::Included(last),
+            ))
+        })
     }
 
     /// Seek the next captured record without visiting completed pages.
@@ -548,11 +566,11 @@ impl<K: Ord, V> CowSegmentedMap<K, V> {
             })
     }
 
-    pub fn keys(&self) -> impl Iterator<Item = &K> {
+    pub fn keys(&self) -> impl DoubleEndedIterator<Item = &K> + Clone {
         self.iter().map(|(key, _)| key)
     }
 
-    pub fn values(&self) -> impl Iterator<Item = &V> {
+    pub fn values(&self) -> impl DoubleEndedIterator<Item = &V> + Clone {
         self.iter().map(|(_, value)| value)
     }
 }
@@ -673,7 +691,10 @@ impl<K: Ord + Clone + CowPageWeight, V: Clone + CowPageWeight> CowSegmentedMap<K
             .expect("inserted segmented map entry must be available")
     }
 
-    pub fn remove(&mut self, key: &K) -> Option<V> {
+    pub fn remove<Q: Ord + ?Sized>(&mut self, key: &Q) -> Option<V>
+    where
+        K: Borrow<Q>,
+    {
         let index = self.segment_index(key)?;
         if !self.segments[index].contains_key(key) {
             return None;
@@ -722,6 +743,20 @@ impl<K, V> CowSegmentedMap<K, V> {
 
     pub fn segment_count(&self) -> usize {
         self.segments.len()
+    }
+
+    /// Retained page-directory allocation, excluding pages and their entries.
+    /// Deleting records does not necessarily shrink the directory's capacity.
+    pub fn page_directory_capacity_bytes(&self) -> usize {
+        std::mem::size_of::<Self>()
+            .saturating_add(std::mem::size_of::<CowData<CowPageDirectory<K, V>>>())
+            .saturating_add(2 * std::mem::size_of::<usize>())
+            .saturating_add(
+                self.segments
+                    .pages
+                    .capacity()
+                    .saturating_mul(std::mem::size_of::<CowSegment<BTreeMap<K, V>>>()),
+            )
     }
 
     /// Shared directory capacity, including its Arc header. Page/record
