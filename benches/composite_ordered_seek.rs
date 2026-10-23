@@ -27,11 +27,14 @@ fn populate(db: &mut Database, rows: usize) -> hawdb::Result<()> {
                 ("body".into(), Value::String("x".repeat(256))),
             ]))
         })
-        .collect();
-    db.query_with_params(
-        "UNWIND $rows AS r CREATE (:Item {kind: r.kind, rank: r.rank, id: r.id, body: r.body})",
-        &BTreeMap::from([("rows".into(), Value::List(fixture))]),
-    )?;
+        .collect::<Vec<_>>();
+    // Keep fixture transactions below the unchanged default WAL record ceiling.
+    for batch in fixture.chunks(4096) {
+        db.query_with_params(
+            "UNWIND $rows AS r CREATE (:Item {kind: r.kind, rank: r.rank, id: r.id, body: r.body})",
+            &BTreeMap::from([("rows".into(), Value::List(batch.to_vec()))]),
+        )?;
+    }
     db.query("CREATE INDEX ON :Item(kind, rank, id)")?;
     Ok(())
 }
@@ -105,7 +108,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let mut outputs = [Vec::new(), Vec::new()];
                 let mut samples = Vec::new();
                 for path_index in if run % 2 == 0 { [0, 1] } else { [1, 0] } {
-                    let before = db.storage_residency_report()?.graph_index_reads;
+                    let before = db.storage_residency_report()?;
                     let start = Instant::now();
                     let report = snapshot.query_request_streaming(
                         QueryRequest::new([&query, &reference][path_index]).with_params(&params),
@@ -115,10 +118,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         },
                     )?;
                     let elapsed = start.elapsed().as_nanos();
-                    let reads = db
-                        .storage_residency_report()?
+                    let after = db.storage_residency_report()?;
+                    let reads = after
                         .graph_index_reads
-                        .delta_since(before);
+                        .delta_since(before.graph_index_reads);
                     let profile = report.execution_profile;
                     assert_eq!(
                         profile.pipeline_memory_report.query_memory_completion_bytes,
@@ -129,6 +132,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         "index_entries_decoded":reads.property_entries_decoded, "index_bytes":reads.property_bytes_read,
                         "index_descriptor_bytes":reads.property_descriptor_storage_bytes_read,
                         "index_candidates":reads.property_candidates_returned,
+                        "cache_capacity_bytes":after.segment_cache_capacity_bytes,
+                        "cache_resident_bytes_before":before.segment_cache_resident_bytes,
+                        "cache_resident_bytes_after":after.segment_cache_resident_bytes,
+                        "cache_pinned_bytes_after":after.segment_cache_pinned_bytes,
+                        "cache_evictions":after.segment_cache_eviction_count.saturating_sub(before.segment_cache_eviction_count),
+                        "cache_admission_rejections":after.segment_cache_admission_rejection_count.saturating_sub(before.segment_cache_admission_rejection_count),
                         "query_peak_bytes":profile.pipeline_memory_report.query_memory_peak_bytes,
                         "blocking_peak_bytes":profile.blocking_operator_memory_reports.iter().map(|report| report.peak_tracked_bytes).max().unwrap_or(0),
                         "scan_reports":profile.scan_pruning_reports.iter().map(|report| json!({"strategy":format!("{:?}", report.strategy), "candidates_before_filter":report.candidate_count_before_filter, "output_rows":report.output_count, "filtered_rows":report.filtered_out_count})).collect::<Vec<_>>()}));

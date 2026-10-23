@@ -204,6 +204,7 @@ pub fn resolve_plan_template_value<'a>(
 /// The caller must use a parameterized plan whose cache key retains value shapes.
 #[doc(hidden)]
 pub fn parameter_scalar_types(
+    plan: &ParameterizedLogicalPlan,
     parameters: &BTreeMap<String, Value>,
 ) -> BTreeMap<Value, hawdb_core::PropertyType> {
     fn visit(
@@ -230,8 +231,10 @@ pub fn parameter_scalar_types(
         }
     }
     let mut output = BTreeMap::new();
-    for (name, value) in parameters {
-        visit(name, value, &mut Vec::new(), &mut output);
+    for name in plan.cache_key.values.keys() {
+        if let Some(value) = parameters.get(name) {
+            visit(name, value, &mut Vec::new(), &mut output);
+        }
     }
     output
 }
@@ -1244,7 +1247,17 @@ mod tests {
                 ]),
             ),
         ]);
-        let types = parameter_scalar_types(&parameters);
+        let mut parameters = parameters;
+        parameters.insert(
+            "unused".into(),
+            Value::List(vec![Value::String("omitted".into()); 64]),
+        );
+        let statement = cypher::parse(
+            "MATCH (n:Item) WHERE n.rank > $rank AND n.id IN $keys RETURN n.id AS id",
+        )
+        .unwrap();
+        let plan = parameterize_logical_plan(&statement, &parameters).unwrap();
+        let types = parameter_scalar_types(&plan, &parameters);
         assert_eq!(types.len(), 3);
         for (marker, kind) in &types {
             let value = resolve_plan_template_value(marker, &parameters, true).unwrap();
@@ -1257,8 +1270,11 @@ mod tests {
         }
         let int_marker = parameter_marker("rank", &Value::Int(12), &[]);
         assert_eq!(types.get(&int_marker), Some(&PropertyType::Int));
-        let changed = BTreeMap::from([("rank".into(), Value::Float(12.5))]);
-        assert!(!parameter_scalar_types(&changed).contains_key(&int_marker));
+        let mut changed = parameters.clone();
+        changed.insert("rank".into(), Value::Float(12.5));
+        let changed_plan = parameterize_logical_plan(&statement, &changed).unwrap();
+        assert!(!parameter_scalar_types(&changed_plan, &changed).contains_key(&int_marker));
+        assert_ne!(plan.cache_key(), changed_plan.cache_key());
         assert_ne!(
             parameter_value_shape(&parameters["rank"]),
             parameter_value_shape(&changed["rank"])

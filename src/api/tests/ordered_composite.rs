@@ -90,7 +90,7 @@ fn assert_pages(
     }
 }
 
-fn assert_native_plan(db: &mut Database) {
+fn assert_native_plan(db: &mut Database, phase: &str) {
     for descending in [false, true] {
         let (first, next, _) = queries(descending, 7);
         let params = BTreeMap::from([
@@ -104,16 +104,27 @@ fn assert_native_plan(db: &mut Database) {
                 .unwrap()
                 .physical_plan
                 .explain(0);
-            assert!(plan.contains("IndexNodeCompositeOrderedSeek"), "{plan}");
+            assert!(
+                plan.contains("IndexNodeCompositeOrderedSeek"),
+                "{phase}: {plan}"
+            );
             assert!(
                 !plan.contains("SortExec") && !plan.contains("TopNExec"),
-                "{plan}"
+                "{phase}: {plan}"
             );
             if query == &next {
-                assert!(plan.contains("after: Some"), "{plan}");
+                assert!(plan.contains("after: Some"), "{phase}: {plan}");
             }
         }
     }
+}
+
+#[test]
+fn ordered_composite_resident_query_pages_use_native_order() {
+    let mut db = Database::new();
+    populate(&mut db, false, true);
+    assert_native_plan(&mut db, "resident");
+    assert_pages(|query, params| db.query_with_params(query, params));
 }
 
 #[test]
@@ -125,10 +136,11 @@ fn ordered_composite_query_pages_preserve_pinned_checkpoint_delta_and_reopen() {
     };
     let mut db = Database::open_with_config(&path, config.clone()).unwrap();
     populate(&mut db, false, true);
-    assert_native_plan(&mut db);
+    // Before the first checkpoint an OutOfCore handle need not expose an
+    // ordered projection. Complete page semantics remain independent of selection.
     assert_pages(|query, params| db.query_with_params(query, params));
     db.checkpoint().unwrap();
-    assert_native_plan(&mut db);
+    assert_native_plan(&mut db, "checkpoint");
     let mut pinned = db.begin_read_transaction().unwrap();
     db.query("MATCH (n:Item) WHERE n.id = 'item-0001' SET n.rank = 40")
         .unwrap();
@@ -141,14 +153,14 @@ fn ordered_composite_query_pages_preserve_pinned_checkpoint_delta_and_reopen() {
     db.query("CREATE (:Item {kind: 'note', rank: 12, id: 'new-item'})")
         .unwrap();
     assert_pages(|query, params| pinned.query_with_params(query, params));
-    assert_native_plan(&mut db);
+    assert_native_plan(&mut db, "delta");
     assert_pages(|query, params| db.query_with_params(query, params));
     db.checkpoint().unwrap();
     assert_pages(|query, params| pinned.query_with_params(query, params));
     drop(pinned);
     drop(db);
     let mut db = Database::open_with_config(&path, config).unwrap();
-    assert_native_plan(&mut db);
+    assert_native_plan(&mut db, "reopen");
     assert_pages(|query, params| db.query_with_params(query, params));
     drop(db);
     std::fs::remove_dir_all(path).unwrap();
@@ -228,7 +240,7 @@ fn ordered_composite_cache_types_and_runtime_projection_capability_are_fenced() 
         "point legality does not depend on unused composite ordering"
     );
     drop(runtime);
-    assert_native_plan(&mut db);
+    assert_native_plan(&mut db, "projection-published");
     for rank in [Value::Int(12), Value::Float(12.5), Value::Int(8)] {
         params.insert("rank".into(), rank.clone());
         let plan = db

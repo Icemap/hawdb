@@ -220,7 +220,7 @@ pub(super) fn candidate(
                     .iter()
                     .find_map(|part| equality(part, variable, property))?;
                 let kind = catalog.scalar_type(value)?;
-                // Numeric equality crosses Int/Float types; require an enforced Int domain.
+                // The initial numeric-prefix opt-in is limited to an enforced Int domain.
                 if !matches!(kind, PropertyType::Bool | PropertyType::String)
                     && !(kind == PropertyType::Int && *declared == PropertyType::Int)
                 {

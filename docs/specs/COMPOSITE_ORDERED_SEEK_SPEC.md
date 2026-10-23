@@ -10,8 +10,10 @@ An index consists of one or more equality-prefix properties, followed by exactly
 two ordering properties. Both order items have the same direction. The last key
 has an enforced unique constraint. Both suffix properties have active, enforced,
 non-null `INT` or `STRING` descriptors. Prefix equality supplies non-null presence;
-integer prefix equality additionally requires an enforced `INT` descriptor because
-numeric equality can otherwise match floating-point keys in a different sort domain.
+the initial numeric-prefix opt-in is restricted to an enforced `INT` descriptor.
+This is a conservative supported-domain restriction. Equality uses typed value
+equality; numeric range comparisons instead cross Int/Float domains, so continuation
+bounds additionally require comparator-compatible suffix types.
 
 The selected read view must advertise complete ordered index delivery. A schema
 index declared after a canonical checkpoint does not by itself prove an available
@@ -43,7 +45,8 @@ through the fallback plan. The optimizer never interprets an opaque parameter ma
 as a scalar type: the plan-cache marker owner supplies shape-specific proofs only
 on eligible cache misses, and binding retains ownership of marker interpretation.
 Cache hits and ordinary point queries do not clone the optimizer catalog for this
-proof.
+proof. The marker owner supplies proofs only for bindings retained by the verified
+parameterized plan, omitting unused lists and other request fields.
 
 ## Ordering, snapshots and continuation
 
@@ -116,6 +119,9 @@ scalar projection with inference-disabled sorting, alternates path order and
 retains every sample, including a labelled initial warmup excluded from latency summaries. It records setup cost, latency, index work and
 admitted memory for first, middle and near-end pages in both directions. Its
 persistent fixture checkpoints and reopens without flushing device caches.
-Timings from that mode are not device-cold results, and index bytes exclude
-canonical hydration and unrelated scan I/O. Preserve negative cases and separate
+Fixture writes use bounded 4,096-row transactions under the unchanged default WAL
+record ceiling; complete setup cost is recorded. Cache capacity, residency,
+evictions and admission refusals accompany query memory reports. Timings from that
+mode are not device-cold results, and index bytes exclude canonical hydration and
+unrelated scan I/O. Preserve negative cases and separate
 source identity, profile, compilation cost and execution measurements.

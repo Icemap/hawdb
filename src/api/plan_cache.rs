@@ -322,8 +322,8 @@ fn ordered_composite_indexes<R: hawdb_storage::graph_engine::GraphReadEngine>(
                         }
                         Some((property.clone(), descriptor.value_type))
                     } else {
-                        // Equality to a non-NULL literal supplies prefix presence. Only
-                        // numeric equality additionally needs an exact declared type.
+                        // Equality supplies prefix presence. Keep declared types for
+                        // the initial conservative numeric-prefix opt-in.
                         Some((
                             property.clone(),
                             active.map_or(PropertyType::Any, |descriptor| descriptor.value_type),
@@ -824,7 +824,12 @@ pub(super) fn optimized_query_plan_for<S: crate::executor::ExecutionStore>(
             .catalog
             .as_ref()
             .clone()
-            .with_parameter_scalar_types(parameter_scalar_types(parameters))
+            .with_parameter_scalar_types(parameter_scalar_types(
+                parameterized
+                    .as_ref()
+                    .expect("parameter proofs require a parameterized plan"),
+                parameters,
+            ))
     });
     let planning_catalog = query_catalog.as_ref().unwrap_or(&catalog_access.catalog);
     let logical_root = LogicalPlanRoot::new(logical);
