@@ -18,8 +18,8 @@ use crate::QueryRequest;
 const CREATE: &str = "MERGE (j:AugmentationJob {job_id: $job_id}) ON CREATE SET \
     j.job_type = $job_type, j.parameters = $parameters, j.created_at = $created_at, \
     j.status = 'pending', j.progress = 0.0, j.message = 'Job created', \
-    j.result = '{}', j.error_message = '', j.started_at = NULL, j.completed_at = NULL \
-    RETURN j.job_id AS id";
+    j.result = '{}', j.error_message = '', j.started_at = NULL, j.completed_at = NULL";
+const READ: &str = "MATCH (j:AugmentationJob {job_id: $job_id}) RETURN j.job_id AS id";
 const START: &str = "MATCH (j:AugmentationJob {job_id: $job_id}) WHERE j.status = 'pending' \
     SET j.status = 'running', j.started_at = $started_at, j.message = 'Job started' \
     RETURN j.job_id AS id";
@@ -139,7 +139,16 @@ fn updates_augmentation_job_lifecycle_batch_for_nowledge_shapes() {
         let output = transaction
             .query_request(bounded_query(query, &parameters))
             .unwrap();
-        counts.push(output.rows.len());
+        if query == CREATE {
+            let created = transaction
+                .query_request(bounded_query(READ, &parameters))
+                .unwrap();
+            assert_eq!(created.rows.len(), 1);
+            assert_eq!(created.rows[0]["id"], Value::String(job_id.into()));
+            counts.push(created.rows.len());
+        } else {
+            counts.push(output.rows.len());
+        }
     }
     assert_eq!(counts, [1, 1, 1, 1, 0, 0]);
     assert_eq!(duplicates, 1);
@@ -242,9 +251,12 @@ fn augmentation_job_lifecycle_queries_persist_as_one_wal_batch_and_replays() {
             ("parameters".into(), Value::String("{}".into())),
             ("created_at".into(), Value::Int(10)),
         ]);
+        transaction
+            .query_request(bounded_query(CREATE, &parameters))
+            .unwrap();
         assert_eq!(
             transaction
-                .query_request(bounded_query(CREATE, &parameters))
+                .query_request(bounded_query(READ, &parameters))
                 .unwrap()
                 .rows
                 .len(),

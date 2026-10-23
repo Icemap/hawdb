@@ -22,15 +22,15 @@ const SUMMARY_PAGE: &str =
     c.ai_summary AS ai_summary, c.updated_at AS updated_at, true AS has_summary \
     ORDER BY c.member_count DESC, c.name, c.community_id, c.id, id(c) LIMIT $limit";
 const PRESENCE_PAGE: &str = "MATCH (c:Community) WHERE c.community_id >= $minimum \
-    RETURN c.id AS id, COALESCE(c.ai_summary <> '', false) AS has_summary \
+    RETURN c.id AS id, CASE WHEN c.ai_summary IS NOT NULL AND c.ai_summary <> '' THEN true ELSE false END AS has_summary \
     ORDER BY has_summary DESC, c.member_count DESC, c.name, c.community_id, c.id, id(c) LIMIT $limit";
 const BY_NUMBER: &str = "MATCH (c:Community {community_id: $community_id}) \
     RETURN c.id AS id, c.community_id AS community_id, c.name AS name, \
     c.description AS description, c.ai_summary AS ai_summary, c.member_count AS member_count, \
-    c.updated_at AS updated_at, COALESCE(c.ai_summary <> '', false) AS has_summary \
+    c.updated_at AS updated_at, CASE WHEN c.ai_summary IS NOT NULL AND c.ai_summary <> '' THEN true ELSE false END AS has_summary \
     ORDER BY id(c) LIMIT 1";
 const BY_ID: &str = "MATCH (c:Community {id: $id}) \
-    RETURN c.community_id AS community_id, COALESCE(c.ai_summary <> '', false) AS has_summary \
+    RETURN c.community_id AS community_id, CASE WHEN c.ai_summary IS NOT NULL AND c.ai_summary <> '' THEN true ELSE false END AS has_summary \
     ORDER BY id(c) LIMIT 1";
 
 fn bounded_query<'a>(

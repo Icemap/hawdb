@@ -24,7 +24,7 @@ fn deletes_knowledge_entity_batch_through_parameterized_query() {
     db.query("CREATE (:Memory {id: 'memory_2', source_id: 'thread_1'})-[:MENTIONS]->(:Entity {id: 'entity_2'})").unwrap();
     db.query("CREATE (:Memory {id: 'memory_3', source_id: 'thread_1'})")
         .unwrap();
-    let parameters = batch_delete_parameters(&["memory_2", "missing", "memory_1"]).unwrap();
+    let parameters = batch_id_parameters(&["memory_2", "missing", "memory_1"]).unwrap();
     let before = db.commit_epoch().unwrap();
     let mut transaction = db.begin_transaction().unwrap();
     let candidates = transaction
@@ -33,11 +33,14 @@ fn deletes_knowledge_entity_batch_through_parameterized_query() {
     assert_eq!(candidates.rows.len(), 2);
     assert_eq!(candidates.rows[0]["id"], Value::String("memory_1".into()));
     assert_eq!(candidates.rows[1]["id"], Value::String("memory_2".into()));
-    let output = transaction
+    transaction
         .query_request(bounded_batch_query(DELETE, &parameters))
         .unwrap();
-    assert_eq!(output.rows.len(), 2);
-    transaction.commit().unwrap();
+    let after = transaction
+        .query_request(bounded_batch_query(READ, &parameters))
+        .unwrap();
+    assert!(after.rows.is_empty());
+    assert_eq!(transaction.commit().unwrap().rows.len(), 2);
     assert_eq!(before, 3);
     assert_eq!(db.commit_epoch().unwrap(), before + 1);
     assert!(db
@@ -45,7 +48,7 @@ fn deletes_knowledge_entity_batch_through_parameterized_query() {
         .unwrap()
         .rows
         .is_empty());
-    let parameters = batch_delete_parameters(&["memory_3"]).unwrap();
+    let parameters = batch_id_parameters(&["memory_3"]).unwrap();
     assert_eq!(
         db.query_request(bounded_batch_query(READ, &parameters))
             .unwrap()
@@ -80,7 +83,7 @@ fn scoped_knowledge_entity_batch_delete_does_not_write_filtered_rows() {
         .unwrap();
     db.query("CREATE (:Memory {id: 'memory_2', source_id: 'thread_2', space_id: ''})")
         .unwrap();
-    let mut parameters = batch_delete_parameters(&["memory_1", "memory_2"]).unwrap();
+    let mut parameters = batch_id_parameters(&["memory_1", "memory_2"]).unwrap();
     parameters.insert("source_id".into(), Value::String("thread_1".into()));
     let output = db
         .query_request(bounded_batch_query(
@@ -101,7 +104,7 @@ fn scoped_knowledge_entity_batch_delete_does_not_write_filtered_rows() {
 fn knowledge_entity_batch_delete_deduplicates_writes() {
     let mut db = Database::new();
     db.query("CREATE (:Memory {id: 'memory_1'})").unwrap();
-    let parameters = batch_delete_parameters(&["memory_1", "memory_1"]).unwrap();
+    let parameters = batch_id_parameters(&["memory_1", "memory_1"]).unwrap();
     let output = db
         .query_request(bounded_batch_query(DELETE, &parameters))
         .unwrap();
@@ -119,7 +122,7 @@ fn knowledge_entity_batch_delete_does_not_write_projected_idless_identity() {
     let mut db = Database::new();
     db.query("CREATE (:Memory {title: 'Idless memory'})")
         .unwrap();
-    let parameters = batch_delete_parameters(&["0"]).unwrap();
+    let parameters = batch_id_parameters(&["0"]).unwrap();
     let output = db
         .query_request(bounded_batch_query(DELETE, &parameters))
         .unwrap();
@@ -144,7 +147,7 @@ fn knowledge_entity_batch_delete_does_not_write_projected_idless_identity() {
 fn knowledge_entity_batch_delete_rejects_invalid_identifier() {
     let mut db = Database::new();
     db.query("CREATE (:Memory {id: 'memory_1'})").unwrap();
-    let parameters = batch_delete_parameters(&["memory_1"]).unwrap();
+    let parameters = batch_id_parameters(&["memory_1"]).unwrap();
     let error = db
         .query_request(bounded_batch_query(
             "MATCH (m:Bad-Label) WHERE m.id IN $ids DETACH DELETE m",
@@ -172,7 +175,7 @@ fn read_only_database_rejects_knowledge_entity_batch_delete_query() {
             },
         )
         .unwrap();
-        let parameters = batch_delete_parameters(&["memory_1"]).unwrap();
+        let parameters = batch_id_parameters(&["memory_1"]).unwrap();
         let error = db
             .query_request(bounded_batch_query(DELETE, &parameters))
             .unwrap_err();
@@ -200,7 +203,7 @@ fn knowledge_entity_batch_delete_query_persists_and_replays_from_wal() {
             .unwrap();
         db.query("CREATE (:Memory {id: 'memory_2'})").unwrap();
         let before = read_test_wal(&path).unwrap().matches("\tbatch\t").count();
-        let parameters = batch_delete_parameters(&["memory_1", "memory_2"]).unwrap();
+        let parameters = batch_id_parameters(&["memory_1", "memory_2"]).unwrap();
         let output = db
             .query_request(bounded_batch_query(DELETE, &parameters))
             .unwrap();
@@ -216,13 +219,13 @@ fn knowledge_entity_batch_delete_query_persists_and_replays_from_wal() {
     {
         let db = Database::open(&path).unwrap();
         let mut read = db.begin_read_transaction().unwrap();
-        let parameters = batch_delete_parameters(&["memory_1", "memory_2"]).unwrap();
+        let parameters = batch_id_parameters(&["memory_1", "memory_2"]).unwrap();
         assert!(read
             .query_request(bounded_batch_query(READ, &parameters))
             .unwrap()
             .rows
             .is_empty());
-        let parameters = batch_delete_parameters(&["entity_1"]).unwrap();
+        let parameters = batch_id_parameters(&["entity_1"]).unwrap();
         assert_eq!(
             read.query_request(bounded_batch_query(
                 "MATCH (e:Entity) WHERE e.id IN $ids RETURN e.id AS id",

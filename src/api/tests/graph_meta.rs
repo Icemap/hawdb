@@ -18,15 +18,13 @@ use crate::QueryRequest;
 const STAMP_PAGERANK: &str = "MERGE (m:GraphMeta {meta_id: $meta_id}) SET \
     m.pagerank_applied = $pagerank_applied, m.pagerank_algorithm = $pagerank_algorithm, \
     m.pagerank_damping = $pagerank_damping, m.pagerank_iterations = $pagerank_iterations, \
-    m.pagerank_computed_at = $pagerank_computed_at, m.updated_at = $updated_at \
-    RETURN id(m) AS node_id";
+    m.pagerank_computed_at = $pagerank_computed_at, m.updated_at = $updated_at";
 const STAMP_COMMUNITY: &str = "MERGE (m:GraphMeta {meta_id: $meta_id}) SET \
     m.community_detection_applied = $community_detection_applied, \
     m.community_algorithm = $community_algorithm, m.community_resolution = $community_resolution, \
     m.community_count = $community_count, \
     m.community_detection_computed_at = $community_detection_computed_at, \
-    m.last_augmentation_at = $last_augmentation_at, m.updated_at = $updated_at \
-    RETURN id(m) AS node_id";
+    m.last_augmentation_at = $last_augmentation_at, m.updated_at = $updated_at";
 const DELETE: &str = "MATCH (m:GraphMeta {meta_id: $meta_id}) DELETE m";
 
 fn bounded_query<'a>(query: &'a str, parameters: &'a BTreeMap<String, Value>) -> QueryRequest<'a> {
@@ -126,8 +124,11 @@ fn stamps_graph_meta_batch_for_nowledge_algorithm_state() {
             duplicates += 1;
             continue;
         }
-        let output = transaction
+        transaction
             .query_request(bounded_query(query, &parameters))
+            .unwrap();
+        let output = transaction
+            .query_request(bounded_query(GRAPH_META_ALGORITHM_STATE_QUERY, &parameters))
             .unwrap();
         assert_eq!(output.rows.len(), 1);
         node_ids.push(output.rows[0]["node_id"].clone());
@@ -203,15 +204,18 @@ fn graph_meta_stamp_queries_persist_as_one_wal_batch_and_replays() {
             ]),
         )
         .unwrap();
-        let output = transaction
+        transaction
             .query_request(bounded_query(
                 "MERGE (m:GraphMeta {meta_id: $meta_id}) \
-             SET m.pagerank_applied = $applied, m.pagerank_computed_at = $computed \
-             RETURN id(m) AS node_id",
+             SET m.pagerank_applied = $applied, m.pagerank_computed_at = $computed",
                 &pagerank,
             ))
             .unwrap();
+        let output = transaction
+            .query_request(bounded_query(GRAPH_META_ALGORITHM_STATE_QUERY, &pagerank))
+            .unwrap();
         assert_eq!(output.rows.len(), 1);
+        assert_eq!(output.rows[0]["pagerank_computed_at"], Value::Int(404));
         let community = parameters(
             "community",
             BTreeMap::from([
@@ -225,8 +229,11 @@ fn graph_meta_stamp_queries_persist_as_one_wal_batch_and_replays() {
             ]),
         )
         .unwrap();
-        let output = transaction
+        transaction
             .query_request(bounded_query(STAMP_COMMUNITY, &community))
+            .unwrap();
+        let output = transaction
+            .query_request(bounded_query(GRAPH_META_ALGORITHM_STATE_QUERY, &community))
             .unwrap();
         assert_eq!(output.rows.len(), 1);
         transaction.commit().unwrap();
@@ -477,11 +484,14 @@ fn graph_meta_delete_query_persists_and_replays() {
             .unwrap();
         assert_eq!(before.rows.len(), 1);
         assert!(matches!(before.rows[0]["node_id"], Value::Int(_)));
-        let output = transaction
+        transaction
             .query_request(bounded_query(DELETE, &parameters))
             .unwrap();
-        assert_eq!(output.rows.len(), 1);
-        transaction.commit().unwrap();
+        let after = transaction
+            .query_request(bounded_query(GRAPH_META_ALGORITHM_STATE_QUERY, &parameters))
+            .unwrap();
+        assert!(after.rows.is_empty());
+        assert_eq!(transaction.commit().unwrap().rows.len(), 1);
     }
     let wal = read_test_wal(&path).unwrap();
     assert!(wal.contains("delete_node"));

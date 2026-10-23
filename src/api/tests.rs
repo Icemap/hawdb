@@ -30,26 +30,20 @@ use super::{
     KnowledgeFallbackReasonCode, KnowledgeFanoutReasonCode, KnowledgeGraphPathDirection,
     KnowledgeInducedEdgeListRequest, KnowledgeLabelLifecycleBatchRequest,
     KnowledgeLabelLifecycleUpdate, KnowledgeLabelMemoryTransferRequest,
-    KnowledgeMemoryAccessBatchRequest, KnowledgeMemoryAccessTouch,
-    KnowledgeMemoryContentBatchRequest, KnowledgeMemoryContentUpdate,
-    KnowledgeMemoryDecayRefreshBatchRequest, KnowledgeMemoryDecayRefreshUpdate,
-    KnowledgeMemoryDedupReviewedBatchRequest, KnowledgeMemoryEvolvesCreate,
-    KnowledgeMemoryEvolvesCreateBatchRequest, KnowledgeMemoryLabelDeleteRequest,
-    KnowledgeMemoryLabelTransferRequest, KnowledgeMemoryLatestBatchRequest,
-    KnowledgeMemoryLatestUpdate, KnowledgeMemoryLifecycleBatchRequest,
-    KnowledgeMemoryLifecycleUpdate, KnowledgeMemoryMetadataBatchRequest,
-    KnowledgeMemoryMetadataUpdate, KnowledgeNeighborDirection, KnowledgeNeighborsRequest,
-    KnowledgeNormalizedSpaceMoveBatchRequest, KnowledgePathRequest, KnowledgePropertyBatchRequest,
-    KnowledgePropertyUpdateBatchRequest, KnowledgePropertyUpdateRequest,
-    KnowledgeRelationshipCreateBatchRequest, KnowledgeRelationshipCreateRequest,
-    KnowledgeRelationshipDeleteBatchRequest, KnowledgeRelationshipDeleteRequest,
-    KnowledgeRelationshipUpdateBatchRequest, KnowledgeRelationshipUpdateRequest,
-    KnowledgeRelationshipUpsertBatchRequest, KnowledgeRelationshipUpsertRequest,
-    KnowledgeRelationshipsRequest, KnowledgeRetrievalEmptyReasonCode, KnowledgeRetrievalRequest,
-    KnowledgeRetrievalStage, KnowledgeScopedEntityBatchRequest, KnowledgeScopedEntityRequest,
+    KnowledgeMemoryEvolvesCreate, KnowledgeMemoryEvolvesCreateBatchRequest,
+    KnowledgeMemoryLabelDeleteRequest, KnowledgeMemoryLabelTransferRequest,
+    KnowledgeMemoryLatestBatchRequest, KnowledgeMemoryLatestUpdate,
+    KnowledgeMemoryLifecycleBatchRequest, KnowledgeMemoryLifecycleUpdate,
+    KnowledgeNeighborDirection, KnowledgeNeighborsRequest, KnowledgePathRequest,
+    KnowledgePropertyBatchRequest, KnowledgeRelationshipCreateBatchRequest,
+    KnowledgeRelationshipCreateRequest, KnowledgeRelationshipDeleteBatchRequest,
+    KnowledgeRelationshipDeleteRequest, KnowledgeRelationshipUpdateBatchRequest,
+    KnowledgeRelationshipUpdateRequest, KnowledgeRelationshipUpsertBatchRequest,
+    KnowledgeRelationshipUpsertRequest, KnowledgeRelationshipsRequest,
+    KnowledgeRetrievalEmptyReasonCode, KnowledgeRetrievalRequest, KnowledgeRetrievalStage,
+    KnowledgeScopedEntityBatchRequest, KnowledgeScopedEntityRequest,
     KnowledgeScopedNeighborsRequest, KnowledgeScopedPathRequest,
-    KnowledgeScopedPropertyBatchRequest, KnowledgeScopedPropertyUpdateBatchRequest,
-    KnowledgeScopedPropertyUpdateRequest, KnowledgeScopedRelationshipCreateBatchRequest,
+    KnowledgeScopedPropertyBatchRequest, KnowledgeScopedRelationshipCreateBatchRequest,
     KnowledgeScopedRelationshipCreateRequest, KnowledgeScopedRelationshipDeleteBatchRequest,
     KnowledgeScopedRelationshipDeleteRequest, KnowledgeScopedRelationshipUpdateBatchRequest,
     KnowledgeScopedRelationshipUpdateRequest, KnowledgeScopedRelationshipsRequest,
@@ -2173,51 +2167,46 @@ fn scoped_knowledge_property_batch_uses_query_runtime_plan_cache() {
     assert_eq!(stats.hits, 1);
 }
 
+const PROPERTY_TITLE_UPDATE: &str = "MATCH (m:Memory {id: $id}) SET m.title = $title \
+    RETURN id(m) AS node_id";
+const PROPERTY_PAIR_UPDATE: &str = "MATCH (m:Memory {id: $id}) \
+    SET m.title = $title, m.review_status = $status RETURN id(m) AS node_id";
+const PROPERTY_SNAPSHOT: &str = "MATCH (m:Memory) \
+    RETURN m.id AS id, id(m) AS node_id, m.title AS title, m.review_status AS status \
+    ORDER BY m.id LIMIT 5";
+
+fn property_title_parameters(id: &str, title: Option<&str>) -> Result<BTreeMap<String, Value>> {
+    // Validate caller input before opening a transaction; fixed statements own
+    // property selection and all graph matching.
+    let title =
+        title.ok_or_else(|| HawDBError::Semantic("at least one assignment required".into()))?;
+    Ok(BTreeMap::from([
+        ("id".into(), Value::String(id.into())),
+        ("title".into(), Value::String(title.into())),
+    ]))
+}
+
 #[test]
-fn updates_knowledge_properties_through_typed_api() {
+fn updates_knowledge_properties_through_bounded_query() {
     let mut db = Database::new();
     db.query("CREATE (:Memory {id: 'memory_1', title: 'Old', review_status: 'pending'})")
         .unwrap();
-
+    let before = db.commit_epoch().unwrap();
+    let mut parameters = property_title_parameters("memory_1", Some("New")).unwrap();
+    parameters.insert("status".into(), Value::String("approved".into()));
     let output = db
-        .update_knowledge_properties(&KnowledgePropertyUpdateRequest {
-            entity: KnowledgeEntityRequest {
-                label: "Memory".to_string(),
-                external_id: "memory_1".to_string(),
-            },
-            assignments: BTreeMap::from([
-                ("title".to_string(), Value::String("New".to_string())),
-                (
-                    "review_status".to_string(),
-                    Value::String("approved".to_string()),
-                ),
-            ]),
-        })
+        .query_request(bounded_batch_query(PROPERTY_PAIR_UPDATE, &parameters))
         .unwrap();
-
-    assert_eq!(output.graph_commit_epoch_before, 1);
-    assert_eq!(output.graph_commit_epoch_after, 2);
-    assert_eq!(output.node_id, Some(0));
-    assert!(output.matched);
-    assert!(!output.filtered_out);
-    assert_eq!(output.updated_property_count, 2);
-    let row = db
-        .query_property_batch_via_cypher(&KnowledgePropertyBatchRequest {
-            entities: vec![KnowledgeEntityRequest {
-                label: "Memory".to_string(),
-                external_id: "memory_1".to_string(),
-            }],
-            property_names: vec!["title".to_string(), "review_status".to_string()],
-        })
+    assert_eq!(before, 1);
+    assert_eq!(db.commit_epoch().unwrap(), before + 1);
+    assert_eq!(output.rows.len(), 1);
+    assert_eq!(output.rows[0]["node_id"], Value::Int(0));
+    let output = db
+        .query_request(bounded_batch_query(PROPERTY_SNAPSHOT, &BTreeMap::new()))
         .unwrap();
-    assert_eq!(
-        row.rows[0].properties.get("title"),
-        Some(&Some(Value::String("New".to_string())))
-    );
-    assert_eq!(
-        row.rows[0].properties.get("review_status"),
-        Some(&Some(Value::String("approved".to_string())))
-    );
+    assert_eq!(output.rows.len(), 1);
+    assert_eq!(output.rows[0]["title"], Value::String("New".into()));
+    assert_eq!(output.rows[0]["status"], Value::String("approved".into()));
 }
 
 #[test]
@@ -2227,45 +2216,23 @@ fn scoped_knowledge_property_update_does_not_write_filtered_seed() {
         "CREATE (:Memory {id: 'memory_1', title: 'Old', source_id: 'thread_1', space_id: ''})",
     )
     .unwrap();
-
+    let before = db.commit_epoch().unwrap();
+    let mut parameters = property_title_parameters("memory_1", Some("New")).unwrap();
+    parameters.insert("source".into(), Value::String("thread_2".into()));
+    parameters.insert("space".into(), Value::String("default".into()));
+    let output = db.query_request(bounded_batch_query(
+        "MATCH (m:Memory {id: $id}) WHERE m.source_id = $source \
+         AND (m.space_id = $space OR ($space = 'default' AND (m.space_id IS NULL OR m.space_id = ''))) \
+         SET m.title = $title RETURN id(m) AS node_id", &parameters)).unwrap();
+    assert!(output.rows.is_empty());
+    assert_eq!(before, 1);
+    assert_eq!(db.commit_epoch().unwrap(), before);
     let output = db
-        .update_scoped_knowledge_properties(&KnowledgeScopedPropertyUpdateRequest {
-            update: KnowledgePropertyUpdateRequest {
-                entity: KnowledgeEntityRequest {
-                    label: "Memory".to_string(),
-                    external_id: "memory_1".to_string(),
-                },
-                assignments: BTreeMap::from([(
-                    "title".to_string(),
-                    Value::String("New".to_string()),
-                )]),
-            },
-            metadata_filters: BTreeMap::from([
-                ("source_id".to_string(), "thread_2".to_string()),
-                ("space_id".to_string(), "default".to_string()),
-            ]),
-        })
+        .query_request(bounded_batch_query(PROPERTY_SNAPSHOT, &BTreeMap::new()))
         .unwrap();
-
-    assert_eq!(output.graph_commit_epoch_before, 1);
-    assert_eq!(output.graph_commit_epoch_after, 1);
-    assert_eq!(output.node_id, Some(0));
-    assert!(!output.matched);
-    assert!(output.filtered_out);
-    assert_eq!(output.updated_property_count, 0);
-    let row = db
-        .query_property_batch_via_cypher(&KnowledgePropertyBatchRequest {
-            entities: vec![KnowledgeEntityRequest {
-                label: "Memory".to_string(),
-                external_id: "memory_1".to_string(),
-            }],
-            property_names: vec!["title".to_string()],
-        })
-        .unwrap();
-    assert_eq!(
-        row.rows[0].properties.get("title"),
-        Some(&Some(Value::String("Old".to_string())))
-    );
+    assert_eq!(output.rows.len(), 1);
+    assert_eq!(output.rows[0]["node_id"], Value::Int(0));
+    assert_eq!(output.rows[0]["title"], Value::String("Old".into()));
 }
 
 #[test]
@@ -2273,32 +2240,30 @@ fn knowledge_property_update_rejects_invalid_identifiers() {
     let mut db = Database::new();
     db.query("CREATE (:Memory {id: 'memory_1', title: 'Old'})")
         .unwrap();
-
+    let parameters = property_title_parameters("memory_1", Some("New")).unwrap();
     let error = db
-        .update_knowledge_properties(&KnowledgePropertyUpdateRequest {
-            entity: KnowledgeEntityRequest {
-                label: "Memory".to_string(),
-                external_id: "memory_1".to_string(),
-            },
-            assignments: BTreeMap::from([(
-                "bad-name".to_string(),
-                Value::String("New".to_string()),
-            )]),
-        })
+        .query_request(bounded_batch_query(
+            "MATCH (m:Memory {id: $id}) SET m.bad-name = $title RETURN id(m)",
+            &parameters,
+        ))
         .unwrap_err();
-
-    assert!(error.to_string().contains("property identifier"));
-    assert_eq!(db.runtime.get().unwrap().store.commit_epoch(), 1);
+    assert!(matches!(error, HawDBError::Parse(_)), "{error}");
+    assert_eq!(db.commit_epoch().unwrap(), 1);
+    let output = db
+        .query_request(bounded_batch_query(PROPERTY_SNAPSHOT, &BTreeMap::new()))
+        .unwrap();
+    assert_eq!(output.rows[0]["title"], Value::String("Old".into()));
 }
 
 #[test]
-fn read_only_database_rejects_typed_knowledge_property_update() {
-    let path = unique_test_dir("read_only_typed_knowledge_property_update");
+fn read_only_database_rejects_knowledge_property_query_update() {
+    let path = unique_test_dir("read_only_knowledge_property_query_update");
     {
         let mut db = Database::open(&path).unwrap();
         db.query("CREATE (:Memory {id: 'memory_1', title: 'Old'})")
             .unwrap();
     }
+    let wal_before = read_test_wal(&path).unwrap();
     {
         let mut db = Database::open_with_config(
             &path,
@@ -2308,148 +2273,89 @@ fn read_only_database_rejects_typed_knowledge_property_update() {
             },
         )
         .unwrap();
+        let parameters = property_title_parameters("memory_1", Some("New")).unwrap();
         let error = db
-            .update_knowledge_properties(&KnowledgePropertyUpdateRequest {
-                entity: KnowledgeEntityRequest {
-                    label: "Memory".to_string(),
-                    external_id: "memory_1".to_string(),
-                },
-                assignments: BTreeMap::from([(
-                    "title".to_string(),
-                    Value::String("New".to_string()),
-                )]),
-            })
+            .query_request(bounded_batch_query(PROPERTY_TITLE_UPDATE, &parameters))
             .unwrap_err();
         assert!(error.to_string().contains("read-only"));
     }
+    assert_eq!(read_test_wal(&path).unwrap(), wal_before);
     std::fs::remove_dir_all(path).unwrap();
 }
 
 #[test]
-fn typed_knowledge_property_update_persists_and_replays_from_wal() {
-    let path = unique_test_dir("typed_knowledge_property_update_wal_replay");
+fn knowledge_property_query_update_persists_and_replays_from_wal() {
+    let path = unique_test_dir("knowledge_property_query_update_wal_replay");
     {
         let mut db = Database::open(&path).unwrap();
         db.query("CREATE (:Memory {id: 'memory_1', title: 'Old'})")
             .unwrap();
-        db.update_knowledge_properties(&KnowledgePropertyUpdateRequest {
-            entity: KnowledgeEntityRequest {
-                label: "Memory".to_string(),
-                external_id: "memory_1".to_string(),
-            },
-            assignments: BTreeMap::from([("title".to_string(), Value::String("New".to_string()))]),
-        })
-        .unwrap();
-    }
-    let wal = read_test_wal(&path).unwrap();
-    assert!(wal.contains("set_node_property"));
-    {
-        let db = Database::open(&path).unwrap();
+        let parameters = property_title_parameters("memory_1", Some("New")).unwrap();
         let output = db
-            .query_property_batch_via_cypher(&KnowledgePropertyBatchRequest {
-                entities: vec![KnowledgeEntityRequest {
-                    label: "Memory".to_string(),
-                    external_id: "memory_1".to_string(),
-                }],
-                property_names: vec!["title".to_string()],
-            })
+            .query_request(bounded_batch_query(PROPERTY_TITLE_UPDATE, &parameters))
             .unwrap();
-        assert_eq!(
-            output.rows[0].properties.get("title"),
-            Some(&Some(Value::String("New".to_string())))
-        );
+        assert_eq!(output.rows.len(), 1);
+    }
+    assert!(read_test_wal(&path).unwrap().contains("set_node_property"));
+    {
+        let mut db = Database::open(&path).unwrap();
+        let output = db
+            .query_request(bounded_batch_query(PROPERTY_SNAPSHOT, &BTreeMap::new()))
+            .unwrap();
+        assert_eq!(output.rows.len(), 1);
+        assert_eq!(output.rows[0]["node_id"], Value::Int(0));
+        assert_eq!(output.rows[0]["title"], Value::String("New".into()));
     }
     std::fs::remove_dir_all(path).unwrap();
 }
 
 #[test]
-fn updates_knowledge_properties_batch_through_typed_api() {
+fn updates_knowledge_properties_batch_through_bounded_queries() {
     let mut db = Database::new();
     db.query("CREATE (:Memory {id: 'memory_1', title: 'Old 1', review_status: 'pending'})")
         .unwrap();
     db.query("CREATE (:Memory {id: 'memory_2', title: 'Old 2', review_status: 'pending'})")
         .unwrap();
-
+    let before = db.commit_epoch().unwrap();
+    let mut transaction = db.begin_transaction().unwrap();
+    let mut parameters = property_title_parameters("memory_1", Some("New 1")).unwrap();
+    parameters.insert("status".into(), Value::String("approved".into()));
+    let first = transaction
+        .query_request(bounded_batch_query(PROPERTY_PAIR_UPDATE, &parameters))
+        .unwrap();
+    assert_eq!(first.rows.len(), 1);
+    assert_eq!(first.rows[0]["node_id"], Value::Int(0));
+    for (id, title, count) in [("memory_2", "New 2", 1), ("missing", "Ignored", 0)] {
+        let parameters = property_title_parameters(id, Some(title)).unwrap();
+        let output = transaction
+            .query_request(bounded_batch_query(PROPERTY_TITLE_UPDATE, &parameters))
+            .unwrap();
+        assert_eq!(output.rows.len(), count);
+        if count == 1 {
+            assert_eq!(output.rows[0]["node_id"], Value::Int(1));
+        }
+    }
+    transaction.commit().unwrap();
+    assert_eq!(before, 2);
+    assert_eq!(db.commit_epoch().unwrap(), before + 1);
     let output = db
-        .update_knowledge_properties_batch(&KnowledgePropertyUpdateBatchRequest {
-            updates: vec![
-                KnowledgePropertyUpdateRequest {
-                    entity: KnowledgeEntityRequest {
-                        label: "Memory".to_string(),
-                        external_id: "memory_1".to_string(),
-                    },
-                    assignments: BTreeMap::from([
-                        ("title".to_string(), Value::String("New 1".to_string())),
-                        (
-                            "review_status".to_string(),
-                            Value::String("approved".to_string()),
-                        ),
-                    ]),
-                },
-                KnowledgePropertyUpdateRequest {
-                    entity: KnowledgeEntityRequest {
-                        label: "Memory".to_string(),
-                        external_id: "memory_2".to_string(),
-                    },
-                    assignments: BTreeMap::from([(
-                        "title".to_string(),
-                        Value::String("New 2".to_string()),
-                    )]),
-                },
-                KnowledgePropertyUpdateRequest {
-                    entity: KnowledgeEntityRequest {
-                        label: "Memory".to_string(),
-                        external_id: "missing".to_string(),
-                    },
-                    assignments: BTreeMap::from([(
-                        "title".to_string(),
-                        Value::String("Ignored".to_string()),
-                    )]),
-                },
-            ],
-        })
+        .query_request(bounded_batch_query(PROPERTY_SNAPSHOT, &BTreeMap::new()))
         .unwrap();
-
-    assert_eq!(output.graph_commit_epoch_before, 2);
-    assert_eq!(output.graph_commit_epoch_after, 3);
-    assert_eq!(output.rows.len(), 3);
-    assert_eq!(output.matched_count, 2);
-    assert_eq!(output.missing_count, 1);
-    assert_eq!(output.filtered_out_count, 0);
-    assert_eq!(output.non_writable_count, 0);
-    assert_eq!(output.updated_property_count, 3);
-    assert_eq!(output.rows[0].updated_property_count, 2);
-    assert_eq!(output.rows[1].updated_property_count, 1);
-    assert_eq!(output.rows[2].node_id, None);
-
-    let row = db
-        .query_property_batch_via_cypher(&KnowledgePropertyBatchRequest {
-            entities: vec![
-                KnowledgeEntityRequest {
-                    label: "Memory".to_string(),
-                    external_id: "memory_1".to_string(),
-                },
-                KnowledgeEntityRequest {
-                    label: "Memory".to_string(),
-                    external_id: "memory_2".to_string(),
-                },
-            ],
-            property_names: vec!["title".to_string(), "review_status".to_string()],
-        })
-        .unwrap();
-    assert_eq!(
-        row.rows[0].properties.get("title"),
-        Some(&Some(Value::String("New 1".to_string())))
-    );
-    assert_eq!(
-        row.rows[0].properties.get("review_status"),
-        Some(&Some(Value::String("approved".to_string())))
-    );
-    assert_eq!(
-        row.rows[1].properties.get("title"),
-        Some(&Some(Value::String("New 2".to_string())))
-    );
+    assert_eq!(output.rows.len(), 2);
+    assert_eq!(output.rows[0]["title"], Value::String("New 1".into()));
+    assert_eq!(output.rows[0]["status"], Value::String("approved".into()));
+    assert_eq!(output.rows[1]["title"], Value::String("New 2".into()));
+    assert_eq!(output.rows[1]["status"], Value::String("pending".into()));
 }
+
+const THREAD_SPACE_MOVE: &str = "MATCH (t:Thread) WHERE t.thread_id IN $ids \
+    AND CASE WHEN t.space_id IS NULL OR t.space_id = '' THEN 'default' ELSE t.space_id END = $source \
+    AND CASE WHEN t.space_id IS NULL OR t.space_id = '' THEN 'default' ELSE t.space_id END <> $target \
+    SET t.space_id = $target, t.updated_at = $updated_at RETURN t.thread_id AS id";
+const MEMORY_SPACE_MOVE: &str = "MATCH (m:Memory) WHERE m.id IN $ids \
+    AND CASE WHEN m.space_id IS NULL OR m.space_id = '' THEN 'default' ELSE m.space_id END = $source \
+    AND CASE WHEN m.space_id IS NULL OR m.space_id = '' THEN 'default' ELSE m.space_id END <> $target \
+    SET m.space_id = $target RETURN m.id AS id";
 
 #[test]
 fn moves_thread_normalized_space_batch_by_identity_property() {
@@ -2460,347 +2366,327 @@ fn moves_thread_normalized_space_batch_by_identity_property() {
         .unwrap();
     db.query("CREATE (:Thread {id: 'storage-3', thread_id: 'thread-3', space_id: 'team'})")
         .unwrap();
-
-    let output = db
-        .move_knowledge_normalized_space_batch(&KnowledgeNormalizedSpaceMoveBatchRequest {
-            label: "Thread".to_string(),
-            identity_property: "thread_id".to_string(),
-            external_ids: vec![
-                "thread-1".to_string(),
-                "thread-2".to_string(),
-                "thread-3".to_string(),
-                "thread-2".to_string(),
-                "missing".to_string(),
-            ],
-            source_space_id: Some("default".to_string()),
-            target_space_id: "team".to_string(),
-            updated_at: Some(Value::String("2026-07-19".to_string())),
-        })
+    let mut parameters =
+        batch_id_parameters(&["thread-1", "thread-2", "thread-3", "thread-2", "missing"]).unwrap();
+    parameters.insert("source".into(), Value::String("default".into()));
+    parameters.insert("target".into(), Value::String("team".into()));
+    parameters.insert("updated_at".into(), Value::String("2026-07-19".into()));
+    let before = db.commit_epoch().unwrap();
+    let mut transaction = db.begin_transaction().unwrap();
+    let candidates = transaction
+        .query_request(bounded_batch_query(
+            "MATCH (t:Thread) WHERE t.thread_id IN $ids RETURN t.thread_id AS id ORDER BY id",
+            &parameters,
+        ))
         .unwrap();
-
-    assert_eq!(output.graph_commit_epoch_before, 3);
-    assert_eq!(output.graph_commit_epoch_after, 4);
-    assert_eq!(output.matched_count, 4);
-    assert_eq!(output.missing_count, 1);
-    assert_eq!(output.source_mismatch_count, 1);
-    assert_eq!(output.already_in_target_count, 0);
-    assert_eq!(output.duplicate_count, 1);
-    assert_eq!(output.moved_count, 2);
-    assert_eq!(
-        output.moved_external_ids,
-        vec!["thread-1".to_string(), "thread-2".to_string()]
-    );
-    assert!(output.rows[0].moved);
-    assert!(output.rows[1].moved);
-    assert!(output.rows[2].source_mismatch);
-    assert!(output.rows[3].duplicate);
-    assert!(!output.rows[4].matched);
-
-    let rows = db
-        .query("MATCH (t:Thread) RETURN t.thread_id, t.space_id, t.updated_at ORDER BY t.thread_id")
+    assert_eq!(candidates.rows.len(), 3);
+    let output = transaction
+        .query_request(bounded_batch_query(THREAD_SPACE_MOVE, &parameters))
         .unwrap();
+    assert_eq!(output.rows.len(), 2);
+    let moved = output
+        .rows
+        .iter()
+        .map(|row| row["id"].clone())
+        .collect::<BTreeSet<_>>();
     assert_eq!(
-        rows.rows[0].get("t.space_id"),
-        Some(&Value::String("team".to_string()))
+        moved,
+        BTreeSet::from([
+            Value::String("thread-1".into()),
+            Value::String("thread-2".into())
+        ])
+    );
+    transaction.commit().unwrap();
+    assert_eq!(before, 3);
+    assert_eq!(db.commit_epoch().unwrap(), before + 1);
+    let rows = db.query_request(bounded_batch_query(
+        "MATCH (t:Thread) RETURN t.id AS storage_id, t.thread_id AS id, t.space_id AS space, t.updated_at AS updated_at ORDER BY id", &BTreeMap::new())).unwrap();
+    assert_eq!(rows.rows.len(), 3);
+    for (index, row) in rows.rows.iter().enumerate() {
+        assert_eq!(
+            row["storage_id"],
+            Value::String(format!("storage-{}", index + 1))
+        );
+        assert_eq!(row["id"], Value::String(format!("thread-{}", index + 1)));
+        assert_eq!(row["space"], Value::String("team".into()));
+    }
+    assert_eq!(
+        rows.rows[0]["updated_at"],
+        Value::String("2026-07-19".into())
     );
     assert_eq!(
-        rows.rows[0].get("t.updated_at"),
-        Some(&Value::String("2026-07-19".to_string()))
+        rows.rows[1]["updated_at"],
+        Value::String("2026-07-19".into())
     );
-    assert_eq!(
-        rows.rows[1].get("t.space_id"),
-        Some(&Value::String("team".to_string()))
-    );
-    assert_eq!(
-        rows.rows[2].get("t.space_id"),
-        Some(&Value::String("team".to_string()))
-    );
+    assert_eq!(rows.rows[2]["updated_at"], Value::Null);
+    // All selected rows are now outside the source; retrying must be a no-op.
+    let epoch = db.commit_epoch().unwrap();
+    assert!(db
+        .query_request(bounded_batch_query(THREAD_SPACE_MOVE, &parameters))
+        .unwrap()
+        .rows
+        .is_empty());
+    assert_eq!(db.commit_epoch().unwrap(), epoch);
 }
 
 #[test]
 fn knowledge_normalized_space_move_batch_rejects_invalid_identifiers() {
     let mut db = Database::new();
+    let parameters = BTreeMap::from([
+        ("id".into(), Value::String("thread-1".into())),
+        ("target".into(), Value::String("team".into())),
+    ]);
     let error = db
-        .move_knowledge_normalized_space_batch(&KnowledgeNormalizedSpaceMoveBatchRequest {
-            label: "Thread".to_string(),
-            identity_property: "thread-id".to_string(),
-            external_ids: vec!["thread-1".to_string()],
-            source_space_id: None,
-            target_space_id: "team".to_string(),
-            updated_at: None,
-        })
+        .query_request(bounded_batch_query(
+            "MATCH (t:Thread {thread-id: $id}) SET t.space_id = $target",
+            &parameters,
+        ))
         .unwrap_err();
-
-    assert!(error.to_string().contains("identity property identifier"));
-    assert_eq!(db.runtime.get().unwrap().store.commit_epoch(), 0);
+    assert!(matches!(error, HawDBError::Parse(_)), "{error}");
+    assert_eq!(db.commit_epoch().unwrap(), 0);
 }
 
 #[test]
-fn typed_knowledge_normalized_space_move_persists_as_one_wal_batch_and_replays() {
-    let path = unique_test_dir("typed_knowledge_normalized_space_move_wal_replay");
+fn knowledge_normalized_space_move_query_persists_as_one_wal_batch_and_replays() {
+    let path = unique_test_dir("knowledge_normalized_space_move_query_wal_replay");
     {
         let mut db = Database::open(&path).unwrap();
         db.query("CREATE (:Memory {id: 'memory_1', space_id: ''})")
             .unwrap();
         db.query("CREATE (:Memory {id: 'memory_2', space_id: 'default'})")
             .unwrap();
-        let batch_count_before_move = read_test_wal(&path).unwrap().matches("\tbatch\t").count();
-        db.move_knowledge_normalized_space_batch(&KnowledgeNormalizedSpaceMoveBatchRequest {
-            label: "Memory".to_string(),
-            identity_property: "id".to_string(),
-            external_ids: vec!["memory_1".to_string(), "memory_2".to_string()],
-            source_space_id: Some("default".to_string()),
-            target_space_id: "archive".to_string(),
-            updated_at: None,
-        })
-        .unwrap();
-        let batch_count_after_move = read_test_wal(&path).unwrap().matches("\tbatch\t").count();
-        assert_eq!(batch_count_after_move, batch_count_before_move + 1);
-    }
-    let wal = read_test_wal(&path).unwrap();
-    assert!(wal.contains("set_node_property"));
-    {
-        let db = Database::open(&path).unwrap();
-        let rows = db
-            .query_property_batch_via_cypher(&KnowledgePropertyBatchRequest {
-                entities: vec![
-                    KnowledgeEntityRequest {
-                        label: "Memory".to_string(),
-                        external_id: "memory_1".to_string(),
-                    },
-                    KnowledgeEntityRequest {
-                        label: "Memory".to_string(),
-                        external_id: "memory_2".to_string(),
-                    },
-                ],
-                property_names: vec!["space_id".to_string()],
-            })
+        let batches_before = read_test_wal(&path).unwrap().matches("\tbatch\t").count();
+        let mut parameters = batch_id_parameters(&["memory_1", "memory_2"]).unwrap();
+        parameters.insert("source".into(), Value::String("default".into()));
+        parameters.insert("target".into(), Value::String("archive".into()));
+        let output = db
+            .query_request(bounded_batch_query(MEMORY_SPACE_MOVE, &parameters))
             .unwrap();
+        assert_eq!(output.rows.len(), 2);
         assert_eq!(
-            rows.rows[0].properties.get("space_id"),
-            Some(&Some(Value::String("archive".to_string())))
+            read_test_wal(&path).unwrap().matches("\tbatch\t").count(),
+            batches_before + 1
         );
-        assert_eq!(
-            rows.rows[1].properties.get("space_id"),
-            Some(&Some(Value::String("archive".to_string())))
-        );
+    }
+    assert!(read_test_wal(&path).unwrap().contains("set_node_property"));
+    {
+        let mut db = Database::open(&path).unwrap();
+        let output = db.query_request(bounded_batch_query(
+            "MATCH (m:Memory) RETURN m.id AS id, m.space_id AS space, m.updated_at AS updated_at ORDER BY id", &BTreeMap::new())).unwrap();
+        assert_eq!(output.rows.len(), 2);
+        for (index, row) in output.rows.iter().enumerate() {
+            assert_eq!(row["id"], Value::String(format!("memory_{}", index + 1)));
+            assert_eq!(row["space"], Value::String("archive".into()));
+            assert_eq!(row["updated_at"], Value::Null);
+        }
     }
     std::fs::remove_dir_all(path).unwrap();
+}
+
+const MEMORY_ACCESS_TOUCH: &str = "MATCH (m:Memory {id: $id}) \
+    SET m.access_count = COALESCE(m.access_count, 0) + 1, m.last_accessed_at = $at \
+    RETURN m.access_count AS accesses, m.clicks AS clicks";
+const MEMORY_CLICK_TOUCH: &str = "MATCH (m:Memory {id: $id}) \
+    SET m.access_count = COALESCE(m.access_count, 0) + 1, m.last_accessed_at = $at, \
+    m.clicks = COALESCE(m.clicks, 0) + 1, m.last_clicked_at = $at, \
+    m.total_dwell_time_ms = COALESCE(m.total_dwell_time_ms, 0) + $dwell \
+    RETURN m.access_count AS accesses, m.clicks AS clicks";
+const MEMORY_ACCESS_READ: &str = "MATCH (m:Memory) RETURN m.id AS id, \
+    m.access_count AS accesses, m.clicks AS clicks, m.total_dwell_time_ms AS dwell, \
+    m.last_accessed_at AS accessed_at, m.last_clicked_at AS clicked_at ORDER BY m.id LIMIT 5";
+
+fn memory_access_parameters(
+    id: &str,
+    at: &str,
+    dwell: Option<i64>,
+) -> Result<BTreeMap<String, Value>> {
+    if id.is_empty() {
+        return Err(HawDBError::Semantic("non-empty memory id required".into()));
+    }
+    if dwell.is_some_and(|value| value < 0) {
+        return Err(HawDBError::Semantic(
+            "non-negative dwell time required".into(),
+        ));
+    }
+    let mut parameters = BTreeMap::from([
+        ("id".into(), Value::String(id.into())),
+        ("at".into(), Value::String(at.into())),
+    ]);
+    if let Some(dwell) = dwell {
+        parameters.insert("dwell".into(), Value::Int(dwell));
+    }
+    Ok(parameters)
 }
 
 #[test]
 fn touches_memory_access_batch_with_incremental_counters() {
     let mut db = Database::new();
-    db.query("CREATE (:Memory {id: 'memory_1', access_count: 2, clicks: 1, total_dwell_time_ms: 100, last_accessed_at: 'old', last_clicked_at: 'old'})")
-        .unwrap();
+    db.query("CREATE (:Memory {id: 'memory_1', access_count: 2, clicks: 1, total_dwell_time_ms: 100, last_accessed_at: 'old', last_clicked_at: 'old'})").unwrap();
     db.query("CREATE (:Memory {id: 'memory_2'})").unwrap();
-
-    let output = db
-        .touch_knowledge_memory_access_batch(&KnowledgeMemoryAccessBatchRequest {
-            touches: vec![
-                KnowledgeMemoryAccessTouch {
-                    memory_id: "memory_1".to_string(),
-                    accessed_at: Value::String("2026-07-19T10:00:00Z".to_string()),
-                    click_dwell_time_ms: None,
-                },
-                KnowledgeMemoryAccessTouch {
-                    memory_id: "memory_1".to_string(),
-                    accessed_at: Value::String("2026-07-19T10:01:00Z".to_string()),
-                    click_dwell_time_ms: Some(50),
-                },
-                KnowledgeMemoryAccessTouch {
-                    memory_id: "memory_2".to_string(),
-                    accessed_at: Value::String("2026-07-19T10:02:00Z".to_string()),
-                    click_dwell_time_ms: Some(25),
-                },
-                KnowledgeMemoryAccessTouch {
-                    memory_id: "missing".to_string(),
-                    accessed_at: Value::String("2026-07-19T10:03:00Z".to_string()),
-                    click_dwell_time_ms: None,
-                },
-            ],
-        })
-        .unwrap();
-
-    assert_eq!(output.graph_commit_epoch_before, 2);
-    assert_eq!(output.graph_commit_epoch_after, 3);
-    assert_eq!(output.rows.len(), 4);
-    assert_eq!(output.matched_count, 3);
-    assert_eq!(output.missing_count, 1);
-    assert_eq!(output.non_writable_count, 0);
-    assert_eq!(output.touched_count, 3);
-    assert_eq!(output.click_touch_count, 2);
-    assert!(output.rows[0].touched);
-    assert!(!output.rows[0].clicked);
-    assert!(output.rows[1].clicked);
-    assert!(output.rows[2].clicked);
-    assert!(!output.rows[3].matched);
-
+    let before = db.commit_epoch().unwrap();
+    let mut transaction = db.begin_transaction().unwrap();
+    let mut counts = Vec::new();
+    for (id, at, dwell, accesses, clicks) in [
+        ("memory_1", "2026-07-19T10:00:00Z", None, 3, 1),
+        ("memory_1", "2026-07-19T10:01:00Z", Some(50), 4, 2),
+        ("memory_2", "2026-07-19T10:02:00Z", Some(25), 1, 1),
+        ("missing", "2026-07-19T10:03:00Z", None, 0, 0),
+    ] {
+        let parameters = memory_access_parameters(id, at, dwell).unwrap();
+        let statement = if dwell.is_some() {
+            MEMORY_CLICK_TOUCH
+        } else {
+            MEMORY_ACCESS_TOUCH
+        };
+        let output = transaction
+            .query_request(bounded_batch_query(statement, &parameters))
+            .unwrap();
+        counts.push(output.rows.len());
+        if !output.rows.is_empty() {
+            assert_eq!(output.rows[0]["accesses"], Value::Int(accesses));
+            assert_eq!(output.rows[0]["clicks"], Value::Int(clicks));
+        }
+    }
+    assert_eq!(counts, [1, 1, 1, 0]);
+    transaction.commit().unwrap();
+    assert_eq!(before, 2);
+    assert_eq!(db.commit_epoch().unwrap(), before + 1);
     let rows = db
-        .query_property_batch_via_cypher(&KnowledgePropertyBatchRequest {
-            entities: vec![
-                KnowledgeEntityRequest {
-                    label: "Memory".to_string(),
-                    external_id: "memory_1".to_string(),
-                },
-                KnowledgeEntityRequest {
-                    label: "Memory".to_string(),
-                    external_id: "memory_2".to_string(),
-                },
-            ],
-            property_names: vec![
-                "access_count".to_string(),
-                "clicks".to_string(),
-                "total_dwell_time_ms".to_string(),
-                "last_accessed_at".to_string(),
-                "last_clicked_at".to_string(),
-            ],
-        })
+        .query_request(bounded_batch_query(MEMORY_ACCESS_READ, &BTreeMap::new()))
         .unwrap();
+    assert_eq!(rows.rows.len(), 2);
+    assert_eq!(rows.rows[0]["accesses"], Value::Int(4));
+    assert_eq!(rows.rows[0]["clicks"], Value::Int(2));
+    assert_eq!(rows.rows[0]["dwell"], Value::Int(150));
     assert_eq!(
-        rows.rows[0].properties.get("access_count"),
-        Some(&Some(Value::Int(4)))
+        rows.rows[0]["accessed_at"],
+        Value::String("2026-07-19T10:01:00Z".into())
     );
     assert_eq!(
-        rows.rows[0].properties.get("clicks"),
-        Some(&Some(Value::Int(2)))
+        rows.rows[0]["clicked_at"],
+        Value::String("2026-07-19T10:01:00Z".into())
     );
-    assert_eq!(
-        rows.rows[0].properties.get("total_dwell_time_ms"),
-        Some(&Some(Value::Int(150)))
-    );
-    assert_eq!(
-        rows.rows[0].properties.get("last_accessed_at"),
-        Some(&Some(Value::String("2026-07-19T10:01:00Z".to_string())))
-    );
-    assert_eq!(
-        rows.rows[0].properties.get("last_clicked_at"),
-        Some(&Some(Value::String("2026-07-19T10:01:00Z".to_string())))
-    );
-    assert_eq!(
-        rows.rows[1].properties.get("access_count"),
-        Some(&Some(Value::Int(1)))
-    );
-    assert_eq!(
-        rows.rows[1].properties.get("clicks"),
-        Some(&Some(Value::Int(1)))
-    );
-    assert_eq!(
-        rows.rows[1].properties.get("total_dwell_time_ms"),
-        Some(&Some(Value::Int(25)))
-    );
+    assert_eq!(rows.rows[1]["accesses"], Value::Int(1));
+    assert_eq!(rows.rows[1]["clicks"], Value::Int(1));
+    assert_eq!(rows.rows[1]["dwell"], Value::Int(25));
 }
 
 #[test]
 fn knowledge_memory_access_batch_rejects_negative_dwell_before_wal() {
     let mut db = Database::new();
     db.query("CREATE (:Memory {id: 'memory_1'})").unwrap();
-    let graph_commit_epoch_before = db.runtime.get().unwrap().store.commit_epoch();
-
-    let error = db
-        .touch_knowledge_memory_access_batch(&KnowledgeMemoryAccessBatchRequest {
-            touches: vec![KnowledgeMemoryAccessTouch {
-                memory_id: "memory_1".to_string(),
-                accessed_at: Value::String("2026-07-19T10:00:00Z".to_string()),
-                click_dwell_time_ms: Some(-1),
-            }],
-        })
-        .unwrap_err();
-
+    let before = db.commit_epoch().unwrap();
+    let error = memory_access_parameters("memory_1", "2026-07-19T10:00:00Z", Some(-1)).unwrap_err();
     assert!(error.to_string().contains("non-negative dwell time"));
-    assert_eq!(
-        db.runtime.get().unwrap().store.commit_epoch(),
-        graph_commit_epoch_before
-    );
+    assert!(memory_access_parameters("", "2026-07-19T10:00:00Z", None).is_err());
+    assert_eq!(db.commit_epoch().unwrap(), before);
 }
 
 #[test]
-fn typed_knowledge_memory_access_batch_persists_as_one_wal_batch_and_replays() {
-    let path = unique_test_dir("typed_knowledge_memory_access_batch_wal_replay");
+fn memory_access_queries_persist_as_one_wal_batch_and_replay() {
+    let path = unique_test_dir("memory_access_query_wal_replay");
     {
         let mut db = Database::open(&path).unwrap();
         db.query("CREATE (:Memory {id: 'memory_1'})").unwrap();
-        db.query("CREATE (:Memory {id: 'memory_2', access_count: 4, clicks: 2, total_dwell_time_ms: 10})")
-            .unwrap();
-        let batch_count_before_touch = read_test_wal(&path).unwrap().matches("\tbatch\t").count();
-        db.touch_knowledge_memory_access_batch(&KnowledgeMemoryAccessBatchRequest {
-            touches: vec![
-                KnowledgeMemoryAccessTouch {
-                    memory_id: "memory_1".to_string(),
-                    accessed_at: Value::String("2026-07-19T11:00:00Z".to_string()),
-                    click_dwell_time_ms: None,
-                },
-                KnowledgeMemoryAccessTouch {
-                    memory_id: "memory_2".to_string(),
-                    accessed_at: Value::String("2026-07-19T11:01:00Z".to_string()),
-                    click_dwell_time_ms: Some(90),
-                },
-            ],
-        })
-        .unwrap();
-        let batch_count_after_touch = read_test_wal(&path).unwrap().matches("\tbatch\t").count();
-        assert_eq!(batch_count_after_touch, batch_count_before_touch + 1);
+        db.query("CREATE (:Memory {id: 'memory_2', access_count: 4, clicks: 2, total_dwell_time_ms: 10})").unwrap();
+        let batches_before = read_test_wal(&path).unwrap().matches("\tbatch\t").count();
+        let mut transaction = db.begin_transaction().unwrap();
+        for (id, at, dwell) in [
+            ("memory_1", "2026-07-19T11:00:00Z", None),
+            ("memory_2", "2026-07-19T11:01:00Z", Some(90)),
+        ] {
+            let parameters = memory_access_parameters(id, at, dwell).unwrap();
+            let statement = if dwell.is_some() {
+                MEMORY_CLICK_TOUCH
+            } else {
+                MEMORY_ACCESS_TOUCH
+            };
+            let output = transaction
+                .query_request(bounded_batch_query(statement, &parameters))
+                .unwrap();
+            assert_eq!(output.rows.len(), 1);
+        }
+        transaction.commit().unwrap();
+        assert_eq!(
+            read_test_wal(&path).unwrap().matches("\tbatch\t").count(),
+            batches_before + 1
+        );
     }
-    let wal = read_test_wal(&path).unwrap();
-    assert!(wal.contains("set_node_property"));
+    assert!(read_test_wal(&path).unwrap().contains("set_node_property"));
     {
-        let db = Database::open(&path).unwrap();
+        let mut db = Database::open(&path).unwrap();
         let rows = db
-            .query_property_batch_via_cypher(&KnowledgePropertyBatchRequest {
-                entities: vec![
-                    KnowledgeEntityRequest {
-                        label: "Memory".to_string(),
-                        external_id: "memory_1".to_string(),
-                    },
-                    KnowledgeEntityRequest {
-                        label: "Memory".to_string(),
-                        external_id: "memory_2".to_string(),
-                    },
-                ],
-                property_names: vec![
-                    "access_count".to_string(),
-                    "clicks".to_string(),
-                    "total_dwell_time_ms".to_string(),
-                ],
-            })
+            .query_request(bounded_batch_query(MEMORY_ACCESS_READ, &BTreeMap::new()))
             .unwrap();
-        assert_eq!(
-            rows.rows[0].properties.get("access_count"),
-            Some(&Some(Value::Int(1)))
-        );
-        assert_eq!(
-            rows.rows[1].properties.get("access_count"),
-            Some(&Some(Value::Int(5)))
-        );
-        assert_eq!(
-            rows.rows[1].properties.get("clicks"),
-            Some(&Some(Value::Int(3)))
-        );
-        assert_eq!(
-            rows.rows[1].properties.get("total_dwell_time_ms"),
-            Some(&Some(Value::Int(100)))
-        );
+        assert_eq!(rows.rows.len(), 2);
+        assert_eq!(rows.rows[0]["accesses"], Value::Int(1));
+        assert_eq!(rows.rows[0]["clicks"], Value::Null);
+        assert_eq!(rows.rows[0]["dwell"], Value::Null);
+        assert_eq!(rows.rows[1]["accesses"], Value::Int(5));
+        assert_eq!(rows.rows[1]["clicks"], Value::Int(3));
+        assert_eq!(rows.rows[1]["dwell"], Value::Int(100));
     }
     std::fs::remove_dir_all(path).unwrap();
 }
 
-fn memory_content_update(memory_id: &str, title: &str) -> KnowledgeMemoryContentUpdate {
-    KnowledgeMemoryContentUpdate {
-        memory_id: memory_id.to_string(),
-        content: format!("{title} content"),
-        title: title.to_string(),
-        semantic_field: format!("{title} semantic field"),
-        importance: Value::Float(0.7),
-        confidence: Value::Float(0.8),
-        unit_type: "fact".to_string(),
-        source: "codex".to_string(),
-        source_range: Value::String("1..3".to_string()),
-        space_id: "default".to_string(),
-        updated_at: Value::Int(1700000000),
-        reindex_needed: true,
-        review_status: "reviewed".to_string(),
-        extraction_method: "manual".to_string(),
+const MEMORY_CONTENT_REPLACE: &str = "MATCH (m:Memory {id: $id}) \
+    SET m.content = $content, m.title = $title, m.semantic_field = $semantic_field, \
+    m.importance = $importance, m.confidence = $confidence, m.unit_type = $unit_type, \
+    m.source = $source, m.source_range = $source_range, m.space_id = $space_id, \
+    m.updated_at = $updated_at, m.reindex_needed = $reindex_needed, \
+    m.review_status = $review_status, m.extraction_method = $extraction_method \
+    RETURN id(m) AS node_id";
+const MEMORY_CONTENT_READ: &str = "MATCH (m:Memory {id: $id}) \
+    RETURN m.content AS content, m.title AS title, m.semantic_field AS semantic_field, \
+    m.importance AS importance, m.confidence AS confidence, m.unit_type AS unit_type, \
+    m.source AS source, m.source_range AS source_range, m.space_id AS space_id, \
+    m.updated_at AS updated_at, m.reindex_needed AS reindex_needed, \
+    m.review_status AS review_status, m.extraction_method AS extraction_method LIMIT 1";
+
+fn memory_content_parameters(id: &str, title: &str) -> BTreeMap<String, Value> {
+    BTreeMap::from([
+        ("id".into(), Value::String(id.into())),
+        ("content".into(), Value::String(format!("{title} content"))),
+        ("title".into(), Value::String(title.into())),
+        (
+            "semantic_field".into(),
+            Value::String(format!("{title} semantic field")),
+        ),
+        ("importance".into(), Value::Float(0.7)),
+        ("confidence".into(), Value::Float(0.8)),
+        ("unit_type".into(), Value::String("fact".into())),
+        ("source".into(), Value::String("codex".into())),
+        ("source_range".into(), Value::String("1..3".into())),
+        ("space_id".into(), Value::String("default".into())),
+        ("updated_at".into(), Value::Int(1700000000)),
+        ("reindex_needed".into(), Value::Bool(true)),
+        ("review_status".into(), Value::String("reviewed".into())),
+        ("extraction_method".into(), Value::String("manual".into())),
+    ])
+}
+
+fn validate_content_parameters(parameters: &BTreeMap<String, Value>) -> Result<()> {
+    // This is host request validation only, with no graph access or query dispatch.
+    for property in ["id", "unit_type", "extraction_method"] {
+        if !matches!(parameters.get(property), Some(Value::String(value)) if !value.is_empty()) {
+            return Err(HawDBError::Semantic(format!(
+                "non-empty {property} required"
+            )));
+        }
     }
+    for property in ["importance", "confidence"] {
+        let valid = match parameters.get(property) {
+            Some(Value::Int(_)) => true,
+            Some(Value::Float(value)) => value.is_finite(),
+            _ => false,
+        };
+        if !valid {
+            return Err(HawDBError::Semantic(format!(
+                "numeric finite {property} required"
+            )));
+        }
+    }
+    Ok(())
 }
 
 #[test]
@@ -2812,112 +2698,93 @@ fn updates_memory_content_batch_for_nowledge_full_update_shape() {
     .unwrap();
     db.query("CREATE (:Memory {title: 'Idless memory'})")
         .unwrap();
-    let idless = db
-        .query("MATCH (m:Memory) WHERE m.title = 'Idless memory' RETURN id(m) AS id")
-        .unwrap();
-    let idless_memory_id = match idless.rows[0].get("id").unwrap() {
-        Value::Int(id) => id.to_string(),
-        other => panic!("expected projected id int, got {other:?}"),
-    };
-
-    let output = db
-        .update_knowledge_memory_content_batch(&KnowledgeMemoryContentBatchRequest {
-            updates: vec![
-                memory_content_update("memory_1", "Updated Memory"),
-                memory_content_update("missing", "Missing Memory"),
-                memory_content_update(&idless_memory_id, "Idless Memory"),
-                memory_content_update("memory_1", "Duplicate Memory"),
-            ],
-        })
-        .unwrap();
-
-    assert_eq!(output.graph_commit_epoch_before, 2);
-    assert_eq!(output.graph_commit_epoch_after, 3);
-    assert_eq!(output.rows.len(), 4);
-    assert_eq!(output.matched_count, 1);
-    assert_eq!(output.missing_count, 1);
-    assert_eq!(output.duplicate_count, 1);
-    assert_eq!(output.non_writable_count, 1);
-    assert_eq!(output.updated_count, 1);
-    assert_eq!(output.updated_property_count, 13);
-    assert!(output.rows[0].updated);
-    assert!(!output.rows[1].matched);
-    assert!(output.rows[2].non_writable);
-    assert!(output.rows[3].duplicate);
-
+    let before = db.commit_epoch().unwrap();
+    let updates = [
+        memory_content_parameters("memory_1", "Updated Memory"),
+        memory_content_parameters("missing", "Missing Memory"),
+        memory_content_parameters("1", "Idless Memory"),
+        memory_content_parameters("memory_1", "Duplicate Memory"),
+    ];
+    for parameters in &updates {
+        validate_content_parameters(parameters).unwrap();
+    }
+    let mut transaction = db.begin_transaction().unwrap();
+    let mut seen = BTreeSet::new();
+    let mut counts = Vec::new();
+    let mut duplicates = 0;
+    for parameters in updates {
+        let Value::String(id) = &parameters["id"] else {
+            unreachable!()
+        };
+        if !seen.insert(id.clone()) {
+            duplicates += 1;
+            continue;
+        }
+        let output = transaction
+            .query_request(bounded_batch_query(MEMORY_CONTENT_REPLACE, &parameters))
+            .unwrap();
+        counts.push(output.rows.len());
+        if !output.rows.is_empty() {
+            assert_eq!(output.rows[0]["node_id"], Value::Int(0));
+        }
+    }
+    assert_eq!(counts, [1, 0, 0]);
+    assert_eq!(duplicates, 1);
+    transaction.commit().unwrap();
+    assert_eq!(before, 2);
+    assert_eq!(db.commit_epoch().unwrap(), before + 1);
+    let parameters = BTreeMap::from([("id".into(), Value::String("memory_1".into()))]);
     let rows = db
-        .query_property_batch_via_cypher(&KnowledgePropertyBatchRequest {
-            entities: vec![KnowledgeEntityRequest {
-                label: "Memory".to_string(),
-                external_id: "memory_1".to_string(),
-            }],
-            property_names: vec![
-                "content".to_string(),
-                "title".to_string(),
-                "semantic_field".to_string(),
-                "importance".to_string(),
-                "confidence".to_string(),
-                "unit_type".to_string(),
-                "source".to_string(),
-                "source_range".to_string(),
-                "space_id".to_string(),
-                "updated_at".to_string(),
-                "reindex_needed".to_string(),
-                "review_status".to_string(),
-                "extraction_method".to_string(),
-            ],
-        })
+        .query_request(bounded_batch_query(MEMORY_CONTENT_READ, &parameters))
         .unwrap();
-    let properties = &rows.rows[0].properties;
+    assert_eq!(rows.rows.len(), 1);
+    let properties = &rows.rows[0];
     assert_eq!(
-        properties.get("content"),
-        Some(&Some(Value::String("Updated Memory content".to_string())))
+        properties["content"],
+        Value::String("Updated Memory content".into())
+    );
+    assert_eq!(properties["title"], Value::String("Updated Memory".into()));
+    assert_eq!(
+        properties["semantic_field"],
+        Value::String("Updated Memory semantic field".into())
+    );
+    assert_eq!(properties["importance"], Value::Float(0.7));
+    assert_eq!(properties["confidence"], Value::Float(0.8));
+    assert_eq!(properties["unit_type"], Value::String("fact".into()));
+    assert_eq!(properties["source"], Value::String("codex".into()));
+    assert_eq!(properties["source_range"], Value::String("1..3".into()));
+    assert_eq!(properties["space_id"], Value::String("default".into()));
+    assert_eq!(properties["updated_at"], Value::Int(1700000000));
+    assert_eq!(properties["reindex_needed"], Value::Bool(true));
+    assert_eq!(
+        properties["review_status"],
+        Value::String("reviewed".into())
     );
     assert_eq!(
-        properties.get("title"),
-        Some(&Some(Value::String("Updated Memory".to_string())))
+        properties["extraction_method"],
+        Value::String("manual".into())
     );
+    let idless = db
+        .query_request(bounded_batch_query(
+            "MATCH (m:Memory) WHERE m.id IS NULL RETURN id(m) AS node_id, m.title AS title LIMIT 1",
+            &BTreeMap::new(),
+        ))
+        .unwrap();
+    assert_eq!(idless.rows.len(), 1);
+    assert_eq!(idless.rows[0]["node_id"], Value::Int(1));
     assert_eq!(
-        properties.get("semantic_field"),
-        Some(&Some(Value::String(
-            "Updated Memory semantic field".to_string()
-        )))
-    );
-    assert_eq!(properties.get("importance"), Some(&Some(Value::Float(0.7))));
-    assert_eq!(properties.get("confidence"), Some(&Some(Value::Float(0.8))));
-    assert_eq!(
-        properties.get("unit_type"),
-        Some(&Some(Value::String("fact".to_string())))
-    );
-    assert_eq!(
-        properties.get("source"),
-        Some(&Some(Value::String("codex".to_string())))
-    );
-    assert_eq!(
-        properties.get("source_range"),
-        Some(&Some(Value::String("1..3".to_string())))
-    );
-    assert_eq!(
-        properties.get("space_id"),
-        Some(&Some(Value::String("default".to_string())))
-    );
-    assert_eq!(
-        properties.get("updated_at"),
-        Some(&Some(Value::Int(1700000000)))
-    );
-    assert_eq!(
-        properties.get("reindex_needed"),
-        Some(&Some(Value::Bool(true)))
-    );
-    assert_eq!(
-        properties.get("review_status"),
-        Some(&Some(Value::String("reviewed".to_string())))
-    );
-    assert_eq!(
-        properties.get("extraction_method"),
-        Some(&Some(Value::String("manual".to_string())))
+        idless.rows[0]["title"],
+        Value::String("Idless memory".into())
     );
 }
+
+const MEMORY_METADATA_REPLACE: &str = "MATCH (m:Memory) WHERE m.id IN $ids \
+    SET m.metadata = $metadata RETURN id(m) AS node_id";
+const MEMORY_METADATA_REPLACE_WITH_TIME: &str = "MATCH (m:Memory) WHERE m.id IN $ids \
+    SET m.metadata = $metadata, m.updated_at = $updated_at RETURN id(m) AS node_id";
+const MEMORY_METADATA_SNAPSHOT: &str = "MATCH (m:Memory) \
+    RETURN id(m) AS node_id, m.id AS id, m.metadata AS metadata, m.updated_at AS updated_at \
+    ORDER BY id(m) LIMIT 5";
 
 #[test]
 fn updates_memory_metadata_batch_for_nowledge_replace_shapes() {
@@ -2928,98 +2795,60 @@ fn updates_memory_metadata_batch_for_nowledge_replace_shapes() {
         .unwrap();
     db.query("CREATE (:Memory {title: 'Idless memory'})")
         .unwrap();
-    let idless = db
-        .query("MATCH (m:Memory) WHERE m.title = 'Idless memory' RETURN id(m) AS id")
-        .unwrap();
-    let idless_memory_id = match idless.rows[0].get("id").unwrap() {
-        Value::Int(id) => id.to_string(),
-        other => panic!("expected projected id int, got {other:?}"),
-    };
-    let graph_commit_epoch_before = db.runtime.get().unwrap().store.commit_epoch();
-
-    let output = db
-        .update_knowledge_memory_metadata_batch(&KnowledgeMemoryMetadataBatchRequest {
-            updates: vec![
-                KnowledgeMemoryMetadataUpdate {
-                    memory_id: "memory_1".to_string(),
-                    metadata: Value::String("{\"replace\":true}".to_string()),
-                    updated_at: None,
-                },
-                KnowledgeMemoryMetadataUpdate {
-                    memory_id: "memory_2".to_string(),
-                    metadata: Value::String("{\"replace\":\"with-ts\"}".to_string()),
-                    updated_at: Some(Value::Int(100)),
-                },
-                KnowledgeMemoryMetadataUpdate {
-                    memory_id: "missing".to_string(),
-                    metadata: Value::String("{}".to_string()),
-                    updated_at: None,
-                },
-                KnowledgeMemoryMetadataUpdate {
-                    memory_id: idless_memory_id,
-                    metadata: Value::String("{}".to_string()),
-                    updated_at: None,
-                },
-                KnowledgeMemoryMetadataUpdate {
-                    memory_id: "memory_1".to_string(),
-                    metadata: Value::String("{\"duplicate\":true}".to_string()),
-                    updated_at: Some(Value::Int(200)),
-                },
-            ],
-        })
-        .unwrap();
-
-    assert_eq!(output.graph_commit_epoch_before, graph_commit_epoch_before);
-    assert_eq!(
-        output.graph_commit_epoch_after,
-        graph_commit_epoch_before + 1
-    );
-    assert_eq!(output.rows.len(), 5);
-    assert_eq!(output.matched_count, 2);
-    assert_eq!(output.missing_count, 1);
-    assert_eq!(output.non_writable_count, 1);
-    assert_eq!(output.duplicate_count, 1);
-    assert_eq!(output.updated_count, 2);
-    assert_eq!(output.updated_property_count, 3);
-    assert_eq!(output.rows[0].updated_property_count, 1);
-    assert_eq!(output.rows[1].updated_property_count, 2);
-    assert!(!output.rows[2].matched);
-    assert!(output.rows[3].non_writable);
-    assert!(output.rows[4].duplicate);
-
+    let before = db.commit_epoch().unwrap();
+    let mut transaction = db.begin_transaction().unwrap();
+    let mut seen = BTreeSet::new();
+    let mut counts = Vec::new();
+    let mut duplicates = 0;
+    for (id, metadata, timestamp) in [
+        ("memory_1", "{\"replace\":true}", None),
+        ("memory_2", "{\"replace\":\"with-ts\"}", Some(100)),
+        ("missing", "{}", None),
+        ("2", "{}", None),
+        ("memory_1", "{\"duplicate\":true}", Some(200)),
+    ] {
+        if !seen.insert(id) {
+            duplicates += 1;
+            continue;
+        }
+        let mut parameters = batch_id_parameters(&[id]).unwrap();
+        parameters.insert("metadata".into(), Value::String(metadata.into()));
+        let statement = if let Some(timestamp) = timestamp {
+            parameters.insert("updated_at".into(), Value::Int(timestamp));
+            MEMORY_METADATA_REPLACE_WITH_TIME
+        } else {
+            MEMORY_METADATA_REPLACE
+        };
+        let output = transaction
+            .query_request(bounded_batch_query(statement, &parameters))
+            .unwrap();
+        counts.push(output.rows.len());
+    }
+    assert_eq!(counts, [1, 1, 0, 0]);
+    assert_eq!(duplicates, 1);
+    transaction.commit().unwrap();
+    assert_eq!(db.commit_epoch().unwrap(), before + 1);
     let rows = db
-        .query_property_batch_via_cypher(&KnowledgePropertyBatchRequest {
-            entities: vec![
-                KnowledgeEntityRequest {
-                    label: "Memory".to_string(),
-                    external_id: "memory_1".to_string(),
-                },
-                KnowledgeEntityRequest {
-                    label: "Memory".to_string(),
-                    external_id: "memory_2".to_string(),
-                },
-            ],
-            property_names: vec!["metadata".to_string(), "updated_at".to_string()],
-        })
+        .query_request(bounded_batch_query(
+            MEMORY_METADATA_SNAPSHOT,
+            &BTreeMap::new(),
+        ))
         .unwrap();
+    assert_eq!(rows.rows.len(), 3);
     assert_eq!(
-        rows.rows[0].properties.get("metadata"),
-        Some(&Some(Value::String("{\"replace\":true}".to_string())))
+        rows.rows[0]["metadata"],
+        Value::String("{\"replace\":true}".into())
     );
+    assert_eq!(rows.rows[0]["updated_at"], Value::Int(1));
     assert_eq!(
-        rows.rows[0].properties.get("updated_at"),
-        Some(&Some(Value::Int(1)))
+        rows.rows[1]["metadata"],
+        Value::String("{\"replace\":\"with-ts\"}".into())
     );
-    assert_eq!(
-        rows.rows[1].properties.get("metadata"),
-        Some(&Some(Value::String(
-            "{\"replace\":\"with-ts\"}".to_string()
-        )))
-    );
-    assert_eq!(
-        rows.rows[1].properties.get("updated_at"),
-        Some(&Some(Value::Int(100)))
-    );
+    assert_eq!(rows.rows[1]["updated_at"], Value::Int(100));
+    assert_eq!(rows.rows[2]["node_id"], Value::Int(2));
+    assert_eq!(rows.rows[2]["id"], Value::Null);
+    assert_eq!(rows.rows[2]["metadata"], Value::Null);
+    assert_eq!(rows.rows[2]["updated_at"], Value::Null);
 }
 
 #[test]
@@ -3027,88 +2856,66 @@ fn memory_metadata_update_rejects_empty_id_before_wal() {
     let mut db = Database::new();
     db.query("CREATE (:Memory {id: 'memory_1', metadata: '{}'})")
         .unwrap();
-    let graph_commit_epoch_before = db.runtime.get().unwrap().store.commit_epoch();
-
-    let error = db
-        .update_knowledge_memory_metadata_batch(&KnowledgeMemoryMetadataBatchRequest {
-            updates: vec![KnowledgeMemoryMetadataUpdate {
-                memory_id: String::new(),
-                metadata: Value::String("{}".to_string()),
-                updated_at: None,
-            }],
-        })
-        .unwrap_err();
-
-    assert!(error.to_string().contains("non-empty memory id"));
-    assert_eq!(
-        db.runtime.get().unwrap().store.commit_epoch(),
-        graph_commit_epoch_before
-    );
+    let before = db.commit_epoch().unwrap();
+    let error = batch_id_parameters(&[""]).unwrap_err();
+    assert!(error.to_string().contains("non-empty id"));
+    assert_eq!(db.commit_epoch().unwrap(), before);
 }
 
 #[test]
-fn typed_memory_metadata_update_persists_as_one_wal_batch_and_replays() {
-    let path = unique_test_dir("typed_memory_metadata_update_wal_replay");
+fn memory_metadata_queries_persist_as_one_wal_batch_and_replay() {
+    let path = unique_test_dir("memory_metadata_query_wal_replay");
     {
         let mut db = Database::open(&path).unwrap();
         db.query("CREATE (:Memory {id: 'memory_1', metadata: '{}', updated_at: 1})")
             .unwrap();
         db.query("CREATE (:Memory {id: 'memory_2', metadata: '{}', updated_at: 2})")
             .unwrap();
-        let batch_count_before_update = read_test_wal(&path).unwrap().matches("\tbatch\t").count();
-        db.update_knowledge_memory_metadata_batch(&KnowledgeMemoryMetadataBatchRequest {
-            updates: vec![
-                KnowledgeMemoryMetadataUpdate {
-                    memory_id: "memory_1".to_string(),
-                    metadata: Value::String("{\"one\":true}".to_string()),
-                    updated_at: None,
-                },
-                KnowledgeMemoryMetadataUpdate {
-                    memory_id: "memory_2".to_string(),
-                    metadata: Value::String("{\"two\":true}".to_string()),
-                    updated_at: Some(Value::Int(20)),
-                },
-            ],
-        })
-        .unwrap();
-        let batch_count_after_update = read_test_wal(&path).unwrap().matches("\tbatch\t").count();
-        assert_eq!(batch_count_after_update, batch_count_before_update + 1);
+        let batches_before = read_test_wal(&path).unwrap().matches("\tbatch\t").count();
+        let mut transaction = db.begin_transaction().unwrap();
+        for (id, metadata, timestamp) in [
+            ("memory_1", "{\"one\":true}", None),
+            ("memory_2", "{\"two\":true}", Some(20)),
+        ] {
+            let mut parameters = batch_id_parameters(&[id]).unwrap();
+            parameters.insert("metadata".into(), Value::String(metadata.into()));
+            let statement = if let Some(timestamp) = timestamp {
+                parameters.insert("updated_at".into(), Value::Int(timestamp));
+                MEMORY_METADATA_REPLACE_WITH_TIME
+            } else {
+                MEMORY_METADATA_REPLACE
+            };
+            let output = transaction
+                .query_request(bounded_batch_query(statement, &parameters))
+                .unwrap();
+            assert_eq!(output.rows.len(), 1);
+        }
+        transaction.commit().unwrap();
+        assert_eq!(
+            read_test_wal(&path).unwrap().matches("\tbatch\t").count(),
+            batches_before + 1
+        );
     }
-    let wal = read_test_wal(&path).unwrap();
-    assert!(wal.contains("set_node_property"));
+    assert!(read_test_wal(&path).unwrap().contains("set_node_property"));
     {
-        let db = Database::open(&path).unwrap();
+        let mut db = Database::open(&path).unwrap();
         let rows = db
-            .query_property_batch_via_cypher(&KnowledgePropertyBatchRequest {
-                entities: vec![
-                    KnowledgeEntityRequest {
-                        label: "Memory".to_string(),
-                        external_id: "memory_1".to_string(),
-                    },
-                    KnowledgeEntityRequest {
-                        label: "Memory".to_string(),
-                        external_id: "memory_2".to_string(),
-                    },
-                ],
-                property_names: vec!["metadata".to_string(), "updated_at".to_string()],
-            })
+            .query_request(bounded_batch_query(
+                MEMORY_METADATA_SNAPSHOT,
+                &BTreeMap::new(),
+            ))
             .unwrap();
+        assert_eq!(rows.rows.len(), 2);
         assert_eq!(
-            rows.rows[0].properties.get("metadata"),
-            Some(&Some(Value::String("{\"one\":true}".to_string())))
+            rows.rows[0]["metadata"],
+            Value::String("{\"one\":true}".into())
         );
+        assert_eq!(rows.rows[0]["updated_at"], Value::Int(1));
         assert_eq!(
-            rows.rows[0].properties.get("updated_at"),
-            Some(&Some(Value::Int(1)))
+            rows.rows[1]["metadata"],
+            Value::String("{\"two\":true}".into())
         );
-        assert_eq!(
-            rows.rows[1].properties.get("metadata"),
-            Some(&Some(Value::String("{\"two\":true}".to_string())))
-        );
-        assert_eq!(
-            rows.rows[1].properties.get("updated_at"),
-            Some(&Some(Value::Int(20)))
-        );
+        assert_eq!(rows.rows[1]["updated_at"], Value::Int(20));
     }
     std::fs::remove_dir_all(path).unwrap();
 }
@@ -3117,94 +2924,97 @@ fn typed_memory_metadata_update_persists_as_one_wal_batch_and_replays() {
 fn memory_content_update_rejects_invalid_rows_before_wal() {
     let mut db = Database::new();
     db.query("CREATE (:Memory {id: 'memory_1'})").unwrap();
-    let graph_commit_epoch_before = db.runtime.get().unwrap().store.commit_epoch();
-
-    let empty_id = db
-        .update_knowledge_memory_content_batch(&KnowledgeMemoryContentBatchRequest {
-            updates: vec![memory_content_update("", "Empty")],
-        })
-        .unwrap_err();
-    assert!(empty_id.to_string().contains("non-empty memory id"));
-
-    let mut invalid_importance = memory_content_update("memory_1", "Invalid Importance");
-    invalid_importance.importance = Value::String("high".to_string());
-    let importance_error = db
-        .update_knowledge_memory_content_batch(&KnowledgeMemoryContentBatchRequest {
-            updates: vec![invalid_importance],
-        })
-        .unwrap_err();
-    assert!(importance_error
-        .to_string()
-        .contains("numeric finite importance"));
-
-    let mut empty_unit_type = memory_content_update("memory_1", "Empty Unit Type");
-    empty_unit_type.unit_type.clear();
-    let unit_type_error = db
-        .update_knowledge_memory_content_batch(&KnowledgeMemoryContentBatchRequest {
-            updates: vec![empty_unit_type],
-        })
-        .unwrap_err();
-    assert!(unit_type_error.to_string().contains("non-empty unit type"));
-    assert_eq!(
-        db.runtime.get().unwrap().store.commit_epoch(),
-        graph_commit_epoch_before
-    );
+    let before = db.commit_epoch().unwrap();
+    let error = validate_content_parameters(&memory_content_parameters("", "Empty")).unwrap_err();
+    assert!(error.to_string().contains("non-empty id"));
+    for (property, value, message) in [
+        (
+            "importance",
+            Value::String("high".into()),
+            "numeric finite importance",
+        ),
+        (
+            "importance",
+            Value::Float(f64::INFINITY),
+            "numeric finite importance",
+        ),
+        (
+            "confidence",
+            Value::Float(f64::NAN),
+            "numeric finite confidence",
+        ),
+        (
+            "unit_type",
+            Value::String(String::new()),
+            "non-empty unit_type",
+        ),
+        (
+            "extraction_method",
+            Value::String(String::new()),
+            "non-empty extraction_method",
+        ),
+    ] {
+        let mut parameters = memory_content_parameters("memory_1", "Invalid");
+        parameters.insert(property.into(), value);
+        assert!(validate_content_parameters(&parameters)
+            .unwrap_err()
+            .to_string()
+            .contains(message));
+    }
+    assert_eq!(db.commit_epoch().unwrap(), before);
 }
 
 #[test]
-fn typed_memory_content_update_persists_as_one_wal_batch_and_replays() {
-    let path = unique_test_dir("typed_memory_content_update_wal_replay");
+fn memory_content_queries_persist_as_one_wal_batch_and_replay() {
+    let path = unique_test_dir("memory_content_query_wal_replay");
     {
         let mut db = Database::open(&path).unwrap();
         db.query("CREATE (:Memory {id: 'memory_1', title: 'Old 1'})")
             .unwrap();
         db.query("CREATE (:Memory {id: 'memory_2', title: 'Old 2'})")
             .unwrap();
-        let batch_count_before_update = read_test_wal(&path).unwrap().matches("\tbatch\t").count();
-        db.update_knowledge_memory_content_batch(&KnowledgeMemoryContentBatchRequest {
-            updates: vec![
-                memory_content_update("memory_1", "Updated One"),
-                memory_content_update("memory_2", "Updated Two"),
-            ],
-        })
-        .unwrap();
-        let batch_count_after_update = read_test_wal(&path).unwrap().matches("\tbatch\t").count();
-        assert_eq!(batch_count_after_update, batch_count_before_update + 1);
+        let batches_before = read_test_wal(&path).unwrap().matches("\tbatch\t").count();
+        let updates = [
+            memory_content_parameters("memory_1", "Updated One"),
+            memory_content_parameters("memory_2", "Updated Two"),
+        ];
+        for parameters in &updates {
+            validate_content_parameters(parameters).unwrap();
+        }
+        let mut transaction = db.begin_transaction().unwrap();
+        for parameters in updates {
+            let rows = transaction
+                .query_request(bounded_batch_query(MEMORY_CONTENT_REPLACE, &parameters))
+                .unwrap();
+            assert_eq!(rows.rows.len(), 1);
+        }
+        transaction.commit().unwrap();
+        assert_eq!(
+            read_test_wal(&path).unwrap().matches("\tbatch\t").count(),
+            batches_before + 1
+        );
     }
-    let wal = read_test_wal(&path).unwrap();
-    assert!(wal.contains("set_node_property"));
+    assert!(read_test_wal(&path).unwrap().contains("set_node_property"));
     {
-        let db = Database::open(&path).unwrap();
-        let rows = db
-            .query_property_batch_via_cypher(&KnowledgePropertyBatchRequest {
-                entities: vec![
-                    KnowledgeEntityRequest {
-                        label: "Memory".to_string(),
-                        external_id: "memory_1".to_string(),
-                    },
-                    KnowledgeEntityRequest {
-                        label: "Memory".to_string(),
-                        external_id: "memory_2".to_string(),
-                    },
-                ],
-                property_names: vec!["title".to_string(), "reindex_needed".to_string()],
-            })
-            .unwrap();
-        assert_eq!(
-            rows.rows[0].properties.get("title"),
-            Some(&Some(Value::String("Updated One".to_string())))
-        );
-        assert_eq!(
-            rows.rows[1].properties.get("title"),
-            Some(&Some(Value::String("Updated Two".to_string())))
-        );
-        assert_eq!(
-            rows.rows[0].properties.get("reindex_needed"),
-            Some(&Some(Value::Bool(true)))
-        );
+        let mut db = Database::open(&path).unwrap();
+        for (id, title) in [("memory_1", "Updated One"), ("memory_2", "Updated Two")] {
+            let parameters = BTreeMap::from([("id".into(), Value::String(id.into()))]);
+            let rows = db
+                .query_request(bounded_batch_query(MEMORY_CONTENT_READ, &parameters))
+                .unwrap();
+            assert_eq!(rows.rows.len(), 1);
+            assert_eq!(rows.rows[0]["title"], Value::String(title.into()));
+            assert_eq!(rows.rows[0]["reindex_needed"], Value::Bool(true));
+        }
     }
     std::fs::remove_dir_all(path).unwrap();
 }
+
+const MEMORY_DEDUP_REVIEW: &str = "MATCH (m:Memory) WHERE m.id IN $ids \
+    SET m.dedup_reviewed_at = $reviewed_at RETURN m.id AS id";
+const MEMORY_DEDUP_SNAPSHOT: &str = "MATCH (m:Memory) \
+    RETURN id(m) AS node_id, m.id AS id, m.title AS title, m.dedup_reviewed_at AS reviewed_at \
+    ORDER BY id(m) LIMIT 5";
 
 #[test]
 fn updates_memory_dedup_reviewed_batch_for_scheduler_shape() {
@@ -3215,133 +3025,129 @@ fn updates_memory_dedup_reviewed_batch_for_scheduler_shape() {
         .unwrap();
     db.query("CREATE (:Memory {title: 'Idless memory'})")
         .unwrap();
-    let idless = db
-        .query("MATCH (m:Memory) WHERE m.title = 'Idless memory' RETURN id(m) AS id")
+    let before = db.commit_epoch().unwrap();
+    let mut parameters =
+        batch_id_parameters(&["memory_1", "missing", "2", "memory_2", "memory_1"]).unwrap();
+    parameters.insert("reviewed_at".into(), Value::Int(1800000000));
+    let mut transaction = db.begin_transaction().unwrap();
+    let output = transaction
+        .query_request(bounded_batch_query(MEMORY_DEDUP_REVIEW, &parameters))
         .unwrap();
-    let idless_memory_id = match idless.rows[0].get("id").unwrap() {
-        Value::Int(id) => id.to_string(),
-        other => panic!("expected projected id int, got {other:?}"),
-    };
-
-    let output = db
-        .update_knowledge_memory_dedup_reviewed_batch(&KnowledgeMemoryDedupReviewedBatchRequest {
-            memory_ids: vec![
-                "memory_1".to_string(),
-                "missing".to_string(),
-                idless_memory_id,
-                "memory_2".to_string(),
-                "memory_1".to_string(),
-            ],
-            reviewed_at: Value::Int(1800000000),
-        })
-        .unwrap();
-
-    assert_eq!(output.graph_commit_epoch_before, 3);
-    assert_eq!(output.graph_commit_epoch_after, 4);
-    assert_eq!(output.rows.len(), 5);
-    assert_eq!(output.matched_count, 2);
-    assert_eq!(output.missing_count, 1);
-    assert_eq!(output.non_writable_count, 1);
-    assert_eq!(output.duplicate_count, 1);
-    assert_eq!(output.updated_count, 2);
-    assert!(output.rows[0].updated);
-    assert!(!output.rows[1].matched);
-    assert!(output.rows[2].non_writable);
-    assert!(output.rows[3].updated);
-    assert!(output.rows[4].duplicate);
-
+    // IN selects graph rows once even when the caller repeats an id.
+    assert_eq!(output.rows.len(), 2);
+    for id in ["memory_1", "memory_2"] {
+        assert!(output
+            .rows
+            .iter()
+            .any(|row| row["id"] == Value::String(id.into())));
+    }
+    transaction.commit().unwrap();
+    assert_eq!(before, 3);
+    assert_eq!(db.commit_epoch().unwrap(), before + 1);
     let rows = db
-        .query_property_batch_via_cypher(&KnowledgePropertyBatchRequest {
-            entities: vec![
-                KnowledgeEntityRequest {
-                    label: "Memory".to_string(),
-                    external_id: "memory_1".to_string(),
-                },
-                KnowledgeEntityRequest {
-                    label: "Memory".to_string(),
-                    external_id: "memory_2".to_string(),
-                },
-            ],
-            property_names: vec!["dedup_reviewed_at".to_string()],
-        })
+        .query_request(bounded_batch_query(MEMORY_DEDUP_SNAPSHOT, &BTreeMap::new()))
         .unwrap();
-    assert_eq!(
-        rows.rows[0].properties.get("dedup_reviewed_at"),
-        Some(&Some(Value::Int(1800000000)))
-    );
-    assert_eq!(
-        rows.rows[1].properties.get("dedup_reviewed_at"),
-        Some(&Some(Value::Int(1800000000)))
-    );
+    assert_eq!(rows.rows.len(), 3);
+    assert_eq!(rows.rows[0]["reviewed_at"], Value::Int(1800000000));
+    assert_eq!(rows.rows[1]["reviewed_at"], Value::Int(1800000000));
+    assert_eq!(rows.rows[2]["node_id"], Value::Int(2));
+    assert_eq!(rows.rows[2]["id"], Value::Null);
+    assert_eq!(rows.rows[2]["title"], Value::String("Idless memory".into()));
+    assert_eq!(rows.rows[2]["reviewed_at"], Value::Null);
 }
 
 #[test]
 fn memory_dedup_reviewed_rejects_empty_ids_before_wal() {
     let mut db = Database::new();
     db.query("CREATE (:Memory {id: 'memory_1'})").unwrap();
-    let graph_commit_epoch_before = db.runtime.get().unwrap().store.commit_epoch();
-
-    let error = db
-        .update_knowledge_memory_dedup_reviewed_batch(&KnowledgeMemoryDedupReviewedBatchRequest {
-            memory_ids: vec!["memory_1".to_string(), String::new()],
-            reviewed_at: Value::Int(1800000000),
-        })
-        .unwrap_err();
-
-    assert!(error.to_string().contains("non-empty memory ids"));
-    assert_eq!(
-        db.runtime.get().unwrap().store.commit_epoch(),
-        graph_commit_epoch_before
-    );
+    let before = db.commit_epoch().unwrap();
+    let error = batch_id_parameters(&["memory_1", ""]).unwrap_err();
+    assert!(error.to_string().contains("non-empty id"));
+    assert_eq!(db.commit_epoch().unwrap(), before);
 }
 
 #[test]
-fn typed_memory_dedup_reviewed_persists_as_one_wal_batch_and_replays() {
-    let path = unique_test_dir("typed_memory_dedup_reviewed_wal_replay");
+fn memory_dedup_review_queries_persist_as_one_wal_batch_and_replay() {
+    let path = unique_test_dir("memory_dedup_review_query_wal_replay");
     {
         let mut db = Database::open(&path).unwrap();
         db.query("CREATE (:Memory {id: 'memory_1'})").unwrap();
         db.query("CREATE (:Memory {id: 'memory_2'})").unwrap();
-        let batch_count_before_update = read_test_wal(&path).unwrap().matches("\tbatch\t").count();
-        db.update_knowledge_memory_dedup_reviewed_batch(
-            &KnowledgeMemoryDedupReviewedBatchRequest {
-                memory_ids: vec!["memory_1".to_string(), "memory_2".to_string()],
-                reviewed_at: Value::String("2026-07-19T18:00:00Z".to_string()),
-            },
-        )
-        .unwrap();
-        let batch_count_after_update = read_test_wal(&path).unwrap().matches("\tbatch\t").count();
-        assert_eq!(batch_count_after_update, batch_count_before_update + 1);
-    }
-    let wal = read_test_wal(&path).unwrap();
-    assert!(wal.contains("set_node_property"));
-    {
-        let db = Database::open(&path).unwrap();
-        let rows = db
-            .query_property_batch_via_cypher(&KnowledgePropertyBatchRequest {
-                entities: vec![
-                    KnowledgeEntityRequest {
-                        label: "Memory".to_string(),
-                        external_id: "memory_1".to_string(),
-                    },
-                    KnowledgeEntityRequest {
-                        label: "Memory".to_string(),
-                        external_id: "memory_2".to_string(),
-                    },
-                ],
-                property_names: vec!["dedup_reviewed_at".to_string()],
-            })
+        let batches_before = read_test_wal(&path).unwrap().matches("\tbatch\t").count();
+        let mut parameters = batch_id_parameters(&["memory_1", "memory_2"]).unwrap();
+        parameters.insert(
+            "reviewed_at".into(),
+            Value::String("2026-07-19T18:00:00Z".into()),
+        );
+        let mut transaction = db.begin_transaction().unwrap();
+        let output = transaction
+            .query_request(bounded_batch_query(MEMORY_DEDUP_REVIEW, &parameters))
             .unwrap();
+        assert_eq!(output.rows.len(), 2);
+        transaction.commit().unwrap();
         assert_eq!(
-            rows.rows[0].properties.get("dedup_reviewed_at"),
-            Some(&Some(Value::String("2026-07-19T18:00:00Z".to_string())))
+            read_test_wal(&path).unwrap().matches("\tbatch\t").count(),
+            batches_before + 1
         );
-        assert_eq!(
-            rows.rows[1].properties.get("dedup_reviewed_at"),
-            Some(&Some(Value::String("2026-07-19T18:00:00Z".to_string())))
-        );
+    }
+    assert!(read_test_wal(&path).unwrap().contains("set_node_property"));
+    {
+        let mut db = Database::open(&path).unwrap();
+        let rows = db
+            .query_request(bounded_batch_query(MEMORY_DEDUP_SNAPSHOT, &BTreeMap::new()))
+            .unwrap();
+        assert_eq!(rows.rows.len(), 2);
+        for row in &rows.rows {
+            assert_eq!(
+                row["reviewed_at"],
+                Value::String("2026-07-19T18:00:00Z".into())
+            );
+        }
     }
     std::fs::remove_dir_all(path).unwrap();
+}
+
+const MEMORY_DECAY_UPDATE: &str = "MATCH (m:Memory {id: $id}) \
+    SET m.decay_score_cached = $decay RETURN id(m) AS node_id";
+const MEMORY_DECAY_CONFIDENCE_UPDATE: &str = "MATCH (m:Memory {id: $id}) \
+    SET m.decay_score_cached = $decay, m.confidence = $confidence RETURN id(m) AS node_id";
+const MEMORY_DECAY_READ: &str = "MATCH (m:Memory) \
+    RETURN id(m) AS node_id, m.id AS id, m.title AS title, \
+    m.decay_score_cached AS decay, m.confidence AS confidence ORDER BY node_id";
+
+fn memory_decay_parameters(
+    id: &str,
+    decay: Value,
+    confidence: Option<Value>,
+) -> Result<BTreeMap<String, Value>> {
+    if id.is_empty() {
+        return Err(HawDBError::Semantic("non-empty memory id required".into()));
+    }
+    for (name, value) in [
+        ("decay score", Some(&decay)),
+        ("confidence", confidence.as_ref()),
+    ] {
+        if let Some(value) = value {
+            let valid = match value {
+                Value::Int(_) => true,
+                Value::Float(number) => number.is_finite(),
+                _ => false,
+            };
+            if !valid {
+                return Err(HawDBError::Semantic(format!(
+                    "numeric finite {name} required"
+                )));
+            }
+        }
+    }
+    let mut parameters = BTreeMap::from([
+        ("id".into(), Value::String(id.into())),
+        ("decay".into(), decay),
+    ]);
+    if let Some(confidence) = confidence {
+        parameters.insert("confidence".into(), confidence);
+    }
+    Ok(parameters)
 }
 
 #[test]
@@ -3355,208 +3161,139 @@ fn updates_memory_decay_refresh_batch_for_scheduler_shapes() {
         .unwrap();
     db.query("CREATE (:Memory {title: 'Idless memory'})")
         .unwrap();
-    let idless = db
-        .query("MATCH (m:Memory) WHERE m.title = 'Idless memory' RETURN id(m) AS id")
-        .unwrap();
-    let idless_memory_id = match idless.rows[0].get("id").unwrap() {
-        Value::Int(id) => id.to_string(),
-        other => panic!("expected projected id int, got {other:?}"),
-    };
-    let graph_commit_epoch_before = db.runtime.get().unwrap().store.commit_epoch();
-
-    let output = db
-        .update_knowledge_memory_decay_refresh_batch(&KnowledgeMemoryDecayRefreshBatchRequest {
-            updates: vec![
-                KnowledgeMemoryDecayRefreshUpdate {
-                    memory_id: "decay-refresh-memory-1".to_string(),
-                    decay_score_cached: Value::Float(0.42),
-                    confidence: Some(Value::Float(0.77)),
-                },
-                KnowledgeMemoryDecayRefreshUpdate {
-                    memory_id: "decay-refresh-memory-2".to_string(),
-                    decay_score_cached: Value::Float(0.31),
-                    confidence: None,
-                },
-                KnowledgeMemoryDecayRefreshUpdate {
-                    memory_id: "missing".to_string(),
-                    decay_score_cached: Value::Float(0.5),
-                    confidence: None,
-                },
-                KnowledgeMemoryDecayRefreshUpdate {
-                    memory_id: idless_memory_id,
-                    decay_score_cached: Value::Float(0.6),
-                    confidence: Some(Value::Float(0.6)),
-                },
-                KnowledgeMemoryDecayRefreshUpdate {
-                    memory_id: "decay-refresh-memory-1".to_string(),
-                    decay_score_cached: Value::Float(0.9),
-                    confidence: None,
-                },
-            ],
-        })
-        .unwrap();
-
-    assert_eq!(output.graph_commit_epoch_before, graph_commit_epoch_before);
-    assert_eq!(
-        output.graph_commit_epoch_after,
-        graph_commit_epoch_before + 1
-    );
-    assert_eq!(output.rows.len(), 5);
-    assert_eq!(output.matched_count, 2);
-    assert_eq!(output.missing_count, 1);
-    assert_eq!(output.non_writable_count, 1);
-    assert_eq!(output.duplicate_count, 1);
-    assert_eq!(output.updated_count, 2);
-    assert_eq!(output.updated_property_count, 3);
-    assert_eq!(output.rows[0].updated_property_count, 2);
-    assert_eq!(output.rows[1].updated_property_count, 1);
-    assert!(!output.rows[2].matched);
-    assert!(output.rows[3].non_writable);
-    assert!(output.rows[4].duplicate);
-
+    let before = db.commit_epoch().unwrap();
+    let mut transaction = db.begin_transaction().unwrap();
+    let mut seen = BTreeSet::new();
+    let mut counts = Vec::new();
+    let mut duplicates = 0;
+    for (id, decay, confidence) in [
+        ("decay-refresh-memory-1", 0.42, Some(0.77)),
+        ("decay-refresh-memory-2", 0.31, None),
+        ("missing", 0.5, None),
+        ("2", 0.6, Some(0.6)),
+        ("decay-refresh-memory-1", 0.9, None),
+    ] {
+        let parameters =
+            memory_decay_parameters(id, Value::Float(decay), confidence.map(Value::Float)).unwrap();
+        // Repeated caller input uses the first assignment; matching remains in Cypher.
+        if !seen.insert(id) {
+            duplicates += 1;
+            continue;
+        }
+        let query = if confidence.is_some() {
+            MEMORY_DECAY_CONFIDENCE_UPDATE
+        } else {
+            MEMORY_DECAY_UPDATE
+        };
+        let output = transaction
+            .query_request(bounded_batch_query(query, &parameters))
+            .unwrap();
+        counts.push(output.rows.len());
+    }
+    assert_eq!(counts, [1, 1, 0, 0]);
+    assert_eq!(duplicates, 1);
+    transaction.commit().unwrap();
+    assert_eq!(before, 3);
+    assert_eq!(db.commit_epoch().unwrap(), before + 1);
     let rows = db
-        .query_property_batch_via_cypher(&KnowledgePropertyBatchRequest {
-            entities: vec![
-                KnowledgeEntityRequest {
-                    label: "Memory".to_string(),
-                    external_id: "decay-refresh-memory-1".to_string(),
-                },
-                KnowledgeEntityRequest {
-                    label: "Memory".to_string(),
-                    external_id: "decay-refresh-memory-2".to_string(),
-                },
-            ],
-            property_names: vec!["decay_score_cached".to_string(), "confidence".to_string()],
-        })
+        .query_request(bounded_batch_query(MEMORY_DECAY_READ, &BTreeMap::new()))
         .unwrap();
+    assert_eq!(rows.rows.len(), 3);
     assert_eq!(
-        rows.rows[0].properties.get("decay_score_cached"),
-        Some(&Some(Value::Float(0.42)))
+        rows.rows[0]["id"],
+        Value::String("decay-refresh-memory-1".into())
     );
+    assert_eq!(rows.rows[0]["decay"], Value::Float(0.42));
+    assert_eq!(rows.rows[0]["confidence"], Value::Float(0.77));
     assert_eq!(
-        rows.rows[0].properties.get("confidence"),
-        Some(&Some(Value::Float(0.77)))
+        rows.rows[1]["id"],
+        Value::String("decay-refresh-memory-2".into())
     );
-    assert_eq!(
-        rows.rows[1].properties.get("decay_score_cached"),
-        Some(&Some(Value::Float(0.31)))
-    );
-    assert_eq!(rows.rows[1].properties.get("confidence"), Some(&None));
+    assert_eq!(rows.rows[1]["decay"], Value::Float(0.31));
+    assert_eq!(rows.rows[1]["confidence"], Value::Null);
+    assert_eq!(rows.rows[2]["node_id"], Value::Int(2));
+    assert_eq!(rows.rows[2]["id"], Value::Null);
+    assert_eq!(rows.rows[2]["title"], Value::String("Idless memory".into()));
+    assert_eq!(rows.rows[2]["decay"], Value::Null);
+    assert_eq!(rows.rows[2]["confidence"], Value::Null);
 }
 
 #[test]
 fn memory_decay_refresh_rejects_invalid_rows_before_wal() {
     let path = unique_test_dir("memory_decay_refresh_rejects_invalid_rows_before_wal");
-    let mut db = Database::open(&path).unwrap();
-    db.query("CREATE (:Memory {id: 'decay-refresh-memory-1', decay_score_cached: 1.0})")
-        .unwrap();
-    let graph_commit_epoch_before = db.runtime.get().unwrap().store.commit_epoch();
-    let wal_before = read_test_wal(&path).unwrap();
-
-    let empty_id = db
-        .update_knowledge_memory_decay_refresh_batch(&KnowledgeMemoryDecayRefreshBatchRequest {
-            updates: vec![KnowledgeMemoryDecayRefreshUpdate {
-                memory_id: String::new(),
-                decay_score_cached: Value::Float(0.42),
-                confidence: None,
-            }],
-        })
-        .unwrap_err();
-    assert!(empty_id.to_string().contains("non-empty memory id"));
-
-    let invalid_decay = db
-        .update_knowledge_memory_decay_refresh_batch(&KnowledgeMemoryDecayRefreshBatchRequest {
-            updates: vec![KnowledgeMemoryDecayRefreshUpdate {
-                memory_id: "decay-refresh-memory-1".to_string(),
-                decay_score_cached: Value::String("stale".to_string()),
-                confidence: None,
-            }],
-        })
-        .unwrap_err();
-    assert!(invalid_decay
-        .to_string()
-        .contains("numeric finite decay score"));
-
-    let invalid_confidence = db
-        .update_knowledge_memory_decay_refresh_batch(&KnowledgeMemoryDecayRefreshBatchRequest {
-            updates: vec![KnowledgeMemoryDecayRefreshUpdate {
-                memory_id: "decay-refresh-memory-1".to_string(),
-                decay_score_cached: Value::Float(0.42),
-                confidence: Some(Value::String("high".to_string())),
-            }],
-        })
-        .unwrap_err();
-    assert!(invalid_confidence
-        .to_string()
-        .contains("numeric finite confidence"));
-
-    assert_eq!(
-        db.runtime.get().unwrap().store.commit_epoch(),
-        graph_commit_epoch_before
-    );
-    assert_eq!(read_test_wal(&path).unwrap(), wal_before);
+    {
+        let mut db = Database::open(&path).unwrap();
+        db.query("CREATE (:Memory {id: 'decay-refresh-memory-1', decay_score_cached: 1.0})")
+            .unwrap();
+        let before = db.commit_epoch().unwrap();
+        let wal_before = read_test_wal(&path).unwrap();
+        let error = memory_decay_parameters("", Value::Float(0.42), None).unwrap_err();
+        assert!(error.to_string().contains("non-empty memory id"));
+        for value in [Value::String("stale".into()), Value::Float(f64::NAN)] {
+            let error = memory_decay_parameters("decay-refresh-memory-1", value, None).unwrap_err();
+            assert!(error.to_string().contains("numeric finite decay score"));
+        }
+        for value in [Value::String("high".into()), Value::Float(f64::INFINITY)] {
+            let error =
+                memory_decay_parameters("decay-refresh-memory-1", Value::Float(0.42), Some(value))
+                    .unwrap_err();
+            assert!(error.to_string().contains("numeric finite confidence"));
+        }
+        assert_eq!(db.commit_epoch().unwrap(), before);
+        assert_eq!(read_test_wal(&path).unwrap(), wal_before);
+        let rows = db
+            .query_request(bounded_batch_query(MEMORY_DECAY_READ, &BTreeMap::new()))
+            .unwrap();
+        assert_eq!(rows.rows[0]["decay"], Value::Float(1.0));
+        assert_eq!(rows.rows[0]["confidence"], Value::Null);
+    }
     std::fs::remove_dir_all(path).unwrap();
 }
 
 #[test]
-fn typed_memory_decay_refresh_persists_as_one_wal_batch_and_replays() {
-    let path = unique_test_dir("typed_memory_decay_refresh_wal_replay");
+fn memory_decay_refresh_queries_persist_as_one_wal_batch_and_replay() {
+    let path = unique_test_dir("memory_decay_refresh_query_wal_replay");
     {
         let mut db = Database::open(&path).unwrap();
-        db.query("CREATE (:Memory {id: 'decay-refresh-memory-1', decay_score_cached: 1.0, confidence: 0.1})")
-            .unwrap();
+        db.query("CREATE (:Memory {id: 'decay-refresh-memory-1', decay_score_cached: 1.0, confidence: 0.1})").unwrap();
         db.query("CREATE (:Memory {id: 'decay-refresh-memory-2', decay_score_cached: 1.0})")
             .unwrap();
-        let batch_count_before_update = read_test_wal(&path).unwrap().matches("\tbatch\t").count();
-        db.update_knowledge_memory_decay_refresh_batch(&KnowledgeMemoryDecayRefreshBatchRequest {
-            updates: vec![
-                KnowledgeMemoryDecayRefreshUpdate {
-                    memory_id: "decay-refresh-memory-1".to_string(),
-                    decay_score_cached: Value::Float(0.42),
-                    confidence: Some(Value::Float(0.77)),
-                },
-                KnowledgeMemoryDecayRefreshUpdate {
-                    memory_id: "decay-refresh-memory-2".to_string(),
-                    decay_score_cached: Value::Float(0.31),
-                    confidence: None,
-                },
-            ],
-        })
-        .unwrap();
-        let batch_count_after_update = read_test_wal(&path).unwrap().matches("\tbatch\t").count();
-        assert_eq!(batch_count_after_update, batch_count_before_update + 1);
+        let batches_before = read_test_wal(&path).unwrap().matches("\tbatch\t").count();
+        let mut transaction = db.begin_transaction().unwrap();
+        for (id, decay, confidence) in [
+            ("decay-refresh-memory-1", 0.42, Some(0.77)),
+            ("decay-refresh-memory-2", 0.31, None),
+        ] {
+            let parameters =
+                memory_decay_parameters(id, Value::Float(decay), confidence.map(Value::Float))
+                    .unwrap();
+            let query = if confidence.is_some() {
+                MEMORY_DECAY_CONFIDENCE_UPDATE
+            } else {
+                MEMORY_DECAY_UPDATE
+            };
+            let output = transaction
+                .query_request(bounded_batch_query(query, &parameters))
+                .unwrap();
+            assert_eq!(output.rows.len(), 1);
+        }
+        transaction.commit().unwrap();
+        assert_eq!(
+            read_test_wal(&path).unwrap().matches("\tbatch\t").count(),
+            batches_before + 1
+        );
     }
-    let wal = read_test_wal(&path).unwrap();
-    assert!(wal.contains("set_node_property"));
+    assert!(read_test_wal(&path).unwrap().contains("set_node_property"));
     {
-        let db = Database::open(&path).unwrap();
+        let mut db = Database::open(&path).unwrap();
         let rows = db
-            .query_property_batch_via_cypher(&KnowledgePropertyBatchRequest {
-                entities: vec![
-                    KnowledgeEntityRequest {
-                        label: "Memory".to_string(),
-                        external_id: "decay-refresh-memory-1".to_string(),
-                    },
-                    KnowledgeEntityRequest {
-                        label: "Memory".to_string(),
-                        external_id: "decay-refresh-memory-2".to_string(),
-                    },
-                ],
-                property_names: vec!["decay_score_cached".to_string(), "confidence".to_string()],
-            })
+            .query_request(bounded_batch_query(MEMORY_DECAY_READ, &BTreeMap::new()))
             .unwrap();
-        assert_eq!(
-            rows.rows[0].properties.get("decay_score_cached"),
-            Some(&Some(Value::Float(0.42)))
-        );
-        assert_eq!(
-            rows.rows[0].properties.get("confidence"),
-            Some(&Some(Value::Float(0.77)))
-        );
-        assert_eq!(
-            rows.rows[1].properties.get("decay_score_cached"),
-            Some(&Some(Value::Float(0.31)))
-        );
+        assert_eq!(rows.rows.len(), 2);
+        assert_eq!(rows.rows[0]["decay"], Value::Float(0.42));
+        assert_eq!(rows.rows[0]["confidence"], Value::Float(0.77));
+        assert_eq!(rows.rows[1]["decay"], Value::Float(0.31));
+        assert_eq!(rows.rows[1]["confidence"], Value::Null);
     }
     std::fs::remove_dir_all(path).unwrap();
 }
@@ -4143,7 +3880,7 @@ fn deletes_sources_for_nowledge_detach_delete_shape() {
         other => panic!("expected projected id int, got {other:?}"),
     };
 
-    let parameters = batch_delete_parameters(&[
+    let parameters = batch_id_parameters(&[
         "source_1",
         "missing",
         &idless_source_id,
@@ -4162,14 +3899,20 @@ fn deletes_sources_for_nowledge_detach_delete_shape() {
     assert_eq!(candidates.rows.len(), 2);
     assert_eq!(candidates.rows[0]["id"], Value::String("source_1".into()));
     assert_eq!(candidates.rows[1]["id"], Value::String("source_2".into()));
-    let output = transaction
+    transaction
         .query_request(bounded_batch_query(
             "MATCH (n:Source) WHERE n.id IN $ids DETACH DELETE n",
             &parameters,
         ))
         .unwrap();
-    assert_eq!(output.rows.len(), 2);
-    transaction.commit().unwrap();
+    let after = transaction
+        .query_request(bounded_batch_query(
+            "MATCH (n:Source) WHERE n.id IN $ids RETURN n.id AS id",
+            &parameters,
+        ))
+        .unwrap();
+    assert!(after.rows.is_empty());
+    assert_eq!(transaction.commit().unwrap().rows.len(), 2);
     assert_eq!(before, 4);
     assert_eq!(db.commit_epoch().unwrap(), before + 1);
     let retained = db
@@ -4224,7 +3967,7 @@ fn source_delete_rejects_empty_source_id_before_wal() {
     db.query("CREATE (:Source {id: 'source_1'})").unwrap();
     let graph_commit_epoch_before = db.runtime.get().unwrap().store.commit_epoch();
 
-    let error = batch_delete_parameters(&[""]).unwrap_err();
+    let error = batch_id_parameters(&[""]).unwrap_err();
 
     assert!(error.to_string().contains("non-empty id"));
     assert_eq!(
@@ -4242,7 +3985,7 @@ fn source_delete_query_persists_as_one_wal_batch_and_replays() {
             .unwrap();
         db.query("CREATE (:Source {id: 'source_2'})").unwrap();
         let batch_count_before_delete = read_test_wal(&path).unwrap().matches("\tbatch\t").count();
-        let parameters = batch_delete_parameters(&["source_1", "source_2"]).unwrap();
+        let parameters = batch_id_parameters(&["source_1", "source_2"]).unwrap();
         let output = db
             .query_request(bounded_batch_query(
                 "MATCH (n:Source) WHERE n.id IN $ids DETACH DELETE n",
@@ -4257,7 +4000,7 @@ fn source_delete_query_persists_as_one_wal_batch_and_replays() {
     assert!(wal.contains("delete_node"));
     {
         let db = Database::open(&path).unwrap();
-        let parameters = batch_delete_parameters(&["source_1", "source_2"]).unwrap();
+        let parameters = batch_id_parameters(&["source_1", "source_2"]).unwrap();
         let sources = db
             .begin_read_transaction()
             .unwrap()
@@ -4272,7 +4015,7 @@ fn source_delete_query_persists_as_one_wal_batch_and_replays() {
                 .unwrap()
                 .query_request(bounded_batch_query(
                     "MATCH (n:Memory) WHERE n.id IN $ids RETURN n.id AS id",
-                    &batch_delete_parameters(&["memory_1"]).unwrap()
+                    &batch_id_parameters(&["memory_1"]).unwrap()
                 ))
                 .unwrap()
                 .rows
@@ -6805,7 +6548,7 @@ fn deletes_skills_for_nowledge_detach_delete_shape() {
     };
 
     let parameters =
-        batch_delete_parameters(&["skill_1", "missing", &idless_skill_id, "skill_2", "skill_1"])
+        batch_id_parameters(&["skill_1", "missing", &idless_skill_id, "skill_2", "skill_1"])
             .unwrap();
     let before = db.commit_epoch().unwrap();
     let mut transaction = db.begin_transaction().unwrap();
@@ -6818,14 +6561,20 @@ fn deletes_skills_for_nowledge_detach_delete_shape() {
     assert_eq!(candidates.rows.len(), 2);
     assert_eq!(candidates.rows[0]["id"], Value::String("skill_1".into()));
     assert_eq!(candidates.rows[1]["id"], Value::String("skill_2".into()));
-    let output = transaction
+    transaction
         .query_request(bounded_batch_query(
             "MATCH (n:Skill) WHERE n.id IN $ids DETACH DELETE n",
             &parameters,
         ))
         .unwrap();
-    assert_eq!(output.rows.len(), 2);
-    transaction.commit().unwrap();
+    let after = transaction
+        .query_request(bounded_batch_query(
+            "MATCH (n:Skill) WHERE n.id IN $ids RETURN n.id AS id",
+            &parameters,
+        ))
+        .unwrap();
+    assert!(after.rows.is_empty());
+    assert_eq!(transaction.commit().unwrap().rows.len(), 2);
     assert_eq!(before, 4);
     assert_eq!(db.commit_epoch().unwrap(), before + 1);
     let retained = db
@@ -6880,7 +6629,7 @@ fn skill_delete_rejects_empty_skill_id_before_wal() {
     db.query("CREATE (:Skill {id: 'skill_1'})").unwrap();
     let graph_commit_epoch_before = db.runtime.get().unwrap().store.commit_epoch();
 
-    let error = batch_delete_parameters(&[""]).unwrap_err();
+    let error = batch_id_parameters(&[""]).unwrap_err();
 
     assert!(error.to_string().contains("non-empty id"));
     assert_eq!(
@@ -6898,7 +6647,7 @@ fn skill_delete_query_persists_as_one_wal_batch_and_replays() {
             .unwrap();
         db.query("CREATE (:Skill {id: 'skill_2'})").unwrap();
         let batch_count_before_delete = read_test_wal(&path).unwrap().matches("\tbatch\t").count();
-        let parameters = batch_delete_parameters(&["skill_1", "skill_2"]).unwrap();
+        let parameters = batch_id_parameters(&["skill_1", "skill_2"]).unwrap();
         let output = db
             .query_request(bounded_batch_query(
                 "MATCH (n:Skill) WHERE n.id IN $ids DETACH DELETE n",
@@ -6913,7 +6662,7 @@ fn skill_delete_query_persists_as_one_wal_batch_and_replays() {
     assert!(wal.contains("delete_node"));
     {
         let db = Database::open(&path).unwrap();
-        let parameters = batch_delete_parameters(&["skill_1", "skill_2"]).unwrap();
+        let parameters = batch_id_parameters(&["skill_1", "skill_2"]).unwrap();
         let skills = db
             .begin_read_transaction()
             .unwrap()
@@ -6928,7 +6677,7 @@ fn skill_delete_query_persists_as_one_wal_batch_and_replays() {
                 .unwrap()
                 .query_request(bounded_batch_query(
                     "MATCH (n:Memory) WHERE n.id IN $ids RETURN n.id AS id",
-                    &batch_delete_parameters(&["memory_1"]).unwrap()
+                    &batch_id_parameters(&["memory_1"]).unwrap()
                 ))
                 .unwrap()
                 .rows
@@ -7489,7 +7238,7 @@ fn deletes_threads_for_nowledge_compensation_delete_shape() {
         other => panic!("expected projected id int, got {other:?}"),
     };
 
-    let parameters = batch_delete_parameters(&[
+    let parameters = batch_id_parameters(&[
         "thread_1",
         "missing",
         &idless_thread_id,
@@ -7508,14 +7257,20 @@ fn deletes_threads_for_nowledge_compensation_delete_shape() {
     assert_eq!(candidates.rows.len(), 2);
     assert_eq!(candidates.rows[0]["id"], Value::String("thread_1".into()));
     assert_eq!(candidates.rows[1]["id"], Value::String("thread_2".into()));
-    let output = transaction
+    transaction
         .query_request(bounded_batch_query(
             "MATCH (n:Thread) WHERE n.id IN $ids DETACH DELETE n",
             &parameters,
         ))
         .unwrap();
-    assert_eq!(output.rows.len(), 2);
-    transaction.commit().unwrap();
+    let after = transaction
+        .query_request(bounded_batch_query(
+            "MATCH (n:Thread) WHERE n.id IN $ids RETURN n.id AS id",
+            &parameters,
+        ))
+        .unwrap();
+    assert!(after.rows.is_empty());
+    assert_eq!(transaction.commit().unwrap().rows.len(), 2);
     assert_eq!(before, 4);
     assert_eq!(db.commit_epoch().unwrap(), before + 1);
     let retained = db
@@ -7531,7 +7286,7 @@ fn deletes_threads_for_nowledge_compensation_delete_shape() {
     );
 
     for thread_id in ["thread_1", "thread_2"] {
-        let parameters = batch_delete_parameters(&[thread_id]).unwrap();
+        let parameters = batch_id_parameters(&[thread_id]).unwrap();
         assert!(db
             .begin_read_transaction()
             .unwrap()
@@ -7546,7 +7301,7 @@ fn deletes_threads_for_nowledge_compensation_delete_shape() {
     assert_eq!(
         db.query_request(bounded_batch_query(
             "MATCH (n:Thread) WHERE n.id IN $ids RETURN n.id AS id",
-            &batch_delete_parameters(&["thread_3"]).unwrap(),
+            &batch_id_parameters(&["thread_3"]).unwrap(),
         ))
         .unwrap()
         .rows
@@ -7601,7 +7356,7 @@ fn thread_delete_rejects_empty_thread_id_before_wal() {
     db.query("CREATE (:Thread {id: 'thread_1'})").unwrap();
     let graph_commit_epoch_before = db.runtime.get().unwrap().store.commit_epoch();
 
-    let error = batch_delete_parameters(&[""]).unwrap_err();
+    let error = batch_id_parameters(&[""]).unwrap_err();
 
     assert!(error.to_string().contains("non-empty id"));
     assert_eq!(
@@ -7619,7 +7374,7 @@ fn thread_delete_query_persists_as_one_wal_batch_and_replays() {
             .unwrap();
         db.query("CREATE (:Thread {id: 'thread_2'})").unwrap();
         let batch_count_before_delete = read_test_wal(&path).unwrap().matches("\tbatch\t").count();
-        let parameters = batch_delete_parameters(&["thread_1", "thread_2"]).unwrap();
+        let parameters = batch_id_parameters(&["thread_1", "thread_2"]).unwrap();
         let output = db
             .query_request(bounded_batch_query(
                 "MATCH (n:Thread) WHERE n.id IN $ids DETACH DELETE n",
@@ -7635,7 +7390,7 @@ fn thread_delete_query_persists_as_one_wal_batch_and_replays() {
     {
         let db = Database::open(&path).unwrap();
         for thread_id in ["thread_1", "thread_2"] {
-            let parameters = batch_delete_parameters(&[thread_id]).unwrap();
+            let parameters = batch_id_parameters(&[thread_id]).unwrap();
             assert!(db
                 .begin_read_transaction()
                 .unwrap()
@@ -7652,7 +7407,7 @@ fn thread_delete_query_persists_as_one_wal_batch_and_replays() {
                 .unwrap()
                 .query_request(bounded_batch_query(
                     "MATCH (n:Message) WHERE n.id IN $ids RETURN n.id AS id",
-                    &batch_delete_parameters(&["message_1"]).unwrap()
+                    &batch_id_parameters(&["message_1"]).unwrap()
                 ))
                 .unwrap()
                 .rows
@@ -9779,7 +9534,7 @@ fn read_test_durable_text(path: &std::path::Path) -> std::io::Result<String> {
 #[cfg(all(any(unix, windows), feature = "test-support"))]
 mod power_loss;
 
-fn batch_delete_parameters(ids: &[&str]) -> Result<BTreeMap<String, Value>> {
+fn batch_id_parameters(ids: &[&str]) -> Result<BTreeMap<String, Value>> {
     if ids.iter().any(|id| id.is_empty()) {
         return Err(HawDBError::Semantic("non-empty id required".into()));
     }

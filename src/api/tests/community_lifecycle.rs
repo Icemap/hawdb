@@ -27,8 +27,8 @@ fn bounded_query<'a>(query: &'a str, parameters: &'a BTreeMap<String, Value>) ->
 const CREATE: &str = "MERGE (c:Community {id: $id}) ON CREATE SET \
     c.community_id = $community_id, c.name = $name, c.description = $description, \
     c.ai_summary = $ai_summary, c.member_count = $member_count, c.algorithm = 'louvain', \
-    c.resolution = $resolution, c.created_at = $created_at, c.updated_at = $updated_at \
-    RETURN id(c) AS node_id, c.name AS name";
+    c.resolution = $resolution, c.created_at = $created_at, c.updated_at = $updated_at";
+const READ: &str = "MATCH (c:Community {id: $id}) RETURN id(c) AS node_id, c.name AS name";
 const UPDATE: &str = "MATCH (c:Community {id: $id}) \
     SET c.name = $name, c.description = $description, c.ai_summary = $ai_summary, \
     c.updated_at = $updated_at RETURN id(c) AS node_id";
@@ -96,8 +96,11 @@ fn updates_community_lifecycle_for_nowledge_detection_and_summary() {
             ("created_at".into(), Value::Int(timestamp)),
             ("updated_at".into(), Value::Int(timestamp)),
         ]);
-        let output = transaction
+        transaction
             .query_request(bounded_query(CREATE, &parameters))
+            .unwrap();
+        let output = transaction
+            .query_request(bounded_query(READ, &parameters))
             .unwrap();
         assert_eq!(output.rows.len(), 1);
         assert_eq!(output.rows[0]["node_id"], Value::Int(expected_id));
@@ -221,9 +224,12 @@ fn community_lifecycle_queries_persist_as_one_wal_batch_and_replays() {
             ("created_at".into(), Value::Int(10)),
             ("updated_at".into(), Value::Int(10)),
         ]);
+        transaction
+            .query_request(bounded_query(CREATE, &create))
+            .unwrap();
         assert_eq!(
             transaction
-                .query_request(bounded_query(CREATE, &create))
+                .query_request(bounded_query(READ, &create))
                 .unwrap()
                 .rows
                 .len(),

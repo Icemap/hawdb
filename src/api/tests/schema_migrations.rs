@@ -16,7 +16,8 @@ use super::*;
 use crate::QueryRequest;
 
 const APPLY: &str = "MERGE (m:SchemaMigrationLog {id: $id}) \
-    ON CREATE SET m.applied_at = $applied_at \
+    ON CREATE SET m.applied_at = $applied_at";
+const READ: &str = "MATCH (m:SchemaMigrationLog {id: $id}) \
     RETURN id(m) AS node_id, m.applied_at AS applied_at";
 
 fn bounded_query<'a>(
@@ -68,8 +69,11 @@ fn applies_schema_migration_log_batch_idempotently() {
         ("new_2", 103, 103),
     ] {
         let parameters = parameters(id, timestamp).unwrap();
-        let output = transaction
+        transaction
             .query_request(bounded_query(APPLY, &parameters, 1))
+            .unwrap();
+        let output = transaction
+            .query_request(bounded_query(READ, &parameters, 1))
             .unwrap();
         assert_eq!(output.rows.len(), 1);
         assert_eq!(output.rows[0]["applied_at"], Value::Int(expected));
@@ -185,8 +189,11 @@ fn schema_migration_queries_persist_as_one_wal_batch_and_replays() {
         let mut transaction = db.begin_transaction().unwrap();
         for (id, timestamp) in [("migration_1", 100), ("migration_2", 200)] {
             let parameters = parameters(id, timestamp).unwrap();
-            let output = transaction
+            transaction
                 .query_request(bounded_query(APPLY, &parameters, 1))
+                .unwrap();
+            let output = transaction
+                .query_request(bounded_query(READ, &parameters, 1))
                 .unwrap();
             assert_eq!(output.rows.len(), 1);
         }
@@ -230,10 +237,16 @@ fn schema_migration_existing_only_preserves_epoch_and_wal() {
         let mut db = Database::open(&path).unwrap();
         let before = db.commit_epoch().unwrap();
         let parameters = parameters("existing", 99).unwrap();
-        let result = db
+        let mut transaction = db.begin_transaction().unwrap();
+        transaction
             .query_request(bounded_query(APPLY, &parameters, 1))
             .unwrap();
+        let result = transaction
+            .query_request(bounded_query(READ, &parameters, 1))
+            .unwrap();
+        assert_eq!(result.rows.len(), 1);
         assert_eq!(result.rows[0]["applied_at"], Value::Int(10));
+        transaction.commit().unwrap();
         assert_eq!(db.commit_epoch().unwrap(), before);
     }
     assert_eq!(read_test_wal(&path).unwrap(), wal_before);

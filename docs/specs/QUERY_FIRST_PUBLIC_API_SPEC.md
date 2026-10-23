@@ -430,6 +430,17 @@ Their old DTOs, test read wrappers and mutation adapters are removed.
 Generic/scoped entity batches and Source/Skill/Thread deletion fixtures use
 bounded IN predicates and DETACH DELETE, preserving projected-idless nodes and
 unrelated endpoints without graph inspection in host code.
+Property updates, Memory content/metadata, dedup-review timestamps, access/click
+counters, decay refresh and normalized-space moves use fixed bounded SET
+statements. Optional assignments use separate statements; source-space
+normalization, identity matching and filtering remain in Cypher. Host helpers
+only validate caller input and normalize duplicate requests. Multi-statement
+mutations share an explicit transaction; repeated counter updates observe its
+private workspace. These fixtures retain exact field values, missing/idless
+target protection, omitted-field behavior, no-op epochs and single-batch
+WAL/reopen assertions. Their business adapters and request/result DTOs are
+removed. The shared property-statement helper remains only for legacy fixtures
+that have not yet migrated.
 Remaining legacy business adapters still require migration; this removal does
 not complete issue #1193.
 

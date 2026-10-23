@@ -27,6 +27,10 @@ fn bounded_query<'a>(query: &'a str, parameters: &'a BTreeMap<String, Value>) ->
 const CREATE: &str = "MATCH (e:Entity {id: $entity_id}), (c:Community {id: $community_id}) \
     CREATE (e)-[:BELONGS_TO {strength: $strength, created_at: $created_at, properties: $properties}]->(c)";
 
+const READ: &str =
+    "MATCH (:Entity {id: $entity_id})-[r:BELONGS_TO]->(:Community {id: $community_id}) \
+    RETURN r.strength AS strength, r.created_at AS created_at, r.properties AS properties";
+
 fn parameters(
     entity_id: &str,
     community_id: &str,
@@ -73,8 +77,15 @@ fn creates_community_memberships_for_nowledge_entity_lifecycle() {
     )
     .unwrap();
     for (parameters, expected) in [(&first, 1), (&missing, 0)] {
-        let output = transaction
+        let before = transaction
+            .query_request(bounded_query(READ, parameters))
+            .unwrap();
+        assert!(before.rows.is_empty());
+        transaction
             .query_request(bounded_query(CREATE, parameters))
+            .unwrap();
+        let output = transaction
+            .query_request(bounded_query(READ, parameters))
             .unwrap();
         assert_eq!(output.rows.len(), expected);
     }
@@ -158,10 +169,15 @@ fn community_membership_queries_persist_as_one_wal_batch_and_replays() {
         let mut transaction = db.begin_transaction().unwrap();
         for (entity, strength, timestamp) in [("entity_1", 0.6, 21), ("entity_2", 0.8, 22)] {
             let parameters = parameters(entity, "community_1", strength, timestamp, "{}").unwrap();
-            let output = transaction
+            transaction
                 .query_request(bounded_query(CREATE, &parameters))
                 .unwrap();
+            let output = transaction
+                .query_request(bounded_query(READ, &parameters))
+                .unwrap();
             assert_eq!(output.rows.len(), 1);
+            assert_eq!(output.rows[0]["strength"], Value::Float(strength));
+            assert_eq!(output.rows[0]["created_at"], Value::Int(timestamp));
         }
         transaction.commit().unwrap();
     }

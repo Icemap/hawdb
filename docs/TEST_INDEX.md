@@ -722,3 +722,52 @@ scoped nonmatches, duplicate input, missing IDs, projected-idless protection,
 read-only refusal, incident-edge removal, unchanged unrelated nodes and one-batch
 recovery. They no longer use generic entity-delete response DTOs or business
 read helpers for their postconditions. Native CI retains the existing owners.
+
+### Property mutation query fixtures
+
+The property mutation cases in `src/api/tests.rs` and
+`src/api/tests/knowledge_property_batch_mutations.rs` now use ordinary bounded
+Cypher (five rows / 4 KiB per statement), fixed property names and explicit
+transactions for batch writes. Input normalization only checks that a requested
+assignment exists. Filtering and id matching stay in Cypher. Coverage preserves
+invalid syntax, missing/filtered targets, idless protection, no-op epochs,
+read-only refusal, exact changed/unchanged values and one-batch WAL/reopen.
+The existing `//:hawdb_unit_general_tests` partition in the root Prow lane
+owns execution; local lint compiles the cases but does not replace runtime
+results.
+
+Memory dedup-review fixtures use the same bounded request boundary, parameterized
+IN matching and one explicit transaction/WAL batch. The root API lane retains
+duplicate/missing/idless, empty-id and integer/string timestamp replay coverage.
+
+Memory metadata fixtures retain omitted-timestamp versus explicit-timestamp
+behavior, first-input duplicate precedence, missing/idless targets and durable
+one-batch replay through fixed bounded SET statements in the same root API lane.
+
+Memory content fixtures assert all 13 fields after a bounded parameterized SET,
+first-input duplicate precedence, missing/idless protection and one-batch reopen.
+Host input validation retains empty-id/unit/extraction and finite numeric checks.
+The general root partition owns these migrated cases.
+
+Memory access fixtures preserve repeated-touch increments, optional click/dwell
+fields, negative-dwell refusal and one-batch replay using arithmetic SET
+statements. Missing targets return no rows; host normalization does no graph
+aggregation. The general root partition owns these migrated cases.
+
+The memory decay refresh fixtures retain first-input deduplication, missing and
+idless target protection, optional-confidence preservation, finite-number input
+validation, exact values and one-batch reopen through bounded Cypher. Their
+execution remains in the existing root API partition.
+
+Lifecycle fixture corrections retain the original root cases: MERGE statements
+are followed by bounded identity/value reads inside the same explicit
+transaction; ordinary CREATE/DELETE statements use before/after state and
+committed delete counts rather than expecting immediate projected rows.
+Community summary presence and ordering use existing CASE predicates. The
+fixtures retain identity, idempotence, no-op epoch/WAL and reopen assertions.
+
+Normalized-space move fixtures use fixed Thread/Memory statements with
+CASE-normalized source predicates, target exclusions and identity-property
+matching. They preserve duplicate/missing/filtered targets, unchanged storage
+identities, optional timestamps, retry no-op epochs, invalid property syntax and
+one-batch WAL/reopen in the existing root API partition.
