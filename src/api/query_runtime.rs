@@ -150,7 +150,7 @@ impl PreparedRuntimeExecution {
 
 #[derive(Clone, Copy, Default)]
 pub(super) struct QueryExecutionOptions<'a> {
-    capture_trace: bool,
+    pub(super) capture_trace: bool,
     pub(super) access_control: Option<&'a QueryAccessControlContext>,
     pub(super) task_context: Option<&'a hawdb_core::RuntimeTaskContext>,
     pub(super) scoring: Option<BoundScoringRequest<'a>>,
@@ -387,6 +387,18 @@ impl Database {
             &runtime.optimizer_planning_cache,
             QueryExecutionOptions::for_request(request, None),
         )
+    }
+
+    pub(crate) fn accepts_prepared_query(&self, prepared: &PreparedRuntimeQuery) -> Result<bool> {
+        let runtime = self.runtime.get()?;
+        Ok(prepared.is_compatible(
+            self.current_branch_from_runtime(&runtime)
+                .map(|current| current.info.id),
+            &self.config,
+            &self.system_variables,
+            &runtime.catalog,
+            &runtime.store,
+        ))
     }
 }
 

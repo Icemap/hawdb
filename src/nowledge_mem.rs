@@ -1469,28 +1469,11 @@ impl NowledgeMemGraph {
     ) -> Result<(RuntimePermit, crate::api::PreparedRuntimeQuery)> {
         let prepared = self.prepare_admitted_query(cypher, parameters)?;
         let admission = prepared.admission();
-        let governor_budget = self.runtime_governor.snapshot().limits.result_budget_bytes;
-        let result_budget = if admission.is_mutation {
-            governor_budget
-        } else {
-            let configured = self
-                .db
-                .config()
-                .max_read_result_payload_bytes
-                .ok_or_else(|| {
-                    HawDBError::Execution(
-                        "admitted materialized query requires max_read_result_payload_bytes"
-                            .to_string(),
-                    )
-                })?;
-            let configured = u64::try_from(configured).unwrap_or(u64::MAX);
-            if configured > governor_budget {
-                return Err(HawDBError::Execution(format!(
-                    "admitted materialized query payload budget {configured} exceeds runtime result budget {governor_budget}"
-                )));
-            }
-            configured
-        };
+        let result_budget = read_execution::materialized_result_budget(
+            self.db.config(),
+            &self.runtime_governor,
+            admission.is_mutation,
+        )?;
         self.try_admit_runtime(
             admission
                 .runtime_work_request_for_snapshot(result_budget, self.runtime_governor.snapshot())
@@ -2895,7 +2878,7 @@ impl NowledgeMemEmbeddedStoreHandle {
     }
 
     pub fn query_with_report(&self, cypher: &str) -> Result<NowledgeMemQueryOutput> {
-        self.write_store()?.query_with_report(cypher)
+        self.query_with_params_with_report(cypher, &BTreeMap::new())
     }
 
     pub fn set_telemetry_sink(&self, telemetry: Option<Arc<dyn TelemetrySink>>) -> Result<()> {
@@ -2908,8 +2891,7 @@ impl NowledgeMemEmbeddedStoreHandle {
         cypher: &str,
         options: NowledgeMemQueryReportOptions,
     ) -> Result<NowledgeMemQueryOutput> {
-        self.write_store()?
-            .query_with_report_options(cypher, options)
+        self.query_with_params_with_report_options(cypher, &BTreeMap::new(), options)
     }
 
     pub fn query_with_params_with_report(
@@ -2917,8 +2899,11 @@ impl NowledgeMemEmbeddedStoreHandle {
         cypher: &str,
         parameters: &BTreeMap<String, Value>,
     ) -> Result<NowledgeMemQueryOutput> {
-        self.write_store()?
-            .query_with_params_with_report(cypher, parameters)
+        self.query_with_params_with_report_options(
+            cypher,
+            parameters,
+            NowledgeMemQueryReportOptions::default(),
+        )
     }
 
     /// Hydrates an explicitly bounded set of search-projection documents.
@@ -3341,8 +3326,12 @@ impl NowledgeMemEmbeddedStoreHandle {
         parameters: &BTreeMap<String, Value>,
         options: NowledgeMemQueryReportOptions,
     ) -> Result<NowledgeMemQueryOutput> {
-        self.write_store()?
-            .query_with_params_with_report_options(cypher, parameters, options)
+        self.query_with_params_with_report_options_context(
+            cypher,
+            parameters,
+            options,
+            &RuntimeTaskContext::default(),
+        )
     }
 
     pub fn query_with_params_with_report_options_context(
@@ -3352,13 +3341,7 @@ impl NowledgeMemEmbeddedStoreHandle {
         options: NowledgeMemQueryReportOptions,
         task_context: &RuntimeTaskContext,
     ) -> Result<NowledgeMemQueryOutput> {
-        self.write_store()?
-            .query_with_params_with_report_options_context(
-                cypher,
-                parameters,
-                options,
-                task_context,
-            )
+        self.query_with_admitted_report(cypher, parameters, options, task_context)
     }
 
     pub fn read_query(
@@ -4015,13 +3998,19 @@ impl NowledgeMemEmbeddedStoreHandle {
             HawDBError::Execution(error.to_string())
         })?;
         // Capture after admission so a write completed during admission is visible.
-        // This guard must also drop before the permit on every error path.
-        let published = self.lock_published_read()?;
-        let published = published.as_ref().ok_or_else(|| {
-            HawDBError::Execution("nowledge mem embedded store read lock poisoned".to_string())
-        })?;
-        published.view.snapshot.ensure_usable()?;
-        let config = published.view.snapshot.config();
+        // Snapshot construction and observation refresh run after unlocking.
+        let (view, identity) = {
+            let published = self.lock_published_read()?;
+            let published = published.as_ref().ok_or_else(|| {
+                HawDBError::Execution("nowledge mem embedded store read lock poisoned".to_string())
+            })?;
+            (
+                Arc::clone(&published.view),
+                published.instance_identity.clone(),
+            )
+        };
+        view.snapshot.ensure_usable()?;
+        let config = view.snapshot.config();
         if let Some(max_rows) = max_rows {
             let configured_rows = config.read_result_row_limit().unwrap_or(usize::MAX);
             if max_rows > configured_rows {
@@ -4031,10 +4020,8 @@ impl NowledgeMemEmbeddedStoreHandle {
             }
         }
         let task_context = permit.bind_task_context(task_context.clone());
-        let transaction = published
-            .view
-            .begin_read_transaction_with_context(&task_context)?;
-        Ok((permit, transaction, published.instance_identity.clone()))
+        let transaction = view.begin_read_transaction_with_context(&task_context)?;
+        Ok((permit, transaction, identity))
     }
 
     fn finish_canonical_read<T>(&self, result: Result<T>) -> Result<T> {

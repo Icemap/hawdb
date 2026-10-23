@@ -47,6 +47,15 @@ descriptor participates in preparation. The model covers reservation ownership,
 not callback behavior, SQL binding correctness, or cumulative output budgets;
 request regressions own those checks.
 
+Mem ordinary/streaming and report entrypoints share `read_execution` preparation:
+the published graph view drops before execution admission, while the prepared
+template keeps its transferred reservation. Reports with no resident projection
+acquire the current graph/out-of-core pair only after admission and execute and
+record telemetry outside the publication lock. The existing transfer/admission
+transitions apply unchanged. Native tests check writer progress in observation
+callbacks and reject schema/instance changes; the model does not prove host
+callback reentrancy or the still-locked resident projection fallback.
+
 Recommended verification:
 
 ```console

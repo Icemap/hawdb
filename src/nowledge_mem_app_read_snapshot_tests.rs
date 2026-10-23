@@ -2112,7 +2112,7 @@ fn bounded_out_of_core_text_seed_filters_before_top_k() {
     writer.finish().unwrap();
     let mut database = Database::new_with_config(DatabaseConfig {
         max_read_result_rows: Some(16),
-        max_read_result_payload_bytes: Some(16 * 1024),
+        max_read_result_payload_bytes: Some(1024 * 1024),
         ..Default::default()
     });
     database
@@ -2148,6 +2148,51 @@ fn bounded_out_of_core_text_seed_filters_before_top_k() {
             Default::default(),
         ))
         .unwrap();
+    let reported = handle
+        .query_with_params_with_report_options(
+            query,
+            &parameters,
+            super::NowledgeMemQueryReportOptions {
+                capture_physical_plan: true,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    assert_eq!(reported.output.rows.len(), 1);
+    assert_eq!(reported.output.rows[0]["id"], Value::String("team".into()));
+    assert!(reported
+        .report
+        .physical_operator_counts
+        .contains_key("TextSeedScan"));
+    let analyzed = handle
+        .query_with_params_with_report(&format!("EXPLAIN ANALYZE {query}"), &parameters)
+        .unwrap();
+    assert_eq!(analyzed.output.rows.len(), 1);
+    assert_eq!(analyzed.output.rows[0]["row_count"], Value::Int(1));
+    for prefix in ["EXPLAIN", "EXPLAIN ANALYZE"] {
+        handle
+            .with_bounded_read_snapshot(
+                NowledgeMemReadSnapshotBudget {
+                    max_rows: 1,
+                    max_payload_bytes: 1024 * 1024,
+                },
+                |snapshot| {
+                    let output =
+                        snapshot.query_cypher(&format!("{prefix} {query}"), &parameters, 1)?;
+                    assert_eq!(output.rows.len(), 1);
+                    assert_eq!(snapshot.report().output_rows, 1);
+                    assert_eq!(
+                        snapshot.report().output_payload_bytes,
+                        output.rows.payload_bytes()
+                    );
+                    if prefix == "EXPLAIN ANALYZE" {
+                        assert_eq!(output.rows[0]["row_count"], Value::Int(1));
+                    }
+                    Ok(())
+                },
+            )
+            .unwrap();
+    }
     handle
         .with_bounded_read_snapshot(
             NowledgeMemReadSnapshotBudget {

@@ -195,6 +195,19 @@ commits preserve reuse; an incompatible source returns a retry error before
 execution. Streaming callbacks may overlap commits and acquire newer reads,
 while their original result remains bound to its selected snapshot.
 
+Mem report reads without a resident projection use the same admitted template
+and immutable publication path, including out-of-core external search operators.
+They capture optimizer/cache/profile evidence during that execution and record
+statement telemetry outside the store lock. A telemetry callback may wait for a
+writer and perform a fresh read without replacing the original report's snapshot.
+Ordinary report reads reuse preparation without an additional plan-cache lookup;
+EXPLAIN's separately bound diagnostic plan is outside this reuse guarantee. Non-snapshot
+statements and resident projection reports currently retain the canonical owner
+for execution; they reuse admission preparation and revalidate the instance,
+schema, branch and configuration after acquiring it. This fallback remains a
+separate concurrency requirement. Canonical snapshot construction and observation
+refresh also run outside the short publication-pointer acquisition lock.
+
 `with_bounded_read_snapshot` additionally pins the configured search projection
 with its graph publication. Out-of-core snapshots own the complete immutable
 reader, including its manifest, visibility state, shared artifact handles and

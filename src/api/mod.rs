@@ -22367,6 +22367,31 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
         )
     }
 
+    pub(crate) fn query_prepared_request_traced(
+        &mut self,
+        prepared: PreparedRuntimeQuery,
+        request: QueryRequest<'_>,
+        capture_trace: bool,
+        external: &mut dyn executor::ExternalReadOperator,
+    ) -> Result<(QueryOutput, QueryExecutionTrace)> {
+        let task =
+            query_request::bind_request_context(self.task_context.as_ref(), request.task_context)?;
+        let request = QueryRequest {
+            task_context: task.as_ref(),
+            ..request
+        };
+        let mut options = query_runtime::QueryExecutionOptions::for_request(request, None);
+        options.capture_trace = capture_trace;
+        let (cypher_text, prepared) = prepared.into_execution(&self.catalog, &self.store);
+        self.query_prepared_request_traced_internal(
+            &cypher_text,
+            prepared,
+            request.parameters.unwrap_or(&BTreeMap::new()),
+            options,
+            external,
+        )
+    }
+
     pub fn query_with_params_access_control(
         &mut self,
         cypher_text: &str,
@@ -22713,11 +22738,34 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
     fn query_prepared_request_profiled(
         &mut self,
         cypher_text: &str,
-        mut prepared: query_runtime::PreparedRuntimeExecution,
+        prepared: query_runtime::PreparedRuntimeExecution,
         parameters: &BTreeMap<String, Value>,
         options: query_runtime::QueryExecutionOptions<'_>,
         external: &mut dyn executor::ExternalReadOperator,
     ) -> Result<BoundedReadQueryOutput> {
+        let (output, trace) = self.query_prepared_request_traced_internal(
+            cypher_text,
+            prepared,
+            parameters,
+            options,
+            external,
+        )?;
+        Ok(BoundedReadQueryOutput {
+            output,
+            execution_profile: trace
+                .execution_profile
+                .expect("read execution always supplies a profile"),
+        })
+    }
+
+    fn query_prepared_request_traced_internal(
+        &mut self,
+        cypher_text: &str,
+        mut prepared: query_runtime::PreparedRuntimeExecution,
+        parameters: &BTreeMap<String, Value>,
+        options: query_runtime::QueryExecutionOptions<'_>,
+        external: &mut dyn executor::ExternalReadOperator,
+    ) -> Result<(QueryOutput, QueryExecutionTrace)> {
         let _planning_memory = prepared.planning_memory.take();
         let task_context = options.task_context;
         self.store.ensure_usable()?;
@@ -22733,7 +22781,11 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
         let query_runtime::PreparedRuntimeExecution { statement, .. } = prepared;
         let body = statement_body(&statement);
         if let cypher::Statement::Explain(explain) = &statement {
-            return self.execute_explain_request(cypher_text, explain, parameters, options);
+            let result =
+                self.execute_explain_request(cypher_text, explain, parameters, options, external)?;
+            let mut trace = QueryExecutionTrace::uncached(statement);
+            trace.execution_profile = Some(result.execution_profile);
+            return Ok((result.output, trace));
         }
         if matches!(body, cypher::Statement::Checkpoint) {
             reject_transaction_control_parameters("CHECKPOINT", parameters)?;
@@ -22778,12 +22830,17 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
         self.store.poison_on_storage_error(&profiled);
         let profiled = profiled?;
         query_runtime::query_runtime_checkpoint(task_context)?;
-        Ok(BoundedReadQueryOutput {
-            output: QueryOutput {
+        Ok((
+            QueryOutput {
                 rows: profiled.rows,
             },
-            execution_profile: profiled.profile,
-        })
+            QueryExecutionTrace {
+                statement,
+                optimizer_trace: options.capture_trace.then_some(optimized.trace),
+                plan_cache_lookup: Some(optimized.plan_cache_lookup),
+                execution_profile: Some(profiled.profile),
+            },
+        ))
     }
 
     fn execute_explain_request(
@@ -22792,6 +22849,7 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
         explain: &cypher::Explain,
         parameters: &BTreeMap<String, Value>,
         options: query_runtime::QueryExecutionOptions<'_>,
+        external: &mut dyn executor::ExternalReadOperator,
     ) -> Result<BoundedReadQueryOutput> {
         let task_context = options.task_context;
         query_runtime::query_runtime_checkpoint(task_context)?;
@@ -22817,7 +22875,6 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
             ));
         }
         if explain.analyze {
-            let mut external = executor::NoExternalReadOperator;
             let profiled = executor::execute_with_request(
                 executor::ExecutionRequest::new(
                     &optimized.physical_plan,
@@ -22838,11 +22895,7 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
                 .with_optional_host_scorer(
                     options.scoring.and_then(BoundScoringRequest::host_scorer),
                 ),
-                executor::ExecutionResources::new(
-                    &mut self.catalog,
-                    &mut self.store,
-                    &mut external,
-                ),
+                executor::ExecutionResources::new(&mut self.catalog, &mut self.store, external),
             );
             self.store.poison_on_storage_error(&profiled);
             let profiled = profiled?;

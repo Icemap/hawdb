@@ -94,6 +94,42 @@ impl PublishedConcurrentRead {
         self.snapshot
             .prepare_runtime_request(request, &self.system_variables, &self.plan_cache)
     }
+
+    pub(crate) fn query_prepared_with_trace(
+        &self,
+        prepared: PreparedRuntimeQuery,
+        request: crate::QueryRequest<'_>,
+        capture_trace: bool,
+        external: &mut dyn crate::executor::ExternalReadOperator,
+    ) -> Result<(QueryOutput, super::super::QueryExecutionTrace)> {
+        let started = hawdb_core::time::Instant::now();
+        let statement_kind = prepared.statement_kind();
+        let parse_nanos = prepared.parse_nanos();
+        let result = (|| {
+            let mut read = match request.task_context {
+                Some(context) => self.begin_read_transaction_with_context(context)?,
+                None => self.begin_read_transaction()?,
+            };
+            read.query_prepared_request_traced(prepared, request, capture_trace, external)
+        })();
+        self.recorder.record_statement_execution(
+            "cypher",
+            request.cypher,
+            statement_kind,
+            started,
+            result.as_ref().map(|(output, _)| output),
+            super::super::StatementExecutionContext {
+                execution_profile: result
+                    .as_ref()
+                    .ok()
+                    .and_then(|(_, trace)| trace.execution_profile.as_ref()),
+                retained_profile: None,
+                access_control: request.access_control,
+                parse_nanos,
+            },
+        );
+        result
+    }
 }
 
 impl std::fmt::Debug for PublishedConcurrentRead {

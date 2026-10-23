@@ -47,12 +47,15 @@ The weekly native runtime lane also runs this family and
 publication-failure, unwind, admission and old-generation assertions after Mem
 switches to the concurrent transaction kernel.
 
-`nowledge_mem::read_execution::tests` covers ordinary owned/streaming reads from
-published views: a streaming callback must allow a writer and fresh reader to
-finish, and execution-admission telemetry must release the preparation view.
+`nowledge_mem::read_execution::tests` covers ordinary owned/streaming and report
+reads from published views: streaming and report-observation callbacks must allow
+a writer and fresh reader to finish, and execution-admission telemetry must
+release the preparation view in both ordinary and report entrypoints.
 Data-only commits remain reusable; schema and database-instance changes reject
 the old preparation before execution. Every case checks released admission
-memory. The root general unit owner and weekly runtime lane execute this family.
+memory. Report cases also require one cache lookup per preparation and preserve
+physical-plan capture with rebound parameters. The root general unit owner and
+weekly runtime lane execute this family.
 
 The App snapshot family also exercises out-of-core generation replacement through
 the actual Mem maintenance entrypoint while a snapshot callback remains active.
@@ -60,6 +63,10 @@ It checks the old graph/projection pair, the newer pair, generation advancement,
 release of the old reader after callback completion, and refunded admission.
 This covers `SearchOutOfCoreReader::refresh_shared` through its embedded host;
 resident projection lock release remains a separate implementation requirement.
+The text-seed fixture also exercises the report entrypoint and EXPLAIN ANALYZE
+with the captured out-of-core external operator. Plain/analyzed explain rows
+have an explicit 1 MiB diagnostic cap and debit their delivered row/payload from
+the cumulative snapshot ledger; ordinary reads keep their 8 KiB snapshot cap.
 
 ## Execution lanes
 
