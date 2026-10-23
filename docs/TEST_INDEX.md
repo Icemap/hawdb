@@ -302,8 +302,9 @@ registration policy, and direct history pruning without staging compaction.
 
 ## Strict append preparation
 
-- Existing storage unit owner: `//crates/storage:hawdb_storage_tests`; the
-  Storage Platform Cargo job runs the same library cases on macOS and Windows.
+- Existing storage unit owner: `//crates/storage:hawdb_storage_tests`, discovered
+  by the Prow crate presubmit suite on PRs. The weekly Storage Platform Cargo
+  job additionally runs these library cases on macOS and Windows.
   `append_table::tests::preparation` covers mixed DDL/caller/generated batches,
   sparse metadata overlays, deep-history old/new partitions, checkpoint-state
   restoration and exact recovered sequence gaps, late rejection atomicity and

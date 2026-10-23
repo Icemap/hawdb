@@ -11,8 +11,9 @@ cargo bench --locked -p hawdb-storage --bench strict_append_prepare
 
 The benchmark uses the repository-wide release profile. It is not registered
 in CI or a scheduled job. Ordinary storage regression tests remain owned by
-`//crates/storage:hawdb_storage_tests` and the existing Storage Platform Cargo
-job (`cargo test -p hawdb-storage` on macOS/Windows).
+`//crates/storage:hawdb_storage_tests`, discovered by the existing Prow crate
+presubmit suite on PRs. The weekly Storage Platform Cargo job adds
+`cargo test -p hawdb-storage` on macOS/Windows.
 
 ## Workload and measurement
 
