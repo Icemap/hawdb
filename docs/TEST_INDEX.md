@@ -177,6 +177,14 @@ they are not special optimization profiles for individual regression targets.
 Bazel is primarily a test runner; release is an explicit regression-verification
 profile, not a production artifact publishing path.
 
+GitHub Actions jobs using `setup-bazel` enable Bazelisk downloads, repository
+archives, disk action outputs and extracted external-repository caches. Disk
+cache keys are scoped by workflow/job; the action also separates OS/architecture
+and keeps disk/repository cache directories distinct. These caches are restored
+and saved through GitHub Actions cache storage, without a Bazel remote cache.
+Cached results remain cache reuse rather than new execution evidence; compare
+restore/save overhead and cold/warm build costs before claiming a CI speedup.
+
 The ignored executor regression
 `observer::query::tests::query_observer_registration_without_debug_assertions`
 is explicitly selected by `//crates/executor:hawdb_query_observer_release_tests`
