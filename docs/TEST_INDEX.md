@@ -307,3 +307,22 @@ result to pass. See [Windows native CI](WINDOWS_NATIVE_CI.md) for the complete
 selection/profile/count matrix, cache policy, cold-build costs and local replay.
 The daily/manual abandonment lane remains separate and requires eight passing
 cases with the selected 1/2/4/8-thread setting. No fuzz campaign is added.
+
+## Strict append preparation
+
+- Existing storage unit owner: `//crates/storage:hawdb_storage_tests`, discovered
+  by the Prow crate presubmit suite on PRs. The weekly Storage Platform Cargo
+  job additionally runs these library cases on macOS and Windows.
+  `append_table::tests::preparation` covers mixed DDL/caller/generated batches,
+  sparse metadata overlays, deep-history old/new partitions, checkpoint-state
+  restoration and exact recovered sequence gaps, late rejection atomicity and
+  retry without consumed sequence values. The tests are deterministic and use
+  the global checked profile. Existing append admission/exhaustion and
+  durability/concurrency cases remain additional coverage.
+- Manual measurements: `cargo bench --locked -p hawdb-storage --bench
+  strict_append_prepare` uses the global release profile. Both key modes,
+  one/64 rows, zero/1024 unrelated tables and zero/1024 live batches; 257 measured
+  preparations per release case with exact output/source validation. No CI or
+  scheduled registration. See [workload, results and limits](STRICT_APPEND_PREPARE_BENCHMARK.md).
+  These are preparation timings without WAL synchronization, not committed
+  throughput or durable p99 measurements.
