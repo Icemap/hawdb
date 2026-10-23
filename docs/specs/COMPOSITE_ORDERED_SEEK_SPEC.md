@@ -134,3 +134,6 @@ evictions and admission refusals accompany query memory reports. Timings from th
 mode are not device-cold results, and index bytes exclude canonical hydration and
 unrelated scan I/O. Preserve negative cases and separate
 source identity, profile, compilation cost and execution measurements.
+
+See the [source-bound local measurements](../benchmarks/composite_ordered_seek_2026_10_23/README.md)
+for raw samples, adverse cases, point controls and preparation-mode limits.

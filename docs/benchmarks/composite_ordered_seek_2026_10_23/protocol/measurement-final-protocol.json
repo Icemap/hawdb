@@ -1,0 +1,14 @@
+{
+  "started_unix": 1792752892.3909702,
+  "platform": "macOS-27.0.1-arm64-arm-64bit",
+  "candidate_source": "cac072479786f01c658022916e3ada75314ed129",
+  "baseline_source": "bb7d213cd114b69d248397dd93a093b0ad035841",
+  "binary_hashes": {
+    "composite-ordered-final": "6a161153be73aee926dedc203929e2b28509a0df026e2f90e59ebc6243133597",
+    "point-baseline-v1": "05b5867d339615b074f4413d6f683afe221aab7ea043c0e50dfa6ec6a89d6fd1",
+    "point-candidate-final": "4ca99a20e2c9b09c0c7c113e33fbb6fdde188cc2b21d2d50faa63d86bbe9f24c"
+  },
+  "profile": "repository release, pinned Rust 1.97.1; no overrides",
+  "cache_policy": "first sample labelled warmup and retained; Materialized fixture preparation then OutOfCore reopen, exact count preflight; no device-cache flush",
+  "measurement_notes": "No CPU affinity, hardware exclusivity, or device-cold claim. Index bytes exclude canonical hydration. Preserve every sample including regressions."
+}

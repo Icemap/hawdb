@@ -1,0 +1,8 @@
+[package]
+name = "hawdb-ordered-point-control"
+version = "0.0.0"
+edition = "2024"
+[dependencies]
+hawdb = { path = "/private/tmp/hawdb-ordered-seek-work" }
+serde_json = "1"
+[workspace]

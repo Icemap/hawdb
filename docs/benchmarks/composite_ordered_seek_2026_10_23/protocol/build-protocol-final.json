@@ -1,0 +1,14 @@
+{
+  "measured_source": "cac072479786f01c658022916e3ada75314ed129",
+  "runtime_source": "cac072479786f01c658022916e3ada75314ed129",
+  "baseline_source": "bb7d213cd114b69d248397dd93a093b0ad035841",
+  "toolchain": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+  "commands": {
+    "benchmark_build": "cargo build --locked --release --bench composite_ordered_seek --jobs 2",
+    "point_candidate_build": "cargo build --locked --release --manifest-path /private/tmp/hawdb-ordered-point-candidate/Cargo.toml --target-dir /private/tmp/hawdb-ordered-point-control/target --jobs 2"
+  },
+  "cwd": "/private/tmp/hawdb-optimizer-work",
+  "point_control_note": "An accidental external-CWD baseline build using the default toolchain was terminated without publishing any binary. The final candidate build uses its candidate manifest from the repository CWD, with pinned compiler and uniform profile. Saved baseline binary is unchanged; final executable hashes and source IDs are recorded separately.",
+  "runtime_diff_after552": " benches/composite_ordered_seek.rs         | 13 +++++++--\n docs/TEST_INDEX.md                        |  2 +-\n docs/specs/COMPOSITE_ORDERED_SEEK_SPEC.md | 15 ++++++++--\n src/api/plan_cache.rs                     | 47 ++++++++++++++++---------------\n 4 files changed, 48 insertions(+), 29 deletions(-)\n",
+  "fixture_mode": "Explicit Materialized preparation and full uniqueness validation; checkpoint and OutOfCore reopen before count preflight/measurement. Default durability and budgets."
+}

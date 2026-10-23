@@ -1,0 +1,9 @@
+{
+  "source": "552d4b4e0b3201cb35a19cc86522596add4ed249",
+  "targets": 98,
+  "executed": 12,
+  "cached": 86,
+  "invocation": "8c1dcd23-e2d8-433f-9a98-44728c316441",
+  "seconds_including_build": "673.408",
+  "failures": []
+}

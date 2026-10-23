@@ -1,0 +1,42 @@
+use hawdb::{Database, Value};
+use std::collections::BTreeMap;
+use std::time::Instant;
+fn main() -> hawdb::Result<()> {
+    let composite = std::env::args().nth(1).is_some_and(|arg| arg == "composite");
+    let mut db = Database::new();
+    db.query("CREATE NODE TABLE Item")?;
+    db.query("CREATE PROPERTY ON NODE TABLE Item(rank) TYPE INT NOT NULL")?;
+    db.query("CREATE PROPERTY ON NODE TABLE Item(id) TYPE STRING NOT NULL")?;
+    db.query("CREATE CONSTRAINT ON :Item(id) ASSERT UNIQUE")?;
+    let rows = (0..1000).map(|id| Value::Map(BTreeMap::from([
+        ("kind".into(), Value::String("note".into())),
+        ("rank".into(), Value::Int(id / 4)),
+        ("id".into(), Value::String(format!("item-{id:04}"))),
+    ]))).collect();
+    db.query_with_params("UNWIND $rows AS r CREATE (:Item {kind: r.kind, rank: r.rank, id: r.id})", &BTreeMap::from([("rows".into(), Value::List(rows))]))?;
+    db.query("CREATE INDEX ON :Item(id)")?;
+    if composite { db.query("CREATE INDEX ON :Item(kind, rank, id)")?; }
+    let query = "MATCH (n:Item) WHERE n.id = $id RETURN n.rank AS rank";
+    let mut params = BTreeMap::from([("id".into(), Value::String("item-0000".into()))]);
+    for run in 0..=11 {
+        let before = db.plan_cache_stats()?;
+        let start = Instant::now();
+        let mut checksum = 0i64;
+        for step in 0..1000 {
+            params.insert("id".into(), Value::String(format!("item-{:04}", step % 64)));
+            let output = db.query_with_params(query, &params)?;
+            assert_eq!(output.rows.len(), 1);
+            let Value::Int(rank) = output.rows[0]["rank"] else { panic!("fixture type") };
+            checksum += rank;
+        }
+        let elapsed = start.elapsed().as_nanos();
+        let after = db.plan_cache_stats()?;
+        assert_eq!(checksum, (0..1000).map(|step| ((step % 64) / 4) as i64).sum::<i64>());
+        if run > 0 {
+            assert_eq!(after.hits - before.hits, 1000);
+            assert_eq!(after.misses - before.misses, 0);
+            println!("{}", serde_json::json!({"composite_schema":composite,"run":run,"iterations":1000,"ns":elapsed,"hits":after.hits-before.hits,"misses":after.misses-before.misses,"checksum":checksum}));
+        }
+    }
+    Ok(())
+}

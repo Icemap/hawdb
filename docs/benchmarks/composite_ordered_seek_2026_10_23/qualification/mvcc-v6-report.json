@@ -1,0 +1,49 @@
+{
+  "command": "run",
+  "completed_cases": 36911,
+  "directory": "target/mvcc-fuzz/34445-1792752515588666000",
+  "elapsed_ms": 30000,
+  "families_by_first_terminal": [
+    [
+      2263,
+      2351
+    ],
+    [
+      2284,
+      2330
+    ],
+    [
+      1160,
+      3454
+    ],
+    [
+      2310,
+      2304
+    ],
+    [
+      1199,
+      3415
+    ],
+    [
+      2313,
+      2301
+    ],
+    [
+      2313,
+      2301
+    ],
+    [
+      2262,
+      2351
+    ]
+  ],
+  "format_version": 1,
+  "provenance": "runtime checkout HEAD; may include uncommitted changes; not build attestation",
+  "reduction_attempts": null,
+  "requested_cases": 1000000,
+  "scope": "two optimistic snapshots; deterministic statement order; in-memory relational primary keys and broad predicates",
+  "seed": 1,
+  "source_revision": "cac072479786f01c658022916e3ada75314ed129",
+  "status": "passed",
+  "time_budget_seconds": 30
+}

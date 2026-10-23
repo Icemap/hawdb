@@ -1,0 +1,1753 @@
+{
+  "source": "cac072479786f01c658022916e3ada75314ed129",
+  "ordered": [
+    {
+      "rows": 64,
+      "backend": "memory",
+      "direction": "ASC",
+      "depth": 0,
+      "output_rows": 32,
+      "ordered_us": 53.375,
+      "reference_us": 80.542,
+      "median_ratio": 0.6626977229271684,
+      "paired_ratio_range": [
+        0.6416510318949343,
+        0.6818305977005786
+      ],
+      "ordered_decodes_range": [
+        0,
+        0
+      ],
+      "ordered_blocks_range": [
+        0,
+        0
+      ],
+      "ordered_descriptors_range": [
+        0,
+        0
+      ],
+      "ordered_index_bytes_range": [
+        0,
+        0
+      ],
+      "ordered_query_peak": 16783456,
+      "reference_query_peak": 16994002,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 75684
+    },
+    {
+      "rows": 64,
+      "backend": "memory",
+      "direction": "ASC",
+      "depth": 32,
+      "output_rows": 25,
+      "ordered_us": 60.292,
+      "reference_us": 73.167,
+      "median_ratio": 0.8240326923339757,
+      "paired_ratio_range": [
+        0.8044217687074829,
+        0.8590363951473137
+      ],
+      "ordered_decodes_range": [
+        0,
+        0
+      ],
+      "ordered_blocks_range": [
+        0,
+        0
+      ],
+      "ordered_descriptors_range": [
+        0,
+        0
+      ],
+      "ordered_index_bytes_range": [
+        0,
+        0
+      ],
+      "ordered_query_peak": 16782091,
+      "reference_query_peak": 16884186,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 37100
+    },
+    {
+      "rows": 64,
+      "backend": "memory",
+      "direction": "ASC",
+      "depth": 62,
+      "output_rows": 1,
+      "ordered_us": 42.375,
+      "reference_us": 44.625,
+      "median_ratio": 0.9495798319327731,
+      "paired_ratio_range": [
+        0.8854327071142594,
+        0.9703446433342239
+      ],
+      "ordered_decodes_range": [
+        0,
+        0
+      ],
+      "ordered_blocks_range": [
+        0,
+        0
+      ],
+      "ordered_descriptors_range": [
+        0,
+        0
+      ],
+      "ordered_index_bytes_range": [
+        0,
+        0
+      ],
+      "ordered_query_peak": 16777411,
+      "reference_query_peak": 16782842,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 1484
+    },
+    {
+      "rows": 64,
+      "backend": "memory",
+      "direction": "DESC",
+      "depth": 0,
+      "output_rows": 32,
+      "ordered_us": 48.083,
+      "reference_us": 76.375,
+      "median_ratio": 0.6295646481178396,
+      "paired_ratio_range": [
+        0.6185718332346201,
+        0.67430441898527
+      ],
+      "ordered_decodes_range": [
+        0,
+        0
+      ],
+      "ordered_blocks_range": [
+        0,
+        0
+      ],
+      "ordered_descriptors_range": [
+        0,
+        0
+      ],
+      "ordered_index_bytes_range": [
+        0,
+        0
+      ],
+      "ordered_query_peak": 16783456,
+      "reference_query_peak": 16994002,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 75684
+    },
+    {
+      "rows": 64,
+      "backend": "memory",
+      "direction": "DESC",
+      "depth": 32,
+      "output_rows": 25,
+      "ordered_us": 54.875,
+      "reference_us": 67.709,
+      "median_ratio": 0.8104535586111152,
+      "paired_ratio_range": [
+        0.7934473557587157,
+        0.8494714399928933
+      ],
+      "ordered_decodes_range": [
+        0,
+        0
+      ],
+      "ordered_blocks_range": [
+        0,
+        0
+      ],
+      "ordered_descriptors_range": [
+        0,
+        0
+      ],
+      "ordered_index_bytes_range": [
+        0,
+        0
+      ],
+      "ordered_query_peak": 16782091,
+      "reference_query_peak": 16884186,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 37100
+    },
+    {
+      "rows": 64,
+      "backend": "memory",
+      "direction": "DESC",
+      "depth": 62,
+      "output_rows": 32,
+      "ordered_us": 60.25,
+      "reference_us": 85.917,
+      "median_ratio": 0.7012581910448457,
+      "paired_ratio_range": [
+        0.6890689010874232,
+        0.7172025961878472
+      ],
+      "ordered_decodes_range": [
+        0,
+        0
+      ],
+      "ordered_blocks_range": [
+        0,
+        0
+      ],
+      "ordered_descriptors_range": [
+        0,
+        0
+      ],
+      "ordered_index_bytes_range": [
+        0,
+        0
+      ],
+      "ordered_query_peak": 16783456,
+      "reference_query_peak": 16985594,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 72716
+    },
+    {
+      "rows": 64,
+      "backend": "disk",
+      "direction": "ASC",
+      "depth": 0,
+      "output_rows": 32,
+      "ordered_us": 72.333,
+      "reference_us": 88.75,
+      "median_ratio": 0.8150197183098592,
+      "paired_ratio_range": [
+        0.8023436619718309,
+        0.8258937350060959
+      ],
+      "ordered_decodes_range": [
+        40,
+        40
+      ],
+      "ordered_blocks_range": [
+        1,
+        1
+      ],
+      "ordered_descriptors_range": [
+        4,
+        4
+      ],
+      "ordered_index_bytes_range": [
+        3518,
+        3518
+      ],
+      "ordered_query_peak": 16783456,
+      "reference_query_peak": 16994002,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 75684
+    },
+    {
+      "rows": 64,
+      "backend": "disk",
+      "direction": "ASC",
+      "depth": 32,
+      "output_rows": 25,
+      "ordered_us": 81.0,
+      "reference_us": 88.292,
+      "median_ratio": 0.9174104109092557,
+      "paired_ratio_range": [
+        0.8948163337302112,
+        0.9292121596520636
+      ],
+      "ordered_decodes_range": [
+        33,
+        33
+      ],
+      "ordered_blocks_range": [
+        1,
+        1
+      ],
+      "ordered_descriptors_range": [
+        4,
+        4
+      ],
+      "ordered_index_bytes_range": [
+        3518,
+        3518
+      ],
+      "ordered_query_peak": 16782091,
+      "reference_query_peak": 16884186,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 37100
+    },
+    {
+      "rows": 64,
+      "backend": "disk",
+      "direction": "ASC",
+      "depth": 62,
+      "output_rows": 1,
+      "ordered_us": 46.459,
+      "reference_us": 66.875,
+      "median_ratio": 0.6947140186915888,
+      "paired_ratio_range": [
+        0.6891390767770262,
+        0.7073396443958978
+      ],
+      "ordered_decodes_range": [
+        9,
+        9
+      ],
+      "ordered_blocks_range": [
+        1,
+        1
+      ],
+      "ordered_descriptors_range": [
+        4,
+        4
+      ],
+      "ordered_index_bytes_range": [
+        3518,
+        3518
+      ],
+      "ordered_query_peak": 16777411,
+      "reference_query_peak": 16782842,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 1484
+    },
+    {
+      "rows": 64,
+      "backend": "disk",
+      "direction": "DESC",
+      "depth": 0,
+      "output_rows": 32,
+      "ordered_us": 74.292,
+      "reference_us": 88.0,
+      "median_ratio": 0.8442272727272727,
+      "paired_ratio_range": [
+        0.8253609361730287,
+        0.8562132046105609
+      ],
+      "ordered_decodes_range": [
+        40,
+        40
+      ],
+      "ordered_blocks_range": [
+        1,
+        1
+      ],
+      "ordered_descriptors_range": [
+        4,
+        4
+      ],
+      "ordered_index_bytes_range": [
+        3518,
+        3518
+      ],
+      "ordered_query_peak": 16783456,
+      "reference_query_peak": 16994002,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 75684
+    },
+    {
+      "rows": 64,
+      "backend": "disk",
+      "direction": "DESC",
+      "depth": 32,
+      "output_rows": 25,
+      "ordered_us": 76.75,
+      "reference_us": 88.25,
+      "median_ratio": 0.8696883852691218,
+      "paired_ratio_range": [
+        0.625225136450481,
+        1.1605456453305352
+      ],
+      "ordered_decodes_range": [
+        34,
+        34
+      ],
+      "ordered_blocks_range": [
+        1,
+        1
+      ],
+      "ordered_descriptors_range": [
+        4,
+        4
+      ],
+      "ordered_index_bytes_range": [
+        3518,
+        3518
+      ],
+      "ordered_query_peak": 16782091,
+      "reference_query_peak": 16884186,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 37100
+    },
+    {
+      "rows": 64,
+      "backend": "disk",
+      "direction": "DESC",
+      "depth": 62,
+      "output_rows": 32,
+      "ordered_us": 91.333,
+      "reference_us": 106.209,
+      "median_ratio": 0.8599365402178724,
+      "paired_ratio_range": [
+        0.7811979971747443,
+        0.8707919143876338
+      ],
+      "ordered_decodes_range": [
+        40,
+        40
+      ],
+      "ordered_blocks_range": [
+        1,
+        1
+      ],
+      "ordered_descriptors_range": [
+        4,
+        4
+      ],
+      "ordered_index_bytes_range": [
+        3518,
+        3518
+      ],
+      "ordered_query_peak": 16783456,
+      "reference_query_peak": 16985594,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 72716
+    },
+    {
+      "rows": 1000,
+      "backend": "memory",
+      "direction": "ASC",
+      "depth": 0,
+      "output_rows": 32,
+      "ordered_us": 119.042,
+      "reference_us": 844.166,
+      "median_ratio": 0.14101728806893432,
+      "paired_ratio_range": [
+        0.08839235525576167,
+        0.1906901509705248
+      ],
+      "ordered_decodes_range": [
+        0,
+        0
+      ],
+      "ordered_blocks_range": [
+        0,
+        0
+      ],
+      "ordered_descriptors_range": [
+        0,
+        0
+      ],
+      "ordered_index_bytes_range": [
+        0,
+        0
+      ],
+      "ordered_query_peak": 16783456,
+      "reference_query_peak": 17914574,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 47488
+    },
+    {
+      "rows": 1000,
+      "backend": "memory",
+      "direction": "ASC",
+      "depth": 500,
+      "output_rows": 32,
+      "ordered_us": 61.625,
+      "reference_us": 372.291,
+      "median_ratio": 0.16552911566489656,
+      "paired_ratio_range": [
+        0.16281585323641398,
+        0.18883610451306412
+      ],
+      "ordered_decodes_range": [
+        0,
+        0
+      ],
+      "ordered_blocks_range": [
+        0,
+        0
+      ],
+      "ordered_descriptors_range": [
+        0,
+        0
+      ],
+      "ordered_index_bytes_range": [
+        0,
+        0
+      ],
+      "ordered_query_peak": 16783456,
+      "reference_query_peak": 17862990,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 47488
+    },
+    {
+      "rows": 1000,
+      "backend": "memory",
+      "direction": "ASC",
+      "depth": 998,
+      "output_rows": 1,
+      "ordered_us": 38.125,
+      "reference_us": 77.292,
+      "median_ratio": 0.4932593282616571,
+      "paired_ratio_range": [
+        0.48205928237129486,
+        0.5812839576780098
+      ],
+      "ordered_decodes_range": [
+        0,
+        0
+      ],
+      "ordered_blocks_range": [
+        0,
+        0
+      ],
+      "ordered_descriptors_range": [
+        0,
+        0
+      ],
+      "ordered_index_bytes_range": [
+        0,
+        0
+      ],
+      "ordered_query_peak": 16777411,
+      "reference_query_peak": 16782842,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 1484
+    },
+    {
+      "rows": 1000,
+      "backend": "memory",
+      "direction": "DESC",
+      "depth": 0,
+      "output_rows": 32,
+      "ordered_us": 59.459,
+      "reference_us": 727.459,
+      "median_ratio": 0.08173519057431415,
+      "paired_ratio_range": [
+        0.06119593634131552,
+        0.09097496733010638
+      ],
+      "ordered_decodes_range": [
+        0,
+        0
+      ],
+      "ordered_blocks_range": [
+        0,
+        0
+      ],
+      "ordered_descriptors_range": [
+        0,
+        0
+      ],
+      "ordered_index_bytes_range": [
+        0,
+        0
+      ],
+      "ordered_query_peak": 16783456,
+      "reference_query_peak": 17914574,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 47488
+    },
+    {
+      "rows": 1000,
+      "backend": "memory",
+      "direction": "DESC",
+      "depth": 500,
+      "output_rows": 32,
+      "ordered_us": 62.541,
+      "reference_us": 409.291,
+      "median_ratio": 0.15280326222663093,
+      "paired_ratio_range": [
+        0.14318705035971224,
+        0.15988100152167595
+      ],
+      "ordered_decodes_range": [
+        0,
+        0
+      ],
+      "ordered_blocks_range": [
+        0,
+        0
+      ],
+      "ordered_descriptors_range": [
+        0,
+        0
+      ],
+      "ordered_index_bytes_range": [
+        0,
+        0
+      ],
+      "ordered_query_peak": 16783456,
+      "reference_query_peak": 17862990,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 47488
+    },
+    {
+      "rows": 1000,
+      "backend": "memory",
+      "direction": "DESC",
+      "depth": 998,
+      "output_rows": 32,
+      "ordered_us": 60.625,
+      "reference_us": 726.458,
+      "median_ratio": 0.083452863069854,
+      "paired_ratio_range": [
+        0.08198517125714294,
+        0.08825234884088706
+      ],
+      "ordered_decodes_range": [
+        0,
+        0
+      ],
+      "ordered_blocks_range": [
+        0,
+        0
+      ],
+      "ordered_descriptors_range": [
+        0,
+        0
+      ],
+      "ordered_index_bytes_range": [
+        0,
+        0
+      ],
+      "ordered_query_peak": 16783456,
+      "reference_query_peak": 17914574,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 47488
+    },
+    {
+      "rows": 1000,
+      "backend": "disk",
+      "direction": "ASC",
+      "depth": 0,
+      "output_rows": 32,
+      "ordered_us": 91.541,
+      "reference_us": 761.709,
+      "median_ratio": 0.12017844084814543,
+      "paired_ratio_range": [
+        0.11737274728619662,
+        0.14055099777011346
+      ],
+      "ordered_decodes_range": [
+        44,
+        44
+      ],
+      "ordered_blocks_range": [
+        1,
+        1
+      ],
+      "ordered_descriptors_range": [
+        4,
+        4
+      ],
+      "ordered_index_bytes_range": [
+        53687,
+        53687
+      ],
+      "ordered_query_peak": 16783456,
+      "reference_query_peak": 17906382,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 47488
+    },
+    {
+      "rows": 1000,
+      "backend": "disk",
+      "direction": "ASC",
+      "depth": 500,
+      "output_rows": 32,
+      "ordered_us": 211.584,
+      "reference_us": 652.792,
+      "median_ratio": 0.32412161913748944,
+      "paired_ratio_range": [
+        0.29536059229345446,
+        0.51623239076553
+      ],
+      "ordered_decodes_range": [
+        44,
+        44
+      ],
+      "ordered_blocks_range": [
+        1,
+        1
+      ],
+      "ordered_descriptors_range": [
+        4,
+        4
+      ],
+      "ordered_index_bytes_range": [
+        53687,
+        53687
+      ],
+      "ordered_query_peak": 16783456,
+      "reference_query_peak": 17858894,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 47488
+    },
+    {
+      "rows": 1000,
+      "backend": "disk",
+      "direction": "ASC",
+      "depth": 998,
+      "output_rows": 1,
+      "ordered_us": 73.209,
+      "reference_us": 374.417,
+      "median_ratio": 0.19552798083420359,
+      "paired_ratio_range": [
+        0.18161372502189316,
+        0.39876923076923076
+      ],
+      "ordered_decodes_range": [
+        13,
+        13
+      ],
+      "ordered_blocks_range": [
+        1,
+        1
+      ],
+      "ordered_descriptors_range": [
+        4,
+        4
+      ],
+      "ordered_index_bytes_range": [
+        53687,
+        53687
+      ],
+      "ordered_query_peak": 16777411,
+      "reference_query_peak": 16782842,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 1484
+    },
+    {
+      "rows": 1000,
+      "backend": "disk",
+      "direction": "DESC",
+      "depth": 0,
+      "output_rows": 32,
+      "ordered_us": 253.541,
+      "reference_us": 839.667,
+      "median_ratio": 0.3019542270924069,
+      "paired_ratio_range": [
+        0.29232898279913344,
+        0.31097813588555584
+      ],
+      "ordered_decodes_range": [
+        43,
+        43
+      ],
+      "ordered_blocks_range": [
+        1,
+        1
+      ],
+      "ordered_descriptors_range": [
+        4,
+        4
+      ],
+      "ordered_index_bytes_range": [
+        53687,
+        53687
+      ],
+      "ordered_query_peak": 16783456,
+      "reference_query_peak": 17906382,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 47488
+    },
+    {
+      "rows": 1000,
+      "backend": "disk",
+      "direction": "DESC",
+      "depth": 500,
+      "output_rows": 32,
+      "ordered_us": 168.708,
+      "reference_us": 617.75,
+      "median_ratio": 0.27310076891946583,
+      "paired_ratio_range": [
+        0.2479719571567673,
+        0.30169558129610813
+      ],
+      "ordered_decodes_range": [
+        44,
+        44
+      ],
+      "ordered_blocks_range": [
+        1,
+        1
+      ],
+      "ordered_descriptors_range": [
+        4,
+        4
+      ],
+      "ordered_index_bytes_range": [
+        53687,
+        53687
+      ],
+      "ordered_query_peak": 16783456,
+      "reference_query_peak": 17858894,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 47488
+    },
+    {
+      "rows": 1000,
+      "backend": "disk",
+      "direction": "DESC",
+      "depth": 998,
+      "output_rows": 32,
+      "ordered_us": 267.625,
+      "reference_us": 896.292,
+      "median_ratio": 0.2985913072971755,
+      "paired_ratio_range": [
+        0.2574538323634697,
+        0.32159623404904153
+      ],
+      "ordered_decodes_range": [
+        44,
+        44
+      ],
+      "ordered_blocks_range": [
+        1,
+        1
+      ],
+      "ordered_descriptors_range": [
+        4,
+        4
+      ],
+      "ordered_index_bytes_range": [
+        53687,
+        53687
+      ],
+      "ordered_query_peak": 16783456,
+      "reference_query_peak": 17906382,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 47488
+    },
+    {
+      "rows": 10000,
+      "backend": "memory",
+      "direction": "ASC",
+      "depth": 0,
+      "output_rows": 32,
+      "ordered_us": 99.917,
+      "reference_us": 5951.125,
+      "median_ratio": 0.016789598605305718,
+      "paired_ratio_range": [
+        0.009162027412900122,
+        0.028699111512529143
+      ],
+      "ordered_decodes_range": [
+        0,
+        0
+      ],
+      "ordered_blocks_range": [
+        0,
+        0
+      ],
+      "ordered_descriptors_range": [
+        0,
+        0
+      ],
+      "ordered_index_bytes_range": [
+        0,
+        0
+      ],
+      "ordered_query_peak": 16783456,
+      "reference_query_peak": 17971918,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 47488
+    },
+    {
+      "rows": 10000,
+      "backend": "memory",
+      "direction": "ASC",
+      "depth": 5000,
+      "output_rows": 32,
+      "ordered_us": 110.167,
+      "reference_us": 3799.959,
+      "median_ratio": 0.028991628593887462,
+      "paired_ratio_range": [
+        0.017695582756785525,
+        0.03895892903561216
+      ],
+      "ordered_decodes_range": [
+        0,
+        0
+      ],
+      "ordered_blocks_range": [
+        0,
+        0
+      ],
+      "ordered_descriptors_range": [
+        0,
+        0
+      ],
+      "ordered_index_bytes_range": [
+        0,
+        0
+      ],
+      "ordered_query_peak": 16783456,
+      "reference_query_peak": 17939150,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 47488
+    },
+    {
+      "rows": 10000,
+      "backend": "memory",
+      "direction": "ASC",
+      "depth": 9998,
+      "output_rows": 1,
+      "ordered_us": 58.0,
+      "reference_us": 534.5,
+      "median_ratio": 0.10851262862488306,
+      "paired_ratio_range": [
+        0.08473531196566596,
+        0.16916183348924227
+      ],
+      "ordered_decodes_range": [
+        0,
+        0
+      ],
+      "ordered_blocks_range": [
+        0,
+        0
+      ],
+      "ordered_descriptors_range": [
+        0,
+        0
+      ],
+      "ordered_index_bytes_range": [
+        0,
+        0
+      ],
+      "ordered_query_peak": 16777411,
+      "reference_query_peak": 16782842,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 1484
+    },
+    {
+      "rows": 10000,
+      "backend": "memory",
+      "direction": "DESC",
+      "depth": 0,
+      "output_rows": 32,
+      "ordered_us": 90.208,
+      "reference_us": 7028.083,
+      "median_ratio": 0.012835363498126019,
+      "paired_ratio_range": [
+        0.007407104896938975,
+        0.017833170154649566
+      ],
+      "ordered_decodes_range": [
+        0,
+        0
+      ],
+      "ordered_blocks_range": [
+        0,
+        0
+      ],
+      "ordered_descriptors_range": [
+        0,
+        0
+      ],
+      "ordered_index_bytes_range": [
+        0,
+        0
+      ],
+      "ordered_query_peak": 16783456,
+      "reference_query_peak": 17971918,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 47488
+    },
+    {
+      "rows": 10000,
+      "backend": "memory",
+      "direction": "DESC",
+      "depth": 5000,
+      "output_rows": 32,
+      "ordered_us": 124.375,
+      "reference_us": 4157.375,
+      "median_ratio": 0.029916714272828406,
+      "paired_ratio_range": [
+        0.016189571185807036,
+        0.03214308688472847
+      ],
+      "ordered_decodes_range": [
+        0,
+        0
+      ],
+      "ordered_blocks_range": [
+        0,
+        0
+      ],
+      "ordered_descriptors_range": [
+        0,
+        0
+      ],
+      "ordered_index_bytes_range": [
+        0,
+        0
+      ],
+      "ordered_query_peak": 16783456,
+      "reference_query_peak": 17939150,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 47488
+    },
+    {
+      "rows": 10000,
+      "backend": "memory",
+      "direction": "DESC",
+      "depth": 9998,
+      "output_rows": 32,
+      "ordered_us": 123.458,
+      "reference_us": 7849.0,
+      "median_ratio": 0.015729137469741368,
+      "paired_ratio_range": [
+        0.009311122435979105,
+        0.017521163050717655
+      ],
+      "ordered_decodes_range": [
+        0,
+        0
+      ],
+      "ordered_blocks_range": [
+        0,
+        0
+      ],
+      "ordered_descriptors_range": [
+        0,
+        0
+      ],
+      "ordered_index_bytes_range": [
+        0,
+        0
+      ],
+      "ordered_query_peak": 16783456,
+      "reference_query_peak": 17971918,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 47488
+    },
+    {
+      "rows": 10000,
+      "backend": "disk",
+      "direction": "ASC",
+      "depth": 0,
+      "output_rows": 32,
+      "ordered_us": 288.958,
+      "reference_us": 7215.625,
+      "median_ratio": 0.04004614984841923,
+      "paired_ratio_range": [
+        0.03570142661684576,
+        0.04505456074773231
+      ],
+      "ordered_decodes_range": [
+        48,
+        48
+      ],
+      "ordered_blocks_range": [
+        1,
+        1
+      ],
+      "ordered_descriptors_range": [
+        4,
+        4
+      ],
+      "ordered_index_bytes_range": [
+        536087,
+        536087
+      ],
+      "ordered_query_peak": 16783456,
+      "reference_query_peak": 17906382,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 47488
+    },
+    {
+      "rows": 10000,
+      "backend": "disk",
+      "direction": "ASC",
+      "depth": 5000,
+      "output_rows": 32,
+      "ordered_us": 1185.416,
+      "reference_us": 5344.708,
+      "median_ratio": 0.22179247210511782,
+      "paired_ratio_range": [
+        0.2083099766903383,
+        0.238467845203143
+      ],
+      "ordered_decodes_range": [
+        47,
+        47
+      ],
+      "ordered_blocks_range": [
+        1,
+        1
+      ],
+      "ordered_descriptors_range": [
+        4,
+        4
+      ],
+      "ordered_index_bytes_range": [
+        536087,
+        536087
+      ],
+      "ordered_query_peak": 16783456,
+      "reference_query_peak": 17906382,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 47488
+    },
+    {
+      "rows": 10000,
+      "backend": "disk",
+      "direction": "ASC",
+      "depth": 9998,
+      "output_rows": 1,
+      "ordered_us": 327.333,
+      "reference_us": 3130.459,
+      "median_ratio": 0.10456389941538924,
+      "paired_ratio_range": [
+        0.09507075096080572,
+        0.13324257355930744
+      ],
+      "ordered_decodes_range": [
+        16,
+        16
+      ],
+      "ordered_blocks_range": [
+        1,
+        1
+      ],
+      "ordered_descriptors_range": [
+        4,
+        4
+      ],
+      "ordered_index_bytes_range": [
+        536087,
+        536087
+      ],
+      "ordered_query_peak": 16777411,
+      "reference_query_peak": 16782842,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 1484
+    },
+    {
+      "rows": 10000,
+      "backend": "disk",
+      "direction": "DESC",
+      "depth": 0,
+      "output_rows": 32,
+      "ordered_us": 2079.583,
+      "reference_us": 8173.667,
+      "median_ratio": 0.25442472760390167,
+      "paired_ratio_range": [
+        0.21179467401285584,
+        0.29438327995954827
+      ],
+      "ordered_decodes_range": [
+        47,
+        47
+      ],
+      "ordered_blocks_range": [
+        1,
+        1
+      ],
+      "ordered_descriptors_range": [
+        4,
+        4
+      ],
+      "ordered_index_bytes_range": [
+        536087,
+        536087
+      ],
+      "ordered_query_peak": 16783456,
+      "reference_query_peak": 17906382,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 47488
+    },
+    {
+      "rows": 10000,
+      "backend": "disk",
+      "direction": "DESC",
+      "depth": 5000,
+      "output_rows": 32,
+      "ordered_us": 1192.792,
+      "reference_us": 6003.625,
+      "median_ratio": 0.19867863166003874,
+      "paired_ratio_range": [
+        0.18382590776078803,
+        0.24420730600904736
+      ],
+      "ordered_decodes_range": [
+        47,
+        47
+      ],
+      "ordered_blocks_range": [
+        1,
+        1
+      ],
+      "ordered_descriptors_range": [
+        4,
+        4
+      ],
+      "ordered_index_bytes_range": [
+        536087,
+        536087
+      ],
+      "ordered_query_peak": 16783456,
+      "reference_query_peak": 17906382,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 47488
+    },
+    {
+      "rows": 10000,
+      "backend": "disk",
+      "direction": "DESC",
+      "depth": 9998,
+      "output_rows": 32,
+      "ordered_us": 2140.208,
+      "reference_us": 8363.417,
+      "median_ratio": 0.2559011466246392,
+      "paired_ratio_range": [
+        0.23338412748933707,
+        0.3008202837328803
+      ],
+      "ordered_decodes_range": [
+        47,
+        47
+      ],
+      "ordered_blocks_range": [
+        1,
+        1
+      ],
+      "ordered_descriptors_range": [
+        4,
+        4
+      ],
+      "ordered_index_bytes_range": [
+        536087,
+        536087
+      ],
+      "ordered_query_peak": 16783456,
+      "reference_query_peak": 17906382,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 47488
+    },
+    {
+      "rows": 100000,
+      "backend": "memory",
+      "direction": "ASC",
+      "depth": 0,
+      "output_rows": 32,
+      "ordered_us": 136.458,
+      "reference_us": 61441.958,
+      "median_ratio": 0.002220925316214695,
+      "paired_ratio_range": [
+        0.00100144830445323,
+        0.0024484380101603585
+      ],
+      "ordered_decodes_range": [
+        0,
+        0
+      ],
+      "ordered_blocks_range": [
+        0,
+        0
+      ],
+      "ordered_descriptors_range": [
+        0,
+        0
+      ],
+      "ordered_index_bytes_range": [
+        0,
+        0
+      ],
+      "ordered_query_peak": 16783456,
+      "reference_query_peak": 18954958,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 47488
+    },
+    {
+      "rows": 100000,
+      "backend": "memory",
+      "direction": "ASC",
+      "depth": 50000,
+      "output_rows": 32,
+      "ordered_us": 147.708,
+      "reference_us": 33371.917,
+      "median_ratio": 0.004426116725628917,
+      "paired_ratio_range": [
+        0.0021535417327423795,
+        0.004670563960918546
+      ],
+      "ordered_decodes_range": [
+        0,
+        0
+      ],
+      "ordered_blocks_range": [
+        0,
+        0
+      ],
+      "ordered_descriptors_range": [
+        0,
+        0
+      ],
+      "ordered_index_bytes_range": [
+        0,
+        0
+      ],
+      "ordered_query_peak": 16783456,
+      "reference_query_peak": 18430670,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 47488
+    },
+    {
+      "rows": 100000,
+      "backend": "memory",
+      "direction": "ASC",
+      "depth": 99998,
+      "output_rows": 1,
+      "ordered_us": 88.292,
+      "reference_us": 3825.583,
+      "median_ratio": 0.023079358100451617,
+      "paired_ratio_range": [
+        0.013205021955457448,
+        0.025141772001661622
+      ],
+      "ordered_decodes_range": [
+        0,
+        0
+      ],
+      "ordered_blocks_range": [
+        0,
+        0
+      ],
+      "ordered_descriptors_range": [
+        0,
+        0
+      ],
+      "ordered_index_bytes_range": [
+        0,
+        0
+      ],
+      "ordered_query_peak": 16777411,
+      "reference_query_peak": 16782842,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 1484
+    },
+    {
+      "rows": 100000,
+      "backend": "memory",
+      "direction": "DESC",
+      "depth": 0,
+      "output_rows": 32,
+      "ordered_us": 122.417,
+      "reference_us": 67736.292,
+      "median_ratio": 0.0018072586553748765,
+      "paired_ratio_range": [
+        0.0008058845012923092,
+        0.001908004498941003
+      ],
+      "ordered_decodes_range": [
+        0,
+        0
+      ],
+      "ordered_blocks_range": [
+        0,
+        0
+      ],
+      "ordered_descriptors_range": [
+        0,
+        0
+      ],
+      "ordered_index_bytes_range": [
+        0,
+        0
+      ],
+      "ordered_query_peak": 16783456,
+      "reference_query_peak": 18954958,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 47488
+    },
+    {
+      "rows": 100000,
+      "backend": "memory",
+      "direction": "DESC",
+      "depth": 50000,
+      "output_rows": 32,
+      "ordered_us": 154.459,
+      "reference_us": 43509.833,
+      "median_ratio": 0.003549979150689914,
+      "paired_ratio_range": [
+        0.0016660683443047433,
+        0.004643258657792976
+      ],
+      "ordered_decodes_range": [
+        0,
+        0
+      ],
+      "ordered_blocks_range": [
+        0,
+        0
+      ],
+      "ordered_descriptors_range": [
+        0,
+        0
+      ],
+      "ordered_index_bytes_range": [
+        0,
+        0
+      ],
+      "ordered_query_peak": 16783456,
+      "reference_query_peak": 18430670,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 47488
+    },
+    {
+      "rows": 100000,
+      "backend": "memory",
+      "direction": "DESC",
+      "depth": 99998,
+      "output_rows": 32,
+      "ordered_us": 156.5,
+      "reference_us": 76540.292,
+      "median_ratio": 0.002044674718512963,
+      "paired_ratio_range": [
+        0.0009304323846890868,
+        0.0021227593645794405
+      ],
+      "ordered_decodes_range": [
+        0,
+        0
+      ],
+      "ordered_blocks_range": [
+        0,
+        0
+      ],
+      "ordered_descriptors_range": [
+        0,
+        0
+      ],
+      "ordered_index_bytes_range": [
+        0,
+        0
+      ],
+      "ordered_query_peak": 16783456,
+      "reference_query_peak": 18954958,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 47488
+    },
+    {
+      "rows": 100000,
+      "backend": "disk",
+      "direction": "ASC",
+      "depth": 0,
+      "output_rows": 32,
+      "ordered_us": 503.166,
+      "reference_us": 75286.25,
+      "median_ratio": 0.006683371797639011,
+      "paired_ratio_range": [
+        0.005061535020160145,
+        0.007020960990835111
+      ],
+      "ordered_decodes_range": [
+        49,
+        49
+      ],
+      "ordered_blocks_range": [
+        1,
+        1
+      ],
+      "ordered_descriptors_range": [
+        6,
+        6
+      ],
+      "ordered_index_bytes_range": [
+        1048548,
+        1048548
+      ],
+      "ordered_query_peak": 16783456,
+      "reference_query_peak": 17906382,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 47488
+    },
+    {
+      "rows": 100000,
+      "backend": "disk",
+      "direction": "ASC",
+      "depth": 50000,
+      "output_rows": 32,
+      "ordered_us": 581.917,
+      "reference_us": 53335.208,
+      "median_ratio": 0.01091056024380743,
+      "paired_ratio_range": [
+        0.009734039098525687,
+        0.012187750810561584
+      ],
+      "ordered_decodes_range": [
+        48,
+        48
+      ],
+      "ordered_blocks_range": [
+        1,
+        1
+      ],
+      "ordered_descriptors_range": [
+        6,
+        6
+      ],
+      "ordered_index_bytes_range": [
+        1048533,
+        1048533
+      ],
+      "ordered_query_peak": 16783456,
+      "reference_query_peak": 17906382,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 47488
+    },
+    {
+      "rows": 100000,
+      "backend": "disk",
+      "direction": "ASC",
+      "depth": 99998,
+      "output_rows": 1,
+      "ordered_us": 155.25,
+      "reference_us": 30635.667,
+      "median_ratio": 0.005067622650422463,
+      "paired_ratio_range": [
+        0.0032208271047326677,
+        0.006203104691370135
+      ],
+      "ordered_decodes_range": [
+        14,
+        14
+      ],
+      "ordered_blocks_range": [
+        1,
+        1
+      ],
+      "ordered_descriptors_range": [
+        6,
+        6
+      ],
+      "ordered_index_bytes_range": [
+        117800,
+        117800
+      ],
+      "ordered_query_peak": 16777411,
+      "reference_query_peak": 16782842,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 1484
+    },
+    {
+      "rows": 100000,
+      "backend": "disk",
+      "direction": "DESC",
+      "depth": 0,
+      "output_rows": 32,
+      "ordered_us": 244.208,
+      "reference_us": 80508.416,
+      "median_ratio": 0.003033322628034316,
+      "paired_ratio_range": [
+        0.002450302629613067,
+        0.0034872130635385996
+      ],
+      "ordered_decodes_range": [
+        45,
+        45
+      ],
+      "ordered_blocks_range": [
+        1,
+        1
+      ],
+      "ordered_descriptors_range": [
+        5,
+        5
+      ],
+      "ordered_index_bytes_range": [
+        117800,
+        117800
+      ],
+      "ordered_query_peak": 16783456,
+      "reference_query_peak": 17906382,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 47488
+    },
+    {
+      "rows": 100000,
+      "backend": "disk",
+      "direction": "DESC",
+      "depth": 50000,
+      "output_rows": 32,
+      "ordered_us": 553.875,
+      "reference_us": 57721.25,
+      "median_ratio": 0.009595686164107673,
+      "paired_ratio_range": [
+        0.008060798648092848,
+        0.010084573841566013
+      ],
+      "ordered_decodes_range": [
+        48,
+        48
+      ],
+      "ordered_blocks_range": [
+        1,
+        1
+      ],
+      "ordered_descriptors_range": [
+        6,
+        6
+      ],
+      "ordered_index_bytes_range": [
+        1048533,
+        1048533
+      ],
+      "ordered_query_peak": 16783456,
+      "reference_query_peak": 17906382,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 47488
+    },
+    {
+      "rows": 100000,
+      "backend": "disk",
+      "direction": "DESC",
+      "depth": 99998,
+      "output_rows": 32,
+      "ordered_us": 287.625,
+      "reference_us": 84561.25,
+      "median_ratio": 0.0034013806560333486,
+      "paired_ratio_range": [
+        0.0026569079958253475,
+        0.0037725670214924325
+      ],
+      "ordered_decodes_range": [
+        45,
+        45
+      ],
+      "ordered_blocks_range": [
+        1,
+        1
+      ],
+      "ordered_descriptors_range": [
+        5,
+        5
+      ],
+      "ordered_index_bytes_range": [
+        117800,
+        117800
+      ],
+      "ordered_query_peak": 16783456,
+      "reference_query_peak": 17906382,
+      "ordered_blocking_peak": 0,
+      "reference_blocking_peak": 47488
+    }
+  ],
+  "point": [
+    {
+      "composite": false,
+      "pairs": [
+        {
+          "pair": 0,
+          "baseline_us_per_lookup": 16.033583,
+          "candidate_us_per_lookup": 15.55175,
+          "ratio": 0.9699485136915436
+        },
+        {
+          "pair": 1,
+          "baseline_us_per_lookup": 16.056083,
+          "candidate_us_per_lookup": 15.654125,
+          "ratio": 0.9749653760509335
+        },
+        {
+          "pair": 2,
+          "baseline_us_per_lookup": 15.913375,
+          "candidate_us_per_lookup": 15.721125,
+          "ratio": 0.9879189675351708
+        },
+        {
+          "pair": 3,
+          "baseline_us_per_lookup": 15.802417,
+          "candidate_us_per_lookup": 16.10325,
+          "ratio": 1.0190371510889757
+        },
+        {
+          "pair": 4,
+          "baseline_us_per_lookup": 15.891167,
+          "candidate_us_per_lookup": 15.908458,
+          "ratio": 1.0010880887476672
+        }
+      ],
+      "median_paired_ratio": 0.9879189675351708
+    },
+    {
+      "composite": true,
+      "pairs": [
+        {
+          "pair": 0,
+          "baseline_us_per_lookup": 15.888709,
+          "candidate_us_per_lookup": 15.755167,
+          "ratio": 0.9915951635844045
+        },
+        {
+          "pair": 1,
+          "baseline_us_per_lookup": 16.422084,
+          "candidate_us_per_lookup": 15.688042,
+          "ratio": 0.9553015317666138
+        },
+        {
+          "pair": 2,
+          "baseline_us_per_lookup": 16.099,
+          "candidate_us_per_lookup": 16.102,
+          "ratio": 1.0001863469780732
+        },
+        {
+          "pair": 3,
+          "baseline_us_per_lookup": 16.020292,
+          "candidate_us_per_lookup": 16.011333,
+          "ratio": 0.9994407717412391
+        },
+        {
+          "pair": 4,
+          "baseline_us_per_lookup": 16.013125,
+          "candidate_us_per_lookup": 16.043917,
+          "ratio": 1.0019229226025526
+        }
+      ],
+      "median_paired_ratio": 0.9994407717412391
+    }
+  ],
+  "setup": [
+    {
+      "rows": 64,
+      "backend": "memory",
+      "seconds": 0.0033255
+    },
+    {
+      "rows": 64,
+      "backend": "disk",
+      "seconds": 1.136232541
+    },
+    {
+      "rows": 1000,
+      "backend": "memory",
+      "seconds": 0.012419042
+    },
+    {
+      "rows": 1000,
+      "backend": "disk",
+      "seconds": 1.098703792
+    },
+    {
+      "rows": 10000,
+      "backend": "memory",
+      "seconds": 0.124013916
+    },
+    {
+      "rows": 10000,
+      "backend": "disk",
+      "seconds": 1.199732417
+    },
+    {
+      "rows": 100000,
+      "backend": "memory",
+      "seconds": 1.346431041
+    },
+    {
+      "rows": 100000,
+      "backend": "disk",
+      "seconds": 3.26201425
+    }
+  ]
+}
