@@ -174,6 +174,18 @@ the last committed state and permit later work. Publication retains the current
 COW roots and one current pin; compaction paths that use only the oldest logical
 epoch may conservatively postpone reclamation until a later checkpoint.
 
+`NowledgeMemEmbeddedStoreHandle::with_transaction` supplies the existing
+`ConcurrentDatabaseTransaction` workspace. Transaction callbacks stage outside
+the store publication lock, retain their admitted permit, and publish through
+the ordinary lock manager, commit validation and WAL coordinator. The statement
+group entrypoint uses the same path. Direct Mem mutations and maintenance acquire
+the coordinator's database-exclusive logical lease before the publication lock;
+they MUST NOT bypass active pessimistic write locks. Both paths update the same
+canonical read publication, so no second snapshot cache can retain a stale
+physical generation. An unfinished WAL group cannot become a read publication.
+Retired views release their pins after unlocking. Mem writer unwind remains a
+serving failure until reopen, including an unwind in a transaction callback.
+
 `with_bounded_read_snapshot` additionally pins the configured search projection
 and retains the store read lock through the callback. Graph-only snapshots MUST
 report no projection presence or projection epochs and MUST reject external

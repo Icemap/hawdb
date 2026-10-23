@@ -67,6 +67,7 @@ use crate::{
     },
 };
 use hawdb_core::RuntimeTaskContext;
+mod concurrent_owner;
 mod incremental_search;
 mod registered_search;
 use hawdb_optimizer::AdaptiveVectorBackendPolicy;
@@ -1542,13 +1543,7 @@ impl NowledgeMemGraph {
     }
 
     fn try_admit_runtime(&self, request: hawdb_qos::RuntimeWorkRequest) -> Result<RuntimePermit> {
-        self.runtime_governor.try_admit(request).map_err(|error| {
-            if error.is_retryable() {
-                self.runtime_governor
-                    .record_admission_wait(request, error.code, 0);
-            }
-            HawDBError::Execution(error.to_string())
-        })
+        try_admit_runtime(&self.runtime_governor, request)
     }
 
     fn admitted_streaming_result_bytes(&self, options: &NowledgeMemReadOptions) -> Result<usize> {
@@ -2479,6 +2474,7 @@ impl crate::DatabasePublicationState for NowledgeMemEmbeddedStore {
 #[derive(Debug, Clone)]
 pub struct NowledgeMemEmbeddedStoreHandle {
     inner: Arc<crate::DatabasePublicationOwner<NowledgeMemEmbeddedStore>>,
+    concurrent: crate::ConcurrentDatabase,
     published_read: Arc<Mutex<Option<PublishedCanonicalRead>>>,
     // One-way: a failed or panicking write guard sets this and leaves the
     // last-good publication untouched, so readers fail closed instead of
@@ -2489,7 +2485,7 @@ pub struct NowledgeMemEmbeddedStoreHandle {
 #[derive(Debug)]
 struct PublishedCanonicalRead {
     instance_identity: crate::DatabaseInstanceIdentity,
-    snapshot: crate::api::DatabaseReadSnapshot,
+    view: Arc<crate::api::PublishedConcurrentRead>,
     governor: RuntimeGovernor,
 }
 
@@ -2497,7 +2493,9 @@ impl PublishedCanonicalRead {
     fn capture(store: &NowledgeMemEmbeddedStore) -> Result<Self> {
         Ok(Self {
             instance_identity: store.graph.database().instance_identity()?,
-            snapshot: store.graph.database().read_snapshot()?,
+            view: Arc::new(crate::api::PublishedConcurrentRead::capture(
+                store.graph.database(),
+            )?),
             governor: store.graph.runtime_governor().clone(),
         })
     }
@@ -2505,6 +2503,8 @@ impl PublishedCanonicalRead {
 
 struct EmbeddedStoreWriteGuard<'a> {
     store: crate::api::publication::DatabasePublicationWriteGuard<'a, NowledgeMemEmbeddedStore>,
+    _exclusive: Option<crate::api::ExclusiveDatabaseLease>,
+    retired: Option<PublishedCanonicalRead>,
     published: &'a Mutex<Option<PublishedCanonicalRead>>,
     read_publication_failed: &'a AtomicBool,
 }
@@ -2545,14 +2545,13 @@ impl Drop for EmbeddedStoreWriteGuard<'_> {
                 return;
             }
         };
-        let previous = self
+        self.retired = self
             .published
             .lock()
             .unwrap_or_else(|error| error.into_inner())
             .replace(next);
         // Releasing the last generation pin can acquire the pin registry lock.
         // Keep that destructor outside the publication critical section.
-        drop(previous);
     }
 }
 
@@ -2799,10 +2798,21 @@ impl<'a> NowledgeMemReadSnapshot<'a> {
 impl NowledgeMemEmbeddedStoreHandle {
     pub fn new(store: NowledgeMemEmbeddedStore) -> Result<Self> {
         let published_read = PublishedCanonicalRead::capture(&store)?;
+        let inner = Arc::new(crate::DatabasePublicationOwner::new(store));
+        let published_read = Arc::new(Mutex::new(Some(published_read)));
+        let read_publication_failed = Arc::new(AtomicBool::new(false));
+        let concurrent = crate::ConcurrentDatabase::with_shared_owner(Arc::new(
+            concurrent_owner::MemDatabaseOwner {
+                inner: Arc::clone(&inner),
+                published_read: Arc::clone(&published_read),
+                read_publication_failed: Arc::clone(&read_publication_failed),
+            },
+        ))?;
         Ok(Self {
-            inner: Arc::new(crate::DatabasePublicationOwner::new(store)),
-            published_read: Arc::new(Mutex::new(Some(published_read))),
-            read_publication_failed: Arc::new(AtomicBool::new(false)),
+            inner,
+            concurrent,
+            published_read,
+            read_publication_failed,
         })
     }
 
@@ -3045,11 +3055,12 @@ impl NowledgeMemEmbeddedStoreHandle {
         statements: &[NowledgeGraphStatement],
     ) -> Result<crate::NowledgeGraphTransactionOutput> {
         let permit = self.admit_transaction(statements)?;
-        let task_context = permit.bind_task_context(RuntimeTaskContext::default());
-        let _permit = permit;
-        let mut store = self.write_store()?;
-        let db = store.graph_mut().database_mut();
-        let mut transaction = db.begin_transaction_with_context(&task_context)?;
+        let _unwind = concurrent_owner::PublicationUnwindGuard(&self.read_publication_failed);
+        let mut transaction = self.concurrent.begin_admitted_transaction(
+            crate::ConcurrentTransactionOptions::default(),
+            permit,
+            RuntimeTaskContext::default(),
+        )?;
         let mut statement_outputs = Vec::with_capacity(statements.len());
         for statement in statements {
             statement_outputs
@@ -3070,25 +3081,22 @@ impl NowledgeMemEmbeddedStoreHandle {
     /// introduced. Returning an error rolls back every staged statement.
     pub fn with_transaction<T>(
         &self,
-        operation: impl FnOnce(&mut crate::DatabaseTransaction<'_>) -> Result<T>,
+        operation: impl FnOnce(&mut crate::ConcurrentDatabaseTransaction) -> Result<T>,
     ) -> Result<T> {
         let permit = self.admit_typed_transaction()?;
-        let task_context = permit.bind_task_context(RuntimeTaskContext::default());
-        let _permit = permit;
-        let mut store = self.write_store()?;
-        let mut transaction = store
-            .graph_mut()
-            .database_mut()
-            .begin_transaction_with_context(&task_context)?;
-        let result = match operation(&mut transaction) {
+        let _unwind = concurrent_owner::PublicationUnwindGuard(&self.read_publication_failed);
+        let mut transaction = self.concurrent.begin_admitted_transaction(
+            crate::ConcurrentTransactionOptions::default(),
+            permit,
+            RuntimeTaskContext::default(),
+        )?;
+        match operation(&mut transaction) {
             Ok(output) => transaction.commit().map(|_| output),
             Err(error) => {
                 transaction.rollback();
                 Err(error)
             }
-        };
-        store.graph.database().poison_on_storage_error(&result);
-        result
+        }
     }
 
     /// Executes a caller-owned group of bounded Cypher reads against one
@@ -3816,26 +3824,35 @@ impl NowledgeMemEmbeddedStoreHandle {
     }
 
     fn admit_typed_transaction(&self) -> Result<RuntimePermit> {
-        let store = self.read_store()?;
-        let config = store.graph.database().config();
-        let memory_bytes = crate::executor::estimated_mutation_memory_bytes(
-            config.mutation_limits,
-            config.max_wal_record_bytes,
-        )
-        .max(u64::try_from(config.execution_memory.query_memory_bytes.get()).unwrap_or(u64::MAX));
-        let result_bytes = u64::try_from(
-            config
-                .max_read_result_payload_bytes
-                .unwrap_or(config.mutation_limits.max_result_payload_bytes.get()),
-        )
-        .unwrap_or(u64::MAX);
-        store.graph.try_admit_runtime(
-            RuntimeWorkRequest::new(RuntimeWorkPriority::Foreground, RuntimeWorkKind::Mutation)
-                .with_cpu_slots(1)
-                .with_memory_bytes(memory_bytes)
-                .with_result_bytes(result_bytes)
-                .with_blocking(true),
-        )
+        let (governor, request) = {
+            let published = self.lock_published_read()?;
+            let published = published.as_ref().ok_or_else(|| {
+                HawDBError::StorageIntegrity("canonical read publication is unavailable".into())
+            })?;
+            let config = published.view.snapshot.config();
+            let memory_bytes = crate::executor::estimated_mutation_memory_bytes(
+                config.mutation_limits,
+                config.max_wal_record_bytes,
+            )
+            .max(
+                u64::try_from(config.execution_memory.query_memory_bytes.get()).unwrap_or(u64::MAX),
+            );
+            let result_bytes = u64::try_from(
+                config
+                    .max_read_result_payload_bytes
+                    .unwrap_or(config.mutation_limits.max_result_payload_bytes.get()),
+            )
+            .unwrap_or(u64::MAX);
+            (
+                published.governor.clone(),
+                RuntimeWorkRequest::new(RuntimeWorkPriority::Foreground, RuntimeWorkKind::Mutation)
+                    .with_cpu_slots(1)
+                    .with_memory_bytes(memory_bytes)
+                    .with_result_bytes(result_bytes)
+                    .with_blocking(true),
+            )
+        };
+        try_admit_runtime(&governor, request)
     }
 
     fn admit_typed_read(&self, max_estimated_payload_bytes: usize) -> Result<RuntimePermit> {
@@ -3902,10 +3919,13 @@ impl NowledgeMemEmbeddedStoreHandle {
             let published = published.as_ref().ok_or_else(|| {
                 HawDBError::Execution("nowledge mem embedded store read lock poisoned".to_string())
             })?;
-            published.snapshot.ensure_usable()?;
+            published.view.snapshot.ensure_usable()?;
             (
                 published.governor.clone(),
-                typed_read_request(published.snapshot.config(), max_estimated_payload_bytes)?,
+                typed_read_request(
+                    published.view.snapshot.config(),
+                    max_estimated_payload_bytes,
+                )?,
             )
         };
         let permit = governor.try_admit(request).map_err(|error| {
@@ -3920,8 +3940,8 @@ impl NowledgeMemEmbeddedStoreHandle {
         let published = published.as_ref().ok_or_else(|| {
             HawDBError::Execution("nowledge mem embedded store read lock poisoned".to_string())
         })?;
-        published.snapshot.ensure_usable()?;
-        let config = published.snapshot.config();
+        published.view.snapshot.ensure_usable()?;
+        let config = published.view.snapshot.config();
         if let Some(max_rows) = max_rows {
             let configured_rows = config.read_result_row_limit().unwrap_or(usize::MAX);
             if max_rows > configured_rows {
@@ -3931,7 +3951,9 @@ impl NowledgeMemEmbeddedStoreHandle {
             }
         }
         let task_context = permit.bind_task_context(task_context.clone());
-        let transaction = published.snapshot.begin_read_transaction(&task_context)?;
+        let transaction = published
+            .view
+            .begin_read_transaction_with_context(&task_context)?;
         Ok((permit, transaction, published.instance_identity.clone()))
     }
 
@@ -3941,7 +3963,7 @@ impl NowledgeMemEmbeddedStoreHandle {
             let published = published.as_ref().ok_or_else(|| {
                 HawDBError::Execution("nowledge mem embedded store read lock poisoned".to_string())
             })?;
-            published.snapshot.ensure_usable()?;
+            published.view.snapshot.ensure_usable()?;
         }
         result
     }
@@ -4000,7 +4022,6 @@ impl NowledgeMemEmbeddedStoreHandle {
         let db = store.graph.database();
         let config = db.config();
         let mut priority = RuntimeWorkPriority::Background;
-        let mut kind = RuntimeWorkKind::Query;
         let mut estimated_memory_bytes = TYPED_CONTROL_STATEMENT_MEMORY_BYTES;
         let mut result_bytes = 0u64;
         let mut io_slots = 0usize;
@@ -4008,9 +4029,6 @@ impl NowledgeMemEmbeddedStoreHandle {
             let admission = db.runtime_admission_plan(&statement.cypher, &statement.parameters)?;
             if admission.work_request.priority == WorkPriority::Foreground {
                 priority = RuntimeWorkPriority::Foreground;
-            }
-            if admission.is_mutation {
-                kind = RuntimeWorkKind::Mutation;
             }
             estimated_memory_bytes = estimated_memory_bytes.max(admission.estimated_memory_bytes);
             io_slots = io_slots.max(admission.required_io_slots);
@@ -4026,7 +4044,7 @@ impl NowledgeMemEmbeddedStoreHandle {
             result_bytes = result_bytes
                 .saturating_add(u64::try_from(statement_result_bytes).unwrap_or(u64::MAX));
         }
-        let request = RuntimeWorkRequest::new(priority, kind)
+        let request = RuntimeWorkRequest::new(priority, RuntimeWorkKind::Mutation)
             .with_cpu_slots(1)
             .with_memory_bytes(estimated_memory_bytes)
             .with_io_slots(io_slots)
@@ -4042,15 +4060,40 @@ impl NowledgeMemEmbeddedStoreHandle {
     }
 
     fn write_store(&self) -> Result<EmbeddedStoreWriteGuard<'_>> {
+        if self.read_publication_failed.load(Ordering::Acquire) {
+            return Err(HawDBError::StorageIntegrity(
+                "canonical read publication is poisoned".into(),
+            ));
+        }
+        let exclusive = self.concurrent.exclusive_database_lease()?;
         let store = self.inner.write().map_err(|_| {
             HawDBError::Execution("nowledge mem embedded store write lock poisoned".to_string())
         })?;
+        if self.read_publication_failed.load(Ordering::Acquire) {
+            return Err(HawDBError::StorageIntegrity(
+                "canonical read publication is poisoned".into(),
+            ));
+        }
         Ok(EmbeddedStoreWriteGuard {
             store,
+            _exclusive: Some(exclusive),
+            retired: None,
             published: &self.published_read,
             read_publication_failed: &self.read_publication_failed,
         })
     }
+}
+
+fn try_admit_runtime(
+    governor: &RuntimeGovernor,
+    request: RuntimeWorkRequest,
+) -> Result<RuntimePermit> {
+    governor.try_admit(request).map_err(|error| {
+        if error.is_retryable() {
+            governor.record_admission_wait(request, error.code, 0);
+        }
+        HawDBError::Execution(error.to_string())
+    })
 }
 
 fn typed_read_request(

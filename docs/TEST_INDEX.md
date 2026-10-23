@@ -38,6 +38,15 @@ request cases with `tokio-runtime,acl`. Its saturated-admission case also proves
 SQL waits for capacity before parsing. Native CI owns execution; local strict
 Clippy checks compile the same test sources.
 
+`nowledge_mem::concurrent_owner::tests` requires a second writer to commit while
+the first transaction callback remains suspended, then checks both the retained
+old snapshot and the newly published state and released admission memory. It
+uses the existing App snapshot fixture and root general unit owner.
+The weekly native runtime lane also runs this family and
+`nowledge_mem::app_read_snapshot_tests`, preserving their mixed-statement,
+publication-failure, unwind, admission and old-generation assertions after Mem
+switches to the concurrent transaction kernel.
+
 ## Execution lanes
 
 | Lane / entry point | Problems covered | Execution policy |

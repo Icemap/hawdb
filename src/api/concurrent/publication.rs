@@ -21,16 +21,22 @@ use crate::Value;
 use crate::{QueryOutput, Result};
 use std::sync::Arc;
 
-pub(super) struct PublishedConcurrentRead {
-    pub(super) snapshot: DatabaseReadSnapshot,
+pub(crate) struct PublishedConcurrentRead {
+    pub(crate) snapshot: DatabaseReadSnapshot,
     pub(super) recorder: StatementRecorder,
     system_variables: QuerySystemVariables,
     plan_cache: Arc<SharedState<PlanCache>>,
 }
 
 impl PublishedConcurrentRead {
-    pub(super) fn capture(database: &Database) -> Result<Self> {
+    pub(crate) fn capture(database: &Database) -> Result<Self> {
         let runtime = database.runtime.get()?;
+        if runtime.store.wal_sync_group_active() {
+            return Err(crate::HawDBError::StorageIntegrity(
+                "cannot publish a read view before the WAL group durability barrier".into(),
+            ));
+        }
+        runtime.store.ensure_usable()?;
         Ok(Self {
             snapshot: database.read_snapshot_without_observations()?,
             recorder: database.statement_recorder(),
@@ -42,6 +48,15 @@ impl PublishedConcurrentRead {
     pub(super) fn begin_read_transaction(&self) -> Result<DatabaseReadTransaction> {
         let mut snapshot = self.snapshot.fork(None)?;
         // Observation tables include reads completed since the last write.
+        self.recorder.refresh_read_snapshot(&mut snapshot);
+        Ok(snapshot)
+    }
+
+    pub(crate) fn begin_read_transaction_with_context(
+        &self,
+        context: &hawdb_core::RuntimeTaskContext,
+    ) -> Result<DatabaseReadTransaction> {
+        let mut snapshot = self.snapshot.begin_read_transaction(context)?;
         self.recorder.refresh_read_snapshot(&mut snapshot);
         Ok(snapshot)
     }
@@ -73,6 +88,15 @@ impl PublishedConcurrentRead {
     pub(super) fn prepare(&self, request: crate::QueryRequest<'_>) -> Result<PreparedRuntimeQuery> {
         self.snapshot
             .prepare_runtime_request(request, &self.system_variables, &self.plan_cache)
+    }
+}
+
+impl std::fmt::Debug for PublishedConcurrentRead {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("PublishedConcurrentRead")
+            .field("snapshot", &self.snapshot)
+            .finish_non_exhaustive()
     }
 }
 

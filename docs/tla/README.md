@@ -1498,6 +1498,18 @@ preserving overlap and compatibility safety. Both modes serialize the durable
 WAL decision and snapshot publication while readers continue to pin the last
 published epoch.
 
+The Mem transaction callback and statement-group adapters now use this same
+coordinator with a shared canonical owner. Their private staging maps to the
+existing active transaction states, while commit retains the same publisher and
+durability transitions. Direct Mem mutations/maintenance take the full-key
+exclusive lease before borrowing that owner. Shared-owner guards publish one
+canonical read view; they do not add a second commit decision or retain a
+separate coordinator snapshot. Callback unwind and incomplete-group publication
+are rejected by the adapter's serving-failure state. Rust Mem regressions cover
+two independent staging writers, current/old readers, callback failure, source
+poisoning and physical-view replacement. This correspondence does not extend the
+optimistic model beyond the per-key validation coverage boundary below.
+
 The model checks that stale optimistic transactions cannot publish, only one
 transaction owns the commit pipeline, overlapping shared/exclusive lock spans
 remain compatible, an optimistic publisher owns the full exclusive span,

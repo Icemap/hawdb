@@ -3,7 +3,7 @@
 use super::{Database, DatabaseReadTransaction};
 use crate::{HawDBError, Result};
 use std::ops::{Deref, DerefMut};
-use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+use std::sync::{PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard, TryLockError};
 
 /// State whose graph mutations and projection publications share one owner.
 /// The canonical database must remain the same instance throughout a validated
@@ -56,9 +56,22 @@ impl<S> DatabasePublicationOwner<S> {
         })
     }
 
-    #[cfg(test)]
-    pub(crate) fn try_write(&self) -> std::sync::TryLockResult<RwLockWriteGuard<'_, S>> {
-        self.state.try_write()
+    pub(crate) fn try_write(
+        &self,
+    ) -> std::sync::TryLockResult<DatabasePublicationWriteGuard<'_, S>> {
+        match self.state.try_write() {
+            Ok(state) => Ok(DatabasePublicationWriteGuard { state }),
+            Err(TryLockError::WouldBlock) => Err(TryLockError::WouldBlock),
+            Err(TryLockError::Poisoned(error)) => Err(TryLockError::Poisoned(PoisonError::new(
+                DatabasePublicationWriteGuard {
+                    state: error.into_inner(),
+                },
+            ))),
+        }
+    }
+
+    pub(crate) fn is_poisoned(&self) -> bool {
+        self.state.is_poisoned()
     }
 }
 

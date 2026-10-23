@@ -89,6 +89,9 @@ pub use automatic_checkpoint::AutomaticCheckpointReport;
 mod branch_lifecycle;
 mod canonical_snapshot;
 mod concurrent;
+pub(crate) use concurrent::{
+    ExclusiveDatabaseLease, PublishedConcurrentRead, SharedDatabaseGuard, SharedDatabaseOwner,
+};
 mod vector_index;
 pub use vector_index::{
     VectorIndexBuildError, VectorIndexBuildOptions, VectorIndexField, VectorIndexLanguageBudget,
@@ -1766,6 +1769,7 @@ impl Database {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn read_snapshot(&self) -> Result<DatabaseReadSnapshot> {
         Ok(DatabaseReadSnapshot(self.begin_read_transaction()?))
     }

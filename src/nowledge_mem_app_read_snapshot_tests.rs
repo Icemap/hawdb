@@ -36,7 +36,7 @@ fn snapshot_governor() -> hawdb_qos::RuntimeGovernor {
     )
 }
 
-fn app_read_handle() -> NowledgeMemEmbeddedStoreHandle {
+pub(super) fn app_read_handle() -> NowledgeMemEmbeddedStoreHandle {
     let mut database = Database::new_with_config(DatabaseConfig {
         max_read_result_rows: Some(16),
         max_read_result_payload_bytes: Some(16 * 1024),
@@ -1552,6 +1552,7 @@ fn failed_snapshot_publication_retains_the_last_generation_and_requires_reopen()
             .unwrap()
             .as_ref()
             .unwrap()
+            .view
             .snapshot
             .begin_read_transaction(&hawdb_core::RuntimeTaskContext::default())
             .unwrap()
@@ -1576,10 +1577,11 @@ fn failed_snapshot_publication_retains_the_last_generation_and_requires_reopen()
             Err(crate::HawDBError::Execution(reason)) if reason.contains("poisoned")
         ));
     }
-    // Restoring an admissible writer does not silently clear lost-publication
-    // evidence. A fresh handle recovers the successful transaction instead.
+    // Normal writers cannot repair a failed publication. Even direct test-only
+    // restoration must preserve the evidence until the handle is reopened.
+    assert!(handle.write_store().is_err());
     {
-        let mut store = handle.write_store().unwrap();
+        let mut store = handle.inner.write().unwrap();
         *store.graph_mut().database_mut() = committed;
     }
     assert!(matches!(

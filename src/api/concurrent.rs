@@ -17,9 +17,12 @@ mod coordinator;
 #[cfg(test)]
 mod key_range_tests;
 mod metrics;
+mod owner;
 mod publication;
 
 pub use metrics::{ConcurrentDatabaseMetrics, ConcurrentPhaseMetrics};
+pub(crate) use owner::{SharedDatabaseGuard, SharedDatabaseOwner};
+pub(crate) use publication::PublishedConcurrentRead;
 
 use self::coordinator::{CommitSequencer, LockManager, TransactionIdAllocator};
 use super::system_sql;
@@ -119,6 +122,17 @@ pub struct ConcurrentDatabase {
     inner: Arc<ConcurrentDatabaseInner>,
 }
 
+pub(crate) struct ExclusiveDatabaseLease {
+    inner: Arc<ConcurrentDatabaseInner>,
+    transaction_id: u64,
+}
+
+impl Drop for ExclusiveDatabaseLease {
+    fn drop(&mut self) {
+        self.inner.locks.release(self.transaction_id);
+    }
+}
+
 #[derive(Debug)]
 struct ConcurrentDatabaseInner {
     commits: CommitSequencer,
@@ -161,9 +175,20 @@ impl ConcurrentDatabase {
         database: Database,
         wal_group_commit: WalGroupCommitConfig,
     ) -> Self {
+        Self::with_sequencer(CommitSequencer::new(database, wal_group_commit))
+    }
+
+    pub(crate) fn with_shared_owner(owner: Arc<dyn SharedDatabaseOwner>) -> Result<Self> {
+        Ok(Self::with_sequencer(CommitSequencer::shared(
+            owner,
+            WalGroupCommitConfig::default(),
+        )?))
+    }
+
+    fn with_sequencer(commits: CommitSequencer) -> Self {
         Self {
             inner: Arc::new(ConcurrentDatabaseInner {
-                commits: CommitSequencer::new(database, wal_group_commit),
+                commits,
                 locks: LockManager::default(),
                 transaction_ids: TransactionIdAllocator::default(),
                 checkpoint_serial: Mutex::new(()),
@@ -600,6 +625,14 @@ impl ConcurrentDatabase {
         &self,
         execute: impl FnOnce(&mut Database) -> Result<QueryOutput>,
     ) -> Result<QueryOutput> {
+        let _lease = self.exclusive_database_lease()?;
+        self.inner
+            .commits
+            .lock()
+            .and_then(|mut database| execute(&mut database))
+    }
+
+    pub(crate) fn exclusive_database_lease(&self) -> Result<ExclusiveDatabaseLease> {
         let transaction_id = self.inner.transaction_ids.allocate()?;
         self.inner.locks.acquire(
             transaction_id,
@@ -607,13 +640,10 @@ impl ConcurrentDatabase {
             Instant::now(),
             DEFAULT_PESSIMISTIC_LOCK_TIMEOUT,
         )?;
-        let result = self
-            .inner
-            .commits
-            .lock()
-            .and_then(|mut database| execute(&mut database));
-        self.inner.locks.release(transaction_id);
-        result
+        Ok(ExclusiveDatabaseLease {
+            inner: Arc::clone(&self.inner),
+            transaction_id,
+        })
     }
 
     #[cfg(test)]
