@@ -81,6 +81,7 @@ pub struct ObservationPoint {
 #[derive(Debug)]
 struct Observation {
     point: ObservationPoint,
+    file_name_prefix: Option<String>,
     snapshot: Option<PowerLossSnapshot>,
 }
 
@@ -153,6 +154,34 @@ impl PowerLossModel {
     /// No callback runs under storage locks, and later barriers cannot advance
     /// the captured image. A subsequent final capture verifies IO coverage.
     pub fn observe(&self, point: ObservationPoint) -> io::Result<()> {
+        self.observe_filtered(point, None)
+    }
+
+    /// Select temporary publication writes without matching later validation
+    /// scratch. The path, event and boundary constraints still apply first.
+    pub fn observe_file_name_prefix(
+        &self,
+        point: ObservationPoint,
+        prefix: &str,
+    ) -> io::Result<()> {
+        if prefix.is_empty()
+            || Path::new(prefix).file_name() != Some(std::ffi::OsStr::new(prefix))
+            || !Path::new(prefix)
+                .components()
+                .all(|component| matches!(component, std::path::Component::Normal(_)))
+        {
+            return Err(invalid(
+                "observation prefix must be one normal filename component",
+            ));
+        }
+        self.observe_filtered(point, Some(prefix.to_owned()))
+    }
+
+    fn observe_filtered(
+        &self,
+        point: ObservationPoint,
+        file_name_prefix: Option<String>,
+    ) -> io::Result<()> {
         let _engine = self.core.lock()?;
         if point.relative_path.as_os_str().is_empty()
             || !point
@@ -172,6 +201,7 @@ impl PowerLossModel {
         }
         *observation = Some(Observation {
             point,
+            file_name_prefix,
             snapshot: None,
         });
         Ok(())
@@ -291,6 +321,11 @@ impl ModelCore {
                 || observation.point.include_descendants
                     && path.starts_with(&observation.point.relative_path))
             && observation.point.boundary == boundary
+            && observation.file_name_prefix.as_ref().is_none_or(|prefix| {
+                path.file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name.starts_with(prefix))
+            })
         {
             if observation.point.skip_matches > 0 {
                 observation.point.skip_matches -= 1;
