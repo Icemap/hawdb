@@ -65,8 +65,8 @@ a usable inventory slice alone is partial delivery.
 
 Phase-one acceptance includes a development/nightly Mem query-path integration
 or shadow comparison for the designated callers, preserving response fields,
-zero-count entities, scope/lifecycle rules, transaction-local reads of pending
-writes, rollback and post-commit visibility.
+zero-count entities, scope/lifecycle rules, read-only snapshot transactions
+and explicit post-commit freshness.
 Record reference-query equality and actual indexed access before measuring
 query latency, maintenance lag and writer overhead. Thresholds come from the
 same Mem workload baseline. Engine fixtures, capture APIs, DDL syntax or a
@@ -88,7 +88,7 @@ relational tables need not gain row-image capture merely to ship this phase.
 | Priority | Mem business | Proposed relation | Required maintenance | Read contract |
 | --- | --- | --- | --- | --- |
 | P0 | Entity search and community seed ranking | `entity_usage`, grouped by entity identity and both endpoint scope keys | Graph expansion, endpoint changes, bag counts, indexed grouping | Exact snapshot shared with candidate filtering and ranking |
-| P0 | Memory headlines, archive inventory, Space usage | `memory_inventory`, keyed by scope and predicate version | Deterministic visibility projection, grouped counts, old/new classification | Exact snapshot; read-your-write floor for refresh after mutations |
+| P0 | Memory headlines, archive inventory, Space usage | `memory_inventory`, keyed by scope and predicate version | Deterministic visibility projection, grouped counts, old/new classification | Exact snapshot; committed-source floor for refresh after commit |
 | Later | Graph statistics and density inputs | `graph_inventory`, with explicit node/edge kinds and scope policy | Node/edge counts, deletion and endpoint handling | One coherent snapshot; preserve each existing response's definitions |
 | P1 | Community detail, representative memories, GraphRAG candidates | `community_memory` and membership support | Graph/derived-relation join, distinct reference counts, generation fencing | One community generation and one canonical snapshot; scope before Top-K |
 | P1 | Source library counts and Thread activity | `source_memory_usage`, `thread_message_activity` | Edge counts, relational grouping, retractable extrema | Exact list/detail snapshot; preserve source provenance separately |
@@ -734,71 +734,58 @@ contract during overload.
 
 ## 7. Read consistency and Mem admission
 
-**Transactional materialized-view reads are required in phase one**, including
-explicit read-write transactions. Physical materialization may be maintained
-asynchronously, with exact reads and a bounded canonical fallback, only while
-preserving the logical transaction contract below. This is a proposed capability
-to implement and qualify, not an existing materialized-view guarantee.
+Phase one supports standalone materialized-view reads and **explicit read-only
+snapshot transactions**. Physical maintenance is asynchronous, with exact reads
+and a bounded canonical fallback. Querying materialized views inside explicit
+read-write transactions, transaction-private view deltas and reading pending
+writes through a view are deferred. This limits the new materialized-view
+surface; it does not remove HawDB's existing canonical read-write transactions.
+All materialized-view capabilities here remain proposed and unimplemented.
 
-### 7.1 Transaction contract
+### 7.1 Read-only transaction contract and extension boundary
 
-A materialized relation has the same transaction visibility as evaluating its
-registered query on the transaction's canonical data. Let `S_E` be the snapshot
-selected under HawDB's supported transaction isolation and `W_T` the current
-transaction's pending graph/relational mutations. Every view read in `T` must
-satisfy:
+For a read-only transaction `T`, select and retain one canonical snapshot `S_E`
+under the existing supported isolation rules. Reads of its base data, named
+views and their joins must agree with that same snapshot:
 
 ```text
-ReadView(T, D) = Q_D(S_E + W_T)
+ReadView(T, D) = Q_D(S_E)
 ```
 
-The plus sign means applying the transaction's actual pending mutations, not
-concatenating rows. A read-only transaction has empty `W_T`. Reuse the existing
-isolation, statement-error, transaction-abort and conflict rules; this proposal
-does not silently upgrade snapshot isolation to serializability. Base reads,
-view reads and their joins must share the same transaction snapshot and current
-private writes. Subsequent statements observe earlier successful writes in the
-same transaction. Another transaction cannot see those uncommitted effects.
+Repeated reads remain at `E` even if canonical writers commit or background
+maintenance publishes a newer head. A view at another epoch cannot be combined
+with canonical rows at `E`. Use a retained matching manifest, wait within the
+read deadline, evaluate the reference query against `S_E` within its budget,
+or return a typed not-ready/resource error. Never silently return mixed epochs
+or a partial result. These rules do not upgrade the existing isolation level
+to serializability.
 
-The engine may evaluate a bounded transaction-private view delta over a
-compatible materialization or execute the bound reference query against the
-same transaction-local state. Ordinary view syntax must preserve the contract
-through either path: callers do not rewrite queries or issue a manual flush to
-obtain read-your-own-writes. A committed view at `E` alone is insufficient when
-`W_T` changes its dependencies. Waiting for the background worker cannot make
-uncommitted writes visible; it must not be used as the implementation of this
-transaction-local read path. Exhaustion returns the ordinary typed query or
-transaction error under existing abort rules, never a stale or partial answer.
+Reject unsupported materialized-view access in a read-write transaction with
+a specific capability diagnostic, including when that transaction has not yet
+written data. Do not silently ignore transaction mode, commit it, switch it to
+read-only, or serve committed-only view state as if it included pending writes.
+DML inside a read-only transaction follows existing rejection/abort rules.
+Application DML cannot write derived view rows. Transactional view creation,
+drop, refresh and savepoints are outside phase one.
 
-If a chosen artifact covers `E0 < E`, a private exact path must first account
-for complete committed changes through `E`, then apply `W_T`, exactly once.
-An artifact newer than the transaction snapshot is not a valid substitute.
-Missing retained coverage or support state selects the transaction-local
-reference query within its budget, or an explicit failure. A partial private
-catch-up cannot be exposed as a transaction-consistent view read.
+Canonical graph/relational writes continue using existing transaction commit,
+rollback, conflict and durability rules. Maintenance consumes complete committed
+changes only; rolled-back or losing transactions contribute nothing. Async
+materialization can lag after a successful canonical commit. A subsequent
+separate read may carry its committed source floor through a typed read context
+or commit receipt and use the exact wait/fallback/error path below. Such a floor
+is a freshness request over committed data, not read-your-own-uncommitted-writes
+or an atomic writable view transaction. View lag is not evidence that a lost
+canonical commit response means rollback.
 
-Private aggregate/arrangement changes remain owned by the transaction. Rollback
-or a rejected commit discards them without advancing a public view head, source
-cursor or durable maintenance progress for that transaction. At commit, all
-relevant canonical mutations acquire one atomic source boundary; no view reader can observe only
-some effects. A follow-on view read through the committing context/commit
-receipt must honor at least that commit boundary. Across independent handles,
-propagate the receipt/floor explicitly rather than assume shared session state.
-A lost commit acknowledgement uses the existing operation-resolution contract;
-background view progress is not evidence that the canonical transaction failed.
-
-Async physical catch-up may lag after canonical commit only because exact
-reads evaluate a compatible materialization plus admitted deltas or the same
-canonical reference query. The background worker consumes committed changes
-only and atomically selects result, support state, indexes and progress. View
-rows remain derived/read-only to application DML; supporting transactions does
-not introduce an independent writable copy of canonical data. Transactional
-view creation/drop/refresh requires separately defined DDL semantics and is not
-implied by the required read/write-transaction query behavior.
-
-This transaction path is part of the Memory/Space inventory and Entity usage
-vertical slices. An implementation with only committed-epoch freshness or
-read-only snapshot transactions does not complete phase one.
+Keep definition versions, source epochs, contribution identities and publication
+progress separate so a later separately qualified transaction-aware read path
+can be added. A possible extension would evaluate `Q_D(S_E + W_T)` through a
+bounded private delta or same-transaction reference execution, where `W_T` is
+pending canonical state. Its isolation, rollback, conflicts, resource admission
+and commit integration need their own design and tests. Phase one reserves no
+public stub, transaction-private state storage or private-delta implementation
+for that extension, and has no acceptance dependency on it.
 
 ### 7.2 Committed snapshots and read admission
 
@@ -806,9 +793,9 @@ Proposed read modes (logical contracts, not existing method signatures):
 
 | Mode | Guarantee | Failure behavior |
 | --- | --- | --- |
-| `TransactionRead(T)` | Evaluate the definition on the transaction snapshot plus its private writes | Use a compatible private delta or transaction-local reference query; never return committed-only stale data |
+| `ReadOnlyTransaction(T)` | Evaluate the definition at the transaction's retained committed snapshot | Match the manifest/source epoch, execute the same-snapshot reference query, or fail within budget |
 | `ExactSnapshot(E)` | View and every canonical join/filter use `S_E` | Wait within deadline for the retained epoch, execute the canonical reference query at `S_E`, or return typed not-ready/budget status |
-| `ReadYourWrites(C)` after commit | Choose a snapshot `E >= C`, then the same exact contract | Never return an older generation as the post-write refresh |
+| `AfterCommit(C)` | Choose a committed snapshot `E >= C`, then the same exact contract | Never return an older generation as the post-write refresh |
 | `BoundedStale` | Explicitly allowed view-only result with source epoch and bounded lag | Reject if the limit/authorization contract cannot be established |
 
 Epoch selection and source snapshot capture occur once per logical read.
@@ -975,28 +962,26 @@ Any exploratory fuzzing remains local under repository policy.
 
 ### Phase-one transaction regression matrix
 
-These are mandatory future native facade and Mem query-path acceptance cases.
-They are not executed results of this documentation change. Select transactions
-using the existing supported isolation and its actual write-conflict rules.
+These are future native facade and Mem query-path acceptance cases, not executed
+results of this documentation change. They qualify only the read-only view
+surface and committed-source maintenance boundary.
 
 | Fixture | Required result / negative control |
 | --- | --- |
-| Read-only transaction reads base and view repeatedly while another writer commits | One transaction-consistent snapshot; the background view advancing cannot change the pinned read result |
-| Read-write transaction creates a Memory then reads its inventory view | Its own pending classification contributes immediately; a second transaction cannot see it |
-| Move Space and archive within one transaction | View reads after each successful statement agree with the transaction-local reference query; no mixed Space/classification at commit |
-| Add two distinct mentions, read, delete one and read again before commit | Entity usage reflects two then one in the writer; an existing reader retains its isolated committed state |
-| Roll back after private aggregate or join changes | No canonical or public view effect; no public progress or support-state leak |
-| Commit fails under an existing write conflict | Losing transaction's private changes never become a selected view result |
-| Commit succeeds while physical materialization is behind | A follow-on read honoring its commit receipt sees the committed effects through an exact path, without caller polling/flush |
-| Private-state budget exhaustion / query error | Apply existing statement/transaction abort semantics and report the cause; never substitute committed-only results |
-| Commit response is lost, then reopen/retry | Resolve the canonical operation; resume complete capture once without double-counting or treating a lagging view as rollback evidence |
+| Read-only transaction reads base and view repeatedly while another writer commits | One retained snapshot; a newer background view cannot change the pinned result or produce a mixed-epoch join |
+| Two views plus canonical filtering in one read-only transaction | Both views and filtering agree at the same source epoch, or take the bounded reference/error path |
+| Query a view inside an explicit read-write transaction, before or after writes | Return the unsupported-capability diagnostic; preserve existing transaction error semantics and never silently change transaction mode |
+| Attempt DML inside a read-only transaction or against derived rows | Reject through the applicable transaction/read-only relation rules |
+| Commit a canonical Space move and archive together | A later view snapshot includes the complete transaction or none of it, with no intermediate Space/classification combination |
+| Canonical transaction rolls back or loses a supported write conflict | No contribution from that transaction enters public view state or maintenance progress |
+| Separate read requests the committed floor while physical materialization lags | Wait, use the same-snapshot reference query or report a bounded failure; never return a snapshot below the floor |
+| Snapshot/coverage is unavailable or a read budget is exhausted | Return the specific not-ready/resource error without silently advancing the transaction snapshot |
+| Commit response is lost, then reopen/retry | Resolve the canonical operation and resume complete capture without double-counting or inferring rollback from view lag |
 
-Include negative controls that deliberately read committed-only view state
-inside a writer, mix transaction/source epochs, leak a private contribution to
-another reader or preserve it after rollback. They must fail the same reference
-oracle used by the designated Mem callers. Future savepoint/DDL transaction
-claims need additional contracts and tests rather than inference from these
-DML/read fixtures.
+Negative controls must catch mixed epochs, visible partial source transactions,
+rollback contributions and a silently accepted unsupported read-write view
+query. Pending-write overlays and transaction-local aggregate/arrangement state
+are later work and are not required for phase-one completion.
 
 ### Phase-one contribution regression matrix
 
@@ -1089,4 +1074,4 @@ specific to HawDB's embedded execution and durability model.
 
 - [MV4PG: Materialized Views for Property Graphs, arXiv:2411.18847v1](https://arxiv.org/abs/2411.18847v1): workload-selected graph views and pre-generated maintenance templates. Property-update maintenance is outside its evaluated views; overlapping-match deduplication remains future work. Its reported speedups are not HawDB measurements or evidence for HawDB recovery/concurrency guarantees.
 
-- [RisingWave: transaction statement handling](https://github.com/risingwavelabs/risingwave/blob/73219848e4fb2193d0da283068824613973008db/src/frontend/src/handler/transaction.rs) and [transaction context](https://github.com/risingwavelabs/risingwave/blob/73219848e4fb2193d0da283068824613973008db/src/frontend/src/session/transaction.rs): explicit read-only snapshots are supported; explicit read-write transactions are not started, and implicit read-write mode is single-statement. This narrower capability does not define HawDB's required transaction contract.
+- [RisingWave: transaction statement handling](https://github.com/risingwavelabs/risingwave/blob/73219848e4fb2193d0da283068824613973008db/src/frontend/src/handler/transaction.rs) and [transaction context](https://github.com/risingwavelabs/risingwave/blob/73219848e4fb2193d0da283068824613973008db/src/frontend/src/session/transaction.rs): explicit read-only snapshots are supported; explicit read-write transactions are not started, and implicit read-write mode is single-statement. This is a comparison for the proposed read-only view scope, not a restriction on HawDB's existing canonical transactions.
