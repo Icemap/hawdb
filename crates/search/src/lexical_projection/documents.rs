@@ -51,7 +51,7 @@ impl<'a> DocumentLookup<'a> {
         }
     }
 
-    pub(super) fn get(&mut self, ordinal: u64) -> Result<(String, u32)> {
+    pub(super) fn get(&mut self, ordinal: u64) -> Result<(&str, u32)> {
         if let Some(task) = self.task {
             super::query_context::checkpoint(task)?;
         }
@@ -92,7 +92,7 @@ impl<'a> DocumentLookup<'a> {
             if let Some(task) = self.task {
                 super::query_context::checkpoint(task)?;
             }
-            let id = cursor.string(1024 * 1024)?;
+            let id = cursor.borrowed_string(1024 * 1024)?;
             let length = cursor.u32()?;
             let current = self.next_ordinal;
             self.next_ordinal = self.next_ordinal.checked_add(1).ok_or_else(|| {

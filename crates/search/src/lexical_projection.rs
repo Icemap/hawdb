@@ -67,6 +67,7 @@ mod manifest_encoding;
 mod reader_admission;
 pub(super) use reader_admission::{Identity as ReaderIdentity, OpenContext as ReaderOpenContext};
 mod posting_codec;
+use posting_codec::Posting as QueryPosting;
 
 #[cfg(test)]
 mod positioned_read_tests;
@@ -1670,12 +1671,13 @@ impl LexicalProjectionReader {
                     );
                     // Reserve actual validated posting and document block extents,
                     // old/new decoded Vec capacity during block transitions,
-                    // encoded/decoded strings and heap keys, pointer-vector growth,
+                    // decoded ordinal/frequency buffers, pointer-vector growth,
                     // and retained query term copies.
                     bytes
                         .saturating_add(max_block.saturating_mul(4))
                         .saturating_add(
-                            max_entries.saturating_mul(4 * std::mem::size_of::<Posting>() as u64),
+                            max_entries
+                                .saturating_mul(4 * std::mem::size_of::<QueryPosting>() as u64),
                         )
                         .saturating_add(
                             references
@@ -1701,27 +1703,15 @@ impl LexicalProjectionReader {
                 let mut bytes = usize::try_from(admitted_stream_bytes).map_err(|_| {
                     HawDBError::Execution("lexical query workspace exceeds address space".into())
                 })?;
-                // Block transitions retain encoded data and decoded IDs.
-                // Each decoded Posting owns a copy of its dictionary term.
+                // Keep room for encoded document-block transitions. IDs borrow
+                // this storage; only the score collector retains owned copies.
                 let document_bytes = usize::try_from(document_mapping_bytes).map_err(|_| {
                     HawDBError::Execution("lexical document block exceeds address space".into())
                 })?;
                 for _ in 0..3 {
                     bytes = checked_add(bytes, document_bytes)?;
                 }
-                for term in query_terms.iter().map(query_term) {
-                    let entries = self
-                        .posting_blocks(term)
-                        .map(|block| block.entry_count as usize)
-                        .max()
-                        .unwrap_or_default();
-                    let copies = entries
-                        .checked_mul(term.len())
-                        .and_then(|bytes| bytes.checked_mul(4))
-                        .ok_or_else(|| {
-                            HawDBError::Execution("lexical decoded term capacity overflow".into())
-                        })?;
-                    bytes = checked_add(bytes, copies)?;
+                for _ in query_terms {
                     bytes = checked_add(bytes, 4 * MAP_ENTRY_BYTES)?;
                 }
                 context.memory.reserve(bytes)
@@ -1794,7 +1784,7 @@ impl LexicalProjectionReader {
             }
         }
         let mut documents = DocumentLookup::new(self, context.map(|context| context.task));
-        let mut group: Vec<(usize, Posting)> = Vec::new();
+        let mut group: Vec<(usize, QueryPosting)> = Vec::new();
         let mut order: Vec<(u64, usize)> = Vec::with_capacity(streams.len());
         let mut blocks_skipped = 0u64;
         let prune = prune_blocks
@@ -1994,8 +1984,8 @@ impl LexicalProjectionReader {
     }
 }
 
-fn validate_posting_length(posting: &Posting, document_len: u32) -> Result<()> {
-    if posting.term_frequency > document_len {
+fn validate_posting_length(posting: &QueryPosting, document_len: u32) -> Result<()> {
+    if posting.tf > document_len {
         return Err(HawDBError::Storage(
             "lexical term frequency exceeds its document length".to_string(),
         ));
@@ -2009,8 +1999,8 @@ struct TermPostingStream<'a> {
     context: Option<QueryContext<'a>>,
     blocks: Vec<&'a BlockDescriptor>,
     block_index: usize,
-    current: std::vec::IntoIter<Posting>,
-    peeked: Option<Posting>,
+    current: std::vec::IntoIter<QueryPosting>,
+    peeked: Option<QueryPosting>,
     /// Frame-header bounds of the block whose postings are materialized next.
     bounds: Option<PostingBlockBounds>,
     postings_visited: u64,
@@ -2044,7 +2034,7 @@ impl<'a> TermPostingStream<'a> {
         }
     }
 
-    fn peek(&mut self) -> Result<Option<&Posting>> {
+    fn peek(&mut self) -> Result<Option<&QueryPosting>> {
         query_context::check(self.context)?;
         if self.peeked.is_none() {
             self.peeked = self.advance()?;
@@ -2056,7 +2046,7 @@ impl<'a> TermPostingStream<'a> {
         Ok(self.peek()?.map(|posting| posting.ordinal))
     }
 
-    fn take(&mut self) -> Option<Posting> {
+    fn take(&mut self) -> Option<QueryPosting> {
         self.peeked.take()
     }
 
@@ -2100,7 +2090,7 @@ impl<'a> TermPostingStream<'a> {
         u64::try_from(self.blocks.len().saturating_sub(self.block_index)).unwrap_or(u64::MAX)
     }
 
-    fn advance(&mut self) -> Result<Option<Posting>> {
+    fn advance(&mut self) -> Result<Option<QueryPosting>> {
         loop {
             query_context::check(self.context)?;
             if let Some(posting) = self.current.next() {
@@ -2154,11 +2144,7 @@ impl<'a> TermPostingStream<'a> {
                         ));
                     }
                     self.postings_visited = self.postings_visited.saturating_add(1);
-                    postings.push(Posting {
-                        term: Term::untracked(self.term.to_owned()),
-                        ordinal: entry.ordinal,
-                        term_frequency: entry.tf,
-                    });
+                    postings.push(entry);
                     Ok(())
                 },
             )?;
@@ -2406,9 +2392,9 @@ fn bm25_term_upper_bound(idf: f64, max_frequency: u32, average_len: f64) -> f64 
 /// Scores one document from the postings every stream holds for it.
 #[allow(clippy::too_many_arguments)]
 fn score_document(
-    document_id: String,
+    document_id: &str,
     document_len: u32,
-    postings: &[(usize, Posting)],
+    postings: &[(usize, QueryPosting)],
     stream_idf: &[f64],
     delta: &LexicalMiniDelta,
     global_statistics: Option<&LexicalCorpusStatistics>,
@@ -2419,19 +2405,19 @@ fn score_document(
     let mut score = 0.0;
     for (index, posting) in postings {
         validate_posting_length(posting, document_len)?;
-        if (global_statistics.is_some() || !delta.overrides(&document_id))
-            && query_context::allowed(collector.context, &document_id, allowed)?
+        if (global_statistics.is_some() || !delta.overrides(document_id))
+            && query_context::allowed(collector.context, document_id, allowed)?
         {
             score += bm25_term_score(
                 stream_idf[*index],
-                posting.term_frequency,
+                posting.tf,
                 document_len,
                 average_document_len,
             );
         }
     }
     if score > 0.0 {
-        collector.push(&document_id, score)?;
+        collector.push(document_id, score)?;
     }
     Ok(())
 }
@@ -3517,10 +3503,6 @@ impl<'a> SliceCursor<'a> {
 
     fn remaining(&self) -> &'a [u8] {
         &self.bytes[self.offset..]
-    }
-
-    fn string(&mut self, max: u64) -> Result<String> {
-        self.borrowed_string(max).map(str::to_owned)
     }
 
     fn borrowed_string(&mut self, max: u64) -> Result<&'a str> {

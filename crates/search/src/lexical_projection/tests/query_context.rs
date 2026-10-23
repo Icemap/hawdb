@@ -17,6 +17,7 @@ use hawdb_core::RuntimeCancellationToken;
 use hawdb_executor::{QueryMemoryClass, QueryMemoryLedger};
 use std::cell::{Cell, RefCell};
 
+mod allocations;
 mod memory_budget;
 
 thread_local! {
