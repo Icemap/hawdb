@@ -47,6 +47,13 @@ The weekly native runtime lane also runs this family and
 publication-failure, unwind, admission and old-generation assertions after Mem
 switches to the concurrent transaction kernel.
 
+`nowledge_mem::read_execution::tests` covers ordinary owned/streaming reads from
+published views: a streaming callback must allow a writer and fresh reader to
+finish, and execution-admission telemetry must release the preparation view.
+Data-only commits remain reusable; schema and database-instance changes reject
+the old preparation before execution. Every case checks released admission
+memory. The root general unit owner and weekly runtime lane execute this family.
+
 ## Execution lanes
 
 | Lane / entry point | Problems covered | Execution policy |

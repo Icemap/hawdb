@@ -85,7 +85,12 @@ impl PublishedConcurrentRead {
             .query_sql_with_prepared_request(request, prepared)
     }
 
-    pub(super) fn prepare(&self, request: crate::QueryRequest<'_>) -> Result<PreparedRuntimeQuery> {
+    pub(crate) fn accepts_prepared(&self, prepared: &PreparedRuntimeQuery) -> bool {
+        self.snapshot
+            .accepts_prepared(prepared, &self.system_variables)
+    }
+
+    pub(crate) fn prepare(&self, request: crate::QueryRequest<'_>) -> Result<PreparedRuntimeQuery> {
         self.snapshot
             .prepare_runtime_request(request, &self.system_variables, &self.plan_cache)
     }

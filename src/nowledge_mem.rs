@@ -69,6 +69,7 @@ use crate::{
 use hawdb_core::RuntimeTaskContext;
 mod concurrent_owner;
 mod incremental_search;
+mod read_execution;
 mod registered_search;
 use hawdb_optimizer::AdaptiveVectorBackendPolicy;
 use hawdb_qos::{
@@ -1547,24 +1548,7 @@ impl NowledgeMemGraph {
     }
 
     fn admitted_streaming_result_bytes(&self, options: &NowledgeMemReadOptions) -> Result<usize> {
-        let governor_budget =
-            usize::try_from(self.runtime_governor.snapshot().limits.result_budget_bytes)
-                .unwrap_or(usize::MAX);
-        let configured = self
-            .db
-            .config()
-            .max_read_result_payload_bytes
-            .unwrap_or(governor_budget);
-        let requested = options
-            .max_estimated_payload_bytes
-            .unwrap_or(governor_budget);
-        let admitted = governor_budget.min(configured).min(requested);
-        if admitted == 0 {
-            return Err(HawDBError::Execution(
-                "admitted streaming query requires a non-zero result byte budget".to_string(),
-            ));
-        }
-        Ok(admitted)
+        read_execution::admitted_result_bytes(self.db.config(), &self.runtime_governor, options)
     }
 
     fn check_runtime_context(&self, task_context: &RuntimeTaskContext) -> Result<()> {
@@ -2487,6 +2471,7 @@ struct PublishedCanonicalRead {
     instance_identity: crate::DatabaseInstanceIdentity,
     view: Arc<crate::api::PublishedConcurrentRead>,
     governor: RuntimeGovernor,
+    mode: NowledgeMemGraphMode,
 }
 
 impl PublishedCanonicalRead {
@@ -2497,6 +2482,7 @@ impl PublishedCanonicalRead {
                 store.graph.database(),
             )?),
             governor: store.graph.runtime_governor().clone(),
+            mode: store.graph.mode,
         })
     }
 }
@@ -3326,7 +3312,7 @@ impl NowledgeMemEmbeddedStoreHandle {
         cypher: &str,
         options: &NowledgeMemReadOptions,
     ) -> Result<NowledgeMemReadOutput> {
-        self.read_store()?.read_query_with_options(cypher, options)
+        self.read_query_with_params(cypher, &BTreeMap::new(), options)
     }
 
     pub fn read_query_with_params(
@@ -3335,8 +3321,11 @@ impl NowledgeMemEmbeddedStoreHandle {
         parameters: &BTreeMap<String, Value>,
         options: &NowledgeMemReadOptions,
     ) -> Result<NowledgeMemReadOutput> {
-        self.read_store()?
-            .read_query_with_params(cypher, parameters, options)
+        let mut output = self
+            .read_query_with_params_streaming_collect(cypher, parameters, options)
+            .map_err(|error| legacy_nowledge_mem_read_error(error, options))?;
+        output.report.streaming = false;
+        Ok(output)
     }
 
     pub fn read_query_with_params_streaming(
@@ -3346,8 +3335,13 @@ impl NowledgeMemEmbeddedStoreHandle {
         options: &NowledgeMemReadOptions,
         consumer: impl FnMut(BTreeMap<String, Value>) -> Result<()>,
     ) -> Result<QueryStreamReport> {
-        self.read_store()?
-            .read_query_with_params_streaming(cypher, parameters, options, consumer)
+        self.read_query_with_params_streaming_context(
+            cypher,
+            parameters,
+            options,
+            &RuntimeTaskContext::default(),
+            consumer,
+        )
     }
 
     pub fn read_query_with_params_streaming_context(
@@ -3358,12 +3352,21 @@ impl NowledgeMemEmbeddedStoreHandle {
         task_context: &RuntimeTaskContext,
         consumer: impl FnMut(BTreeMap<String, Value>) -> Result<()>,
     ) -> Result<QueryStreamReport> {
-        self.read_store()?.read_query_with_params_streaming_context(
+        self.with_admitted_graph_read(
             cypher,
             parameters,
             options,
             task_context,
-            consumer,
+            |read, prepared, limits, context, _| {
+                read.query_prepared_with_params_streaming_context(
+                    prepared,
+                    parameters,
+                    limits,
+                    crate::executor::StreamDelivery::Validated,
+                    context,
+                    consumer,
+                )
+            },
         )
     }
 
@@ -3373,8 +3376,20 @@ impl NowledgeMemEmbeddedStoreHandle {
         parameters: &BTreeMap<String, Value>,
         options: &NowledgeMemReadOptions,
     ) -> Result<NowledgeMemReadOutput> {
-        self.read_store()?
-            .read_query_with_params_streaming_collect(cypher, parameters, options)
+        self.with_admitted_graph_read(
+            cypher,
+            parameters,
+            options,
+            &RuntimeTaskContext::default(),
+            |read, prepared, limits, context, mode| {
+                let bounded = read.query_prepared_with_params_profiled_context(
+                    prepared, parameters, limits, context,
+                )?;
+                let mut output = bounded_nowledge_mem_read_output(mode, bounded, options)?;
+                output.report.streaming = true;
+                Ok(output)
+            },
+        )
     }
 
     pub fn graph_rag_schema_context(

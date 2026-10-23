@@ -57,15 +57,13 @@ struct RuntimePlanningContext<'a> {
 #[cfg_attr(not(feature = "tokio-runtime"), allow(dead_code))]
 impl RuntimePlanningSnapshot {
     pub(crate) fn accepts_prepared(&self, prepared: &PreparedRuntimeQuery) -> bool {
-        self.branch_id == prepared.branch_id
-            && self.config == prepared.config
-            && self.system_variables == prepared.system_variables
-            && prepared
-                .optimizer_environment
-                .as_ref()
-                .is_none_or(|environment| {
-                    environment.is_execution_compatible(&self.catalog, &self.store)
-                })
+        prepared.is_compatible(
+            self.branch_id,
+            &self.config,
+            &self.system_variables,
+            &self.catalog,
+            &self.store,
+        )
     }
 
     pub(crate) fn is_current_for(
@@ -209,6 +207,23 @@ pub(super) fn parse_runtime_execution(cypher_text: &str) -> Result<PreparedRunti
 
 #[cfg_attr(not(feature = "tokio-runtime"), allow(dead_code))]
 impl PreparedRuntimeQuery {
+    fn is_compatible(
+        &self,
+        branch_id: Option<hawdb_core::Uuid>,
+        config: &DatabaseConfig,
+        system_variables: &QuerySystemVariables,
+        catalog: &Catalog,
+        store: &GraphStore,
+    ) -> bool {
+        self.branch_id == branch_id
+            && self.config == *config
+            && self.system_variables == *system_variables
+            && self
+                .optimizer_environment
+                .as_ref()
+                .is_none_or(|environment| environment.is_execution_compatible(catalog, store))
+    }
+
     pub(crate) fn with_planning_memory(mut self, memory: hawdb_qos::RuntimeRetainedMemory) -> Self {
         self.planning_memory = Some(memory);
         self
@@ -376,6 +391,24 @@ impl Database {
 }
 
 impl DatabaseReadSnapshot {
+    pub(super) fn accepts_prepared(
+        &self,
+        prepared: &PreparedRuntimeQuery,
+        system_variables: &QuerySystemVariables,
+    ) -> bool {
+        let source = &self.0;
+        prepared.is_compatible(
+            source
+                .current_branch
+                .as_ref()
+                .map(|current| current.info.id),
+            &source.config,
+            system_variables,
+            &source.catalog,
+            &source.store,
+        )
+    }
+
     pub(super) fn prepare_runtime_request(
         &self,
         request: QueryRequest<'_>,

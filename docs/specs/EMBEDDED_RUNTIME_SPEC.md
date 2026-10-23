@@ -186,6 +186,15 @@ physical generation. An unfinished WAL group cannot become a read publication.
 Retired views release their pins after unlocking. Mem writer unwind remains a
 serving failure until reopen, including an unwind in a transaction callback.
 
+Ordinary Mem owned reads and streaming callbacks prepare and execute against
+immutable published graph views after releasing the outer store lock. Planning
+releases its view before execution admission, retaining only the accounted
+template. Execution acquires the current view and verifies instance, branch,
+schema/execution compatibility, configuration and query settings. Ordinary data
+commits preserve reuse; an incompatible source returns a retry error before
+execution. Streaming callbacks may overlap commits and acquire newer reads,
+while their original result remains bound to its selected snapshot.
+
 `with_bounded_read_snapshot` additionally pins the configured search projection
 and retains the store read lock through the callback. Graph-only snapshots MUST
 report no projection presence or projection epochs and MUST reject external
