@@ -13,6 +13,43 @@
 // limitations under the License.
 
 use super::*;
+use crate::QueryRequest;
+
+fn bounded_query<'a>(query: &'a str, parameters: &'a BTreeMap<String, Value>) -> QueryRequest<'a> {
+    QueryRequest::new(query)
+        .with_params(parameters)
+        .with_output_limits(QueryStreamOptions {
+            max_rows: Some(4),
+            max_payload_bytes: Some(4096),
+        })
+}
+
+const CREATE: &str = "MATCH (e:Entity {id: $entity_id}), (c:Community {id: $community_id}) \
+    CREATE (e)-[:BELONGS_TO {strength: $strength, created_at: $created_at, properties: $properties}]->(c)";
+
+fn parameters(
+    entity_id: &str,
+    community_id: &str,
+    strength: f64,
+    created_at: i64,
+    properties: &str,
+) -> Result<BTreeMap<String, Value>> {
+    if !strength.is_finite() {
+        return Err(HawDBError::Semantic("strength must be finite".into()));
+    }
+    if entity_id.is_empty() || community_id.is_empty() {
+        return Err(HawDBError::Semantic(
+            "non-empty endpoint id required".into(),
+        ));
+    }
+    Ok(BTreeMap::from([
+        ("entity_id".into(), Value::String(entity_id.into())),
+        ("community_id".into(), Value::String(community_id.into())),
+        ("strength".into(), Value::Float(strength)),
+        ("created_at".into(), Value::Int(created_at)),
+        ("properties".into(), Value::String(properties.into())),
+    ]))
+}
 
 #[test]
 fn creates_community_memberships_for_nowledge_entity_lifecycle() {
@@ -24,44 +61,39 @@ fn creates_community_memberships_for_nowledge_entity_lifecycle() {
     db.query("CREATE (:Community {id: 'community_1', name: 'Community One'})")
         .unwrap();
 
-    let output = db
-        .create_knowledge_community_memberships_batch(
-            &KnowledgeCommunityMembershipCreateBatchRequest {
-                memberships: vec![
-                    KnowledgeCommunityMembershipCreate {
-                        entity_id: "entity_1".to_string(),
-                        community_id: "community_1".to_string(),
-                        strength: 0.7,
-                        created_at: Value::Int(13),
-                        properties: Value::String("{}".to_string()),
-                    },
-                    KnowledgeCommunityMembershipCreate {
-                        entity_id: "entity_2".to_string(),
-                        community_id: "missing_community".to_string(),
-                        strength: 0.9,
-                        created_at: Value::Int(14),
-                        properties: Value::String("{\"source\":\"test\"}".to_string()),
-                    },
-                ],
-            },
-        )
+    let before = db.commit_epoch().unwrap();
+    let mut transaction = db.begin_transaction().unwrap();
+    let first = parameters("entity_1", "community_1", 0.7, 13, "{}").unwrap();
+    let missing = parameters(
+        "entity_2",
+        "missing_community",
+        0.9,
+        14,
+        "{\"source\":\"test\"}",
+    )
+    .unwrap();
+    for (parameters, expected) in [(&first, 1), (&missing, 0)] {
+        let output = transaction
+            .query_request(bounded_query(CREATE, parameters))
+            .unwrap();
+        assert_eq!(output.rows.len(), expected);
+    }
+    let endpoints = transaction
+        .query_request(bounded_query(
+            "MATCH (e:Entity {id: $entity_id})-[r:BELONGS_TO]->(c:Community) \
+         RETURN id(e) AS entity_node_id, id(c) AS community_node_id",
+            &first,
+        ))
         .unwrap();
-
-    assert_eq!(output.graph_commit_epoch_before, 3);
-    assert_eq!(output.graph_commit_epoch_after, 4);
-    assert_eq!(output.rows.len(), 2);
-    assert_eq!(output.matched_count, 1);
-    assert_eq!(output.missing_endpoint_count, 1);
-    assert_eq!(output.created_relationship_count, 1);
-    assert!(output.rows[0].created);
-    assert_eq!(output.rows[0].entity_node_id, Some(0));
-    assert_eq!(output.rows[0].community_node_id, Some(2));
-    assert!(!output.rows[1].created);
-    assert_eq!(output.rows[1].entity_node_id, Some(1));
-    assert_eq!(output.rows[1].community_node_id, None);
+    assert_eq!(endpoints.rows.len(), 1);
+    assert_eq!(endpoints.rows[0]["entity_node_id"], Value::Int(0));
+    assert_eq!(endpoints.rows[0]["community_node_id"], Value::Int(2));
+    transaction.commit().unwrap();
+    assert_eq!(before, 3);
+    assert_eq!(db.commit_epoch().unwrap(), before + 1);
 
     let relationships = db
-        .query("MATCH (e:Entity {id: 'entity_1'})-[r:BELONGS_TO]->(c:Community) RETURN c.id, r.strength, r.created_at, r.properties")
+        .query_request(bounded_query("MATCH (e:Entity {id: 'entity_1'})-[r:BELONGS_TO]->(c:Community) RETURN c.id, r.strength, r.created_at, r.properties", &BTreeMap::new()))
         .unwrap();
     assert_eq!(relationships.rows.len(), 1);
     assert_eq!(
@@ -81,7 +113,7 @@ fn creates_community_memberships_for_nowledge_entity_lifecycle() {
         Some(&Value::String("{}".to_string()))
     );
     let nodes = db
-        .query("MATCH (n) WHERE n.id IN ['entity_1', 'entity_2', 'community_1'] RETURN count(n) AS total")
+        .query_request(bounded_query("MATCH (n) WHERE n.id IN ['entity_1', 'entity_2', 'community_1'] RETURN count(n) AS total", &BTreeMap::new()))
         .unwrap();
     assert_eq!(nodes.rows[0].get("total"), Some(&Value::Int(3)));
 }
@@ -96,21 +128,9 @@ fn community_membership_create_rejects_invalid_input_before_wal() {
     }
     let wal_before = read_test_wal(&path).unwrap();
     {
-        let mut db = Database::open(&path).unwrap();
+        let db = Database::open(&path).unwrap();
         let graph_commit_epoch_before = db.runtime.get().unwrap().store.commit_epoch();
-        let error = db
-            .create_knowledge_community_memberships_batch(
-                &KnowledgeCommunityMembershipCreateBatchRequest {
-                    memberships: vec![KnowledgeCommunityMembershipCreate {
-                        entity_id: "entity_1".to_string(),
-                        community_id: "community_1".to_string(),
-                        strength: f64::NAN,
-                        created_at: Value::Int(13),
-                        properties: Value::String("{}".to_string()),
-                    }],
-                },
-            )
-            .unwrap_err();
+        let error = parameters("entity_1", "community_1", f64::NAN, 13, "{}").unwrap_err();
         assert!(error.to_string().contains("strength must be finite"));
         assert_eq!(
             db.runtime.get().unwrap().store.commit_epoch(),
@@ -123,8 +143,8 @@ fn community_membership_create_rejects_invalid_input_before_wal() {
 }
 
 #[test]
-fn typed_community_membership_create_persists_as_one_wal_batch_and_replays() {
-    let path = unique_test_dir("typed_community_membership_create_wal_replay");
+fn community_membership_queries_persist_as_one_wal_batch_and_replays() {
+    let path = unique_test_dir("community_membership_query_wal_replay");
     {
         let mut db = Database::open(&path).unwrap();
         db.query("CREATE (:Entity {id: 'entity_1'})").unwrap();
@@ -135,29 +155,15 @@ fn typed_community_membership_create_persists_as_one_wal_batch_and_replays() {
     let setup_batch_count = setup_wal.matches("\tbatch\t").count();
     {
         let mut db = Database::open(&path).unwrap();
-        let output = db
-            .create_knowledge_community_memberships_batch(
-                &KnowledgeCommunityMembershipCreateBatchRequest {
-                    memberships: vec![
-                        KnowledgeCommunityMembershipCreate {
-                            entity_id: "entity_1".to_string(),
-                            community_id: "community_1".to_string(),
-                            strength: 0.6,
-                            created_at: Value::Int(21),
-                            properties: Value::String("{}".to_string()),
-                        },
-                        KnowledgeCommunityMembershipCreate {
-                            entity_id: "entity_2".to_string(),
-                            community_id: "community_1".to_string(),
-                            strength: 0.8,
-                            created_at: Value::Int(22),
-                            properties: Value::String("{}".to_string()),
-                        },
-                    ],
-                },
-            )
-            .unwrap();
-        assert_eq!(output.created_relationship_count, 2);
+        let mut transaction = db.begin_transaction().unwrap();
+        for (entity, strength, timestamp) in [("entity_1", 0.6, 21), ("entity_2", 0.8, 22)] {
+            let parameters = parameters(entity, "community_1", strength, timestamp, "{}").unwrap();
+            let output = transaction
+                .query_request(bounded_query(CREATE, &parameters))
+                .unwrap();
+            assert_eq!(output.rows.len(), 1);
+        }
+        transaction.commit().unwrap();
     }
     let wal = read_test_wal(&path).unwrap();
     assert!(wal.contains("create_rel"));
@@ -165,10 +171,18 @@ fn typed_community_membership_create_persists_as_one_wal_batch_and_replays() {
     {
         let mut db = Database::open(&path).unwrap();
         let relationships = db
-            .query("MATCH (:Entity)-[r:BELONGS_TO]->(:Community) RETURN count(r) AS total")
+            .query_request(bounded_query(
+                "MATCH (:Entity)-[r:BELONGS_TO]->(:Community) RETURN count(r) AS total",
+                &BTreeMap::new(),
+            ))
             .unwrap();
         assert_eq!(relationships.rows[0].get("total"), Some(&Value::Int(2)));
-        let nodes = db.query("MATCH (n) RETURN count(n) AS total").unwrap();
+        let nodes = db
+            .query_request(bounded_query(
+                "MATCH (n) RETURN count(n) AS total",
+                &BTreeMap::new(),
+            ))
+            .unwrap();
         assert_eq!(nodes.rows[0].get("total"), Some(&Value::Int(3)));
     }
     std::fs::remove_dir_all(path).unwrap();

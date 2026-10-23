@@ -47,6 +47,23 @@ struct Job {
     rows: usize,
     read_kind: ReadKind,
     out_of_core: bool,
+    #[serde(default)]
+    sustain_readers: bool,
+}
+
+struct Progress {
+    committed: AtomicUsize,
+    writers_remaining: AtomicUsize,
+}
+
+struct WriterCompletion<'a>(&'a AtomicUsize);
+
+impl Drop for WriterCompletion<'_> {
+    fn drop(&mut self) {
+        // Readers stop after normal completion or a writer panic; a failed
+        // worker still causes the process to fail at join/result validation.
+        self.0.fetch_sub(1, Ordering::Release);
+    }
 }
 
 #[derive(Serialize)]
@@ -125,9 +142,10 @@ fn worker(
     ready: &Barrier,
     go: &Barrier,
     origin: Instant,
-    committed: &AtomicUsize,
+    progress: &Progress,
 ) -> Worker {
     let writer = index < job.writers;
+    let _completion = writer.then(|| WriterCompletion(&progress.writers_remaining));
     let iterations = if writer {
         job.writer_iterations
     } else {
@@ -142,7 +160,12 @@ fn worker(
     let params = parameters(index);
     ready.wait();
     go.wait();
-    for iteration in 0..iterations {
+    let mut iteration = 0;
+    while iteration < iterations
+        || (!writer
+            && job.sustain_readers
+            && progress.writers_remaining.load(Ordering::Acquire) > 0)
+    {
         let started = Instant::now();
         let output = if writer {
             store
@@ -151,7 +174,7 @@ fn worker(
                     assert_eq!(output.output.rows.len(), 1);
                     result.reported_plan_cache_hits += usize::from(output.report.plan_cache_hit);
                     result.reported_plan_cache_misses += usize::from(output.report.plan_cache_miss);
-                    committed.fetch_add(1, Ordering::Relaxed);
+                    progress.committed.fetch_add(1, Ordering::Relaxed);
                     integer(&output.output.rows[0]["value"])
                 })
         } else {
@@ -161,7 +184,7 @@ fn worker(
         result.samples.push(Sample {
             started_ns: nanos(started.duration_since(origin)),
             elapsed_ns,
-            acknowledged_writes: committed.load(Ordering::Relaxed),
+            acknowledged_writes: progress.committed.load(Ordering::Relaxed),
         });
         match output {
             Ok(value) => {
@@ -170,6 +193,7 @@ fn worker(
             }
             Err(error) => *result.errors.entry(error.to_string()).or_default() += 1,
         }
+        iteration += 1;
     }
     result
 }
@@ -239,18 +263,23 @@ fn main() {
     let resources = store.runtime_governor_snapshot().unwrap();
     let ready = Barrier::new(job.writers + job.readers + 1);
     let go = Barrier::new(job.writers + job.readers + 1);
-    let committed = AtomicUsize::new(0);
+    let progress = Progress {
+        committed: AtomicUsize::new(0),
+        writers_remaining: AtomicUsize::new(job.writers),
+    };
     let origin = Instant::now();
     let (workers, elapsed_ns, instrumentation) = std::thread::scope(|scope| {
         let threads: Vec<_> = (0..job.writers + job.readers)
             .map(|index| {
-                let (store, job, ready, go, committed) = (&store, &job, &ready, &go, &committed);
-                scope.spawn(move || worker(store, job, index, ready, go, origin, committed))
+                let (store, job, ready, go, progress) = (&store, &job, &ready, &go, &progress);
+                scope.spawn(move || worker(store, job, index, ready, go, origin, progress))
             })
             .collect();
         ready.wait();
         #[cfg(feature = "qualification")]
         let locks_before = store.publication_lock_metrics();
+        #[cfg(feature = "qualification")]
+        let preparation_before = hawdb::query_preparation_metrics();
         #[cfg(feature = "qualification")]
         let allocations_before = native_profile::snapshot();
         let started = Instant::now();
@@ -262,6 +291,8 @@ fn main() {
         #[cfg(feature = "qualification")]
         let instrumentation = json!({
             "lock_before": locks_before, "lock_after": store.publication_lock_metrics(),
+            "preparation_before": preparation_before,
+            "preparation_after": hawdb::query_preparation_metrics(),
             "allocation_calls": allocations_after.allocation_calls - allocations_before.allocation_calls,
             "allocated_bytes": allocations_after.allocated_bytes - allocations_before.allocated_bytes,
             "deallocation_calls": allocations_after.deallocation_calls - allocations_before.deallocation_calls,
@@ -282,7 +313,10 @@ fn main() {
         .filter(|w| w.writer)
         .map(|w| w.successful)
         .sum();
-    assert_eq!(committed.load(Ordering::Relaxed), successful_writes);
+    assert_eq!(
+        progress.committed.load(Ordering::Relaxed),
+        successful_writes
+    );
     let errors: usize = workers.iter().flat_map(|w| w.errors.values()).sum();
     drop(store);
     let (reopened, _) = Store::open_with_options(options).unwrap();
@@ -298,7 +332,7 @@ fn main() {
     println!(
         "{}",
         json!({
-            "protocol": "hawdb-mem-query-concurrency-v1", "job": job,
+            "protocol": "hawdb-mem-query-concurrency-v2", "job": job,
             "profile": "repository bench", "instrumented": cfg!(feature = "qualification"),
             "durability": "SyncOnEveryWrite (facade default)", "elapsed_ns": elapsed_ns,
             "writes": latency(&workers, true), "reads": latency(&workers, false),

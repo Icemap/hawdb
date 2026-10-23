@@ -664,9 +664,16 @@ The manual `mem_query_concurrency` Cargo/Bazel benchmark exercises the ordinary
 Mem handle with multiple report writers and point, report or streaming readers.
 It retains per-call intervals, acknowledgement observations, errors, actual
 runtime CPU/cgroup limits and residency, and verifies successful writes after
-reopen under default synchronous durability. The `qualification` feature adds
-actual publication-owner wait/hold histograms and process-wide Rust allocation
-requests. Instrumented timings are not ordinary release latency. See
+reopen under default synchronous durability. Its optional sustained-reader mode
+keeps readers active until every fixed-work writer finishes, with the original
+reader iteration count as a minimum and a caller-enforced process timeout.
+Fixed-work and sustained workloads are reported separately. The `qualification` feature adds
+actual publication-owner wait/hold histograms, process-wide Rust allocation
+requests and shared-runtime Cypher parse/preparation counters. The parser count
+includes admission and unprepared execution; the planner count includes cache
+lookup/binding and optimization on misses, including refused attempts. SQL and
+standalone parser users are outside that observation boundary. Instrumented
+timings are not ordinary release latency. See
 [`MEM_QUERY_CONCURRENCY.md`](MEM_QUERY_CONCURRENCY.md) for identical baseline
 porting, workload manifests, boundaries and missing acceptance evidence.
 
@@ -683,3 +690,35 @@ starting admission assertions. Slow Windows initialization must not accidentally
 turn the reservation-accounting test into sample-expiry coverage; the dedicated
 missing/unsupported/stale case retains its fail-closed assertions and zero-age
 sample. No production freshness limit changes.
+
+
+The root general `augmentation_jobs_lifecycle` and `augmentation_jobs_interrupt`
+modules now execute bounded parameterized Cypher directly. Status eligibility is
+in MATCH/WHERE, mutation is in SET or MERGE/ON CREATE, and multiple transitions
+share an ordinary explicit transaction. Caller-only input normalization retains
+duplicate input, empty-reason and finite-progress refusal coverage. Existing
+missing/status-mismatch, no-op epoch/WAL and one-batch durable-reopen assertions
+remain. The legacy CRUD adapters, storage scans and eight response/input DTOs
+are removed. These fixtures remain in their existing CI owner; local smoke does
+not replace those assertions.
+
+The same root general owner retains `graph_meta`, `schema_migrations`,
+`community_lifecycle`, `community_memberships` and `community_reads` through
+ordinary bounded queries. Coverage includes MERGE creation versus existing
+rows, sequential duplicate requests, read-your-own-writes, guarded updates,
+missing endpoints, stable projected ordering, separate count/page statements,
+plan-cache reuse, pinned reads, one-WAL-batch publication and exact reopen.
+An additional existing-only schema-migration case requires unchanged epoch and
+WAL bytes. Host-only ID/property/finite-value normalization retains refusal
+coverage. Twelve database mutation adapters, the Mem entity-delete forwarding
+method, two test read wrappers, their graph scans/response shaping and 48 DTOs
+disappear; request helpers only attach parameters
+and row/payload limits. The remaining business fixtures still need migration.
+
+
+`knowledge_entity_batch_deletes` and the root Source/Skill/Thread deletion cases
+use bounded parameterized IN predicates and DETACH DELETE directly. They retain
+scoped nonmatches, duplicate input, missing IDs, projected-idless protection,
+read-only refusal, incident-edge removal, unchanged unrelated nodes and one-batch
+recovery. They no longer use generic entity-delete response DTOs or business
+read helpers for their postconditions. Native CI retains the existing owners.

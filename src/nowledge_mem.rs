@@ -14,7 +14,6 @@
 
 #[cfg(test)]
 use crate::api::{
-    KnowledgeEntityDeleteBatchOutput, KnowledgeEntityDeleteBatchRequest,
     KnowledgeMemoryEvolvesCreateBatchOutput, KnowledgeMemoryEvolvesCreateBatchRequest,
     KnowledgeMemoryLifecycleBatchOutput, KnowledgeMemoryLifecycleBatchRequest,
 };
@@ -2994,17 +2993,6 @@ impl NowledgeMemEmbeddedStoreHandle {
             .graph_mut()
             .database_mut()
             .update_knowledge_memory_lifecycle_batch(request)
-    }
-
-    pub fn delete_knowledge_entity_batch(
-        &self,
-        request: &KnowledgeEntityDeleteBatchRequest,
-    ) -> Result<KnowledgeEntityDeleteBatchOutput> {
-        let _permit = self.admit_typed_mutation()?;
-        self.write_store()?
-            .graph_mut()
-            .database_mut()
-            .delete_knowledge_entity_batch(request)
     }
 }
 

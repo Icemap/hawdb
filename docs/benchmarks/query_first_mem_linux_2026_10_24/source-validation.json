@@ -1,0 +1,83 @@
+{
+  "baseline": "8e9eab185ef880794d216d99ac6cd57442c511aa",
+  "candidate": "0e51caa18c881b08c7e49f55c41fd8d70fc7ed23",
+  "receipts": [
+    {
+      "name": "baseline-latency",
+      "cwd": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18",
+      "command": [
+        "cargo",
+        "bench",
+        "--locked",
+        "--bench",
+        "mem_query_concurrency",
+        "--no-run",
+        "--message-format=json"
+      ],
+      "exit_code": 0,
+      "build_seconds": 509.40810446161777,
+      "binary_sha256": "423371c9d32271c8c6c643cd4e30c49b79368c48ce6e29a04639a73f19f41648",
+      "benchmark_sha256": "5436fb523d5171db13e56636d2e7a06d3dc1f2c582a82808e776bd98a5f0595a"
+    },
+    {
+      "name": "baseline-instrumented",
+      "cwd": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18",
+      "command": [
+        "cargo",
+        "bench",
+        "--locked",
+        "--bench",
+        "mem_query_concurrency",
+        "--no-run",
+        "--message-format=json",
+        "--features",
+        "qualification"
+      ],
+      "exit_code": 0,
+      "build_seconds": 270.8856303570792,
+      "binary_sha256": "cad4c119160d02e20cff31bfabdf2c7d63c449f75ececd4b884c5cd00640b38b",
+      "benchmark_sha256": "5436fb523d5171db13e56636d2e7a06d3dc1f2c582a82808e776bd98a5f0595a"
+    },
+    {
+      "name": "candidate-isolated-latency",
+      "cwd": "/tmp/hawdb-query-first-api",
+      "command": [
+        "cargo",
+        "bench",
+        "--manifest-path",
+        "/tmp/hawdb-query-first-api/Cargo.toml",
+        "--locked",
+        "--bench",
+        "mem_query_concurrency",
+        "--no-run",
+        "--message-format=json"
+      ],
+      "exit_code": 0,
+      "build_seconds": 449.1990458536893,
+      "binary_sha256": "b0b91ea4345af3e4b4bf8def9765b5bf1a6a090cf89fac56267ebd3c4c8da103",
+      "benchmark_sha256": "5436fb523d5171db13e56636d2e7a06d3dc1f2c582a82808e776bd98a5f0595a"
+    },
+    {
+      "name": "candidate-isolated-instrumented",
+      "cwd": "/tmp/hawdb-query-first-api",
+      "command": [
+        "cargo",
+        "bench",
+        "--manifest-path",
+        "/tmp/hawdb-query-first-api/Cargo.toml",
+        "--locked",
+        "--bench",
+        "mem_query_concurrency",
+        "--no-run",
+        "--message-format=json",
+        "--features",
+        "qualification"
+      ],
+      "exit_code": 0,
+      "build_seconds": 207.99191444460303,
+      "binary_sha256": "bf17a4844f5f36adf019cb1d2d16a8a6e8cd0ee406077b34b0e5bc6fdb4384ac",
+      "benchmark_sha256": "5436fb523d5171db13e56636d2e7a06d3dc1f2c582a82808e776bd98a5f0595a"
+    }
+  ],
+  "shared_target_candidate_receipts": "invalid; excluded"
+}

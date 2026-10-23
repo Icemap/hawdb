@@ -416,8 +416,22 @@ retain duplicate/missing-ID behavior, projected-entity protection, one-batch WAL
 and reopen checks. Community assignment clearing and cleanup also use ordinary
 bounded Cypher, preserving scoped matches, NULL semantics, incident edges,
 no-op epochs and one-batch WAL/reopen coverage without business adapters or DTOs.
-Remaining legacy business
-adapters still require migration; this removal does not complete issue #1193.
+AugmentationJob lifecycle and orphan interruption fixtures use named bounded
+Cypher statements, with status selection in the query and explicit transactions
+for multi-statement atomicity. Duplicate input and value validation are host
+normalization, not database business rules. The old mutation adapters, graph
+scans, state-machine DTOs and response DTOs are removed.
+GraphMeta stamps and deletes, SchemaMigrationLog idempotent records, and
+Community creation, summaries, memberships and reads also use ordinary bounded
+queries. Count and page phases stay distinct; filtering, ordering, existence and
+identity selection stay in Cypher. MERGE/ON CREATE preserves original timestamps
+on repeated requests, and explicit transactions own the single WAL boundary.
+Their old DTOs, test read wrappers and mutation adapters are removed.
+Generic/scoped entity batches and Source/Skill/Thread deletion fixtures use
+bounded IN predicates and DETACH DELETE, preserving projected-idless nodes and
+unrelated endpoints without graph inspection in host code.
+Remaining legacy business adapters still require migration; this removal does
+not complete issue #1193.
 
 ## Stable typed boundaries
 

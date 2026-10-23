@@ -92,16 +92,6 @@ pub(super) trait QueryFirstTestExt {
         request: &KnowledgeEntityLabelProjectedListRequest,
     ) -> Result<KnowledgeEntityLabelProjectedListOutput>;
 
-    fn query_communities_via_cypher(
-        &self,
-        request: &KnowledgeCommunityListRequest,
-    ) -> Result<KnowledgeCommunityListOutput>;
-
-    fn query_community_via_cypher(
-        &self,
-        request: &KnowledgeCommunityRequest,
-    ) -> Result<KnowledgeCommunityOutput>;
-
     fn query_neighbors_via_cypher(
         &self,
         request: &KnowledgeNeighborsRequest,
@@ -236,20 +226,6 @@ impl QueryFirstTestExt for Database {
         request: &KnowledgeEntityLabelProjectedListRequest,
     ) -> Result<KnowledgeEntityLabelProjectedListOutput> {
         super::super::knowledge_entity_label_projected_list_via_query_runtime(self, request)
-    }
-
-    fn query_communities_via_cypher(
-        &self,
-        request: &KnowledgeCommunityListRequest,
-    ) -> Result<KnowledgeCommunityListOutput> {
-        super::super::knowledge_communities_via_query_runtime(self, request)
-    }
-
-    fn query_community_via_cypher(
-        &self,
-        request: &KnowledgeCommunityRequest,
-    ) -> Result<KnowledgeCommunityOutput> {
-        super::super::knowledge_community_via_query_runtime(self, request)
     }
 
     fn query_neighbors_via_cypher(

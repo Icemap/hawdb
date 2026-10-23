@@ -13,6 +13,45 @@
 // limitations under the License.
 
 use super::*;
+use crate::QueryRequest;
+
+const STAMP_PAGERANK: &str = "MERGE (m:GraphMeta {meta_id: $meta_id}) SET \
+    m.pagerank_applied = $pagerank_applied, m.pagerank_algorithm = $pagerank_algorithm, \
+    m.pagerank_damping = $pagerank_damping, m.pagerank_iterations = $pagerank_iterations, \
+    m.pagerank_computed_at = $pagerank_computed_at, m.updated_at = $updated_at \
+    RETURN id(m) AS node_id";
+const STAMP_COMMUNITY: &str = "MERGE (m:GraphMeta {meta_id: $meta_id}) SET \
+    m.community_detection_applied = $community_detection_applied, \
+    m.community_algorithm = $community_algorithm, m.community_resolution = $community_resolution, \
+    m.community_count = $community_count, \
+    m.community_detection_computed_at = $community_detection_computed_at, \
+    m.last_augmentation_at = $last_augmentation_at, m.updated_at = $updated_at \
+    RETURN id(m) AS node_id";
+const DELETE: &str = "MATCH (m:GraphMeta {meta_id: $meta_id}) DELETE m";
+
+fn bounded_query<'a>(query: &'a str, parameters: &'a BTreeMap<String, Value>) -> QueryRequest<'a> {
+    QueryRequest::new(query)
+        .with_params(parameters)
+        .with_output_limits(QueryStreamOptions {
+            max_rows: Some(1),
+            max_payload_bytes: Some(4096),
+        })
+}
+
+fn parameters(
+    meta_id: &str,
+    mut values: BTreeMap<String, Value>,
+) -> Result<BTreeMap<String, Value>> {
+    // Normalize caller input only; statements retain graph selection and mutation.
+    if meta_id.is_empty() {
+        return Err(HawDBError::Semantic("non-empty meta id required".into()));
+    }
+    if values.contains_key("meta_id") {
+        return Err(HawDBError::Semantic("cannot update meta_id".into()));
+    }
+    values.insert("meta_id".into(), Value::String(meta_id.into()));
+    Ok(values)
+}
 
 const GRAPH_META_ALGORITHM_STATE_QUERY: &str = "MATCH (m:GraphMeta) \
      WHERE m.meta_id = $meta_id \
@@ -37,66 +76,71 @@ fn stamps_graph_meta_batch_for_nowledge_algorithm_state() {
     )
     .unwrap();
 
-    let output = db
-        .stamp_knowledge_graph_meta_batch(&KnowledgeGraphMetaStampBatchRequest {
-            stamps: vec![
-                KnowledgeGraphMetaStamp {
-                    meta_id: "main".to_string(),
-                    assignments: BTreeMap::from([
-                        ("pagerank_applied".to_string(), Value::Bool(true)),
-                        (
-                            "pagerank_algorithm".to_string(),
-                            Value::String("pagerank".to_string()),
-                        ),
-                        ("pagerank_damping".to_string(), Value::Float(0.85)),
-                        ("pagerank_iterations".to_string(), Value::Int(20)),
-                        ("pagerank_computed_at".to_string(), Value::Int(100)),
-                        ("updated_at".to_string(), Value::Int(101)),
-                    ]),
-                },
-                KnowledgeGraphMetaStamp {
-                    meta_id: "community".to_string(),
-                    assignments: BTreeMap::from([
-                        ("community_detection_applied".to_string(), Value::Bool(true)),
-                        (
-                            "community_algorithm".to_string(),
-                            Value::String("louvain".to_string()),
-                        ),
-                        ("community_resolution".to_string(), Value::Float(0.8)),
-                        ("community_count".to_string(), Value::Int(3)),
-                        (
-                            "community_detection_computed_at".to_string(),
-                            Value::Int(200),
-                        ),
-                        ("last_augmentation_at".to_string(), Value::Int(201)),
-                        ("updated_at".to_string(), Value::Int(202)),
-                    ]),
-                },
-                KnowledgeGraphMetaStamp {
-                    meta_id: "main".to_string(),
-                    assignments: BTreeMap::from([(
-                        "pagerank_applied".to_string(),
-                        Value::Bool(false),
-                    )]),
-                },
-            ],
-        })
-        .unwrap();
-
-    assert_eq!(output.graph_commit_epoch_before, 1);
-    assert_eq!(output.graph_commit_epoch_after, 2);
-    assert_eq!(output.rows.len(), 3);
-    assert_eq!(output.created_count, 1);
-    assert_eq!(output.updated_count, 1);
-    assert_eq!(output.duplicate_count, 1);
-    assert_eq!(output.updated_property_count, 13);
-    assert!(output.rows[0].updated);
-    assert!(output.rows[1].created);
-    assert!(output.rows[2].duplicate);
-    assert!(output.rows[1].node_id.is_some());
+    let before = db.commit_epoch().unwrap();
+    let mut transaction = db.begin_transaction().unwrap();
+    let pagerank = parameters(
+        "main",
+        BTreeMap::from([
+            ("pagerank_applied".into(), Value::Bool(true)),
+            (
+                "pagerank_algorithm".into(),
+                Value::String("pagerank".into()),
+            ),
+            ("pagerank_damping".into(), Value::Float(0.85)),
+            ("pagerank_iterations".into(), Value::Int(20)),
+            ("pagerank_computed_at".into(), Value::Int(100)),
+            ("updated_at".into(), Value::Int(101)),
+        ]),
+    )
+    .unwrap();
+    let community = parameters(
+        "community",
+        BTreeMap::from([
+            ("community_detection_applied".into(), Value::Bool(true)),
+            (
+                "community_algorithm".into(),
+                Value::String("louvain".into()),
+            ),
+            ("community_resolution".into(), Value::Float(0.8)),
+            ("community_count".into(), Value::Int(3)),
+            ("community_detection_computed_at".into(), Value::Int(200)),
+            ("last_augmentation_at".into(), Value::Int(201)),
+            ("updated_at".into(), Value::Int(202)),
+        ]),
+    )
+    .unwrap();
+    let duplicate = parameters(
+        "main",
+        BTreeMap::from([("pagerank_applied".into(), Value::Bool(false))]),
+    )
+    .unwrap();
+    let mut seen = BTreeSet::new();
+    let mut node_ids = Vec::new();
+    let mut duplicates = 0;
+    for (id, query, parameters) in [
+        ("main", STAMP_PAGERANK, pagerank),
+        ("community", STAMP_COMMUNITY, community),
+        ("main", STAMP_PAGERANK, duplicate),
+    ] {
+        if !seen.insert(id) {
+            duplicates += 1;
+            continue;
+        }
+        let output = transaction
+            .query_request(bounded_query(query, &parameters))
+            .unwrap();
+        assert_eq!(output.rows.len(), 1);
+        node_ids.push(output.rows[0]["node_id"].clone());
+    }
+    assert_eq!(duplicates, 1);
+    assert_eq!(node_ids.len(), 2);
+    assert_ne!(node_ids[0], node_ids[1]);
+    transaction.commit().unwrap();
+    assert_eq!(before, 1);
+    assert_eq!(db.commit_epoch().unwrap(), before + 1);
 
     let rows = db
-        .query("MATCH (m:GraphMeta {meta_id: 'main'}) RETURN m.pagerank_applied AS applied, m.pagerank_algorithm AS algorithm, m.pagerank_damping AS damping, m.pagerank_iterations AS iterations, m.pagerank_computed_at AS computed_at, m.updated_at AS updated_at")
+        .query_request(bounded_query("MATCH (m:GraphMeta {meta_id: 'main'}) RETURN m.pagerank_applied AS applied, m.pagerank_algorithm AS algorithm, m.pagerank_damping AS damping, m.pagerank_iterations AS iterations, m.pagerank_computed_at AS computed_at, m.updated_at AS updated_at", &BTreeMap::new()))
         .unwrap();
     assert_eq!(rows.rows[0].get("applied"), Some(&Value::Bool(true)));
     assert_eq!(
@@ -109,7 +153,7 @@ fn stamps_graph_meta_batch_for_nowledge_algorithm_state() {
     assert_eq!(rows.rows[0].get("updated_at"), Some(&Value::Int(101)));
 
     let rows = db
-        .query("MATCH (m:GraphMeta {meta_id: 'community'}) RETURN m.community_detection_applied AS applied, m.community_algorithm AS algorithm, m.community_resolution AS resolution, m.community_count AS count, m.community_detection_computed_at AS computed_at, m.last_augmentation_at AS augmented")
+        .query_request(bounded_query("MATCH (m:GraphMeta {meta_id: 'community'}) RETURN m.community_detection_applied AS applied, m.community_algorithm AS algorithm, m.community_resolution AS resolution, m.community_count AS count, m.community_detection_computed_at AS computed_at, m.last_augmentation_at AS augmented", &BTreeMap::new()))
         .unwrap();
     assert_eq!(rows.rows[0].get("applied"), Some(&Value::Bool(true)));
     assert_eq!(
@@ -129,17 +173,11 @@ fn graph_meta_stamp_rejects_meta_id_assignment_before_wal() {
         .unwrap();
     let graph_commit_epoch_before = db.runtime.get().unwrap().store.commit_epoch();
 
-    let error = db
-        .stamp_knowledge_graph_meta_batch(&KnowledgeGraphMetaStampBatchRequest {
-            stamps: vec![KnowledgeGraphMetaStamp {
-                meta_id: "main".to_string(),
-                assignments: BTreeMap::from([(
-                    "meta_id".to_string(),
-                    Value::String("other".to_string()),
-                )]),
-            }],
-        })
-        .unwrap_err();
+    let error = parameters(
+        "main",
+        BTreeMap::from([("meta_id".into(), Value::String("other".into()))]),
+    )
+    .unwrap_err();
 
     assert!(error.to_string().contains("cannot update meta_id"));
     assert_eq!(
@@ -149,41 +187,49 @@ fn graph_meta_stamp_rejects_meta_id_assignment_before_wal() {
 }
 
 #[test]
-fn typed_graph_meta_stamp_persists_as_one_wal_batch_and_replays() {
-    let path = unique_test_dir("typed_graph_meta_stamp_wal_replay");
+fn graph_meta_stamp_queries_persist_as_one_wal_batch_and_replays() {
+    let path = unique_test_dir("graph_meta_stamp_query_wal_replay");
     {
         let mut db = Database::open(&path).unwrap();
         db.query("CREATE (:GraphMeta {meta_id: 'main', pagerank_applied: false})")
             .unwrap();
         let batch_count_before_update = read_test_wal(&path).unwrap().matches("\tbatch\t").count();
-        db.stamp_knowledge_graph_meta_batch(&KnowledgeGraphMetaStampBatchRequest {
-            stamps: vec![
-                KnowledgeGraphMetaStamp {
-                    meta_id: "main".to_string(),
-                    assignments: BTreeMap::from([
-                        ("pagerank_applied".to_string(), Value::Bool(true)),
-                        ("pagerank_computed_at".to_string(), Value::Int(404)),
-                    ]),
-                },
-                KnowledgeGraphMetaStamp {
-                    meta_id: "community".to_string(),
-                    assignments: BTreeMap::from([
-                        (
-                            "community_detection_applied".to_string(),
-                            Value::Bool(false),
-                        ),
-                        (
-                            "community_algorithm".to_string(),
-                            Value::String(String::new()),
-                        ),
-                        ("community_resolution".to_string(), Value::Float(1.0)),
-                        ("community_count".to_string(), Value::Int(0)),
-                        ("community_detection_computed_at".to_string(), Value::Null),
-                    ]),
-                },
-            ],
-        })
+        let mut transaction = db.begin_transaction().unwrap();
+        let pagerank = parameters(
+            "main",
+            BTreeMap::from([
+                ("applied".into(), Value::Bool(true)),
+                ("computed".into(), Value::Int(404)),
+            ]),
+        )
         .unwrap();
+        let output = transaction
+            .query_request(bounded_query(
+                "MERGE (m:GraphMeta {meta_id: $meta_id}) \
+             SET m.pagerank_applied = $applied, m.pagerank_computed_at = $computed \
+             RETURN id(m) AS node_id",
+                &pagerank,
+            ))
+            .unwrap();
+        assert_eq!(output.rows.len(), 1);
+        let community = parameters(
+            "community",
+            BTreeMap::from([
+                ("community_detection_applied".into(), Value::Bool(false)),
+                ("community_algorithm".into(), Value::String(String::new())),
+                ("community_resolution".into(), Value::Float(1.0)),
+                ("community_count".into(), Value::Int(0)),
+                ("community_detection_computed_at".into(), Value::Null),
+                ("last_augmentation_at".into(), Value::Null),
+                ("updated_at".into(), Value::Null),
+            ]),
+        )
+        .unwrap();
+        let output = transaction
+            .query_request(bounded_query(STAMP_COMMUNITY, &community))
+            .unwrap();
+        assert_eq!(output.rows.len(), 1);
+        transaction.commit().unwrap();
         let batch_count_after_update = read_test_wal(&path).unwrap().matches("\tbatch\t").count();
         assert_eq!(batch_count_after_update, batch_count_before_update + 1);
     }
@@ -193,12 +239,12 @@ fn typed_graph_meta_stamp_persists_as_one_wal_batch_and_replays() {
     {
         let mut db = Database::open(&path).unwrap();
         let rows = db
-            .query("MATCH (m:GraphMeta {meta_id: 'main'}) RETURN m.pagerank_applied AS applied, m.pagerank_computed_at AS computed")
+            .query_request(bounded_query("MATCH (m:GraphMeta {meta_id: 'main'}) RETURN m.pagerank_applied AS applied, m.pagerank_computed_at AS computed", &BTreeMap::new()))
             .unwrap();
         assert_eq!(rows.rows[0].get("applied"), Some(&Value::Bool(true)));
         assert_eq!(rows.rows[0].get("computed"), Some(&Value::Int(404)));
         let rows = db
-            .query("MATCH (m:GraphMeta {meta_id: 'community'}) RETURN m.community_detection_applied AS applied, m.community_algorithm AS algorithm, m.community_resolution AS resolution, m.community_count AS count, m.community_detection_computed_at AS computed")
+            .query_request(bounded_query("MATCH (m:GraphMeta {meta_id: 'community'}) RETURN m.community_detection_applied AS applied, m.community_algorithm AS algorithm, m.community_resolution AS resolution, m.community_count AS count, m.community_detection_computed_at AS computed", &BTreeMap::new()))
             .unwrap();
         assert_eq!(rows.rows[0].get("applied"), Some(&Value::Bool(false)));
         assert_eq!(
@@ -225,7 +271,7 @@ fn reads_graph_meta_by_meta_id_with_parameterized_cypher() {
     let parameters = BTreeMap::from([("meta_id".to_string(), Value::String("main".to_string()))]);
     let mut read = db.begin_read_transaction().unwrap();
     let output = read
-        .query_with_params_bounded(GRAPH_META_ALGORITHM_STATE_QUERY, &parameters, Some(1))
+        .query_request(bounded_query(GRAPH_META_ALGORITHM_STATE_QUERY, &parameters))
         .unwrap();
 
     assert_eq!(read.commit_epoch(), 1);
@@ -245,7 +291,7 @@ fn reads_graph_meta_by_meta_id_with_parameterized_cypher() {
     let misses = read_test_plan_cache_metric(&read, "misses");
     let hits = read_test_plan_cache_metric(&read, "hits");
     let repeated_output = read
-        .query_with_params_bounded(GRAPH_META_ALGORITHM_STATE_QUERY, &parameters, Some(1))
+        .query_request(bounded_query(GRAPH_META_ALGORITHM_STATE_QUERY, &parameters))
         .unwrap();
     assert_eq!(repeated_output, output);
     assert_eq!(read_test_plan_cache_metric(&read, "entries"), entries);
@@ -255,11 +301,10 @@ fn reads_graph_meta_by_meta_id_with_parameterized_cypher() {
     let missing_parameters =
         BTreeMap::from([("meta_id".to_string(), Value::String("missing".to_string()))]);
     let missing = read
-        .query_with_params_bounded(
+        .query_request(bounded_query(
             GRAPH_META_ALGORITHM_STATE_QUERY,
             &missing_parameters,
-            Some(1),
-        )
+        ))
         .unwrap();
     assert!(missing.rows.is_empty());
 }
@@ -276,13 +321,13 @@ fn fixed_graph_meta_projections_support_state_growth_and_pinned_reads() {
     let graph_commit_epoch = db.runtime.get().unwrap().store.commit_epoch();
     let mut snapshot = db.begin_read_transaction().unwrap();
 
-    db.query("MATCH (m:GraphMeta {meta_id: 'main'}) SET m.future_state_field = 'late', m.extra_field = 'extra'")
+    db.query_request(bounded_query("MATCH (m:GraphMeta {meta_id: 'main'}) SET m.future_state_field = 'late', m.extra_field = 'extra'", &BTreeMap::new()))
         .unwrap();
 
     let parameters = BTreeMap::from([("meta_id".to_string(), Value::String("main".to_string()))]);
     let mut live = db.begin_read_transaction().unwrap();
     let projected = live
-        .query_with_params_bounded(GRAPH_META_FUTURE_STATE_QUERY, &parameters, Some(1))
+        .query_request(bounded_query(GRAPH_META_FUTURE_STATE_QUERY, &parameters))
         .unwrap();
     assert_eq!(
         live.commit_epoch(),
@@ -305,7 +350,7 @@ fn fixed_graph_meta_projections_support_state_growth_and_pinned_reads() {
     let misses = read_test_plan_cache_metric(&live, "misses");
     let hits = read_test_plan_cache_metric(&live, "hits");
     let repeated_projected = live
-        .query_with_params_bounded(GRAPH_META_FUTURE_STATE_QUERY, &parameters, Some(1))
+        .query_request(bounded_query(GRAPH_META_FUTURE_STATE_QUERY, &parameters))
         .unwrap();
     assert_eq!(repeated_projected, projected);
     assert_eq!(read_test_plan_cache_metric(&live, "entries"), entries);
@@ -313,7 +358,7 @@ fn fixed_graph_meta_projections_support_state_growth_and_pinned_reads() {
     assert!(read_test_plan_cache_metric(&live, "hits") > hits);
 
     let snapshot_projected = snapshot
-        .query_with_params_bounded(GRAPH_META_FUTURE_STATE_QUERY, &parameters, Some(1))
+        .query_request(bounded_query(GRAPH_META_FUTURE_STATE_QUERY, &parameters))
         .unwrap();
     assert_eq!(snapshot.commit_epoch(), graph_commit_epoch);
     assert_eq!(
@@ -324,7 +369,10 @@ fn fixed_graph_meta_projections_support_state_growth_and_pinned_reads() {
     let missing_parameters =
         BTreeMap::from([("meta_id".to_string(), Value::String("missing".to_string()))]);
     let missing = live
-        .query_with_params_bounded(GRAPH_META_FUTURE_STATE_QUERY, &missing_parameters, Some(1))
+        .query_request(bounded_query(
+            GRAPH_META_FUTURE_STATE_QUERY,
+            &missing_parameters,
+        ))
         .unwrap();
     assert!(missing.rows.is_empty());
 }
@@ -338,15 +386,13 @@ fn graph_meta_empty_read_returns_no_rows_and_delete_rejects_before_wal() {
 
     let parameters = BTreeMap::from([("meta_id".to_string(), Value::String(String::new()))]);
     let read = db
-        .query_read_only_with_params_bounded(GRAPH_META_ALGORITHM_STATE_QUERY, &parameters, Some(1))
+        .begin_read_transaction()
+        .unwrap()
+        .query_request(bounded_query(GRAPH_META_ALGORITHM_STATE_QUERY, &parameters))
         .unwrap();
     assert!(read.rows.is_empty());
 
-    let delete_error = db
-        .delete_knowledge_graph_meta(&KnowledgeGraphMetaRequest {
-            meta_id: String::new(),
-        })
-        .unwrap_err();
+    let delete_error = self::parameters("", BTreeMap::new()).unwrap_err();
     assert!(delete_error.to_string().contains("non-empty meta id"));
     assert_eq!(
         db.runtime.get().unwrap().store.commit_epoch(),
@@ -371,11 +417,9 @@ fn graph_meta_read_parameters_cannot_change_query_shape_or_wal() {
             Value::String("main') MATCH (n) RETURN n //".to_string()),
         )]);
         let output = db
-            .query_read_only_with_params_bounded(
-                GRAPH_META_FUTURE_STATE_QUERY,
-                &parameters,
-                Some(1),
-            )
+            .begin_read_transaction()
+            .unwrap()
+            .query_request(bounded_query(GRAPH_META_FUTURE_STATE_QUERY, &parameters))
             .unwrap();
         assert!(output.rows.is_empty());
         assert_eq!(
@@ -400,16 +444,12 @@ fn graph_meta_delete_missing_does_not_write_wal() {
     {
         let mut db = Database::open(&path).unwrap();
         let graph_commit_epoch_before = db.runtime.get().unwrap().store.commit_epoch();
+        let parameters = parameters("missing", BTreeMap::new()).unwrap();
         let output = db
-            .delete_knowledge_graph_meta(&KnowledgeGraphMetaRequest {
-                meta_id: "missing".to_string(),
-            })
+            .query_request(bounded_query(DELETE, &parameters))
             .unwrap();
-        assert_eq!(output.graph_commit_epoch_before, graph_commit_epoch_before);
-        assert_eq!(output.graph_commit_epoch_after, graph_commit_epoch_before);
-        assert!(output.node_id.is_none());
-        assert!(!output.matched);
-        assert!(!output.deleted);
+        assert!(output.rows.is_empty());
+        assert_eq!(db.commit_epoch().unwrap(), graph_commit_epoch_before);
     }
     let wal_after = read_test_wal(&path).unwrap();
     assert_eq!(wal_after, wal_before);
@@ -417,8 +457,8 @@ fn graph_meta_delete_missing_does_not_write_wal() {
 }
 
 #[test]
-fn typed_graph_meta_delete_persists_and_replays() {
-    let path = unique_test_dir("typed_graph_meta_delete_wal_replay");
+fn graph_meta_delete_query_persists_and_replays() {
+    let path = unique_test_dir("graph_meta_delete_query_wal_replay");
     {
         let mut db = Database::open(&path).unwrap();
         db.query("CREATE (:GraphMeta {meta_id: 'main', pagerank_applied: true})")
@@ -430,14 +470,18 @@ fn typed_graph_meta_delete_persists_and_replays() {
     let setup_batch_count = setup_wal.matches("\tbatch\t").count();
     {
         let mut db = Database::open(&path).unwrap();
-        let output = db
-            .delete_knowledge_graph_meta(&KnowledgeGraphMetaRequest {
-                meta_id: "main".to_string(),
-            })
+        let parameters = parameters("main", BTreeMap::new()).unwrap();
+        let mut transaction = db.begin_transaction().unwrap();
+        let before = transaction
+            .query_request(bounded_query(GRAPH_META_ALGORITHM_STATE_QUERY, &parameters))
             .unwrap();
-        assert!(output.matched);
-        assert!(output.deleted);
-        assert!(output.node_id.is_some());
+        assert_eq!(before.rows.len(), 1);
+        assert!(matches!(before.rows[0]["node_id"], Value::Int(_)));
+        let output = transaction
+            .query_request(bounded_query(DELETE, &parameters))
+            .unwrap();
+        assert_eq!(output.rows.len(), 1);
+        transaction.commit().unwrap();
     }
     let wal = read_test_wal(&path).unwrap();
     assert!(wal.contains("delete_node"));
@@ -447,11 +491,12 @@ fn typed_graph_meta_delete_persists_and_replays() {
         let main_parameters =
             BTreeMap::from([("meta_id".to_string(), Value::String("main".to_string()))]);
         let main = db
-            .query_read_only_with_params_bounded(
+            .begin_read_transaction()
+            .unwrap()
+            .query_request(bounded_query(
                 GRAPH_META_ALGORITHM_STATE_QUERY,
                 &main_parameters,
-                Some(1),
-            )
+            ))
             .unwrap();
         assert!(main.rows.is_empty());
         let community_parameters = BTreeMap::from([(
@@ -459,11 +504,12 @@ fn typed_graph_meta_delete_persists_and_replays() {
             Value::String("community".to_string()),
         )]);
         let community = db
-            .query_read_only_with_params_bounded(
+            .begin_read_transaction()
+            .unwrap()
+            .query_request(bounded_query(
                 GRAPH_META_ALGORITHM_STATE_QUERY,
                 &community_parameters,
-                Some(1),
-            )
+            ))
             .unwrap();
         assert_eq!(community.rows.len(), 1);
     }

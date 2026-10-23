@@ -1,0 +1,19 @@
+{
+  "name": "baseline-instrumented",
+  "cwd": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18",
+  "command": [
+    "cargo",
+    "bench",
+    "--locked",
+    "--bench",
+    "mem_query_concurrency",
+    "--no-run",
+    "--message-format=json",
+    "--features",
+    "qualification"
+  ],
+  "exit_code": 0,
+  "build_seconds": 270.8856303570792,
+  "binary_sha256": "cad4c119160d02e20cff31bfabdf2c7d63c449f75ececd4b884c5cd00640b38b",
+  "benchmark_sha256": "5436fb523d5171db13e56636d2e7a06d3dc1f2c582a82808e776bd98a5f0595a"
+}

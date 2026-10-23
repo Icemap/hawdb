@@ -609,30 +609,6 @@ pub struct KnowledgeSourceRevisionCreateBatchOutput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeSourceDeleteBatchRequest {
-    pub source_ids: Vec<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeSourceDeleteBatchRow {
-    pub source_id: String,
-    pub node_id: Option<u64>,
-    pub matched: bool,
-    pub non_writable: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeSourceDeleteBatchOutput {
-    pub graph_commit_epoch_before: u64,
-    pub graph_commit_epoch_after: u64,
-    pub rows: Vec<KnowledgeSourceDeleteBatchRow>,
-    pub matched_count: usize,
-    pub missing_count: usize,
-    pub non_writable_count: usize,
-    pub deleted_node_count: usize,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KnowledgeSourceLabelAssignment {
     pub source_id: String,
     pub label_id: String,

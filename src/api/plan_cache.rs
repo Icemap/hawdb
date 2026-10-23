@@ -699,6 +699,8 @@ pub(super) fn optimized_query_plan_for<S: crate::executor::ExecutionStore>(
     trace_mode: PlanTraceMode,
     context: PlanCacheContext<'_, S>,
 ) -> Result<OptimizedQueryPlan> {
+    #[cfg(feature = "qualification")]
+    let _preparation = super::query_preparation_metrics::PlanPreparationTiming::start();
     let query_identity = hawdb_query::QueryIdentity::new("cypher", cypher_text);
     let query_optimizer =
         CascadesOptimizer::with_context(context.optimizer.context().clone().with_query_identity(

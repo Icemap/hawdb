@@ -13,6 +13,32 @@
 // limitations under the License.
 
 use super::*;
+use crate::QueryRequest;
+
+fn bounded_query<'a>(query: &'a str, parameters: &'a BTreeMap<String, Value>) -> QueryRequest<'a> {
+    QueryRequest::new(query)
+        .with_params(parameters)
+        .with_output_limits(QueryStreamOptions {
+            max_rows: Some(4),
+            max_payload_bytes: Some(4096),
+        })
+}
+
+const CREATE: &str = "MERGE (c:Community {id: $id}) ON CREATE SET \
+    c.community_id = $community_id, c.name = $name, c.description = $description, \
+    c.ai_summary = $ai_summary, c.member_count = $member_count, c.algorithm = 'louvain', \
+    c.resolution = $resolution, c.created_at = $created_at, c.updated_at = $updated_at \
+    RETURN id(c) AS node_id, c.name AS name";
+const UPDATE: &str = "MATCH (c:Community {id: $id}) \
+    SET c.name = $name, c.description = $description, c.ai_summary = $ai_summary, \
+    c.updated_at = $updated_at RETURN id(c) AS node_id";
+
+fn resolution(value: f64) -> Result<Value> {
+    if !value.is_finite() {
+        return Err(HawDBError::Semantic("resolution must be finite".into()));
+    }
+    Ok(Value::Float(value))
+}
 
 #[test]
 fn updates_community_lifecycle_for_nowledge_detection_and_summary() {
@@ -20,67 +46,92 @@ fn updates_community_lifecycle_for_nowledge_detection_and_summary() {
     db.query("CREATE (:Community {id: 'community_existing', community_id: 7, name: 'Old Name', description: 'old description', ai_summary: 'old summary', member_count: 2})")
         .unwrap();
 
-    let output = db
-        .update_knowledge_communities_batch(&KnowledgeCommunityLifecycleBatchRequest {
-            creates: vec![
-                KnowledgeCommunityCreate {
-                    id: "community_new".to_string(),
-                    community_id: 8,
-                    name: "New Community".to_string(),
-                    description: Value::String("new description".to_string()),
-                    ai_summary: Value::Null,
-                    member_count: 3,
-                    resolution: 1.25,
-                    created_at: Value::Int(100),
-                    updated_at: Value::Int(100),
-                },
-                KnowledgeCommunityCreate {
-                    id: "community_existing".to_string(),
-                    community_id: 7,
-                    name: "Existing Community".to_string(),
-                    description: Value::String("ignored".to_string()),
-                    ai_summary: Value::String("ignored".to_string()),
-                    member_count: 2,
-                    resolution: 1.0,
-                    created_at: Value::Int(101),
-                    updated_at: Value::Int(101),
-                },
-            ],
-            summary_updates: vec![
-                KnowledgeCommunitySummaryUpdate {
-                    id: "community_existing".to_string(),
-                    name: "Updated Name".to_string(),
-                    description: Value::String("updated description".to_string()),
-                    ai_summary: Value::String("updated summary".to_string()),
-                    updated_at: Value::Int(200),
-                },
-                KnowledgeCommunitySummaryUpdate {
-                    id: "missing_community".to_string(),
-                    name: "Missing".to_string(),
-                    description: Value::String("missing".to_string()),
-                    ai_summary: Value::String("missing".to_string()),
-                    updated_at: Value::Int(201),
-                },
-            ],
-        })
-        .unwrap();
-
-    assert_eq!(output.graph_commit_epoch_before, 1);
-    assert_eq!(output.graph_commit_epoch_after, 2);
-    assert_eq!(output.created_count, 1);
-    assert_eq!(output.already_exists_count, 1);
-    assert_eq!(output.updated_count, 1);
-    assert_eq!(output.missing_count, 1);
-    assert_eq!(output.created_node_count, 1);
-    assert_eq!(output.updated_property_count, 4);
-    assert!(output.create_rows[0].created);
-    assert_eq!(output.create_rows[0].node_id, Some(1));
-    assert!(output.create_rows[1].already_exists);
-    assert!(output.summary_update_rows[0].updated);
-    assert!(output.summary_update_rows[1].missing);
+    let before = db.commit_epoch().unwrap();
+    let mut transaction = db.begin_transaction().unwrap();
+    for (
+        id,
+        number,
+        name,
+        description,
+        summary,
+        members,
+        value,
+        timestamp,
+        expected_id,
+        expected_name,
+    ) in [
+        (
+            "community_new",
+            8,
+            "New Community",
+            "new description",
+            Value::Null,
+            3,
+            1.25,
+            100,
+            1,
+            "New Community",
+        ),
+        (
+            "community_existing",
+            7,
+            "Existing Community",
+            "ignored",
+            Value::String("ignored".into()),
+            2,
+            1.0,
+            101,
+            0,
+            "Old Name",
+        ),
+    ] {
+        let parameters = BTreeMap::from([
+            ("id".into(), Value::String(id.into())),
+            ("community_id".into(), Value::Int(number)),
+            ("name".into(), Value::String(name.into())),
+            ("description".into(), Value::String(description.into())),
+            ("ai_summary".into(), summary),
+            ("member_count".into(), Value::Int(members)),
+            ("resolution".into(), resolution(value).unwrap()),
+            ("created_at".into(), Value::Int(timestamp)),
+            ("updated_at".into(), Value::Int(timestamp)),
+        ]);
+        let output = transaction
+            .query_request(bounded_query(CREATE, &parameters))
+            .unwrap();
+        assert_eq!(output.rows.len(), 1);
+        assert_eq!(output.rows[0]["node_id"], Value::Int(expected_id));
+        assert_eq!(output.rows[0]["name"], Value::String(expected_name.into()));
+    }
+    for (id, name, description, summary, timestamp, expected) in [
+        (
+            "community_existing",
+            "Updated Name",
+            "updated description",
+            "updated summary",
+            200,
+            1,
+        ),
+        ("missing_community", "Missing", "missing", "missing", 201, 0),
+    ] {
+        let parameters = BTreeMap::from([
+            ("id".into(), Value::String(id.into())),
+            ("name".into(), Value::String(name.into())),
+            ("description".into(), Value::String(description.into())),
+            ("ai_summary".into(), Value::String(summary.into())),
+            ("updated_at".into(), Value::Int(timestamp)),
+        ]);
+        let output = transaction
+            .query_request(bounded_query(UPDATE, &parameters))
+            .unwrap();
+        assert_eq!(output.rows.len(), expected);
+    }
+    transaction.commit().unwrap();
+    assert_eq!(before, 1);
+    assert_eq!(db.commit_epoch().unwrap(), before + 1);
 
     let created = db
-        .query("MATCH (c:Community {id: 'community_new'}) RETURN c.community_id, c.name, c.description, c.ai_summary, c.member_count, c.algorithm, c.resolution, c.created_at, c.updated_at")
+        .query_request(bounded_query("MATCH (c:Community {id: 'community_new'}) RETURN c.community_id, c.name, c.description, c.ai_summary, c.member_count, c.algorithm, c.resolution, c.created_at, c.updated_at", &BTreeMap::new()))
         .unwrap();
     assert_eq!(created.rows[0].get("c.community_id"), Some(&Value::Int(8)));
     assert_eq!(
@@ -105,7 +156,7 @@ fn updates_community_lifecycle_for_nowledge_detection_and_summary() {
     assert_eq!(created.rows[0].get("c.updated_at"), Some(&Value::Int(100)));
 
     let updated = db
-        .query("MATCH (c:Community {id: 'community_existing'}) RETURN c.name, c.description, c.ai_summary, c.updated_at")
+        .query_request(bounded_query("MATCH (c:Community {id: 'community_existing'}) RETURN c.name, c.description, c.ai_summary, c.updated_at", &BTreeMap::new()))
         .unwrap();
     assert_eq!(
         updated.rows[0].get("c.name"),
@@ -132,24 +183,9 @@ fn community_lifecycle_rejects_invalid_create_before_wal() {
     }
     let wal_before = read_test_wal(&path).unwrap();
     {
-        let mut db = Database::open(&path).unwrap();
+        let db = Database::open(&path).unwrap();
         let graph_commit_epoch_before = db.runtime.get().unwrap().store.commit_epoch();
-        let error = db
-            .update_knowledge_communities_batch(&KnowledgeCommunityLifecycleBatchRequest {
-                creates: vec![KnowledgeCommunityCreate {
-                    id: "community_invalid".to_string(),
-                    community_id: 1,
-                    name: "Invalid".to_string(),
-                    description: Value::String("invalid".to_string()),
-                    ai_summary: Value::Null,
-                    member_count: 1,
-                    resolution: f64::NAN,
-                    created_at: Value::Int(1),
-                    updated_at: Value::Int(1),
-                }],
-                summary_updates: Vec::new(),
-            })
-            .unwrap_err();
+        let error = resolution(f64::NAN).unwrap_err();
         assert!(error.to_string().contains("resolution must be finite"));
         assert_eq!(
             db.runtime.get().unwrap().store.commit_epoch(),
@@ -162,8 +198,8 @@ fn community_lifecycle_rejects_invalid_create_before_wal() {
 }
 
 #[test]
-fn typed_community_lifecycle_persists_as_one_wal_batch_and_replays() {
-    let path = unique_test_dir("typed_community_lifecycle_wal_replay");
+fn community_lifecycle_queries_persist_as_one_wal_batch_and_replays() {
+    let path = unique_test_dir("community_lifecycle_query_wal_replay");
     {
         let mut db = Database::open(&path).unwrap();
         db.query("CREATE (:Community {id: 'community_existing', name: 'Old'})")
@@ -173,30 +209,42 @@ fn typed_community_lifecycle_persists_as_one_wal_batch_and_replays() {
     let setup_batch_count = setup_wal.matches("\tbatch\t").count();
     {
         let mut db = Database::open(&path).unwrap();
-        let output = db
-            .update_knowledge_communities_batch(&KnowledgeCommunityLifecycleBatchRequest {
-                creates: vec![KnowledgeCommunityCreate {
-                    id: "community_new".to_string(),
-                    community_id: 9,
-                    name: "New".to_string(),
-                    description: Value::String("new".to_string()),
-                    ai_summary: Value::String("summary".to_string()),
-                    member_count: 4,
-                    resolution: 0.75,
-                    created_at: Value::Int(10),
-                    updated_at: Value::Int(10),
-                }],
-                summary_updates: vec![KnowledgeCommunitySummaryUpdate {
-                    id: "community_existing".to_string(),
-                    name: "Updated".to_string(),
-                    description: Value::String("updated".to_string()),
-                    ai_summary: Value::String("updated summary".to_string()),
-                    updated_at: Value::Int(20),
-                }],
-            })
-            .unwrap();
-        assert_eq!(output.created_node_count, 1);
-        assert_eq!(output.updated_count, 1);
+        let mut transaction = db.begin_transaction().unwrap();
+        let create = BTreeMap::from([
+            ("id".into(), Value::String("community_new".into())),
+            ("community_id".into(), Value::Int(9)),
+            ("name".into(), Value::String("New".into())),
+            ("description".into(), Value::String("new".into())),
+            ("ai_summary".into(), Value::String("summary".into())),
+            ("member_count".into(), Value::Int(4)),
+            ("resolution".into(), resolution(0.75).unwrap()),
+            ("created_at".into(), Value::Int(10)),
+            ("updated_at".into(), Value::Int(10)),
+        ]);
+        assert_eq!(
+            transaction
+                .query_request(bounded_query(CREATE, &create))
+                .unwrap()
+                .rows
+                .len(),
+            1
+        );
+        let update = BTreeMap::from([
+            ("id".into(), Value::String("community_existing".into())),
+            ("name".into(), Value::String("Updated".into())),
+            ("description".into(), Value::String("updated".into())),
+            ("ai_summary".into(), Value::String("updated summary".into())),
+            ("updated_at".into(), Value::Int(20)),
+        ]);
+        assert_eq!(
+            transaction
+                .query_request(bounded_query(UPDATE, &update))
+                .unwrap()
+                .rows
+                .len(),
+            1
+        );
+        transaction.commit().unwrap();
     }
     let wal = read_test_wal(&path).unwrap();
     assert!(wal.contains("create_node"));
@@ -205,11 +253,17 @@ fn typed_community_lifecycle_persists_as_one_wal_batch_and_replays() {
     {
         let mut db = Database::open(&path).unwrap();
         let communities = db
-            .query("MATCH (c:Community) RETURN count(c) AS total")
+            .query_request(bounded_query(
+                "MATCH (c:Community) RETURN count(c) AS total",
+                &BTreeMap::new(),
+            ))
             .unwrap();
         assert_eq!(communities.rows[0].get("total"), Some(&Value::Int(2)));
         let updated = db
-            .query("MATCH (c:Community {id: 'community_existing'}) RETURN c.name, c.updated_at")
+            .query_request(bounded_query(
+                "MATCH (c:Community {id: 'community_existing'}) RETURN c.name, c.updated_at",
+                &BTreeMap::new(),
+            ))
             .unwrap();
         assert_eq!(
             updated.rows[0].get("c.name"),

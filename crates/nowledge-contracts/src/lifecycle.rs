@@ -168,30 +168,6 @@ pub struct KnowledgeSkillLifecycleBatchOutput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeSkillDeleteBatchRequest {
-    pub skill_ids: Vec<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeSkillDeleteBatchRow {
-    pub skill_id: String,
-    pub node_id: Option<u64>,
-    pub matched: bool,
-    pub non_writable: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeSkillDeleteBatchOutput {
-    pub graph_commit_epoch_before: u64,
-    pub graph_commit_epoch_after: u64,
-    pub rows: Vec<KnowledgeSkillDeleteBatchRow>,
-    pub matched_count: usize,
-    pub missing_count: usize,
-    pub non_writable_count: usize,
-    pub deleted_node_count: usize,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KnowledgeThreadMetadataUpdate {
     pub thread_id: String,
     pub metadata: Value,
@@ -264,30 +240,6 @@ pub struct KnowledgeThreadMessageCountBatchOutput {
     pub updated_count: usize,
     pub updated_at_changed_count: usize,
     pub updated_property_count: usize,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeThreadDeleteBatchRequest {
-    pub thread_ids: Vec<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeThreadDeleteBatchRow {
-    pub thread_id: String,
-    pub node_id: Option<u64>,
-    pub matched: bool,
-    pub non_writable: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeThreadDeleteBatchOutput {
-    pub graph_commit_epoch_before: u64,
-    pub graph_commit_epoch_after: u64,
-    pub rows: Vec<KnowledgeThreadDeleteBatchRow>,
-    pub matched_count: usize,
-    pub missing_count: usize,
-    pub non_writable_count: usize,
-    pub deleted_node_count: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

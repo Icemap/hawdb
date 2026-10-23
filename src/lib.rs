@@ -209,6 +209,11 @@ pub use api::{
     HAWDB_LIGHTNING_RELATIONAL_STREAM_FORMAT_VERSION, SLOW_QUERY_LOG_EVENT_PROTOCOL,
     STORAGE_RESOURCE_PROFILE_PROTOCOL,
 };
+#[cfg(feature = "qualification")]
+pub use api::{
+    query_preparation_metrics, PublicationLockDurationSnapshot, PublicationLockMetricsSnapshot,
+    QueryPreparationMetricsSnapshot,
+};
 pub use api::{
     ArrowArray, ArrowArrayStream, ArrowSchema, RetainedArrowCodeOwner, RetainedArrowExport,
     RetainedArrowSchema, RetainedArrowStream, RetainedColumnRole, RetainedColumnSchema,
@@ -217,8 +222,6 @@ pub use api::{
     RetainedQueryBatch, RetainedQueryCursor, RetainedQueryError, RetainedQueryOptions,
     RetainedQueryProfile, RetainedQueryStatus,
 };
-#[cfg(feature = "qualification")]
-pub use api::{PublicationLockDurationSnapshot, PublicationLockMetricsSnapshot};
 pub use api::{
     VectorIndexBuildError, VectorIndexBuildOptions, VectorIndexField, VectorIndexLanguageBudget,
     VectorIndexLanguageReport, VectorIndexReadError, VectorIndexReadTransaction,

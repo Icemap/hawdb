@@ -173,6 +173,8 @@ impl<'a> QueryExecutionOptions<'a> {
 pub(super) fn parse_runtime_execution(cypher_text: &str) -> Result<PreparedRuntimeExecution> {
     let statement_started = hawdb_core::time::Instant::now();
     let parsed = hawdb_cypher::parse_profiled(cypher_text);
+    #[cfg(feature = "qualification")]
+    super::query_preparation_metrics::record_parse(parsed.metrics.elapsed_nanos);
     Ok(PreparedRuntimeExecution {
         statement: parsed.result?,
         optimized: None,
@@ -469,6 +471,8 @@ impl RuntimePlanningContext<'_> {
     ) -> Result<PreparedRuntimeQuery> {
         self.store.ensure_usable()?;
         let parsed = hawdb_cypher::parse_profiled(&cypher_text);
+        #[cfg(feature = "qualification")]
+        super::query_preparation_metrics::record_parse(parsed.metrics.elapsed_nanos);
         let parse_metrics = parsed.metrics;
         let statement = parsed.result?;
         let work_request = query_work_request_for_statement(self.system_variables, &statement)?;

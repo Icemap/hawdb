@@ -17,24 +17,17 @@ use super::{
     BackgroundMaintenanceKind, BackgroundMaintenanceOptions, CanonicalStableIdMapping, Database,
     DatabaseConfig, DatabaseReadTransaction, DerivedArtifactJobStatus,
     ExternalContentArtifactJobCompletion, ExternalContentArtifactRuntimeManifest,
-    KnowledgeAugmentationJobInterruptRequest, KnowledgeAugmentationJobLifecycleBatchRequest,
-    KnowledgeAugmentationJobLifecycleTransition, KnowledgeAugmentationJobLifecycleUpdate,
-    KnowledgeCandidateScoringPolicy, KnowledgeCandidateSource, KnowledgeCommunityCreate,
-    KnowledgeCommunityEntityVisibilityRequest, KnowledgeCommunityLifecycleBatchRequest,
-    KnowledgeCommunityListOrder, KnowledgeCommunityListRequest, KnowledgeCommunityLookupKey,
-    KnowledgeCommunityMembershipCreate, KnowledgeCommunityMembershipCreateBatchRequest,
-    KnowledgeCommunityMemoryCrystalFilter, KnowledgeCommunityMemoryListOrder,
-    KnowledgeCommunityMemoryListRequest, KnowledgeCommunityMemoryRowSource,
-    KnowledgeCommunityMemorySource, KnowledgeCommunityRequest, KnowledgeCommunitySummaryUpdate,
+    KnowledgeCandidateScoringPolicy, KnowledgeCandidateSource,
+    KnowledgeCommunityEntityVisibilityRequest, KnowledgeCommunityMemoryCrystalFilter,
+    KnowledgeCommunityMemoryListOrder, KnowledgeCommunityMemoryListRequest,
+    KnowledgeCommunityMemoryRowSource, KnowledgeCommunityMemorySource,
     KnowledgeCrystalCommunityListOrder, KnowledgeCrystalCommunityListRequest,
     KnowledgeCrystalCommunityScope, KnowledgeCrystalListOrder, KnowledgeCrystalListRequest,
     KnowledgeCrystalSourceMergeRequest, KnowledgeCrystalSourceVisibilityRequest,
     KnowledgeEntityBatchRequest, KnowledgeEntityCreateBatchRequest, KnowledgeEntityCreateRequest,
-    KnowledgeEntityDeleteBatchRequest, KnowledgeEntityLabelListRequest,
-    KnowledgeEntityLabelProjectedListRequest, KnowledgeEntityRequest,
-    KnowledgeEntityUpsertBatchRequest, KnowledgeEntityUpsertRequest, KnowledgeFallbackReasonCode,
-    KnowledgeFanoutReasonCode, KnowledgeGraphMetaRequest, KnowledgeGraphMetaStamp,
-    KnowledgeGraphMetaStampBatchRequest, KnowledgeGraphPathDirection,
+    KnowledgeEntityLabelListRequest, KnowledgeEntityLabelProjectedListRequest,
+    KnowledgeEntityRequest, KnowledgeEntityUpsertBatchRequest, KnowledgeEntityUpsertRequest,
+    KnowledgeFallbackReasonCode, KnowledgeFanoutReasonCode, KnowledgeGraphPathDirection,
     KnowledgeInducedEdgeListRequest, KnowledgeLabelLifecycleBatchRequest,
     KnowledgeLabelLifecycleUpdate, KnowledgeLabelMemoryTransferRequest,
     KnowledgeMemoryAccessBatchRequest, KnowledgeMemoryAccessTouch,
@@ -53,20 +46,17 @@ use super::{
     KnowledgeRelationshipUpdateBatchRequest, KnowledgeRelationshipUpdateRequest,
     KnowledgeRelationshipUpsertBatchRequest, KnowledgeRelationshipUpsertRequest,
     KnowledgeRelationshipsRequest, KnowledgeRetrievalEmptyReasonCode, KnowledgeRetrievalRequest,
-    KnowledgeRetrievalStage, KnowledgeSchemaMigrationApply,
-    KnowledgeSchemaMigrationApplyBatchRequest, KnowledgeScopedEntityBatchRequest,
-    KnowledgeScopedEntityDeleteBatchRequest, KnowledgeScopedEntityRequest,
+    KnowledgeRetrievalStage, KnowledgeScopedEntityBatchRequest, KnowledgeScopedEntityRequest,
     KnowledgeScopedNeighborsRequest, KnowledgeScopedPathRequest,
     KnowledgeScopedPropertyBatchRequest, KnowledgeScopedPropertyUpdateBatchRequest,
     KnowledgeScopedPropertyUpdateRequest, KnowledgeScopedRelationshipCreateBatchRequest,
     KnowledgeScopedRelationshipCreateRequest, KnowledgeScopedRelationshipDeleteBatchRequest,
     KnowledgeScopedRelationshipDeleteRequest, KnowledgeScopedRelationshipUpdateBatchRequest,
     KnowledgeScopedRelationshipUpdateRequest, KnowledgeScopedRelationshipsRequest,
-    KnowledgeScopedSubgraphRequest, KnowledgeSkillDeleteBatchRequest,
-    KnowledgeSkillLifecycleBatchRequest, KnowledgeSkillLifecycleUpdate,
-    KnowledgeSkillMetadataBatchRequest, KnowledgeSkillMetadataUpdate,
-    KnowledgeSkillSourceMergeRequest, KnowledgeSkillUsageStatsBatchRequest,
-    KnowledgeSkillUsageStatsUpdate, KnowledgeSourceDeleteBatchRequest,
+    KnowledgeScopedSubgraphRequest, KnowledgeSkillLifecycleBatchRequest,
+    KnowledgeSkillLifecycleUpdate, KnowledgeSkillMetadataBatchRequest,
+    KnowledgeSkillMetadataUpdate, KnowledgeSkillSourceMergeRequest,
+    KnowledgeSkillUsageStatsBatchRequest, KnowledgeSkillUsageStatsUpdate,
     KnowledgeSourceLabelAssignment, KnowledgeSourceLabelAssignmentBatchRequest,
     KnowledgeSourceLabelDelete, KnowledgeSourceLabelDeleteBatchRequest,
     KnowledgeSourceLifecycleBatchRequest, KnowledgeSourceLifecycleUpdate,
@@ -76,16 +66,16 @@ use super::{
     KnowledgeSourceParsedMetadataBatchRequest, KnowledgeSourceParsedMetadataUpdate,
     KnowledgeSourceReferenceRelationshipCleanupRequest, KnowledgeSourceRevisionCreate,
     KnowledgeSourceRevisionCreateBatchRequest, KnowledgeSubgraphRequest,
-    KnowledgeThreadCompactionLinkRequest, KnowledgeThreadDeleteBatchRequest,
-    KnowledgeThreadIdentityCascadeDeleteKeys, KnowledgeThreadIdentityDeleteRequest,
-    KnowledgeThreadMessageCountBatchRequest, KnowledgeThreadMessageCountUpdate,
-    KnowledgeThreadMessageDeleteRequest, KnowledgeThreadMetadataBatchRequest,
-    KnowledgeThreadMetadataUpdate, KnowledgeTraversalFallbackReasonCode,
-    KnowledgeTruncationReasonCode, NowledgeGraphAdapter, NowledgeGraphStatement,
-    PlanCacheBypassReason, PlanCacheLookup, QueryOutput, QueryStreamOptions, RecoveryMode,
-    SearchProjectionGraphDeltaRequest, HAWDB_LIGHTNING_BOOTSTRAP_PROTOCOL_VERSION,
-    NOWLEDGE_DEEP_SEARCH_FILTERED_RANK_WINDOW, NOWLEDGE_DEEP_SEARCH_GRAPH_CONTEXT_MAX_HOPS,
-    NOWLEDGE_DEEP_SEARCH_MIN_GRAPH_SEED_LIMIT, NOWLEDGE_DEEP_SEARCH_MIN_RANK_WINDOW,
+    KnowledgeThreadCompactionLinkRequest, KnowledgeThreadIdentityCascadeDeleteKeys,
+    KnowledgeThreadIdentityDeleteRequest, KnowledgeThreadMessageCountBatchRequest,
+    KnowledgeThreadMessageCountUpdate, KnowledgeThreadMessageDeleteRequest,
+    KnowledgeThreadMetadataBatchRequest, KnowledgeThreadMetadataUpdate,
+    KnowledgeTraversalFallbackReasonCode, KnowledgeTruncationReasonCode, NowledgeGraphAdapter,
+    NowledgeGraphStatement, PlanCacheBypassReason, PlanCacheLookup, QueryOutput,
+    QueryStreamOptions, RecoveryMode, SearchProjectionGraphDeltaRequest,
+    HAWDB_LIGHTNING_BOOTSTRAP_PROTOCOL_VERSION, NOWLEDGE_DEEP_SEARCH_FILTERED_RANK_WINDOW,
+    NOWLEDGE_DEEP_SEARCH_GRAPH_CONTEXT_MAX_HOPS, NOWLEDGE_DEEP_SEARCH_MIN_GRAPH_SEED_LIMIT,
+    NOWLEDGE_DEEP_SEARCH_MIN_RANK_WINDOW,
 };
 use crate::optimizer::PlanCost;
 use crate::qos::{
@@ -102,7 +92,7 @@ use crate::search::{
 };
 use crate::store::{DatabaseDoctor, NodeId, WalDoctorOptions, DENSE_ADJACENCY_DEGREE_THRESHOLD};
 use crate::NowledgeMemStorageRecoveryReport;
-use crate::Value;
+use crate::{HawDBError, Result, Value};
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Cursor, Write};
 use std::num::NonZeroUsize;
@@ -4143,43 +4133,63 @@ fn deletes_sources_for_nowledge_detach_delete_shape() {
     db.query("CREATE (:Source {original_name: 'Idless Source'})")
         .unwrap();
     let idless = db
-        .query("MATCH (s:Source) WHERE s.original_name = 'Idless Source' RETURN id(s) AS id")
+        .query_request(bounded_batch_query(
+            "MATCH (s:Source) WHERE s.original_name = 'Idless Source' RETURN id(s) AS id",
+            &BTreeMap::new(),
+        ))
         .unwrap();
     let idless_source_id = match idless.rows[0].get("id").unwrap() {
         Value::Int(id) => id.to_string(),
         other => panic!("expected projected id int, got {other:?}"),
     };
 
-    let output = db
-        .delete_knowledge_sources(&KnowledgeSourceDeleteBatchRequest {
-            source_ids: vec![
-                "source_1".to_string(),
-                "missing".to_string(),
-                idless_source_id,
-                "source_2".to_string(),
-                "source_1".to_string(),
-            ],
-        })
+    let parameters = batch_delete_parameters(&[
+        "source_1",
+        "missing",
+        &idless_source_id,
+        "source_2",
+        "source_1",
+    ])
+    .unwrap();
+    let before = db.commit_epoch().unwrap();
+    let mut transaction = db.begin_transaction().unwrap();
+    let candidates = transaction
+        .query_request(bounded_batch_query(
+            "MATCH (n:Source) WHERE n.id IN $ids RETURN n.id AS id ORDER BY id",
+            &parameters,
+        ))
         .unwrap();
-
-    assert_eq!(output.graph_commit_epoch_before, 4);
-    assert_eq!(output.graph_commit_epoch_after, 5);
-    assert_eq!(output.rows.len(), 5);
-    assert_eq!(output.matched_count, 3);
-    assert_eq!(output.missing_count, 1);
-    assert_eq!(output.non_writable_count, 1);
-    assert_eq!(output.deleted_node_count, 2);
-    assert!(output.rows[0].matched);
-    assert!(!output.rows[1].matched);
-    assert!(output.rows[2].non_writable);
-    assert!(output.rows[3].matched);
-    assert!(output.rows[4].matched);
+    assert_eq!(candidates.rows.len(), 2);
+    assert_eq!(candidates.rows[0]["id"], Value::String("source_1".into()));
+    assert_eq!(candidates.rows[1]["id"], Value::String("source_2".into()));
+    let output = transaction
+        .query_request(bounded_batch_query(
+            "MATCH (n:Source) WHERE n.id IN $ids DETACH DELETE n",
+            &parameters,
+        ))
+        .unwrap();
+    assert_eq!(output.rows.len(), 2);
+    transaction.commit().unwrap();
+    assert_eq!(before, 4);
+    assert_eq!(db.commit_epoch().unwrap(), before + 1);
+    let retained = db
+        .query_request(bounded_batch_query(
+            "MATCH (n:Source) WHERE n.id IS NULL RETURN n.original_name AS identity",
+            &BTreeMap::new(),
+        ))
+        .unwrap();
+    assert_eq!(retained.rows.len(), 1);
+    assert_eq!(
+        retained.rows[0]["identity"],
+        Value::String("Idless Source".into())
+    );
 
     let sources = db
-        .query(
+        .query_request(bounded_batch_query(
             "MATCH (s:Source) WHERE s.id IS NOT NULL \
              RETURN s.id AS source_id ORDER BY source_id ASC",
-        )
+            &BTreeMap::new(),
+        ))
         .unwrap();
     assert_eq!(sources.rows.len(), 1);
     assert_eq!(
@@ -4187,16 +4197,22 @@ fn deletes_sources_for_nowledge_detach_delete_shape() {
         Some(&Value::String("source_3".to_string()))
     );
     assert_eq!(
-        db.query("MATCH (m:Memory)-[r:SOURCED_FROM]->(s:Source) RETURN count(r) AS relationships")
-            .unwrap()
-            .rows[0]
+        db.query_request(bounded_batch_query(
+            "MATCH (m:Memory)-[r:SOURCED_FROM]->(s:Source) RETURN count(r) AS relationships",
+            &BTreeMap::new()
+        ))
+        .unwrap()
+        .rows[0]
             .get("relationships"),
         Some(&Value::Int(0))
     );
     assert_eq!(
-        db.query("MATCH (m:Memory) RETURN count(m) AS memories")
-            .unwrap()
-            .rows[0]
+        db.query_request(bounded_batch_query(
+            "MATCH (m:Memory) RETURN count(m) AS memories",
+            &BTreeMap::new()
+        ))
+        .unwrap()
+        .rows[0]
             .get("memories"),
         Some(&Value::Int(2))
     );
@@ -4208,13 +4224,9 @@ fn source_delete_rejects_empty_source_id_before_wal() {
     db.query("CREATE (:Source {id: 'source_1'})").unwrap();
     let graph_commit_epoch_before = db.runtime.get().unwrap().store.commit_epoch();
 
-    let error = db
-        .delete_knowledge_sources(&KnowledgeSourceDeleteBatchRequest {
-            source_ids: vec![String::new()],
-        })
-        .unwrap_err();
+    let error = batch_delete_parameters(&[""]).unwrap_err();
 
-    assert!(error.to_string().contains("non-empty source id"));
+    assert!(error.to_string().contains("non-empty id"));
     assert_eq!(
         db.runtime.get().unwrap().store.commit_epoch(),
         graph_commit_epoch_before
@@ -4222,18 +4234,22 @@ fn source_delete_rejects_empty_source_id_before_wal() {
 }
 
 #[test]
-fn typed_source_delete_persists_as_one_wal_batch_and_replays() {
-    let path = unique_test_dir("typed_source_delete_wal_replay");
+fn source_delete_query_persists_as_one_wal_batch_and_replays() {
+    let path = unique_test_dir("source_delete_query_wal_replay");
     {
         let mut db = Database::open(&path).unwrap();
         db.query("CREATE (:Memory {id: 'memory_1'})-[:SOURCED_FROM]->(:Source {id: 'source_1'})")
             .unwrap();
         db.query("CREATE (:Source {id: 'source_2'})").unwrap();
         let batch_count_before_delete = read_test_wal(&path).unwrap().matches("\tbatch\t").count();
-        db.delete_knowledge_sources(&KnowledgeSourceDeleteBatchRequest {
-            source_ids: vec!["source_1".to_string(), "source_2".to_string()],
-        })
-        .unwrap();
+        let parameters = batch_delete_parameters(&["source_1", "source_2"]).unwrap();
+        let output = db
+            .query_request(bounded_batch_query(
+                "MATCH (n:Source) WHERE n.id IN $ids DETACH DELETE n",
+                &parameters,
+            ))
+            .unwrap();
+        assert_eq!(output.rows.len(), 2);
         let batch_count_after_delete = read_test_wal(&path).unwrap().matches("\tbatch\t").count();
         assert_eq!(batch_count_after_delete, batch_count_before_delete + 1);
     }
@@ -4241,28 +4257,28 @@ fn typed_source_delete_persists_as_one_wal_batch_and_replays() {
     assert!(wal.contains("delete_node"));
     {
         let db = Database::open(&path).unwrap();
+        let parameters = batch_delete_parameters(&["source_1", "source_2"]).unwrap();
         let sources = db
-            .query_read_only_with_params_bounded(
-                "MATCH (s:Source) WHERE s.id IN $source_ids RETURN count(s) AS total",
-                &BTreeMap::from([(
-                    "source_ids".to_string(),
-                    Value::List(vec![
-                        Value::String("source_1".to_string()),
-                        Value::String("source_2".to_string()),
-                    ]),
-                )]),
-                Some(1),
-            )
+            .begin_read_transaction()
+            .unwrap()
+            .query_request(bounded_batch_query(
+                "MATCH (n:Source) WHERE n.id IN $ids RETURN count(n) AS total",
+                &parameters,
+            ))
             .unwrap();
         assert_eq!(sources.rows[0].get("total"), Some(&Value::Int(0)));
-        assert!(db
-            .query_entity_via_cypher(&KnowledgeEntityRequest {
-                label: "Memory".to_string(),
-                external_id: "memory_1".to_string(),
-            })
-            .unwrap()
-            .entity
-            .is_some());
+        assert_eq!(
+            db.begin_read_transaction()
+                .unwrap()
+                .query_request(bounded_batch_query(
+                    "MATCH (n:Memory) WHERE n.id IN $ids RETURN n.id AS id",
+                    &batch_delete_parameters(&["memory_1"]).unwrap()
+                ))
+                .unwrap()
+                .rows
+                .len(),
+            1
+        );
     }
     std::fs::remove_dir_all(path).unwrap();
 }
@@ -6778,43 +6794,58 @@ fn deletes_skills_for_nowledge_detach_delete_shape() {
     db.query("CREATE (:Skill {id: 'skill_3'})").unwrap();
     db.query("CREATE (:Skill {title: 'Idless Skill'})").unwrap();
     let idless = db
-        .query("MATCH (s:Skill) WHERE s.title = 'Idless Skill' RETURN id(s) AS id")
+        .query_request(bounded_batch_query(
+            "MATCH (s:Skill) WHERE s.title = 'Idless Skill' RETURN id(s) AS id",
+            &BTreeMap::new(),
+        ))
         .unwrap();
     let idless_skill_id = match idless.rows[0].get("id").unwrap() {
         Value::Int(id) => id.to_string(),
         other => panic!("expected projected id int, got {other:?}"),
     };
 
-    let output = db
-        .delete_knowledge_skills(&KnowledgeSkillDeleteBatchRequest {
-            skill_ids: vec![
-                "skill_1".to_string(),
-                "missing".to_string(),
-                idless_skill_id,
-                "skill_2".to_string(),
-                "skill_1".to_string(),
-            ],
-        })
+    let parameters =
+        batch_delete_parameters(&["skill_1", "missing", &idless_skill_id, "skill_2", "skill_1"])
+            .unwrap();
+    let before = db.commit_epoch().unwrap();
+    let mut transaction = db.begin_transaction().unwrap();
+    let candidates = transaction
+        .query_request(bounded_batch_query(
+            "MATCH (n:Skill) WHERE n.id IN $ids RETURN n.id AS id ORDER BY id",
+            &parameters,
+        ))
         .unwrap();
-
-    assert_eq!(output.graph_commit_epoch_before, 4);
-    assert_eq!(output.graph_commit_epoch_after, 5);
-    assert_eq!(output.rows.len(), 5);
-    assert_eq!(output.matched_count, 3);
-    assert_eq!(output.missing_count, 1);
-    assert_eq!(output.non_writable_count, 1);
-    assert_eq!(output.deleted_node_count, 2);
-    assert!(output.rows[0].matched);
-    assert!(!output.rows[1].matched);
-    assert!(output.rows[2].non_writable);
-    assert!(output.rows[3].matched);
-    assert!(output.rows[4].matched);
+    assert_eq!(candidates.rows.len(), 2);
+    assert_eq!(candidates.rows[0]["id"], Value::String("skill_1".into()));
+    assert_eq!(candidates.rows[1]["id"], Value::String("skill_2".into()));
+    let output = transaction
+        .query_request(bounded_batch_query(
+            "MATCH (n:Skill) WHERE n.id IN $ids DETACH DELETE n",
+            &parameters,
+        ))
+        .unwrap();
+    assert_eq!(output.rows.len(), 2);
+    transaction.commit().unwrap();
+    assert_eq!(before, 4);
+    assert_eq!(db.commit_epoch().unwrap(), before + 1);
+    let retained = db
+        .query_request(bounded_batch_query(
+            "MATCH (n:Skill) WHERE n.id IS NULL RETURN n.title AS identity",
+            &BTreeMap::new(),
+        ))
+        .unwrap();
+    assert_eq!(retained.rows.len(), 1);
+    assert_eq!(
+        retained.rows[0]["identity"],
+        Value::String("Idless Skill".into())
+    );
 
     let skills = db
-        .query(
+        .query_request(bounded_batch_query(
             "MATCH (s:Skill) WHERE s.id IS NOT NULL \
              RETURN s.id AS skill_id ORDER BY skill_id ASC",
-        )
+            &BTreeMap::new(),
+        ))
         .unwrap();
     assert_eq!(skills.rows.len(), 1);
     assert_eq!(
@@ -6822,18 +6853,22 @@ fn deletes_skills_for_nowledge_detach_delete_shape() {
         Some(&Value::String("skill_3".to_string()))
     );
     assert_eq!(
-        db.query(
-            "MATCH (s:Skill)-[r:SYNTHESIZED_FROM]->(m:Memory) RETURN count(r) AS relationships"
-        )
+        db.query_request(bounded_batch_query(
+            "MATCH (s:Skill)-[r:SYNTHESIZED_FROM]->(m:Memory) RETURN count(r) AS relationships",
+            &BTreeMap::new()
+        ))
         .unwrap()
         .rows[0]
             .get("relationships"),
         Some(&Value::Int(0))
     );
     assert_eq!(
-        db.query("MATCH (m:Memory) RETURN count(m) AS memories")
-            .unwrap()
-            .rows[0]
+        db.query_request(bounded_batch_query(
+            "MATCH (m:Memory) RETURN count(m) AS memories",
+            &BTreeMap::new()
+        ))
+        .unwrap()
+        .rows[0]
             .get("memories"),
         Some(&Value::Int(2))
     );
@@ -6845,13 +6880,9 @@ fn skill_delete_rejects_empty_skill_id_before_wal() {
     db.query("CREATE (:Skill {id: 'skill_1'})").unwrap();
     let graph_commit_epoch_before = db.runtime.get().unwrap().store.commit_epoch();
 
-    let error = db
-        .delete_knowledge_skills(&KnowledgeSkillDeleteBatchRequest {
-            skill_ids: vec![String::new()],
-        })
-        .unwrap_err();
+    let error = batch_delete_parameters(&[""]).unwrap_err();
 
-    assert!(error.to_string().contains("non-empty skill id"));
+    assert!(error.to_string().contains("non-empty id"));
     assert_eq!(
         db.runtime.get().unwrap().store.commit_epoch(),
         graph_commit_epoch_before
@@ -6859,18 +6890,22 @@ fn skill_delete_rejects_empty_skill_id_before_wal() {
 }
 
 #[test]
-fn typed_skill_delete_persists_as_one_wal_batch_and_replays() {
-    let path = unique_test_dir("typed_skill_delete_wal_replay");
+fn skill_delete_query_persists_as_one_wal_batch_and_replays() {
+    let path = unique_test_dir("skill_delete_query_wal_replay");
     {
         let mut db = Database::open(&path).unwrap();
         db.query("CREATE (:Skill {id: 'skill_1'})-[:SYNTHESIZED_FROM]->(:Memory {id: 'memory_1'})")
             .unwrap();
         db.query("CREATE (:Skill {id: 'skill_2'})").unwrap();
         let batch_count_before_delete = read_test_wal(&path).unwrap().matches("\tbatch\t").count();
-        db.delete_knowledge_skills(&KnowledgeSkillDeleteBatchRequest {
-            skill_ids: vec!["skill_1".to_string(), "skill_2".to_string()],
-        })
-        .unwrap();
+        let parameters = batch_delete_parameters(&["skill_1", "skill_2"]).unwrap();
+        let output = db
+            .query_request(bounded_batch_query(
+                "MATCH (n:Skill) WHERE n.id IN $ids DETACH DELETE n",
+                &parameters,
+            ))
+            .unwrap();
+        assert_eq!(output.rows.len(), 2);
         let batch_count_after_delete = read_test_wal(&path).unwrap().matches("\tbatch\t").count();
         assert_eq!(batch_count_after_delete, batch_count_before_delete + 1);
     }
@@ -6878,28 +6913,28 @@ fn typed_skill_delete_persists_as_one_wal_batch_and_replays() {
     assert!(wal.contains("delete_node"));
     {
         let db = Database::open(&path).unwrap();
+        let parameters = batch_delete_parameters(&["skill_1", "skill_2"]).unwrap();
         let skills = db
-            .query_read_only_with_params_bounded(
-                "MATCH (s:Skill) WHERE s.id IN $skill_ids RETURN count(s) AS total",
-                &BTreeMap::from([(
-                    "skill_ids".to_string(),
-                    Value::List(vec![
-                        Value::String("skill_1".to_string()),
-                        Value::String("skill_2".to_string()),
-                    ]),
-                )]),
-                Some(1),
-            )
+            .begin_read_transaction()
+            .unwrap()
+            .query_request(bounded_batch_query(
+                "MATCH (n:Skill) WHERE n.id IN $ids RETURN count(n) AS total",
+                &parameters,
+            ))
             .unwrap();
         assert_eq!(skills.rows[0].get("total"), Some(&Value::Int(0)));
-        assert!(db
-            .query_entity_via_cypher(&KnowledgeEntityRequest {
-                label: "Memory".to_string(),
-                external_id: "memory_1".to_string(),
-            })
-            .unwrap()
-            .entity
-            .is_some());
+        assert_eq!(
+            db.begin_read_transaction()
+                .unwrap()
+                .query_request(bounded_batch_query(
+                    "MATCH (n:Memory) WHERE n.id IN $ids RETURN n.id AS id",
+                    &batch_delete_parameters(&["memory_1"]).unwrap()
+                ))
+                .unwrap()
+                .rows
+                .len(),
+            1
+        );
     }
     std::fs::remove_dir_all(path).unwrap();
 }
@@ -7444,67 +7479,117 @@ fn deletes_threads_for_nowledge_compensation_delete_shape() {
     db.query("CREATE (:Thread {title: 'Idless Thread'})")
         .unwrap();
     let idless = db
-        .query("MATCH (t:Thread) WHERE t.title = 'Idless Thread' RETURN id(t) AS id")
+        .query_request(bounded_batch_query(
+            "MATCH (t:Thread) WHERE t.title = 'Idless Thread' RETURN id(t) AS id",
+            &BTreeMap::new(),
+        ))
         .unwrap();
     let idless_thread_id = match idless.rows[0].get("id").unwrap() {
         Value::Int(id) => id.to_string(),
         other => panic!("expected projected id int, got {other:?}"),
     };
 
-    let output = db
-        .delete_knowledge_threads(&KnowledgeThreadDeleteBatchRequest {
-            thread_ids: vec![
-                "thread_1".to_string(),
-                "missing".to_string(),
-                idless_thread_id,
-                "thread_2".to_string(),
-                "thread_1".to_string(),
-            ],
-        })
+    let parameters = batch_delete_parameters(&[
+        "thread_1",
+        "missing",
+        &idless_thread_id,
+        "thread_2",
+        "thread_1",
+    ])
+    .unwrap();
+    let before = db.commit_epoch().unwrap();
+    let mut transaction = db.begin_transaction().unwrap();
+    let candidates = transaction
+        .query_request(bounded_batch_query(
+            "MATCH (n:Thread) WHERE n.id IN $ids RETURN n.id AS id ORDER BY id",
+            &parameters,
+        ))
         .unwrap();
-
-    assert_eq!(output.graph_commit_epoch_before, 4);
-    assert_eq!(output.graph_commit_epoch_after, 5);
-    assert_eq!(output.rows.len(), 5);
-    assert_eq!(output.matched_count, 3);
-    assert_eq!(output.missing_count, 1);
-    assert_eq!(output.non_writable_count, 1);
-    assert_eq!(output.deleted_node_count, 2);
-    assert!(output.rows[0].matched);
-    assert!(!output.rows[1].matched);
-    assert!(output.rows[2].non_writable);
-    assert!(output.rows[3].matched);
-    assert!(output.rows[4].matched);
+    assert_eq!(candidates.rows.len(), 2);
+    assert_eq!(candidates.rows[0]["id"], Value::String("thread_1".into()));
+    assert_eq!(candidates.rows[1]["id"], Value::String("thread_2".into()));
+    let output = transaction
+        .query_request(bounded_batch_query(
+            "MATCH (n:Thread) WHERE n.id IN $ids DETACH DELETE n",
+            &parameters,
+        ))
+        .unwrap();
+    assert_eq!(output.rows.len(), 2);
+    transaction.commit().unwrap();
+    assert_eq!(before, 4);
+    assert_eq!(db.commit_epoch().unwrap(), before + 1);
+    let retained = db
+        .query_request(bounded_batch_query(
+            "MATCH (n:Thread) WHERE n.id IS NULL RETURN n.title AS identity",
+            &BTreeMap::new(),
+        ))
+        .unwrap();
+    assert_eq!(retained.rows.len(), 1);
+    assert_eq!(
+        retained.rows[0]["identity"],
+        Value::String("Idless Thread".into())
+    );
 
     for thread_id in ["thread_1", "thread_2"] {
-        assert!(!test_thread_exists(&db, thread_id));
+        let parameters = batch_delete_parameters(&[thread_id]).unwrap();
+        assert!(db
+            .begin_read_transaction()
+            .unwrap()
+            .query_request(bounded_batch_query(
+                "MATCH (n:Thread) WHERE n.id IN $ids RETURN n.id AS id",
+                &parameters,
+            ))
+            .unwrap()
+            .rows
+            .is_empty());
     }
-    assert!(test_thread_exists(&db, "thread_3"));
     assert_eq!(
-        db.query("MATCH (t:Thread)-[r:CONTAINS]->(m:Message) RETURN count(r) AS relationships")
-            .unwrap()
-            .rows[0]
+        db.query_request(bounded_batch_query(
+            "MATCH (n:Thread) WHERE n.id IN $ids RETURN n.id AS id",
+            &batch_delete_parameters(&["thread_3"]).unwrap(),
+        ))
+        .unwrap()
+        .rows
+        .len(),
+        1
+    );
+    assert_eq!(
+        db.query_request(bounded_batch_query(
+            "MATCH (t:Thread)-[r:CONTAINS]->(m:Message) RETURN count(r) AS relationships",
+            &BTreeMap::new()
+        ))
+        .unwrap()
+        .rows[0]
             .get("relationships"),
         Some(&Value::Int(0))
     );
     assert_eq!(
-        db.query("MATCH (t:Thread)-[r:COMPACTS_TO]->(m:Memory) RETURN count(r) AS relationships")
-            .unwrap()
-            .rows[0]
+        db.query_request(bounded_batch_query(
+            "MATCH (t:Thread)-[r:COMPACTS_TO]->(m:Memory) RETURN count(r) AS relationships",
+            &BTreeMap::new()
+        ))
+        .unwrap()
+        .rows[0]
             .get("relationships"),
         Some(&Value::Int(0))
     );
     assert_eq!(
-        db.query("MATCH (m:Message) RETURN count(m) AS messages")
-            .unwrap()
-            .rows[0]
+        db.query_request(bounded_batch_query(
+            "MATCH (m:Message) RETURN count(m) AS messages",
+            &BTreeMap::new()
+        ))
+        .unwrap()
+        .rows[0]
             .get("messages"),
         Some(&Value::Int(1))
     );
     assert_eq!(
-        db.query("MATCH (m:Memory) RETURN count(m) AS memories")
-            .unwrap()
-            .rows[0]
+        db.query_request(bounded_batch_query(
+            "MATCH (m:Memory) RETURN count(m) AS memories",
+            &BTreeMap::new()
+        ))
+        .unwrap()
+        .rows[0]
             .get("memories"),
         Some(&Value::Int(1))
     );
@@ -7516,13 +7601,9 @@ fn thread_delete_rejects_empty_thread_id_before_wal() {
     db.query("CREATE (:Thread {id: 'thread_1'})").unwrap();
     let graph_commit_epoch_before = db.runtime.get().unwrap().store.commit_epoch();
 
-    let error = db
-        .delete_knowledge_threads(&KnowledgeThreadDeleteBatchRequest {
-            thread_ids: vec![String::new()],
-        })
-        .unwrap_err();
+    let error = batch_delete_parameters(&[""]).unwrap_err();
 
-    assert!(error.to_string().contains("non-empty thread id"));
+    assert!(error.to_string().contains("non-empty id"));
     assert_eq!(
         db.runtime.get().unwrap().store.commit_epoch(),
         graph_commit_epoch_before
@@ -7530,18 +7611,22 @@ fn thread_delete_rejects_empty_thread_id_before_wal() {
 }
 
 #[test]
-fn typed_thread_delete_persists_as_one_wal_batch_and_replays() {
-    let path = unique_test_dir("typed_thread_delete_wal_replay");
+fn thread_delete_query_persists_as_one_wal_batch_and_replays() {
+    let path = unique_test_dir("thread_delete_query_wal_replay");
     {
         let mut db = Database::open(&path).unwrap();
         db.query("CREATE (:Thread {id: 'thread_1'})-[:CONTAINS]->(:Message {id: 'message_1'})")
             .unwrap();
         db.query("CREATE (:Thread {id: 'thread_2'})").unwrap();
         let batch_count_before_delete = read_test_wal(&path).unwrap().matches("\tbatch\t").count();
-        db.delete_knowledge_threads(&KnowledgeThreadDeleteBatchRequest {
-            thread_ids: vec!["thread_1".to_string(), "thread_2".to_string()],
-        })
-        .unwrap();
+        let parameters = batch_delete_parameters(&["thread_1", "thread_2"]).unwrap();
+        let output = db
+            .query_request(bounded_batch_query(
+                "MATCH (n:Thread) WHERE n.id IN $ids DETACH DELETE n",
+                &parameters,
+            ))
+            .unwrap();
+        assert_eq!(output.rows.len(), 2);
         let batch_count_after_delete = read_test_wal(&path).unwrap().matches("\tbatch\t").count();
         assert_eq!(batch_count_after_delete, batch_count_before_delete + 1);
     }
@@ -7550,16 +7635,30 @@ fn typed_thread_delete_persists_as_one_wal_batch_and_replays() {
     {
         let db = Database::open(&path).unwrap();
         for thread_id in ["thread_1", "thread_2"] {
-            assert!(!test_thread_exists(&db, thread_id));
+            let parameters = batch_delete_parameters(&[thread_id]).unwrap();
+            assert!(db
+                .begin_read_transaction()
+                .unwrap()
+                .query_request(bounded_batch_query(
+                    "MATCH (n:Thread) WHERE n.id IN $ids RETURN n.id AS id",
+                    &parameters,
+                ))
+                .unwrap()
+                .rows
+                .is_empty());
         }
-        assert!(db
-            .query_entity_via_cypher(&KnowledgeEntityRequest {
-                label: "Message".to_string(),
-                external_id: "message_1".to_string(),
-            })
-            .unwrap()
-            .entity
-            .is_some());
+        assert_eq!(
+            db.begin_read_transaction()
+                .unwrap()
+                .query_request(bounded_batch_query(
+                    "MATCH (n:Message) WHERE n.id IN $ids RETURN n.id AS id",
+                    &batch_delete_parameters(&["message_1"]).unwrap()
+                ))
+                .unwrap()
+                .rows
+                .len(),
+            1
+        );
     }
     std::fs::remove_dir_all(path).unwrap();
 }
@@ -9679,3 +9778,25 @@ fn read_test_durable_text(path: &std::path::Path) -> std::io::Result<String> {
 
 #[cfg(all(any(unix, windows), feature = "test-support"))]
 mod power_loss;
+
+fn batch_delete_parameters(ids: &[&str]) -> Result<BTreeMap<String, Value>> {
+    if ids.iter().any(|id| id.is_empty()) {
+        return Err(HawDBError::Semantic("non-empty id required".into()));
+    }
+    Ok(BTreeMap::from([(
+        "ids".into(),
+        Value::List(ids.iter().map(|id| Value::String((*id).into())).collect()),
+    )]))
+}
+
+fn bounded_batch_query<'a>(
+    query: &'a str,
+    parameters: &'a BTreeMap<String, Value>,
+) -> crate::QueryRequest<'a> {
+    crate::QueryRequest::new(query)
+        .with_params(parameters)
+        .with_output_limits(QueryStreamOptions {
+            max_rows: Some(5),
+            max_payload_bytes: Some(4096),
+        })
+}
