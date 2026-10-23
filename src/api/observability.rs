@@ -94,6 +94,7 @@ pub(super) fn admit_append_explain(
 
 // A snapshot read can finish recording after releasing the commit sequencer.
 // Only the existing bounded observation containers and configured sink are shared.
+#[derive(Clone)]
 pub(super) struct StatementRecorder {
     slow_query_log: Arc<SharedState<system_sql::SlowQueryLog>>,
     statement_summary: Arc<SharedState<system_sql::StatementSummary>>,

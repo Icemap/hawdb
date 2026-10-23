@@ -110,6 +110,7 @@ jobs:
 
       - name: Test Mem shared publication ownership
         run: |
+          cargo test --locked -p hawdb --features tokio-runtime --lib api::concurrent::autocommit::tests::
           cargo test --locked -p hawdb --features tokio-runtime --lib api::concurrent::graph_preparation_tests::
           cargo test --locked -p hawdb --features tokio-runtime --lib nowledge_mem::concurrent_owner::
           cargo test --locked -p hawdb --features tokio-runtime --lib nowledge_mem::read_execution::

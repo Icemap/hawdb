@@ -177,12 +177,12 @@ impl NowledgeMemEmbeddedStoreHandle {
             let result_budget =
                 materialized_result_budget(&source.config, &source.governor, is_mutation)?;
             let uses_external_seed = prepared.uses_external_seed();
-            let permit = try_admit_runtime(
+            let permit = Arc::new(try_admit_runtime(
                 &source.governor,
                 source.execution_request(&prepared, result_budget),
-            )?;
+            )?);
             let context = permit.bind_task_context(task_context.clone());
-            let snapshot = {
+            let (snapshot, mode) = {
                 let publication = self.lock_published_read()?;
                 let publication = publication.as_ref().ok_or_else(source_changed)?;
                 if publication.instance_identity != source.identity
@@ -192,19 +192,22 @@ impl NowledgeMemEmbeddedStoreHandle {
                 {
                     return Err(source_changed());
                 }
-                prepared.uses_read_snapshot().then(|| {
-                    (
-                        Arc::clone(&publication.view),
-                        publication.mode,
-                        uses_external_seed
-                            .then(|| publication.resident_projection.clone())
-                            .flatten(),
-                        publication
-                            .out_of_core_projection
-                            .as_ref()
-                            .map(|projection| projection.read_snapshot()),
-                    )
-                })
+                (
+                    prepared.uses_read_snapshot().then(|| {
+                        (
+                            Arc::clone(&publication.view),
+                            publication.mode,
+                            uses_external_seed
+                                .then(|| publication.resident_projection.clone())
+                                .flatten(),
+                            publication
+                                .out_of_core_projection
+                                .as_ref()
+                                .map(|projection| projection.read_snapshot()),
+                        )
+                    }),
+                    publication.mode,
+                )
             };
             let started = super::Instant::now();
             let (mode, (output, trace)) = if let Some((view, mode, resident, projection)) = snapshot
@@ -228,6 +231,17 @@ impl NowledgeMemEmbeddedStoreHandle {
                     &mut external,
                 );
                 (mode, self.finish_canonical_read(result)?)
+            } else if prepared.uses_transaction_kernel() {
+                let result = self.concurrent.query_prepared_mutation(
+                    prepared,
+                    QueryRequest::new(cypher)
+                        .with_params(parameters)
+                        .with_task_context(&context),
+                    options.capture_physical_plan,
+                    Some(Arc::clone(&permit)),
+                    Some(&source.identity),
+                )?;
+                (mode, result)
             } else {
                 // Non-snapshot statements still use the canonical owner. Reuse the admitted template
                 // and reject changes made while waiting for that owner.
@@ -373,6 +387,92 @@ mod tests {
         let handle = app_read_handle();
         handle.write_store().unwrap().search_projection = None;
         handle
+    }
+
+    #[test]
+    fn ordinary_report_writers_reuse_admission_and_overlap_on_distinct_unique_keys() {
+        use crate::api::AutocommitMutationPhase;
+
+        let handle = graph_only_handle();
+        handle
+            .query_with_report("CREATE (:Thread {id: 'thread-2', title: 'Second thread'})")
+            .unwrap();
+        handle
+            .query_with_report("CREATE CONSTRAINT ON :Thread(id) ASSERT UNIQUE")
+            .unwrap();
+        let stats = || {
+            handle
+                .read_store()
+                .unwrap()
+                .graph
+                .database()
+                .plan_cache_stats()
+                .unwrap()
+        };
+        let before = stats();
+        let (ready, resume) = handle
+            .concurrent
+            .pause_next_autocommit_mutation(AutocommitMutationPhase::BeforeExecution);
+        let first_handle = handle.clone();
+        let first = std::thread::spawn(move || {
+            first_handle.query_with_params_with_report_options(
+                "MATCH (t:Thread) WHERE t.id = $id SET t.title = $title RETURN t.title AS title",
+                &BTreeMap::from([
+                    ("id".into(), Value::String("thread-1".into())),
+                    ("title".into(), Value::String("First writer".into())),
+                ]),
+                NowledgeMemQueryReportOptions {
+                    capture_physical_plan: true,
+                    ..Default::default()
+                },
+            )
+        });
+        ready.recv_timeout(Duration::from_secs(10)).unwrap();
+        let (finished, completion) = mpsc::channel();
+        let second_handle = handle.clone();
+        let second = std::thread::spawn(move || {
+            finished.send(second_handle.query_with_params_with_report(
+                "MATCH (t:Thread) WHERE t.id = $id SET t.title = $title RETURN t.title AS title",
+                &BTreeMap::from([("id".into(), Value::String("thread-2".into())), ("title".into(), Value::String("Second writer".into()))]),
+            )).unwrap();
+        });
+        let progress = completion.recv_timeout(Duration::from_secs(5));
+        let after = progress
+            .as_ref()
+            .ok()
+            .and_then(|result| result.as_ref().ok())
+            .map(|_| stats());
+        resume.send(()).unwrap();
+        let first = first.join().unwrap().unwrap();
+        second.join().unwrap();
+        let second = progress
+            .expect("a disjoint ordinary writer must finish before the first executes")
+            .unwrap();
+        let after = after.unwrap();
+        assert_eq!(
+            first.output.rows[0]["title"],
+            Value::String("First writer".into())
+        );
+        assert_eq!(
+            second.output.rows[0]["title"],
+            Value::String("Second writer".into())
+        );
+        assert!(first.report.physical_plan_captured);
+        assert_eq!(
+            after.hits + after.misses + after.bypasses
+                - before.hits
+                - before.misses
+                - before.bypasses,
+            2
+        );
+        assert_eq!(stats(), after);
+        assert_eq!(
+            handle
+                .runtime_governor_snapshot()
+                .unwrap()
+                .admitted_memory_bytes,
+            0
+        );
     }
 
     fn generated_thread_query(context: &GraphRagSchemaContext) -> GraphRagGeneratedQuery {

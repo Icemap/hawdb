@@ -2198,3 +2198,24 @@ remains open under #1092 and draft #1039.
 memory transfer, single-CPU admission, cancellation ownership, and the retained
 memory floor that prevents self-wait. See the
 [implementation correspondence and negative controls](PREPARED_ADMISSION_PROOF.md).
+
+### Ordinary autocommit semantic scopes
+
+`HawDBAutocommitScope` abstracts `api::concurrent::autocommit` with two writers
+and two semantic read keys. A key represents the complete predicate domain:
+a unique candidate includes a node even when another predicate excludes it;
+a range/relationship scope can cover several keys. Scope acquisition precedes
+private snapshot capture. Data-only changes outside held scopes remain enabled;
+schema changes before acquisition invalidate admission. Execution and publication
+must retain the scoped versions. The existing transaction/durability and prepared
+admission models own WAL ordering, memory ownership and waiting source pins.
+
+This model does not prove the AST-to-scope mapping, unique lookup/index completeness,
+lock-manager fairness, Rust ownership or physical latency. Native tests cover the
+mapping and actual adapter boundaries. The three unsafe controls remove predicate
+protection, retain an early snapshot, or omit schema validation; each must violate
+its associated invariant. Positive checking belongs to `:storage_models`; manual
+controls are `:HawDBAutocommitScopeUnprotectedPredicate_check`,
+`:HawDBAutocommitScopeEarlySnapshot_check`, and
+`:HawDBAutocommitScopeIgnoreSchema_check`. Do not infer positive qualification
+from successful counterexample controls.

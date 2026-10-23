@@ -109,9 +109,38 @@ preparation and bound request. Restoring the statement savepoint preserves its
 schema, and the existing epoch fence MUST remain in force before replay. The
 preparation ends with the statement; the next statement binds its own parameters
 and prepares against the current private workspace, including staged schema.
-The enclosing transaction admission remains held during lock acquisition. This
-statement-local reuse does not itself transfer autocommit admission preparation
-or change autocommit publication locking.
+The enclosing transaction admission remains held during lock acquisition.
+
+Ordinary Cypher mutations through ConcurrentDatabase and the Mem handle transfer
+the admitted preparation into a single-statement concurrent transaction. They
+MUST acquire semantic read scopes before creating the private execution snapshot;
+a write-only footprint does not protect predicates or an excluded unique candidate.
+Node updates lock their label domain, or a unique candidate/internal node ID plus
+a shared label-membership guard when assignments preserve unique keys. Candidate
+resolution occurs under that membership guard and releases its source before node
+lock waiting. Node creation/MERGE/UNWIND additionally protect ID allocation. Other
+mutations and schema operations currently use a logical database scope; their
+private execution still runs outside the publication owner lock. This conservative
+scope is a concurrency limitation, not a claim of fine-grained relationship writes.
+
+After acquiring scopes, execution MUST validate instance (at host boundaries),
+branch, schema/ordering capabilities, configuration and request authorization/
+scoring against the new workspace. Data-only commits do not invalidate preparation.
+The actual staged footprint also participates in the existing lock manager before
+commit. Preparation funding survives locking/staging and the admitted permit
+survives the WAL/durability boundary. Non-RETURN mutations return the commit summary
+with final IDs; SET RETURN retains its prevalidated statement rows. No uncertain
+publication failure is retried, and cancellation after durable success cannot
+replace acknowledgment. Explicit transactions retain their existing epoch fence.
+Node RETURN predicates and complex node mutation predicates use the executor's
+shared bounded target preflight before staging IDs. Storage property filters
+MUST NOT replace three-valued expression evaluation for RETURN. EXPLAIN ANALYZE
+remains diagnostic and MUST NOT enter the mutation path. Positive legacy mutation
+summary row caps remain enforced independently of explicit RETURN output limits.
+
+SQL autocommit, control/projection procedures and production resource profiling
+still require separate adapter work. Release A/B and actual owner-lock measurements
+remain required; the new Cypher path alone does not establish their performance.
 
 Request limits can tighten database limits but MUST NOT widen them. An explicit
 request `Some(0)` is a zero-row or zero-payload ceiling, not an unlimited sentinel.

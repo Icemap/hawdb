@@ -6,6 +6,7 @@ STORAGE_MODELS = [
     "HawDBAppendMixedTransaction",
     "HawDBAppendSegmentPublication",
     "HawDBAppendTable",
+    "HawDBAutocommitScope",
     "HawDBAutomaticCheckpoint",
     "HawDBAutomaticHandoffWake",
     "HawDBBoundedMorselMerge",

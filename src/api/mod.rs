@@ -89,6 +89,8 @@ pub use automatic_checkpoint::AutomaticCheckpointReport;
 mod branch_lifecycle;
 mod canonical_snapshot;
 mod concurrent;
+#[cfg(test)]
+pub(crate) use concurrent::AutocommitMutationPhase;
 pub(crate) use concurrent::{
     ExclusiveDatabaseLease, PublishedConcurrentRead, SharedDatabaseGuard, SharedDatabaseOwner,
 };
@@ -899,6 +901,7 @@ pub struct DatabaseTransaction<'a> {
 
 #[derive(Debug)]
 pub(super) struct DatabaseTransactionRuntime {
+    instance_identity: DatabaseInstanceIdentity,
     session_config: SessionConfig,
     optimizer: CascadesOptimizer,
     plan_cache: SharedState<PlanCache>,
@@ -20243,6 +20246,7 @@ impl DatabaseTransactionRuntime {
     ) -> Result<Self> {
         let runtime = db.runtime.get()?;
         Ok(Self {
+            instance_identity: db.instance_identity()?,
             session_config,
             optimizer: runtime.optimizer.clone(),
             plan_cache: SharedState::new(PlanCache::new(db.config.max_plan_cache_entries)),
@@ -20521,7 +20525,7 @@ fn execute_graph_transaction_plan(
             optimized.physical_plan,
             PhysicalPlan::SetNodePropertiesReturn { .. }
         );
-        let mutation_limits = match &optimized.physical_plan {
+        let mut mutation_limits = match &optimized.physical_plan {
             PhysicalPlan::SetNodePropertiesReturn {
                 returns: crate::planner::SetNodePropertiesReturnMode::Count { .. },
                 ..
@@ -20533,6 +20537,11 @@ fn execute_graph_transaction_plan(
             },
             _ => runtime.config.mutation_limits,
         };
+        if !is_mutation_return
+            && let Some(limit) = execution.output_limits.max_rows.and_then(NonZeroUsize::new)
+        {
+            mutation_limits.max_result_rows = mutation_limits.max_result_rows.min(limit);
+        }
         let statement_savepoint = transaction.savepoint();
         let execution = (|| {
             let summary = match &optimized.physical_plan {
@@ -20551,13 +20560,37 @@ fn execute_graph_transaction_plan(
                     mutation_limits,
                 )?,
                 _ => {
-                    let mutation = executor::mutation_command(&optimized.physical_plan)?
-                        .ok_or_else(|| {
-                            HawDBError::Execution(
-                                "transaction mutation plan cannot be represented as a staged mutation"
-                                    .to_string(),
-                            )
-                        })?;
+                    let command = if is_mutation_return {
+                        hawdb_executor::mutation::materialize_node_mutation(
+                            &optimized.physical_plan,
+                            transaction.catalog(),
+                            transaction.store(),
+                            mutation_limits,
+                            task_context,
+                        )?
+                    } else {
+                        match executor::mutation_command(&optimized.physical_plan) {
+                            Ok(command) => command,
+                            Err(error) => {
+                                match hawdb_executor::mutation::materialize_node_mutation(
+                                    &optimized.physical_plan,
+                                    transaction.catalog(),
+                                    transaction.store(),
+                                    mutation_limits,
+                                    task_context,
+                                )? {
+                                    Some(command) => Some(command),
+                                    None => return Err(error),
+                                }
+                            }
+                        }
+                    };
+                    let mutation = command.ok_or_else(|| {
+                        HawDBError::Execution(
+                            "transaction mutation plan cannot be represented as a staged mutation"
+                                .to_string(),
+                        )
+                    })?;
                     if is_mutation_return {
                         transaction.stage_mutation_without_commit_rows(mutation, mutation_limits)?
                     } else {
@@ -20649,6 +20682,8 @@ pub(super) struct PreparedGraphTransactionRequest<'a> {
     request: QueryRequest<'a>,
     statement: cypher::Statement,
     optimized: OptimizedQueryPlan,
+    // Outlives the AST/plan, including autocommit lock waiting and staging.
+    _planning_memory: Option<hawdb_qos::RuntimeRetainedMemory>,
 }
 
 impl<'a> PreparedGraphTransactionRequest<'a> {
@@ -20693,7 +20728,61 @@ impl<'a> PreparedGraphTransactionRequest<'a> {
             request,
             statement,
             optimized,
+            _planning_memory: None,
         })
+    }
+
+    pub(super) fn from_admission(
+        runtime: &DatabaseTransactionRuntime,
+        state: &DatabaseTransactionState,
+        prepared: PreparedRuntimeQuery,
+        request: QueryRequest<'a>,
+    ) -> Result<Self> {
+        let transaction = state.graph_transaction.as_ref().expect("graph workspace");
+        if !prepared.matches_request(request)
+            || !prepared.is_compatible(
+                runtime.current_branch.as_ref().map(|branch| branch.info.id),
+                &runtime.config,
+                &runtime.system_variables,
+                transaction.catalog(),
+                transaction.store(),
+            )
+        {
+            return Err(HawDBError::Execution(
+                "prepared mutation changed before execution; prepare and admit again".into(),
+            ));
+        }
+        let (_, mut prepared) = prepared.into_execution(transaction.catalog(), transaction.store());
+        let optimized = prepared
+            .take_optimized(
+                request.access_control,
+                request.scoring.map(query_request::ScoringAttachment::bind),
+            )?
+            .ok_or_else(|| {
+                HawDBError::Execution("admitted mutation has no compatible plan".into())
+            })?;
+        Ok(Self {
+            request,
+            statement: prepared.statement,
+            optimized,
+            _planning_memory: prepared.planning_memory,
+        })
+    }
+
+    pub(super) fn returns_statement_rows(&self) -> bool {
+        matches!(
+            self.optimized.physical_plan,
+            PhysicalPlan::SetNodePropertiesReturn { .. }
+        )
+    }
+
+    pub(super) fn into_trace(self, capture_trace: bool) -> QueryExecutionTrace {
+        QueryExecutionTrace {
+            statement: self.statement,
+            optimizer_trace: capture_trace.then_some(self.optimized.trace),
+            plan_cache_lookup: Some(self.optimized.plan_cache_lookup),
+            execution_profile: None,
+        }
     }
 
     pub(super) fn execute(

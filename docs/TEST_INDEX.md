@@ -100,6 +100,23 @@ the macOS/Windows runtime lane. Existing request, lock and serializability
 families continue to cover the shared execution kernel; preparation counts are
 not latency or allocation measurements.
 
+`api::concurrent::autocommit::tests` covers ordinary Cypher writers sharing a
+label but updating distinct unique keys, readers progressing while private
+execution is suspended, intervening commits without replanning, excluded unique
+candidates, schema invalidation, cancellation/output refusal, and durable create
+IDs after reopen. The root general suite and macOS/Windows runtime lane own these
+cases, along with out-of-core unique lookup, EXPLAIN ANALYZE rejection, mutation
+summary ceilings and expression/NULL predicate parity.
+`nowledge_mem::read_execution::tests` additionally exercises the actual
+admitted report adapter with two such writers, captured plans, one preparation
+per statement and full admission refund. These are correctness/operation-count
+checks, not release latency or allocation evidence.
+
+`HawDBAutocommitScope` joins the existing `docs/tla:storage_models` positive
+owner. Its three manual controls (`UnprotectedPredicate`, `EarlySnapshot`,
+`IgnoreSchema`) distinguish predicate protection, snapshot ordering and admission
+invalidation. They do not replace positive checking or native scope-mapping tests.
+
 `nowledge_mem::read_execution::tests` covers ordinary owned/streaming and report
 reads from published views: streaming and report-observation callbacks must allow
 a writer and fresh reader to finish, and execution-admission telemetry must

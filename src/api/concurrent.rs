@@ -13,6 +13,9 @@
 // limitations under the License.
 
 use crate::sql::{Expr, ExprKind};
+mod autocommit;
+#[cfg(test)]
+pub(crate) use autocommit::AutocommitMutationPhase;
 mod coordinator;
 #[cfg(test)]
 mod graph_preparation_tests;
@@ -143,6 +146,8 @@ struct ConcurrentDatabaseInner {
     checkpoint_serial: Mutex<()>,
     #[cfg(test)]
     autocommit_read_gate: Mutex<Option<AutocommitReadGate>>,
+    #[cfg(test)]
+    autocommit_mutation_gate: Mutex<Option<autocommit::AutocommitMutationGate>>,
 }
 
 #[cfg(test)]
@@ -196,6 +201,8 @@ impl ConcurrentDatabase {
                 checkpoint_serial: Mutex::new(()),
                 #[cfg(test)]
                 autocommit_read_gate: Mutex::new(None),
+                #[cfg(test)]
+                autocommit_mutation_gate: Mutex::new(None),
             }),
         }
     }
@@ -411,6 +418,14 @@ impl ConcurrentDatabase {
         options: ConcurrentTransactionOptions,
     ) -> Result<ConcurrentDatabaseTransaction> {
         let transaction_id = self.inner.transaction_ids.allocate()?;
+        self.begin_transaction_with_id(options, transaction_id)
+    }
+
+    fn begin_transaction_with_id(
+        &self,
+        options: ConcurrentTransactionOptions,
+        transaction_id: u64,
+    ) -> Result<ConcurrentDatabaseTransaction> {
         let database = self.inner.commits.lock()?;
         let base_commit_epoch = database.commit_epoch()?;
         Ok(ConcurrentDatabaseTransaction {
@@ -487,6 +502,12 @@ impl ConcurrentDatabase {
                 return self.with_autocommit_exclusive(|database| database.query_request(request));
             }
         };
+        if prepared.uses_transaction_kernel() {
+            drop(view);
+            return self
+                .query_prepared_mutation(prepared, request, false, None, None)
+                .map(|(output, _)| output);
+        }
         if !prepared.uses_read_snapshot() {
             drop(view);
             return self.with_autocommit_exclusive(move |database| {

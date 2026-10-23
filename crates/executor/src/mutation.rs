@@ -35,7 +35,7 @@ use crate::predicate::property_filter_from_properties;
 mod preflight;
 pub use preflight::{
     execute_mutation_with_store, execute_mutation_with_store_output_limits,
-    materialize_unwind_mutations, project_staged_mutation_return_rows,
+    materialize_node_mutation, materialize_unwind_mutations, project_staged_mutation_return_rows,
 };
 
 pub fn mutation_command(plan: &PhysicalPlan) -> Result<Option<GraphMutation>> {

@@ -216,7 +216,7 @@ pub(crate) fn runtime_result_memory_budget(config: &DatabaseConfig, governor_bud
 
 #[cfg_attr(not(feature = "tokio-runtime"), allow(dead_code))]
 impl PreparedRuntimeQuery {
-    fn is_compatible(
+    pub(super) fn is_compatible(
         &self,
         branch_id: Option<hawdb_core::Uuid>,
         config: &DatabaseConfig,
@@ -276,6 +276,31 @@ impl PreparedRuntimeQuery {
                 .optimized
                 .as_ref()
                 .is_some_and(|optimized| executor::requires_write_access(&optimized.physical_plan))
+    }
+
+    pub(crate) fn uses_transaction_kernel(&self) -> bool {
+        !matches!(
+            statement_body(&self.statement),
+            cypher::Statement::Explain(_)
+        ) && self.optimized.as_ref().is_some_and(|optimized| {
+            matches!(
+                optimized.physical_plan.class(),
+                hawdb_plan_cypher::PhysicalPlanClass::Schema
+                    | hawdb_plan_cypher::PhysicalPlanClass::Mutation
+            )
+        })
+    }
+
+    pub(super) fn physical_plan(&self) -> Option<&PhysicalPlan> {
+        self.optimized
+            .as_ref()
+            .map(|optimized| &optimized.physical_plan)
+    }
+
+    pub(super) fn matches_request(&self, request: QueryRequest<'_>) -> bool {
+        self.cypher_text == request.cypher
+            && self.access_control.as_ref() == request.access_control
+            && self.scoring_key == request.scoring.map(|scoring| scoring.bind().cache_key())
     }
 
     pub(super) fn into_execution<R: hawdb_storage::graph_engine::GraphReadEngine>(
