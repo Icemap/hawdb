@@ -27,8 +27,14 @@ impl Database {
         limits: StorageResourceProfileLimits,
     ) -> Result<StorageResourceProfileReport> {
         limits.validate()?;
-        let prepared = self.prepare_runtime_query(cypher_text.to_string(), parameters)?;
-        self.storage_resource_profile_with_binding(prepared, parameters, limits, None, None, None)
+        self.storage_resource_profile_with_binding(
+            || self.prepare_runtime_query(cypher_text.to_string(), parameters),
+            parameters,
+            limits,
+            None,
+            None,
+            None,
+        )
     }
 
     pub fn storage_resource_profile_for_production(
@@ -48,9 +54,8 @@ impl Database {
             )));
         }
         limits.validate()?;
-        let prepared = self.prepare_runtime_query(cypher_text.to_string(), parameters)?;
         self.storage_resource_profile_with_binding(
-            prepared,
+            || self.prepare_runtime_query(cypher_text.to_string(), parameters),
             parameters,
             limits,
             Some(evidence_binding),
@@ -77,7 +82,7 @@ impl Database {
             )));
         }
         self.storage_resource_profile_with_binding(
-            prepared,
+            || Ok(prepared),
             parameters,
             limits,
             Some(evidence_binding),
@@ -88,7 +93,7 @@ impl Database {
 
     fn storage_resource_profile_with_binding(
         &self,
-        prepared: super::query_runtime::PreparedRuntimeQuery,
+        prepare: impl FnOnce() -> Result<super::query_runtime::PreparedRuntimeQuery>,
         parameters: &BTreeMap<String, Value>,
         limits: StorageResourceProfileLimits,
         evidence_binding: Option<crate::ProductionEvidenceBinding>,
@@ -105,8 +110,10 @@ impl Database {
             max_payload_bytes: Some(limits.max_output_payload_bytes),
         };
         let default_context = hawdb_core::RuntimeTaskContext::default();
+        // Raw callers measure preparation after the residency baseline; admitted
+        // callers hand over the already-accounted preparation without repeating it.
         let query = read.query_prepared_with_params_streaming_context(
-            prepared,
+            prepare()?,
             parameters,
             stream_options,
             executor::StreamDelivery::Validated,
