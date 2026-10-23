@@ -1,0 +1,7 @@
+{
+  "invalid_build": "baseline-build-1",
+  "reason": "Archive baseline has older source timestamps; shared target cache incorrectly reports both changed packages fresh and reuses candidate bytes. No measurements were started.",
+  "observed_candidate_sha256": "ca081144988591143c909eac400cbea71fc20156c041bdea86ece4d0d4f5febf",
+  "observed_invalid_baseline_sha256": "ca081144988591143c909eac400cbea71fc20156c041bdea86ece4d0d4f5febf",
+  "disposition": "Retain invalid build and use an independent baseline target directory. Never measure or accept invalid baseline binary."
+}

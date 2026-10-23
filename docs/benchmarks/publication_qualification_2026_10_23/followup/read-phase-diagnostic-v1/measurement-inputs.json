@@ -1,0 +1,7 @@
+{
+  "protocol.json": "ec5070db1f485d878217b9ed63e35fc55b904d59c4750cfae08a68f6ca50950a",
+  "source-manifest.json": "19c9f01ed54b0e87ea42dbd61caf38667edae3f265e94f91c49cb93bdfb4c495",
+  "measure.py": "4cd91148572bfb057ef6ce9250eaa4a846f68e287437ee6aa3d94b4a337fc708",
+  "analyze.py": "e6a660bded2814ddacc6cf7f80c6929b3ee9b9b0bc85c50532684d64bae264b9",
+  "run.sh": "be1560eff34571159cd99a8eb40a489b0147258298744c49564692568c675195"
+}

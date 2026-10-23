@@ -1,0 +1,31 @@
+{
+  "command": [
+    "cargo",
+    "bench",
+    "--locked",
+    "--bench",
+    "concurrent_writers",
+    "--no-run",
+    "--message-format=json",
+    "--jobs",
+    "2"
+  ],
+  "target": "/home/runner/work/_temp/read-projection-work/map/target",
+  "binary_sha256": "3464223c0b673a65ed9fc04191be620e11b5f0a48b91df51a9737896720a88ec",
+  "seconds": 488.45112499300006,
+  "profile": {
+    "opt_level": "3",
+    "debuginfo": 0,
+    "debug_assertions": false,
+    "overflow_checks": false,
+    "test": true
+  },
+  "features": [
+    "background-maintenance",
+    "default",
+    "full-text-search",
+    "graph-analytics",
+    "tokio-runtime",
+    "vector-search"
+  ]
+}

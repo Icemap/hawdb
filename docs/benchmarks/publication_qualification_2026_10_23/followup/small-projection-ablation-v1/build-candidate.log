@@ -1,0 +1,16 @@
+info: syncing channel updates for 1.97.1-aarch64-unknown-linux-gnu
+info: latest update on 2026-07-16 for version 1.97.1 (8bab26f4f 2026-07-14)
+info: downloading component clippy
+   Compiling hawdb-executor v0.14.0 (/work/crates/executor)
+   Compiling hawdb-search v0.14.0 (/work/crates/search)
+   Compiling hawdb-system-sql v0.14.0 (/work/crates/system-sql)
+   Compiling hawdb-nowledge-contracts v0.14.0 (/work/crates/nowledge-contracts)
+   Compiling hawdb-explain v0.14.0 (/work/crates/explain)
+   Compiling hawdb-readiness v0.14.0 (/work/crates/readiness)
+   Compiling hawdb-bootstrap v0.14.0 (/work/crates/bootstrap)
+   Compiling hawdb-relational v0.14.0 (/work/crates/relational)
+   Compiling hawdb-compat v0.14.0 (/work/crates/compat)
+   Compiling hawdb-resource-profile v0.14.0 (/work/crates/resource-profile)
+   Compiling hawdb-artifact v0.14.0 (/work/crates/artifact)
+   Compiling hawdb v0.14.0 (/work)
+    Finished `bench` profile [optimized] target(s) in 11m 13s

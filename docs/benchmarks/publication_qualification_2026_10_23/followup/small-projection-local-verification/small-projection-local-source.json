@@ -1,0 +1,10 @@
+{
+  "head": "7da5fc6c81790121491dd23ee1c1b232ad9a8c3b",
+  "production_overlay_sha256": {
+    "crates/executor/src/expression.rs": "e5efb1e5b67bfcc1fe786a90220972ad98f2fb739af3c24c577ab2c100fe7c75",
+    "crates/executor/src/expression/projection.rs": "2e48fc56572f0d3c604b2f2805f09407162b7820c1121357993290043631e2a0",
+    "crates/executor/src/scan.rs": "2ff63bec6b0e8866821156cfdc29be089373d92873c62e613c8a1cce7328b15f",
+    "crates/executor/src/expression/projection/tests.rs": "7dda1b8dadef59eebaecfc238dc6474858aa5899e5fac67eb9f6f75b8032b716"
+  },
+  "note": "Uncommitted implementation; query-stage timing overlays exist only in the separate Docker diagnostic source, not this local source."
+}

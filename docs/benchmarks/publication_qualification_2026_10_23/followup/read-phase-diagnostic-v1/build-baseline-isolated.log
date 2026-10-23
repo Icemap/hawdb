@@ -1,0 +1,137 @@
+info: syncing channel updates for 1.97.1-aarch64-unknown-linux-gnu
+info: latest update on 2026-07-16 for version 1.97.1 (8bab26f4f 2026-07-14)
+info: downloading component clippy
+   Compiling libc v0.2.190
+   Compiling jobserver v0.1.35
+   Compiling find-msvc-tools v0.1.9
+   Compiling shlex v2.0.1
+   Compiling memchr v2.8.3
+   Compiling cc v1.2.67
+   Compiling cfg-if v1.0.4
+   Compiling pkg-config v0.3.33
+   Compiling zstd-sys v2.1.1+zstd.1.5.7
+   Compiling aho-corasick v1.1.4
+   Compiling regex-syntax v0.8.11
+   Compiling getrandom v0.4.3
+   Compiling regex-automata v0.4.18
+   Compiling proc-macro2 v1.0.106
+   Compiling regex v1.13.1
+   Compiling unicode-ident v1.0.24
+   Compiling uuid v1.28.0
+   Compiling quote v1.0.46
+   Compiling hawdb-core v0.14.0 (/work/crates/core)
+   Compiling serde_core v1.0.229
+   Compiling zmij v1.0.23
+   Compiling serde_json v1.0.154
+   Compiling typenum v1.20.1
+   Compiling hybrid-array v0.4.15
+   Compiling syn v3.0.3
+   Compiling hawdb-expression v0.14.0 (/work/crates/expression)
+   Compiling hawdb-ddl v0.14.0 (/work/crates/ddl)
+   Compiling itoa v1.0.18
+   Compiling hawdb-plan-core v0.14.0 (/work/crates/plan-core)
+   Compiling hawdb-cypher v0.14.0 (/work/crates/cypher)
+   Compiling semver v1.0.28
+   Compiling crossbeam-utils v0.8.22
+   Compiling rustc_version v0.4.1
+   Compiling hawdb-plan-cypher v0.14.0 (/work/crates/plan-cypher)
+   Compiling block-buffer v0.12.1
+   Compiling crypto-common v0.2.2
+   Compiling crossbeam-epoch v0.9.20
+   Compiling digest v0.11.3
+   Compiling crc32c v0.6.8
+   Compiling cpufeatures v0.3.1
+   Compiling autocfg v1.5.1
+   Compiling crossbeam-deque v0.8.7
+   Compiling num-traits v0.2.19
+   Compiling sha2 v0.11.1
+   Compiling sysinfo v0.39.6
+   Compiling serde v1.0.229
+   Compiling rayon-core v1.13.0
+   Compiling hawdb-cgroup v0.14.0 (/work/crates/cgroup)
+   Compiling zstd-safe v8.1.0
+   Compiling hawdb-qos v0.14.0 (/work/crates/qos)
+   Compiling serde_derive v1.0.229
+   Compiling hawdb-integrity v0.14.0 (/work/crates/integrity)
+   Compiling either v1.16.0
+   Compiling zstd-safe v7.2.4
+   Compiling byteorder v1.5.0
+   Compiling bytemuck v1.25.2
+   Compiling roaring v0.11.5
+   Compiling rayon v1.12.0
+   Compiling zstd v0.14.2
+   Compiling chrono v0.4.45
+   Compiling hawdb-telemetry v0.14.0 (/work/crates/telemetry)
+   Compiling hawdb-analytics v0.14.0 (/work/crates/analytics)
+   Compiling fs2 v0.4.3
+   Compiling memmap2 v0.9.11
+   Compiling hawdb-storage v0.14.0 (/work/crates/storage)
+   Compiling syn v2.0.118
+   Compiling object v0.37.3
+   Compiling hawdb-cascades v0.14.0 (/work/crates/cascades)
+   Compiling equivalent v1.0.2
+   Compiling foldhash v0.2.0
+   Compiling allocator-api2 v0.2.21
+   Compiling crc32fast v1.5.2
+   Compiling hashbrown v0.16.1
+   Compiling ar_archive_writer v0.5.2
+   Compiling hawdb-executor v0.14.0 (/work/crates/executor)
+   Compiling no_std_io2 v0.9.4
+   Compiling rle-decode-fast v1.0.3
+   Compiling libflate_lz77 v2.3.0
+   Compiling psm v0.1.31
+   Compiling hawdb-optimizer-vector v0.14.0 (/work/crates/optimizer-vector)
+   Compiling dary_heap v0.3.9
+   Compiling adler32 v1.2.0
+   Compiling libflate v2.3.1
+   Compiling zstd v0.13.3
+   Compiling hawdb-optimizer-predicate v0.14.0 (/work/crates/optimizer-predicate)
+   Compiling proc-macro-error-attr3 v3.1.0
+   Compiling stacker v0.1.24
+   Compiling proc-macro-error3 v3.1.0
+   Compiling include-flate-compress v0.3.4
+   Compiling crunchy v0.2.4
+   Compiling tinyvec_macros v0.1.1
+   Compiling tinyvec v1.12.0
+   Compiling include-flate-codegen v0.3.4
+   Compiling recursive-proc-macro-impl v0.1.1
+   Compiling hawdb-evidence v0.14.0 (/work/crates/evidence)
+   Compiling fst v0.4.7
+   Compiling recursive v0.1.1
+   Compiling include-flate v0.3.4
+   Compiling unicode-normalization v0.1.25
+   Compiling hawdb-plan-cache v0.14.0 (/work/crates/plan-cache)
+   Compiling rustc-hash v2.1.3
+   Compiling jieba-macros v0.11.0
+   Compiling log v0.4.33
+   Compiling bytecount v0.6.9
+   Compiling jieba-rs v0.11.0
+   Compiling sqlparser v0.63.0
+   Compiling caseless v0.2.2
+   Compiling bitpacking v0.9.3
+   Compiling hawdb-optimizer-graph v0.14.0 (/work/crates/optimizer-graph)
+   Compiling hawdb-vector-projection v0.14.0 (/work/crates/vector-projection)
+   Compiling hawdb-optimizer-relational v0.14.0 (/work/crates/optimizer-relational)
+   Compiling hawdb-sql-syntax v0.14.0 (/work/crates/sql-syntax)
+   Compiling hawdb-sql v0.14.0 (/work/crates/sql)
+   Compiling hawdb-optimizer v0.14.0 (/work/crates/optimizer)
+   Compiling hawdb-search v0.14.0 (/work/crates/search)
+   Compiling hawdb-query v0.14.0 (/work/crates/query)
+   Compiling pin-project-lite v0.2.17
+   Compiling tokio v1.53.3
+   Compiling hawdb-system-sql v0.14.0 (/work/crates/system-sql)
+   Compiling hawdb-nowledge-contracts v0.14.0 (/work/crates/nowledge-contracts)
+   Compiling hawdb-route-ownership v0.14.0 (/work/crates/route-ownership)
+   Compiling unicode-width v0.2.2
+   Compiling hawdb-explain v0.14.0 (/work/crates/explain)
+   Compiling hawdb-readiness v0.14.0 (/work/crates/readiness)
+   Compiling hawdb-runtime-tokio v0.14.0 (/work/crates/runtime-tokio)
+   Compiling hawdb-bootstrap v0.14.0 (/work/crates/bootstrap)
+   Compiling hawdb-query-policy v0.14.0 (/work/crates/query-policy)
+   Compiling hawdb-relational v0.14.0 (/work/crates/relational)
+   Compiling hawdb-resource-profile v0.14.0 (/work/crates/resource-profile)
+   Compiling hawdb-compat v0.14.0 (/work/crates/compat)
+   Compiling hawdb-artifact v0.14.0 (/work/crates/artifact)
+   Compiling hawdb-fuzz-contracts v0.14.0 (/work/crates/fuzz-contracts)
+   Compiling hawdb v0.14.0 (/work)
+    Finished `bench` profile [optimized] target(s) in 9m 32s
