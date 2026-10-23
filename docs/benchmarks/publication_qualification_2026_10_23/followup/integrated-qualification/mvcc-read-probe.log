@@ -1,0 +1,11 @@
+    Finished `dev` profile [optimized] target(s) in 0.23s
+     Running `tools/mvcc-fuzz/target/debug/hawdb-mvcc-fuzz run --seconds 30 --explain`
+PASS | 50184 cases | 30000 ms | target/mvcc-fuzz/15293-1792781032792343000
+  same_key           T1 first:   3078  T2 first:   3195
+  disjoint           T1 first:   3101  T2 first:   3172
+  net_zero           T1 first:   1575  T2 first:   4698
+  absent_delete      T1 first:   3125  T2 first:   3148
+  delete_insert      T1 first:   1615  T2 first:   4658
+  broad_narrow       T1 first:   3139  T2 first:   3134
+  duplicate_insert   T1 first:   3139  T2 first:   3134
+  rollback           T1 first:   3077  T2 first:   3196

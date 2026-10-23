@@ -3,7 +3,7 @@
 use super::{Database, DatabaseReadTransaction};
 use crate::{HawDBError, Result};
 use std::ops::{Deref, DerefMut};
-use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+use std::sync::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 /// State whose graph mutations and projection publications share one owner.
 /// The canonical database must remain the same instance throughout a validated
@@ -26,12 +26,14 @@ pub trait DatabasePublicationState {
 /// the underlying operation's existing retry and recovery semantics.
 #[derive(Debug)]
 pub struct DatabasePublicationOwner<S> {
+    admission: Mutex<()>,
     state: RwLock<S>,
 }
 
 impl<S> DatabasePublicationOwner<S> {
     pub fn new(state: S) -> Self {
         Self {
+            admission: Mutex::new(()),
             state: RwLock::new(state),
         }
     }
@@ -47,13 +49,19 @@ impl<S> DatabasePublicationOwner<S> {
     }
 
     pub(crate) fn read(&self) -> Result<RwLockReadGuard<'_, S>> {
-        self.state.read().map_err(|_| poisoned())
+        // Once a reader waits on the state lock, later writers cannot repeatedly
+        // barge ahead. Admission ends before callbacks so readers stay concurrent.
+        let admission = self.admission.lock().map_err(|_| poisoned())?;
+        let state = self.state.read().map_err(|_| poisoned())?;
+        drop(admission);
+        Ok(state)
     }
 
     pub(crate) fn write(&self) -> Result<DatabasePublicationWriteGuard<'_, S>> {
-        Ok(DatabasePublicationWriteGuard {
-            state: self.state.write().map_err(|_| poisoned())?,
-        })
+        let admission = self.admission.lock().map_err(|_| poisoned())?;
+        let state = self.state.write().map_err(|_| poisoned())?;
+        drop(admission);
+        Ok(DatabasePublicationWriteGuard { state })
     }
 
     #[cfg(test)]
@@ -110,7 +118,146 @@ fn poisoned() -> HawDBError {
 mod tests {
     use super::*;
     use crate::Value;
+    use std::sync::mpsc;
     use std::sync::Arc;
+    use std::time::{Duration, Instant};
+
+    fn wait_for_admitted_owner<S>(owner: &DatabasePublicationOwner<S>) {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            match owner.admission.try_lock() {
+                Err(std::sync::TryLockError::WouldBlock) => return,
+                Err(std::sync::TryLockError::Poisoned(_)) => panic!("admission poisoned"),
+                Ok(guard) => drop(guard),
+            }
+            assert!(Instant::now() < deadline, "owner did not enter admission");
+            std::thread::yield_now();
+        }
+    }
+
+    #[test]
+    fn admitted_reader_precedes_a_later_writer() {
+        let owner = DatabasePublicationOwner::new(0);
+        std::thread::scope(|scope| {
+            let initial = owner.state.write().unwrap();
+            let (events, received) = mpsc::channel();
+            let (release, released) = mpsc::channel();
+            let reader_events = events.clone();
+            let reader_owner = &owner;
+            let reader = scope.spawn(move || {
+                reader_owner
+                    .with_read(|state| {
+                        reader_events.send(("read", *state)).unwrap();
+                        released.recv_timeout(Duration::from_secs(5)).unwrap();
+                        Ok(())
+                    })
+                    .unwrap();
+            });
+            wait_for_admitted_owner(&owner);
+            let writer_owner = &owner;
+            let writer = scope.spawn(move || {
+                writer_owner
+                    .with_write(|state| {
+                        *state += 1;
+                        events.send(("write", *state)).unwrap();
+                        Ok(())
+                    })
+                    .unwrap();
+            });
+            drop(initial);
+            assert_eq!(
+                received.recv_timeout(Duration::from_secs(5)).unwrap(),
+                ("read", 0)
+            );
+            assert!(received.try_recv().is_err());
+            release.send(()).unwrap();
+            reader.join().unwrap();
+            writer.join().unwrap();
+            assert_eq!(
+                received.recv_timeout(Duration::from_secs(5)).unwrap(),
+                ("write", 1)
+            );
+        });
+    }
+
+    #[test]
+    fn admitted_writer_precedes_a_later_reader() {
+        let owner = DatabasePublicationOwner::new(0);
+        std::thread::scope(|scope| {
+            let initial = owner.state.read().unwrap();
+            let (events, received) = mpsc::channel();
+            let (release, released) = mpsc::channel();
+            let writer_events = events.clone();
+            let writer_owner = &owner;
+            let writer = scope.spawn(move || {
+                writer_owner
+                    .with_write(|state| {
+                        *state += 1;
+                        writer_events.send(("write", *state)).unwrap();
+                        released.recv_timeout(Duration::from_secs(5)).unwrap();
+                        Ok(())
+                    })
+                    .unwrap();
+            });
+            wait_for_admitted_owner(&owner);
+            let reader_owner = &owner;
+            let reader = scope.spawn(move || {
+                reader_owner
+                    .with_read(|state| {
+                        events.send(("read", *state)).unwrap();
+                        Ok(())
+                    })
+                    .unwrap();
+            });
+            drop(initial);
+            assert_eq!(
+                received.recv_timeout(Duration::from_secs(5)).unwrap(),
+                ("write", 1)
+            );
+            assert!(received.try_recv().is_err());
+            release.send(()).unwrap();
+            writer.join().unwrap();
+            reader.join().unwrap();
+            assert_eq!(
+                received.recv_timeout(Duration::from_secs(5)).unwrap(),
+                ("read", 1)
+            );
+        });
+    }
+
+    #[test]
+    fn read_callbacks_remain_concurrent_after_admission() {
+        let owner = DatabasePublicationOwner::new(0);
+        std::thread::scope(|scope| {
+            let (events, received) = mpsc::channel();
+            let mut releases = Vec::new();
+            let mut readers = Vec::new();
+            for _ in 0..2 {
+                let (release, released) = mpsc::channel();
+                releases.push(release);
+                let events = events.clone();
+                let owner = &owner;
+                readers.push(scope.spawn(move || {
+                    owner
+                        .with_read(|_| {
+                            events.send(()).unwrap();
+                            released.recv_timeout(Duration::from_secs(5)).unwrap();
+                            Ok(())
+                        })
+                        .unwrap();
+                }));
+            }
+            for _ in 0..2 {
+                received.recv_timeout(Duration::from_secs(5)).unwrap();
+            }
+            for release in releases {
+                release.send(()).unwrap();
+            }
+            for reader in readers {
+                reader.join().unwrap();
+            }
+        });
+    }
 
     struct State {
         graph: Database,

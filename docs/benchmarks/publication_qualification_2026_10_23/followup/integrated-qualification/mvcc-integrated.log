@@ -1,0 +1,25 @@
+   Compiling hawdb-storage v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/storage)
+   Compiling hawdb-executor v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/executor)
+   Compiling hawdb-search v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/search)
+   Compiling hawdb-system-sql v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/system-sql)
+   Compiling hawdb-resource-profile v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/resource-profile)
+   Compiling hawdb-relational v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/relational)
+   Compiling hawdb-compat v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/compat)
+   Compiling hawdb-artifact v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/artifact)
+   Compiling hawdb-explain v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/explain)
+   Compiling hawdb-nowledge-contracts v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/nowledge-contracts)
+   Compiling hawdb-bootstrap v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/bootstrap)
+   Compiling hawdb-readiness v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/readiness)
+   Compiling hawdb v0.14.0 (/private/tmp/hawdb-optimizer-work)
+   Compiling hawdb-mvcc-fuzz v0.0.0 (/private/tmp/hawdb-optimizer-work/tools/mvcc-fuzz)
+    Finished `dev` profile [optimized] target(s) in 1m 02s
+     Running `tools/mvcc-fuzz/target/debug/hawdb-mvcc-fuzz run --seconds 30 --explain`
+PASS | 15908 cases | 30013 ms | target/mvcc-fuzz/89545-1792776484573015000
+  same_key           T1 first:    971  T2 first:   1018
+  disjoint           T1 first:    992  T2 first:    997
+  net_zero           T1 first:    482  T2 first:   1507
+  absent_delete      T1 first:    982  T2 first:   1007
+  delete_insert      T1 first:    517  T2 first:   1471
+  broad_narrow       T1 first:    996  T2 first:    992
+  duplicate_insert   T1 first:    996  T2 first:    992
+  rollback           T1 first:    970  T2 first:   1018

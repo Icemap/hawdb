@@ -5,6 +5,9 @@
 //! before with_write and again inside its callback. Callback time is a measured
 //! lower bound on exclusive ownership, not the inner selector's lock duration.
 
+#[path = "consumer_publication/probes.rs"]
+mod probes;
+
 #[path = "consumer_publication/workload.rs"]
 mod workload;
 
@@ -83,7 +86,10 @@ fn attempt(
     consumer: &mut SearchProjectionConsumer,
     mode: Mode,
     committed: &AtomicUsize,
+    probe: &probes::Probe,
 ) -> Json {
+    let whole_phase = probe.begin("attempt");
+    let mut observations = Vec::new();
     let old = consumer.projection().receipt().source_epoch;
     let started = Instant::now();
     let mut capture_wait = 0;
@@ -109,10 +115,12 @@ fn attempt(
         capture_wait = wait;
         capture_held = held;
         captured_epoch = Some(session.source_epoch());
+        let coverage_phase = probe.begin("coverage_preparation");
         let outside = Instant::now();
         let (covered, calls) = workload::prepare(session, mode != Mode::Covered);
         staging_advance_calls = Some(calls);
         preparation = ns(outside);
+        observations.extend(probe.finish(coverage_phase));
         if mode == Mode::Detached {
             let (reserved, wait, held) = exclusive(owner, |db| {
                 db.prepare_search_projection_consumer_covered_update(
@@ -125,9 +133,11 @@ fn attempt(
             reserve_wait = wait;
             reserve_held = held;
             construction_writes_before = committed.load(Ordering::Acquire);
+            let construction_phase = probe.begin("native_construction");
             let outside = Instant::now();
             let prepared = reserved.prepare();
             construction = ns(outside);
+            observations.extend(probe.finish(construction_phase));
             construction_writes_after = committed.load(Ordering::Acquire);
             let (published, wait, held) = exclusive(owner, |db| {
                 source_at_publication = Some(db.commit_epoch().unwrap());
@@ -161,7 +171,9 @@ fn attempt(
             .unwrap()
     });
     assert_eq!(cleanup.failed_generations, 0, "{cleanup:?}");
+    observations.extend(probe.finish(whole_phase));
     json!({
+        "phase_observations": observations,
         "outcome": outcome, "watermark_before": old, "watermark_after": new,
         "advanced": new > old, "elapsed_ns": ns(started),
         "captured_source_epoch": captured_epoch,
@@ -190,6 +202,8 @@ struct Case {
     writes: usize,
     quiet: usize,
     sustained: bool,
+    readers: usize,
+    reads_per_reader: usize,
 }
 
 fn run(case: Case) -> Json {
@@ -202,6 +216,8 @@ fn run(case: Case) -> Json {
         writes,
         quiet,
         sustained,
+        readers,
+        reads_per_reader,
     } = case;
     let publication_limit = if sustained { 4096 } else { 16 };
     let checkpoint_interval = 16_384;
@@ -212,12 +228,17 @@ fn run(case: Case) -> Json {
         workload::setup(&root, documents, payload, writers, retention_entries);
     let initial = consumer.projection().receipt().source_epoch;
     let owner = DatabasePublicationOwner::new(database);
-    let ready = Barrier::new(writers + 2);
+    let probe = probes::Probe {
+        enabled: readers > 0,
+        clock: Instant::now(),
+    };
+    let concurrent_phase = probe.begin("concurrent_phase");
+    let ready = Barrier::new(writers + readers + 2);
     let active = AtomicUsize::new(writers);
     let completed = AtomicUsize::new(0);
     let checkpoint_writes = AtomicUsize::new(0);
     let checkpoint_samples = Mutex::new(Vec::new());
-    let (workers, attempts, triggers, publisher_exit_active, elapsed, elapsed_all) =
+    let (workers, read_workers, attempts, triggers, publisher_exit_active, elapsed, elapsed_all) =
         std::thread::scope(|scope| {
             let handles = (0..writers)
                 .map(|writer| {
@@ -256,6 +277,22 @@ fn run(case: Case) -> Json {
                     })
                 })
                 .collect::<Vec<_>>();
+            let read_handles = (0..readers)
+                .map(|worker| {
+                    let reader = probes::Reader {
+                        owner: &owner,
+                        barrier: &ready,
+                        active_writers: &active,
+                        committed_writes: &completed,
+                        probe: &probe,
+                        worker,
+                        requests: reads_per_reader,
+                        documents,
+                        payload,
+                    };
+                    scope.spawn(move || reader.run())
+                })
+                .collect::<Vec<_>>();
             let publisher = scope.spawn(|| {
                 ready.wait();
                 let mut attempts = Vec::new();
@@ -276,7 +313,7 @@ fn run(case: Case) -> Json {
                     triggers.push((wait, held));
                     if mode != Mode::Disabled {
                         let before = completed.load(Ordering::Acquire);
-                        let mut row = attempt(&owner, &mut consumer, mode, &completed);
+                        let mut row = attempt(&owner, &mut consumer, mode, &completed, &probe);
                         row["writes_before"] = json!(before);
                         row["writes_after"] = json!(completed.load(Ordering::Acquire));
                         row["writers_active_after"] = json!(active.load(Ordering::Acquire));
@@ -293,8 +330,13 @@ fn run(case: Case) -> Json {
                 .collect::<Vec<_>>();
             let elapsed = ns(started);
             let (attempts, triggers, publisher_exit_active) = publisher.join().unwrap();
+            let read_workers = read_handles
+                .into_iter()
+                .map(|handle| handle.join().unwrap())
+                .collect::<Vec<_>>();
             (
                 workers,
+                read_workers,
                 attempts,
                 triggers,
                 publisher_exit_active,
@@ -302,6 +344,12 @@ fn run(case: Case) -> Json {
                 ns(started),
             )
         });
+    let concurrent_observation = probe.finish(concurrent_phase);
+    let read_results = probes::summarize(read_workers, &attempts);
+    assert_eq!(
+        read_results["requests"].as_u64().unwrap() as usize,
+        readers * reads_per_reader
+    );
     assert_eq!(completed.load(Ordering::Acquire), writes);
     let source_after_writers = owner.with_read(Database::commit_epoch).unwrap();
     assert_eq!(
@@ -346,7 +394,7 @@ fn run(case: Case) -> Json {
                     Ok(())
                 })
                 .unwrap();
-            let row = attempt(&owner, &mut consumer, mode, &completed);
+            let row = attempt(&owner, &mut consumer, mode, &completed, &probe);
             assert_eq!(row["outcome"], "published");
             assert_eq!(row["advanced"], true);
             quiet_samples.push(row);
@@ -407,6 +455,10 @@ fn run(case: Case) -> Json {
         "qualification_note": "Progress requires successful captured-E publication after a real post-E commit while writers remain active; repeated progress requires at least two such advances. Quiet samples are separate.",
         "lock_measurement": "wait includes entry overhead; exclusive callback is a lower bound on outer owner hold time, not inner selector mutex time",
     });
+    result["foreground_read"] = read_results;
+    result["readers"] = json!(readers);
+    result["reads_per_reader"] = json!(reads_per_reader);
+    result["concurrent_phase_observation"] = json!(concurrent_observation);
     result["sustained_workload"] = json!({
         "enabled": sustained, "publication_attempt_limit": publication_limit,
         "publisher_exit_active_writers": publisher_exit_active, "publisher_cap_reached": publisher_cap_reached,
@@ -429,6 +481,8 @@ fn main() {
     let mut writes = 4096;
     let mut quiet = 32;
     let mut sustained = false;
+    let mut readers = 0;
+    let mut reads_per_reader = 512;
     let mut root = None;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
@@ -448,6 +502,8 @@ fn main() {
                 }
             }
             "--writers" => writers = value.parse().unwrap(),
+            "--readers" => readers = value.parse().unwrap(),
+            "--reads-per-reader" => reads_per_reader = value.parse().unwrap(),
             "--documents" => documents = value.parse().unwrap(),
             "--payload" => payload = value.parse().unwrap(),
             "--writes" => writes = value.parse().unwrap(),
@@ -458,6 +514,8 @@ fn main() {
         }
     }
     assert!([1, 4, 8].contains(&writers));
+    assert!(readers <= 8 && (1..=4096).contains(&reads_per_reader));
+    assert!(!sustained || readers == 0);
     assert!((1..=4096).contains(&documents) && (1..=2048).contains(&payload));
     assert!((writers..=100_000).contains(&writes) && (1..=1024).contains(&quiet));
     assert!(!sustained || mode == Mode::Detached);
@@ -472,7 +530,9 @@ fn main() {
             writers,
             writes,
             quiet,
-            sustained
+            sustained,
+            readers,
+            reads_per_reader,
         })
     );
 }

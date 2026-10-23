@@ -48,5 +48,55 @@ class BuildEvidenceTests(unittest.TestCase):
                 measurement.build_evidence(receipts, binary)
 
 
+class ReadEvidenceTests(unittest.TestCase):
+    def fixture(self):
+        resources = {"status_available": True, "VmRSS": 64, "VmHWM": 80,
+                     "cpu_user_ticks": 10, "cpu_system_ticks": 2}
+        samples = [{"worker": 0, "sequence": index, "started_ns": start,
+                    "query_started_ns": start + 1, "finished_ns": start + 2,
+                    "elapsed_ns": 2, "active_writers_after": 1,
+                    "committed_writes_before": index, "committed_writes_after": index + 1}
+                   for index, start in enumerate([2, 6])]
+        return {"readers": 1, "reads_per_reader": 2, "mode": "detached", "writes": 10,
+                "foreground_read": {"requests": 2, "latency": {"count": 2},
+                                    "samples": samples, "completed_during_preparation": 2,
+                                    "completed_with_active_writers": 2},
+                "concurrent_phase_observation": {"phase": "concurrent_phase",
+                                                 "resources_before": resources,
+                                                 "resources_after": dict(resources)},
+                "publication_attempts": [{"phase_observations": [
+                    {"phase": "coverage_preparation", "started_ns": 1, "finished_ns": 10}]}]}
+
+    def test_complete_reads_with_real_overlap(self):
+        self.assertTrue(measurement.validate_reads(self.fixture(), 1, 2))
+
+    def test_drain_only_reads_do_not_qualify(self):
+        result = self.fixture()
+        result["publication_attempts"][0]["phase_observations"][0]["finished_ns"] = 2
+        result["foreground_read"]["completed_during_preparation"] = 0
+        self.assertFalse(measurement.validate_reads(result, 1, 2))
+
+    def test_independent_active_and_preparation_counts_cannot_be_combined(self):
+        result = self.fixture()
+        result["publication_attempts"][0]["phase_observations"][0]["started_ns"] = 5
+        result["foreground_read"]["samples"][1]["active_writers_after"] = 0
+        result["foreground_read"]["samples"][1]["committed_writes_after"] = 10
+        result["foreground_read"]["completed_during_preparation"] = 1
+        result["foreground_read"]["completed_with_active_writers"] = 1
+        self.assertFalse(measurement.validate_reads(result, 1, 2))
+
+    def test_missing_resource_observation_is_not_coverage(self):
+        result = self.fixture()
+        result["concurrent_phase_observation"]["resources_after"]["status_available"] = False
+        with self.assertRaises(AssertionError):
+            measurement.validate_reads(result, 1, 2)
+
+    def test_zero_or_missing_reader_cannot_pass(self):
+        result = self.fixture()
+        result["foreground_read"]["samples"].pop()
+        with self.assertRaises(AssertionError):
+            measurement.validate_reads(result, 1, 2)
+
+
 if __name__ == "__main__":
     unittest.main()

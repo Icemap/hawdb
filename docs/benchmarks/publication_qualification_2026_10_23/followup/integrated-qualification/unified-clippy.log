@@ -1,0 +1,155 @@
+   Compiling libc v0.2.190
+    Checking cfg-if v1.0.4
+    Checking memchr v2.8.3
+    Checking aho-corasick v1.1.4
+    Checking regex-syntax v0.8.11
+    Checking regex-automata v0.4.18
+   Compiling jobserver v0.1.35
+   Compiling shlex v2.0.1
+   Compiling getrandom v0.4.3
+   Compiling find-msvc-tools v0.1.9
+   Compiling cc v1.2.67
+    Checking regex v1.13.1
+    Checking uuid v1.28.0
+   Compiling serde_core v1.0.229
+    Checking hawdb-core v0.14.0 (/private/tmp/hawdb-publication-qualification/integrated-source/crates/core)
+   Compiling zmij v1.0.23
+   Compiling pkg-config v0.3.33
+   Compiling proc-macro2 v1.0.106
+   Compiling zstd-sys v2.1.1+zstd.1.5.7
+   Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.46
+   Compiling serde_json v1.0.154
+    Checking itoa v1.0.18
+    Checking hawdb-ddl v0.14.0 (/private/tmp/hawdb-publication-qualification/integrated-source/crates/ddl)
+    Checking hawdb-expression v0.14.0 (/private/tmp/hawdb-publication-qualification/integrated-source/crates/expression)
+    Checking hawdb-plan-core v0.14.0 (/private/tmp/hawdb-publication-qualification/integrated-source/crates/plan-core)
+    Checking hawdb-cypher v0.14.0 (/private/tmp/hawdb-publication-qualification/integrated-source/crates/cypher)
+    Checking typenum v1.20.1
+    Checking hybrid-array v0.4.15
+    Checking hawdb-plan-cypher v0.14.0 (/private/tmp/hawdb-publication-qualification/integrated-source/crates/plan-cypher)
+    Checking crypto-common v0.2.2
+    Checking block-buffer v0.12.1
+   Compiling syn v3.0.3
+    Checking const-oid v0.10.2
+    Checking bitflags v2.13.1
+    Checking objc2-core-foundation v0.3.2
+    Checking digest v0.11.3
+    Checking cpufeatures v0.3.1
+   Compiling semver v1.0.28
+   Compiling rustc_version v0.4.1
+    Checking sha2 v0.11.1
+    Checking objc2-io-kit v0.3.2
+    Checking sysinfo v0.39.6
+   Compiling crc32c v0.6.8
+    Checking hawdb-cgroup v0.14.0 (/private/tmp/hawdb-publication-qualification/integrated-source/crates/cgroup)
+   Compiling crossbeam-utils v0.8.22
+   Compiling serde v1.0.229
+   Compiling crossbeam-epoch v0.9.20
+    Checking hawdb-qos v0.14.0 (/private/tmp/hawdb-publication-qualification/integrated-source/crates/qos)
+   Compiling serde_derive v1.0.229
+   Compiling autocfg v1.5.1
+   Compiling crossbeam-deque v0.8.7
+   Compiling num-traits v0.2.19
+   Compiling rayon-core v1.13.0
+   Compiling zstd-safe v8.1.0
+    Checking hawdb-integrity v0.14.0 (/private/tmp/hawdb-publication-qualification/integrated-source/crates/integrity)
+    Checking opentelemetry v0.33.1
+    Checking either v1.16.0
+    Checking bytemuck v1.25.2
+    Checking byteorder v1.5.0
+    Checking roaring v0.11.5
+    Checking rayon v1.12.0
+    Checking chrono v0.4.45
+    Checking hawdb-telemetry v0.14.0 (/private/tmp/hawdb-publication-qualification/integrated-source/crates/telemetry)
+    Checking hawdb-analytics v0.14.0 (/private/tmp/hawdb-publication-qualification/integrated-source/crates/analytics)
+    Checking memmap2 v0.9.11
+    Checking fs2 v0.4.3
+    Checking hawdb-cascades v0.14.0 (/private/tmp/hawdb-publication-qualification/integrated-source/crates/cascades)
+    Checking hawdb-optimizer-vector v0.14.0 (/private/tmp/hawdb-publication-qualification/integrated-source/crates/optimizer-vector)
+   Compiling syn v2.0.118
+    Checking zstd v0.14.2
+    Checking hawdb-storage v0.14.0 (/private/tmp/hawdb-publication-qualification/integrated-source/crates/storage)
+   Compiling zstd-safe v7.2.4
+    Checking hawdb-optimizer-predicate v0.14.0 (/private/tmp/hawdb-publication-qualification/integrated-source/crates/optimizer-predicate)
+   Compiling crc32fast v1.5.2
+   Compiling equivalent v1.0.2
+   Compiling allocator-api2 v0.2.21
+   Compiling foldhash v0.2.0
+   Compiling hashbrown v0.16.1
+   Compiling no_std_io2 v0.9.4
+   Compiling rle-decode-fast v1.0.3
+   Compiling libflate_lz77 v2.3.0
+   Compiling dary_heap v0.3.9
+   Compiling adler32 v1.2.0
+   Compiling libflate v2.3.1
+   Compiling zstd v0.13.3
+    Checking hawdb-evidence v0.14.0 (/private/tmp/hawdb-publication-qualification/integrated-source/crates/evidence)
+   Compiling proc-macro-error-attr3 v3.1.0
+   Compiling proc-macro-error3 v3.1.0
+   Compiling include-flate-compress v0.3.4
+    Checking hawdb-executor v0.14.0 (/private/tmp/hawdb-publication-qualification/integrated-source/crates/executor)
+   Compiling crunchy v0.2.4
+   Compiling include-flate-codegen v0.3.4
+   Compiling fst v0.4.7
+    Checking include-flate v0.3.4
+    Checking rustc-hash v2.1.3
+   Compiling jieba-macros v0.11.0
+    Checking bytecount v0.6.9
+    Checking jieba-rs v0.11.0
+    Checking bitpacking v0.9.3
+    Checking hawdb-vector-projection v0.14.0 (/private/tmp/hawdb-publication-qualification/integrated-source/crates/vector-projection)
+   Compiling object v0.37.3
+    Checking hawdb-search v0.14.0 (/private/tmp/hawdb-publication-qualification/integrated-source/crates/search)
+    Checking log v0.4.33
+   Compiling ar_archive_writer v0.5.2
+   Compiling psm v0.1.31
+   Compiling stacker v0.1.24
+    Checking tinyvec_macros v0.1.1
+    Checking tinyvec v1.12.0
+   Compiling recursive-proc-macro-impl v0.1.1
+    Checking hawdb-optimizer-graph v0.14.0 (/private/tmp/hawdb-publication-qualification/integrated-source/crates/optimizer-graph)
+    Checking hawdb-optimizer-relational v0.14.0 (/private/tmp/hawdb-publication-qualification/integrated-source/crates/optimizer-relational)
+    Checking hawdb-plan-cache v0.14.0 (/private/tmp/hawdb-publication-qualification/integrated-source/crates/plan-cache)
+    Checking hawdb-sql-syntax v0.14.0 (/private/tmp/hawdb-publication-qualification/integrated-source/crates/sql-syntax)
+    Checking recursive v0.1.1
+    Checking unicode-normalization v0.1.25
+    Checking pin-project-lite v0.2.17
+    Checking sqlparser v0.63.0
+    Checking caseless v0.2.2
+    Checking hawdb-optimizer v0.14.0 (/private/tmp/hawdb-publication-qualification/integrated-source/crates/optimizer)
+    Checking hawdb-query v0.14.0 (/private/tmp/hawdb-publication-qualification/integrated-source/crates/query)
+    Checking tokio v1.53.3
+    Checking hawdb-nowledge-contracts v0.14.0 (/private/tmp/hawdb-publication-qualification/integrated-source/crates/nowledge-contracts)
+    Checking hawdb-route-ownership v0.14.0 (/private/tmp/hawdb-publication-qualification/integrated-source/crates/route-ownership)
+    Checking unicode-width v0.2.2
+    Checking hawdb-explain v0.14.0 (/private/tmp/hawdb-publication-qualification/integrated-source/crates/explain)
+    Checking hawdb-runtime-tokio v0.14.0 (/private/tmp/hawdb-publication-qualification/integrated-source/crates/runtime-tokio)
+    Checking hawdb-query-policy v0.14.0 (/private/tmp/hawdb-publication-qualification/integrated-source/crates/query-policy)
+    Checking hawdb-bootstrap v0.14.0 (/private/tmp/hawdb-publication-qualification/integrated-source/crates/bootstrap)
+    Checking hawdb-compat v0.14.0 (/private/tmp/hawdb-publication-qualification/integrated-source/crates/compat)
+    Checking hawdb-artifact v0.14.0 (/private/tmp/hawdb-publication-qualification/integrated-source/crates/artifact)
+    Checking hawdb-resource-profile v0.14.0 (/private/tmp/hawdb-publication-qualification/integrated-source/crates/resource-profile)
+    Checking hawdb-fuzz-contracts v0.14.0 (/private/tmp/hawdb-publication-qualification/integrated-source/crates/fuzz-contracts)
+   Compiling rustversion v1.0.23
+    Checking hawdb-sql v0.14.0 (/private/tmp/hawdb-publication-qualification/integrated-source/crates/sql)
+    Checking once_cell v1.21.4
+    Checking tracing-core v0.1.36
+    Checking hawdb-system-sql v0.14.0 (/private/tmp/hawdb-publication-qualification/integrated-source/crates/system-sql)
+    Checking hawdb-relational v0.14.0 (/private/tmp/hawdb-publication-qualification/integrated-source/crates/relational)
+    Checking hawdb-readiness v0.14.0 (/private/tmp/hawdb-publication-qualification/integrated-source/crates/readiness)
+   Compiling generator v0.8.9
+    Checking hawdb v0.14.0 (/private/tmp/hawdb-publication-qualification/integrated-source)
+    Checking lazy_static v1.5.0
+    Checking sharded-slab v0.1.7
+    Checking tracing v0.1.44
+    Checking tracing-log v0.2.0
+    Checking matchers v0.2.0
+    Checking thread_local v1.1.10
+    Checking nu-ansi-term v0.50.3
+    Checking smallvec v1.15.2
+    Checking tracing-subscriber v0.3.23
+    Checking scoped-tls v1.0.1
+    Checking loom v0.7.2
+    Checking hawdb-qualification v0.14.0 (/private/tmp/hawdb-publication-qualification/integrated-source/crates/qualification)
+    Finished `dev` profile [optimized] target(s) in 2m 32s

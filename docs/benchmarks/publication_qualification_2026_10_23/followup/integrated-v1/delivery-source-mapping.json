@@ -1,0 +1,9 @@
+{
+  "measured_source": "4b65398f1580cd771ee22d1085d2e13b20f0109d",
+  "delivery_source": "a4eea1cc85bbf6635399a191907000a1b5b109be",
+  "different_files": [
+    "BUILD.bazel"
+  ],
+  "diff": "diff --git a/BUILD.bazel b/BUILD.bazel\nindex 4ecae94f1..7973bfd5b 100644\n--- a/BUILD.bazel\n+++ b/BUILD.bazel\n@@ -755,8 +755,6 @@ rust_test(\n             \"tests/support/mvcc_fixture.rs\",\n         ],\n         edition = \"2024\",\n-        # Isolate the complete synchronous I/O matrix from other test binaries.\n-        tags = [\"exclusive\"],\n         deps = [library],\n     )\n     for suffix, library in [\n",
+  "scope": "Rust/Cargo/benchmark/runtime files byte-identical. Only duplicate BUILD keyword removed. This mapping does not substitute old CI for new-head CI."
+}

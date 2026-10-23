@@ -140,3 +140,56 @@ actual-helper regression completes coverage/publication at 120,003 calls. The
 sustained cohort itself never exceeded the old host-call bound, so its progress
 must not be attributed causally to that correction. Original failures remain
 retained. Final integrated-source and strict performance acceptance remain open.
+
+## Separate foreground-read and process-resource cohort
+
+The manual driver accepts `--with-readers`, separately from `--sustained`.
+It creates one reader per foreground writer and defaults to 512 bounded requests
+per reader. Each request captures a fresh admitted read transaction under the
+outer owner's shared lock, releases that lock, and queries a canonical Memory
+identity and complete body through the pinned transaction. Every returned ID
+and body is verified. End-to-end read latency includes capture, query and result
+validation; snapshot drop is excluded and recorded as a limitation.
+
+Raw request intervals retain owner wait, callback time, active writers and query
+completion. Qualification requires reads before all writes commit and, for enabled
+preparation, the same query starting and completing inside a measured coverage
+or native-construction interval while writes remain incomplete. Independent
+active-writer and preparation counts cannot be combined into passing coverage. Readers that run only after preparation drains
+do not qualify. The driver retains every completed case and fails the complete
+cohort when this overlap is missing; fixed request counts are not silently
+increased to manufacture overlap.
+
+Instrumented cases observe Linux process RSS, lifetime high-water RSS, CPU clock
+ticks and `/proc/self/io` counters at concurrent-phase and preparation boundaries.
+These observations include the whole process and instrumentation; they do not
+attribute allocations to a component, establish a phase heap peak or resolve
+source residency. Before/after RSS may fall. Lifetime high-water RSS must not be
+relabeled as the peak allocated by that phase. The read/resource cohort remains
+separate from the original writer-only 18-case progress and 54-case latency
+controls and from the strict paired writer acceptance gate.
+
+The new cohort's real runtime proof and full measurement receipts are pending;
+source presence and manual preflight tests are not performance acceptance.
+
+## Outer-owner admission investigation
+
+The initial Linux reader calibration used the original owner with the new probes,
+512 pinned reads, 4,096 foreground writes and unchanged publication controls.
+For the 32-document, single-writer scoped-blocking and detached cases, the first
+read waited about 2.319 and 2.307 seconds to enter the outer owner. The complete
+writer phases were about 2.286 and 2.307 seconds. No read completed while a writer
+remained active, despite 484 and 509 queries completing during preparation after
+the writer drained. These failed overlap records remain calibration evidence,
+not passing read-performance qualification.
+
+A private admission mutex now serializes acquisition of the owner's state
+RwLock. Once a reader holds admission while waiting for the state lock, later
+writers cannot repeatedly barge ahead. Admission is released before callbacks,
+so existing read callbacks remain concurrent. Validation and publication still
+hold the state write guard across the entire authoritative callback. This is
+not a strict FIFO or general starvation-freedom guarantee; the mutex scheduler
+remains platform-dependent. Public APIs, poisoning errors and durability remain
+unchanged. Deterministic queued-reader, queued-writer and concurrent-reader tests
+belong to the existing root unit lane. Full native CI, the unchanged read
+protocol and new-source performance qualification remain required.

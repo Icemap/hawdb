@@ -1,0 +1,63 @@
+{
+  "declared_utc": "2026-10-23T17:53:01.818193+00:00",
+  "committed_parent": "4b65398f1580cd771ee22d1085d2e13b20f0109d",
+  "frozen_base": "8e9eab185ef880794d216d99ac6cd57442c511aa",
+  "overlay_sha256": {
+    "benches/consumer_publication.rs": "4f0fdb11b518fe1cc52c4d3bb9f3c5d2011290487e7d96cb4a6941d4d0751e33",
+    "benches/consumer_publication/workload.rs": "755df5cfe43c897748d7e0f571163dc84f9eeb2344af1d244214599f8c446fa7",
+    "scripts/measure-consumer-publication.py": "abfb74c13e1860d2f49677b0690b4b1a03fd49213320fa53c97ea20b04c52cfa",
+    "crates/storage/src/store/durable/wal.rs": "1e45de86e81f26317eace4237578e52218620f632b73b9d14215e65c999df350"
+  },
+  "correction": "committed corrected helper; integrated main and preserved full resource/durability controls",
+  "staging_call_limit": 200001,
+  "feed_limits": {
+    "work": 1000000,
+    "items": 100000,
+    "bytes": 67108864
+  },
+  "mapping_calls": 100000,
+  "retention_bytes": 67108864,
+  "live_row_entries": 100000,
+  "sustained": {
+    "rounds": 3,
+    "cases": 18,
+    "writes": 100000,
+    "quiet_samples": 32,
+    "shapes": [
+      [
+        32,
+        128
+      ],
+      [
+        512,
+        1024
+      ]
+    ],
+    "writers": [
+      1,
+      4,
+      8
+    ],
+    "mode": "detached",
+    "publication_cap": 4096,
+    "checkpoint_interval": 16384,
+    "success": "at least two committed post-E advances with active writers; no cap with active writers in every case"
+  },
+  "controls": {
+    "rounds": 3,
+    "cases": 54,
+    "writes": 4096,
+    "quiet_samples": 32,
+    "modes": [
+      "disabled",
+      "scoped-blocking",
+      "detached"
+    ]
+  },
+  "resources": {
+    "cpus": 4,
+    "memory_bytes": 6442450944,
+    "image": "rust@sha256:77fac8b98f9f46062bb680b6d25d5bcaabfc400143952ebc572e924bcbedc3fa"
+  },
+  "isolation": "no local compiler or fuzz campaign active during controlled cases; shared host, no hardware exclusivity claim"
+}

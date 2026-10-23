@@ -78,3 +78,67 @@ The corrected Consumer build took 1m 53s with existing caches, and the standalon
 Run [39979561863](https://github.com/nowledge-co/hawdb/actions/runs/39979561863) completed all 18 declared cohorts: 8,640 measured cases, 2,211,840 commits, 2,396,160 reads and 5,760 durable reopens. Every cohort raw/protocol hash matches its receipt. Timing and multi-writer/mixed coverage are complete, but strict performance acceptance failed. This compares the original historical baseline with candidate `7546e2d09`; it does not isolate this PR from all intervening version changes.
 
 Six high-contention cohorts contain regression endpoints in both post-checkpoint and captured-WAL modes. At 8 writers/16 readers, memory commit p99 paired median ratios are 2.034 and 1.836 respectively; ungrouped durable read p50 ratios are 1.459 and 1.438. Several additional endpoints remain inconclusive. All endpoint intervals, failures and raw samples are retained in `writer-mixed-39979561863/`; `writer-mixed-analysis.json` indexes each cohort without pooling confidence across the matrix. Current-main attribution and integrated-source qualification remain required. No threshold, sample count or endpoint was removed.
+
+## Integrated source and outer-owner read investigation
+
+Runtime source `4b65398f1580cd771ee22d1085d2e13b20f0109d` integrates main
+`8e9eab185`; delivery `a4eea1cc8` differs only by the two-line BUILD parse fix.
+The integrated Linux arm64 Consumer pipeline exited zero: 18/18 sustained cases
+and 54/54 independent controls passed all exact checks. Every sustained case
+performed 100,000 writes, six ordinary checkpoints, at least two committed
+post-E advances with active writers, and no active-writer attempt-cap hit.
+Staging calls ranged from 5 to 122,415, so this natural cohort actually used the
+corrected host-call bound. The earlier corrected cohort's 72,025 maximum remains
+unchanged; do not retroactively attribute its success to the bound correction.
+The first integrated build took 11m 21s with existing dependency caches. This
+finite same-binary workload does not prove a steady state or a latency gain.
+
+New x86_64 writer allocations retain separate raw/protocol hashes and all
+unfavorable endpoints. Each single-writer allocation completed 960 measured
+cases, 245,760 commits and 640 reopens. Candidate binaries are bit-identical
+across the new original-baseline and current-main allocations
+(`961df06fe5cc244eac0300484161d10609c5745f535e91a65f4f944d1d8ecc38`).
+
+- Original baseline run 39998688694: all six post-checkpoint endpoints pass;
+  captured grouped p50/p95 remain inconclusive, with medians 0.98358/0.98849 and
+  intervals [0.95335, 1.01164]/[0.94162, 1.01929].
+- Main `8e9eab185` run 39998694071: all durable endpoints pass (paired medians
+  0.76719–0.84906); all four memory endpoints remain inconclusive. No endpoint
+  in either new single-writer allocation is classified as regression. Both
+  complete strict gates still fail. Earlier significant adverse data remains.
+- Current-main mixed run 39998700572: all 18 cohorts and exact checks completed,
+  with 8,640 measured cases, 2,211,840 commits, 2,396,160 reads and 5,760 reopens.
+  Of 324 endpoints, 105 pass, 211 are inconclusive and eight durable-read
+  endpoints regress (median ratios 1.00889–1.06381). These per-cohort intervals
+  do not establish joint matrix confidence. `writer-mixed-current-final-analysis`
+  retains every interval and independently reconstructs ratios from raw cases.
+  This ConcurrentDatabase path is separate from the outer publication owner.
+
+The complete source-bound root CI run on `a4eea1cc8` passes 70 targets: eight
+executed and 62 cached, 564.602 seconds including build. All 926 BEP events,
+84 result actions and 70 target summaries are preserved, with environment
+options removed only from published command metadata. Headroom actually ran
+126 seconds; joined-read shards were cached and do not prove current CI speedup.
+All five Prow and Linux/macOS/Windows native checks passed on this revision.
+These results precede the local admission change and cannot qualify it.
+
+The initial reader probe and calibration preserve failed overlap cases. On the
+32-document/single-writer fixture, reads can wait for the entire foreground
+write phase at the outer RwLock. An instrumented baseline and an otherwise
+identical admission-gated library then ran 12 alternating calibration processes
+(two rounds, three modes, both revisions). All exact checks passed. In all six
+gated cases, 512/512 requests completed while the writer thread remained active;
+first owner-entry waits were 0.52–1.40ms. Enabled-mode same-query preparation and
+active-writer intersections were 89, 468, 129 and 463. Baseline enabled cases
+show zero intersections in three cases and one in the fourth. All records remain,
+including the original validator's weaker independent-count decision. The
+separate joint-overlap audit exposes that weakness rather than overwriting it.
+The formal probe now also records committed-write counts and requires the same
+query to complete in a preparation interval before writer drain.
+
+This calibration is not a full reader latency qualification. The private
+admission mutex and its three deterministic unit cases still need new-source
+CI, complete read/resource measurements and final writer acceptance. RSS and
+lifetime VmHWM observations are process-wide; they are not phase heap ownership,
+phase peaks, resolved residency or exclusive-machine evidence. No existing
+failure, endpoint, threshold, fixture, durability barrier or budget is waived.
