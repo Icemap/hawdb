@@ -102,6 +102,8 @@
 - Report first-build cost as well as execution time. Local improvements do not
   establish remote CI speedup; record final-head CI evidence before that claim.
 
+- Keep checkpoint headroom timing/phase tests in the required isolated `//:hawdb_unit_checkpoint_headroom_tests` lane, using the ordinary checked root binary. Joined-read default/minimal targets shard the complete discovered case inventory over one executable per mode; retain every scenario and refuse empty shards. See `docs/TEST_INDEX.md` for scheduling evidence and replay.
+
 ## Consumer Failure Recovery
 
 - Consumer failure recovery must retain original native birth, scratch and

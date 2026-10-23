@@ -30,7 +30,7 @@ execution lane, fixture size, isolation or known failure mode.
 | `//:hawdb_unit_recovery_tests`, `//:hawdb_unit_storage_crash_matrix_tests` | Transaction persistence, checkpoint/compaction and recovery boundary regressions | Dedicated crash-job evidence has additional identity and completeness checks. |
 | `//:hawdb_unit_row_page_compaction_{materialized,out_of_core}_tests` | Physical row-page reclamation while pinned readers retain old generations; correct reopen/scrub in both residency modes | Full 16-table churn fixture and physical-byte assertions. Repository-wide checked test profile. Known long target: [#889](https://github.com/nowledge-co/hawdb/issues/889). |
 | `//:hawdb_unit_row_page_compaction_admission_tests` | Budget refusal, retryability, failpoints and admission release around compaction | Ordinary compilation; separate from the two full convergence cases. |
-| `//:hawdb_mvcc_joined_reads{,_minimal}_tests` | Joined-read dependencies, absent/filtered parents, off-page children, key bindings and sticky errors | Full and minimal feature contracts; fixed scenario matrix rather than timed fuzz. |
+| `//:hawdb_mvcc_joined_reads{,_minimal}_tests` | Joined-read dependencies, absent/filtered parents, off-page children, key bindings and sticky errors | Root presubmit; full and minimal feature contracts, each compiled once and executed as eight disjoint exact-case Bazel shards. Every cold/page/effect fixture and assertion remains; each shard retains the 300-second deadline. Fixed scenario matrix rather than timed fuzz. The shard script rejects empty inventories, invalid coordinates, failed or zero-case selections. |
 | `//:hawdb_mvcc_projection_publication{,_minimal}_tests` | Projection publication versus concurrent reads and transaction validation | Preserve publication barriers and complete observation evidence. |
 | `//:hawdb_mvcc_staging_session{,_minimal}_tests` | Fixed-E graph/SQL mapping, complete-E phantom/delete/content guards, disjoint-write rejection, append/projection isolation, registered Consumer publication, cancellation and reopen | Root CI; one-item batches and hot/cold full-rebuild equality. Registered Consumer cases also run on native Windows. The competing-registration/candidate fixture uses one background slot and proves idle tokens retain no execution slots. The stationary Consumer family covers fresh publication admission, 260 resident refusals with unchanged allocation ledger/directories, native birth retirement, seal/intent FD pressure with injected pre-selection failure and seven publication/ACK/cache boundaries with live resolution and reopen. FD observers require `test-support`; other cases run in the default unit lane too. Final artifact construction is blocking. See [source-coherent catch-up](specs/SOURCE_COHERENT_SEARCH_CATCH_UP_SPEC.md) and [registered publication](REGISTERED_CONSUMER_CATCH_UP.md). |
 | `//:hawdb_mvcc_full_source{,_minimal}_tests`, `//:hawdb_mvcc_baseline_comparison{,_minimal}_tests` | Exhaustive pinned source enumeration, duplicate IDs, full set/content comparison and full-rebuild reference | Root CI; small deterministic hot/cold fixtures. Complete-E verification adds a full-source pass and conservatively rejects every post-E write. |
@@ -299,3 +299,33 @@ publication after registry-cache reload, and a scoped mapper that follows a
 relationship to an out-of-scope label whose post-E mutation must invalidate
 publication. Storage units check immutable reservation predecessors, missing
 registration policy, and direct history pruning without staging compaction.
+
+## PR #1217 root CI scheduling
+
+- `//:hawdb_unit_checkpoint_headroom_tests` owns the complete
+  `api::automatic_checkpoint::tests::headroom::` namespace, including capacity,
+  notification, foreground and preparation-backoff submodules. It is included
+  through the existing required root unit suites and excluded from general by
+  the same inventory partitioner. It reuses the ordinary root executable and
+  global checked profile, runs with one libtest thread and Bazel `exclusive`,
+  and keeps the existing 900-second partition deadline. Internal test-created
+  concurrency remains intact. This prevents the phase/clock assertions from
+  competing with roughly 1,800 unrelated unit cases and other test actions
+  in the same Bazel invocation; external node contention remains possible.
+- The production five-second no-progress refusal, deliberate stalled-owner
+  deadline tests, 320 acknowledged rows, checkpoint-count and reopen assertions
+  are unchanged. No Busy retry, ignored assertion or production timing change
+  is introduced. Native Cargo ownership is unchanged.
+- The previous source-bound root run for #1217 (Prow
+  `2113655888001634304`, head `7546e2d09`, base `8e9eab185`) completed all 68
+  targets: 65 passed, two joined-read targets timed out at 300.154/300.316s and
+  the general partition failed on `automatic checkpoint capacity`. The joined
+  cases create synchronous durable fixtures and overlapped other tests and
+  compilation. This is scheduling evidence, not proof of a WAL regression.
+- Root presubmit also owns `//:mvcc_joined_read_shard_script_test` and
+  `//:root_unit_partition_script_test`. They check complete/disjoint inventory
+  ownership, nonempty execution, shard status signaling and native error
+  propagation. Local replay uses the existing public joined-read labels or
+  `bazel test //:hawdb_unit_checkpoint_headroom_tests`; no CI-only flags or
+  special compiler profile are required. Final-head CI must establish runtime
+  acceptance; target isolation alone is not a measured speedup.
