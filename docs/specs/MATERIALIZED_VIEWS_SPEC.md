@@ -65,7 +65,8 @@ a usable inventory slice alone is partial delivery.
 
 Phase-one acceptance includes a development/nightly Mem query-path integration
 or shadow comparison for the designated callers, preserving response fields,
-zero-count entities, scope/lifecycle rules and post-write refresh behavior.
+zero-count entities, scope/lifecycle rules, transaction-local reads of pending
+writes, rollback and post-commit visibility.
 Record reference-query equality and actual indexed access before measuring
 query latency, maintenance lag and writer overhead. Thresholds come from the
 same Mem workload baseline. Engine fixtures, capture APIs, DDL syntax or a
@@ -733,17 +734,81 @@ contract during overload.
 
 ## 7. Read consistency and Mem admission
 
-The first Mem adoption uses **asynchronous maintenance with exact reads and an
-explicit bounded canonical fallback**. Synchronous maintenance in every
-canonical transaction is deferred because graph fan-out can extend writer
-latency. Asynchrony does not permit silent result staleness.
+**Transactional materialized-view reads are required in phase one**, including
+explicit read-write transactions. Physical materialization may be maintained
+asynchronously, with exact reads and a bounded canonical fallback, only while
+preserving the logical transaction contract below. This is a proposed capability
+to implement and qualify, not an existing materialized-view guarantee.
 
-Proposed read modes:
+### 7.1 Transaction contract
+
+A materialized relation has the same transaction visibility as evaluating its
+registered query on the transaction's canonical data. Let `S_E` be the snapshot
+selected under HawDB's supported transaction isolation and `W_T` the current
+transaction's pending graph/relational mutations. Every view read in `T` must
+satisfy:
+
+```text
+ReadView(T, D) = Q_D(S_E + W_T)
+```
+
+The plus sign means applying the transaction's actual pending mutations, not
+concatenating rows. A read-only transaction has empty `W_T`. Reuse the existing
+isolation, statement-error, transaction-abort and conflict rules; this proposal
+does not silently upgrade snapshot isolation to serializability. Base reads,
+view reads and their joins must share the same transaction snapshot and current
+private writes. Subsequent statements observe earlier successful writes in the
+same transaction. Another transaction cannot see those uncommitted effects.
+
+The engine may evaluate a bounded transaction-private view delta over a
+compatible materialization or execute the bound reference query against the
+same transaction-local state. Ordinary view syntax must preserve the contract
+through either path: callers do not rewrite queries or issue a manual flush to
+obtain read-your-own-writes. A committed view at `E` alone is insufficient when
+`W_T` changes its dependencies. Waiting for the background worker cannot make
+uncommitted writes visible; it must not be used as the implementation of this
+transaction-local read path. Exhaustion returns the ordinary typed query or
+transaction error under existing abort rules, never a stale or partial answer.
+
+If a chosen artifact covers `E0 < E`, a private exact path must first account
+for complete committed changes through `E`, then apply `W_T`, exactly once.
+An artifact newer than the transaction snapshot is not a valid substitute.
+Missing retained coverage or support state selects the transaction-local
+reference query within its budget, or an explicit failure. A partial private
+catch-up cannot be exposed as a transaction-consistent view read.
+
+Private aggregate/arrangement changes remain owned by the transaction. Rollback
+or a rejected commit discards them without advancing a public view head, source
+cursor or durable maintenance progress for that transaction. At commit, all
+relevant canonical mutations acquire one atomic source boundary; no view reader can observe only
+some effects. A follow-on view read through the committing context/commit
+receipt must honor at least that commit boundary. Across independent handles,
+propagate the receipt/floor explicitly rather than assume shared session state.
+A lost commit acknowledgement uses the existing operation-resolution contract;
+background view progress is not evidence that the canonical transaction failed.
+
+Async physical catch-up may lag after canonical commit only because exact
+reads evaluate a compatible materialization plus admitted deltas or the same
+canonical reference query. The background worker consumes committed changes
+only and atomically selects result, support state, indexes and progress. View
+rows remain derived/read-only to application DML; supporting transactions does
+not introduce an independent writable copy of canonical data. Transactional
+view creation/drop/refresh requires separately defined DDL semantics and is not
+implied by the required read/write-transaction query behavior.
+
+This transaction path is part of the Memory/Space inventory and Entity usage
+vertical slices. An implementation with only committed-epoch freshness or
+read-only snapshot transactions does not complete phase one.
+
+### 7.2 Committed snapshots and read admission
+
+Proposed read modes (logical contracts, not existing method signatures):
 
 | Mode | Guarantee | Failure behavior |
 | --- | --- | --- |
+| `TransactionRead(T)` | Evaluate the definition on the transaction snapshot plus its private writes | Use a compatible private delta or transaction-local reference query; never return committed-only stale data |
 | `ExactSnapshot(E)` | View and every canonical join/filter use `S_E` | Wait within deadline for the retained epoch, execute the canonical reference query at `S_E`, or return typed not-ready/budget status |
-| `ReadYourWrites(C)` | Choose a snapshot `E >= C`, then the same exact contract | Never return an older generation as the post-write refresh |
+| `ReadYourWrites(C)` after commit | Choose a snapshot `E >= C`, then the same exact contract | Never return an older generation as the post-write refresh |
 | `BoundedStale` | Explicitly allowed view-only result with source epoch and bounded lag | Reject if the limit/authorization contract cannot be established |
 
 Epoch selection and source snapshot capture occur once per logical read.
@@ -908,6 +973,31 @@ were hydrated. Small deterministic graph/relational differential sequences
 compare bag results against full queries after every complete source epoch.
 Any exploratory fuzzing remains local under repository policy.
 
+### Phase-one transaction regression matrix
+
+These are mandatory future native facade and Mem query-path acceptance cases.
+They are not executed results of this documentation change. Select transactions
+using the existing supported isolation and its actual write-conflict rules.
+
+| Fixture | Required result / negative control |
+| --- | --- |
+| Read-only transaction reads base and view repeatedly while another writer commits | One transaction-consistent snapshot; the background view advancing cannot change the pinned read result |
+| Read-write transaction creates a Memory then reads its inventory view | Its own pending classification contributes immediately; a second transaction cannot see it |
+| Move Space and archive within one transaction | View reads after each successful statement agree with the transaction-local reference query; no mixed Space/classification at commit |
+| Add two distinct mentions, read, delete one and read again before commit | Entity usage reflects two then one in the writer; an existing reader retains its isolated committed state |
+| Roll back after private aggregate or join changes | No canonical or public view effect; no public progress or support-state leak |
+| Commit fails under an existing write conflict | Losing transaction's private changes never become a selected view result |
+| Commit succeeds while physical materialization is behind | A follow-on read honoring its commit receipt sees the committed effects through an exact path, without caller polling/flush |
+| Private-state budget exhaustion / query error | Apply existing statement/transaction abort semantics and report the cause; never substitute committed-only results |
+| Commit response is lost, then reopen/retry | Resolve the canonical operation; resume complete capture once without double-counting or treating a lagging view as rollback evidence |
+
+Include negative controls that deliberately read committed-only view state
+inside a writer, mix transaction/source epochs, leak a private contribution to
+another reader or preserve it after rollback. They must fail the same reference
+oracle used by the designated Mem callers. Future savepoint/DDL transaction
+claims need additional contracts and tests rather than inference from these
+DML/read fixtures.
+
 ### Phase-one contribution regression matrix
 
 These are future focused regressions and differential fixtures, not test
@@ -998,3 +1088,5 @@ specific to HawDB's embedded execution and durability model.
 - [RisingWave: historical initialization and continuous maintenance](https://risingwave.com/blog/backfilling-in-risingwave-from-historical-initialization-to-continuous-streaming/): snapshot initialization, retained changes, resumable progress and catch-up.
 
 - [MV4PG: Materialized Views for Property Graphs, arXiv:2411.18847v1](https://arxiv.org/abs/2411.18847v1): workload-selected graph views and pre-generated maintenance templates. Property-update maintenance is outside its evaluated views; overlapping-match deduplication remains future work. Its reported speedups are not HawDB measurements or evidence for HawDB recovery/concurrency guarantees.
+
+- [RisingWave: transaction statement handling](https://github.com/risingwavelabs/risingwave/blob/73219848e4fb2193d0da283068824613973008db/src/frontend/src/handler/transaction.rs) and [transaction context](https://github.com/risingwavelabs/risingwave/blob/73219848e4fb2193d0da283068824613973008db/src/frontend/src/session/transaction.rs): explicit read-only snapshots are supported; explicit read-write transactions are not started, and implicit read-write mode is single-statement. This narrower capability does not define HawDB's required transaction contract.
