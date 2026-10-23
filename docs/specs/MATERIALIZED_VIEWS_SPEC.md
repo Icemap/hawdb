@@ -1,9 +1,15 @@
-# Materialized Views for Mem Workloads
+# Real-Time Materialized Views
 
 ## Status and decision boundary
 
 **Status: exploratory proposal; no implemented materialized-view surface.**
-Tracking issue: https://github.com/nowledge-co/hawdb/issues/1142.
+Initial workload design: https://github.com/nowledge-co/hawdb/issues/1142.
+Execution protocol follow-up: https://github.com/nowledge-co/hawdb/issues/1204.
+
+Real-time means continuous, asynchronous incremental maintenance with explicit
+source epochs and bounded resource admission. It does not promise zero lag or
+make an installed view immediately ready. The first adoption remains the Mem
+workloads below; the execution mechanisms are reusable engine contracts.
 
 This document proposes engine capabilities and prospective acceptance criteria.
 It does not change existing API contracts, Mem business semantics, canonical
@@ -300,6 +306,15 @@ complete-through cursor is not generally an exact historical result snapshot.
 It cannot be reinterpreted as a tuple retraction stream. Current catch-up
 source-coherence checks remain binding; none are removed by this proposal.
 
+The execution follow-up also checks HawDB main at
+`7876b78845bd2e23453b7c10e3bbcabc0315f8ea` against `SearchProjectionChange` in
+`crates/storage/src/projection.rs` and detached preparation in
+`src/api/search_projection_consumer/covered/preparation.rs`. The former records
+identities rather than old/new tuple images; the latter releases the database
+owner before artifact preparation. Neither implements an incremental query
+plan, a general view catalog, or the historical publication permit proposed
+below. These source observations do not establish new qualification results.
+
 ## 4. Definition, catalog, and query surface
 
 ### 4.1 Proposed first interface
@@ -409,7 +424,70 @@ between canonical publication and derived capture, including a lost gap marker.
 Publication waits for the covered source durability barrier; relaxed canonical
 durability cannot cause a durable view to cite lost source commits.
 
-### 5.2 Operator state and retractions
+### 5.2 Complete transaction delta protocol
+
+The following is a logical protocol, not an existing Rust API or a canonical
+WAL format change. One envelope identifies the database/branch incarnation,
+source schema/capture revision, previous covered boundary, and committed epoch.
+It contains typed graph-node, relationship and relational-row changes, each
+with stable identity and old/new projected values, plus a completeness record.
+Insert has no old row; delete has no new row; update carries both. Relationship
+images retain endpoints and referenced properties; node deletion must preserve
+all contributions needed to retract incident relationships.
+
+Capture observes the actual transactional before/after states, not a later
+lookup by identity. Coalescing repeated writes within one transaction is valid
+only when the normalized transition preserves the committed result. No-op or
+irrelevant commits may carry empty data but still advance contiguous coverage.
+Rolled-back transactions produce no committed envelope. Schema changes that
+invalidate capture produce an explicit rebuild boundary.
+
+An incremental worker admits a complete commit before changing its candidate
+state. It can page or spill private work inside that commit, but may neither
+publish partial effects nor expose a resume cursor in its middle. Adjacent
+commits may be batched only with equivalent ordered transition semantics and
+retained complete boundaries. Duplicate delivery is handled by durable progress
+and operation identity; equal row values are not evidence of duplicate delivery.
+A missing interval, conflicting epoch payload, incompatible schema revision or
+unverifiable source identity stops incremental advancement.
+
+The capture protocol must not introduce a second authoritative transaction
+commit. Persist covered data before certifying its coverage; on reopen compare
+journal coverage with the canonical source boundary. A canonical commit may
+succeed while derived capture fails, but no consumer can certify a range across
+that gap. Missing or torn coverage metadata is not evidence of an empty commit.
+Repair requires exact retained-source reconstruction or an explicit rebuild.
+
+### 5.3 Incremental plan and operator state
+
+Bind an ordinary deterministic query before deriving its maintenance plan.
+The maintenance compiler accepts only qualified logical operators, records
+schema/expression dependencies and versions, and produces both a full-build
+plan and a delta plan with identical output schema and bag semantics. Existing
+batch executors are semantic references, not automatically incremental
+executors. Unsupported shapes fail at definition admission.
+
+```text
+canonical commits -> complete transaction deltas -> incremental operators
+                  -> private state/results/indexes -> sealed manifest
+                  -> fenced head selection -> SQL/Cypher view reads
+```
+
+Each operator consumes typed signed row batches and produces typed signed row
+batches. Filter/project retain only needed dependencies; joins maintain keyed
+input arrangements; grouped aggregates retain their support state. Propagate
+only affected keys through the plan. Consolidation preserves multiplicities,
+NULL behavior and checked arithmetic. State and output updates remain private
+until the complete source boundary is ready for publication.
+
+Maintenance state lives behind existing internal ownership boundaries. The
+embedded facade owns definitions, maintenance handles and typed diagnostics;
+query planning owns qualification and delta derivation; derived storage owns
+arrangements, result indexes and recovery. No new public crate, daemon, external
+connector or process-per-view scheduler is required by this proposal. Broad
+cross-view plan sharing is deferred until independent view ownership is sound.
+
+### 5.4 Qualified operator semantics
 
 Use signed bag deltas over engine-owned source arrangements. An update is an
 old-row retraction plus a new-row insertion. Persist the arrangements needed to
@@ -478,6 +556,15 @@ explicit MV-owned registry extension. Do not silently charge ordinary reads to
 the existing search registry's finite capacity or allocate registrations per
 restart. Capacity refusal occurs before build callbacks and publication effects.
 
+Persist snapshot scan progress together with the private build generation and
+its retained delta boundary if resumable initialization is enabled. A progress
+record binds source identity, snapshot epoch, definition revision and scan
+position. Restore it only while the snapshot and post-snapshot coverage remain
+valid; otherwise discard/reclaim the candidate through validated custody and
+start an explicit rebuild. Never expose a partly scanned result as ready.
+Initialization status distinguishes snapshot rows scanned, catch-up progress,
+retained bytes and live lag; a scan finishing is not catch-up completion.
+
 ### 6.2 Derived storage and serving indexes
 
 Reuse the projection-generation catalog. Extend its immutable manifest to
@@ -538,6 +625,45 @@ state, and resumes from durable contiguous capture. It must not require a full
 graph scan when that coverage is intact. Missing capture after crash, source
 replacement, retention expiry or incompatible codecs require explicit rebuild.
 Search documents and aggregate state remain outside the canonical WAL.
+
+### 6.4 Publication under continuous writes
+
+A future historical publication permit certifies a complete result at retained
+source epoch `E`; it does not assert that the canonical head still equals `E`.
+A later canonical commit alone must not invalidate this permit when the exact
+source, complete delta coverage and definition remain retained and compatible.
+This capability requires separate implementation and qualification; the current
+prepared-publication validator remains unchanged until then.
+
+The permit binds instance/branch incarnation, definition revision, covered
+source boundary, candidate manifest digest and expected previous view head.
+Final selection holds the publication fence across identity/drop/schema
+validation and durable head selection. It rejects a replaced target, expired
+source, changed definition, incomplete coverage or stale expected head. A
+candidate cannot overwrite a view head that has already advanced beyond it.
+
+Source advancement beyond `E` may be harmless to publishing that historical
+result, while dependency-changing DDL or target replacement is not. Serving an
+exact join still requires the canonical snapshot at `E`; historical publication
+does not authorize mixing it with current canonical rows. Keep source commit,
+derived publication, read visibility and durability boundaries distinct.
+
+Preparation, source scanning, delta evaluation, artifact construction and
+compaction occur outside the canonical owner write guard. Final publication
+holds only the authority needed for bounded validation and selector commit.
+Required synchronization may still dominate this interval: record actual lock
+hold and writer latency rather than assuming a metadata-sized publish is fast.
+Retire old artifacts after selection under pinned-reader and GC rules.
+
+A worker chooses a fixed complete boundary per admitted batch rather than
+restarting whenever writers advance the source. With sufficient maintenance
+capacity and retained coverage, published source watermarks must advance while
+writers continue committing; catching the instantaneous head is not required
+for each publication. If input outruns maintenance, report backlog and bounded
+lag, throttle maintenance admission or require rebuild on retention exhaustion.
+Do not claim bounded freshness under arbitrary input load or block canonical
+writes indefinitely to hide lag. Exact reads retain their wait/fallback/error
+contract during overload.
 
 ## 7. Read consistency and Mem admission
 
@@ -658,6 +784,26 @@ only catalog syntax or background refresh of an unrelated SQL table. Broad
 optimizer substitution, arbitrary view DAGs, synchronous transaction maintenance,
 recursive paths, rolling-window engines and distributed execution are deferred.
 
+### First implementation PR
+
+Start with the bounded complete-transaction delta seam and its native
+reference oracle, not view DDL or a background full-query timer. This slice
+must capture graph node/relationship and relational old/new transitions at the
+same canonical commit, with rollback, repeated writes, mixed transactions,
+empty relevant deltas, overflow and missing-coverage controls. Compare applying
+the captured transition to the referenced before-state projection with that
+projection of the actual after-state at the same epoch. Cover process recovery and missing/torn sidecar records without
+weakening canonical commit durability. Keep the protocol internal until its
+capture and replay boundaries are qualified. If this spans independent owners,
+split capture and durable replay qualification into sequential PRs against main.
+
+Subsequent independently reviewable changes add the qualified incremental
+operators, catalog/full bootstrap, durable arrangements and serving indexes,
+then publication/read integration and graph workload acceptance. Catalog syntax
+alone does not complete any runtime milestone. Existing runtime/formal test
+owners must be named in each implementation PR and added to the test index;
+this documentation change does not register or execute those future tests.
+
 ### Formal and native correctness qualification
 
 Before implementing publication/lifecycle transitions, extend or compose the
@@ -705,6 +851,13 @@ Required evidence:
   ordinary reopen when durable coverage is intact.
 - Query p50/p95/p99, writer latency, maintenance lag, affected keys, CPU,
   page reads, peak memory, disk amplification and rebuild duration.
+- Continuous-writer qualification uses a coordinated fixture that keeps writes
+  active throughout snapshot build, catch-up and at least multiple successive
+  publications. Independently observe committed-write and published-source
+  progress; prove unrelated writes complete during preparation. Report source
+  arrival/service rates, retained coverage and lag, and distinguish bounded
+  overload from a stalled worker. Measure publication guard wait/hold time and
+  writer p95/p99 against the same workload before/after the publication change.
 - Direct-query fallback frequency under the proposed exact-read contract.
   A fast stale view with frequent expensive fallbacks is not a successful P0.
 - Worst-case fan-out and retention exhaustion produce bounded, observable
@@ -733,3 +886,16 @@ graph/SQL operators, durable derived arrangements and indexed serving, with
 exact snapshot reads and explicit bounded canonical fallback. Start with Entity
 usage and Memory inventories. That delivers reusable engine semantics for
 existing Mem businesses without embedding Mem routes in the database kernel.
+
+
+## 12. References
+
+The following are background references only. They do not define HawDB APIs,
+provide HawDB test evidence, require upstream dependencies, or imply adoption
+of a distributed runtime. The contracts and qualification gates above are
+specific to HawDB's embedded execution and durability model.
+
+- [RisingWave: stream row operation representation](https://github.com/risingwavelabs/risingwave/blob/73219848e4fb2193d0da283068824613973008db/src/common/src/array/stream_chunk.rs): insertion, deletion and paired update images.
+- [RisingWave: materialization executor](https://github.com/risingwavelabs/risingwave/blob/73219848e4fb2193d0da283068824613973008db/src/stream/src/executor/mview/materialize.rs): persisted materialization state and barrier handling.
+- [RisingWave: materialized-view creation](https://github.com/risingwavelabs/risingwave/blob/73219848e4fb2193d0da283068824613973008db/src/frontend/src/handler/create_mv.rs): query planning and maintained-job creation.
+- [RisingWave: historical initialization and continuous maintenance](https://risingwave.com/blog/backfilling-in-risingwave-from-historical-initialization-to-continuous-streaming/): snapshot initialization, retained changes, resumable progress and catch-up.
