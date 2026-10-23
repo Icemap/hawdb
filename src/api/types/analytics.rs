@@ -41,8 +41,6 @@ mod facade_tests {
 
     #[test]
     fn facade_reexports_analytics_protocol_models_without_conversion() {
-        let _: fn(KnowledgePageRankScoreUpdate) -> hawdb_nowledge_contracts::test_support::analytics::KnowledgePageRankScoreUpdate =
-            |value| value;
         let _: fn(KnowledgeRelationshipDeleteRequest) -> hawdb_nowledge_contracts::test_support::analytics::KnowledgeRelationshipDeleteRequest =
             |value| value;
     }

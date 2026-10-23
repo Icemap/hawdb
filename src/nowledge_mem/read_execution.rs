@@ -346,7 +346,9 @@ fn source_changed() -> HawDBError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::nowledge_mem::app_read_snapshot_tests::app_read_handle;
+    use crate::nowledge_mem::app_read_snapshot_tests::{
+        app_read_handle, app_read_handle_with_result_budget,
+    };
     use crate::{
         GraphRagGeneratedQuery, GraphRagQueryBinding, GraphRagQueryDraft, GraphRagQueryPattern,
         GraphRagQueryPredicate, GraphRagQueryPredicateOperator, GraphRagQueryProjection,
@@ -455,6 +457,13 @@ mod tests {
     #[test]
     fn generated_reads_reuse_preparation_and_preserve_parameter_and_output_limits() {
         let handle = graph_only_handle();
+        handle
+            .write_store()
+            .unwrap()
+            .graph
+            .database_mut()
+            .query("CREATE PROPERTY ON NODE TABLE Thread(id) TYPE STRING NOT NULL")
+            .unwrap();
         let query = generated_thread_query(
             &handle
                 .graph_rag_schema_context(GraphRagSchemaContextOptions::default())
@@ -522,12 +531,22 @@ mod tests {
                 .is_err());
         }
         let wrong_type = BTreeMap::from([("id".into(), Value::Int(1))]);
-        assert!(handle
-            .read_generated_graph_rag(&query, &wrong_type, &options())
-            .is_err());
-        assert!(handle
-            .read_generated_graph_rag(&query, &BTreeMap::new(), &options())
-            .is_err());
+        for (parameters, message) in [
+            (wrong_type, "GraphRAG query parameter id must be string"),
+            (BTreeMap::new(), "missing GraphRAG query parameter: id"),
+        ] {
+            let error = handle
+                .read_generated_graph_rag(&query, &parameters, &options())
+                .unwrap_err();
+            assert!(error.to_string().contains(message), "{error}");
+            let error = handle
+                .read_store()
+                .unwrap()
+                .graph
+                .read_generated_graph_rag(&query, &parameters, &options())
+                .unwrap_err();
+            assert!(error.to_string().contains(message), "{error}");
+        }
         assert_eq!(
             handle
                 .runtime_governor_snapshot()
@@ -591,8 +610,13 @@ mod tests {
             if event.statement_kind == self.statement_kind
                 && self.armed.swap(false, Ordering::SeqCst)
             {
-                assert!(event.success);
-                assert_eq!(event.row_count, 1);
+                if !event.success || event.row_count != 1 {
+                    *self.failure.lock().unwrap() = Some(format!(
+                        "success={}, row_count={}",
+                        event.success, event.row_count
+                    ));
+                    return;
+                }
                 self.start.send(()).unwrap();
                 let progress = self
                     .done
@@ -649,6 +673,13 @@ mod tests {
         }
     }
 
+    fn explain_handle() -> NowledgeMemEmbeddedStoreHandle {
+        // EXPLAIN retains plan/schema metadata in addition to its logical payload.
+        let handle = app_read_handle_with_result_budget(64 * 1024);
+        handle.write_store().unwrap().search_projection = None;
+        handle
+    }
+
     #[test]
     fn report_observation_allows_writer_commit_and_a_fresh_read() {
         const TEXT: &str = "CALL text_search($text, topK := 2) YIELD id, score MATCH (m:Memory) RETURN m.title AS title";
@@ -667,19 +698,19 @@ mod tests {
                 Some("Nearest memory"),
             ),
             (
-                graph_only_handle(),
+                explain_handle(),
                 "EXPLAIN MATCH (t:Thread) RETURN t.title AS title",
                 "explain",
                 None,
             ),
             (
-                graph_only_handle(),
+                explain_handle(),
                 "EXPLAIN MATCH (t:Thread) SET t.title = 'Not executed'",
                 "explain",
                 None,
             ),
             (
-                graph_only_handle(),
+                explain_handle(),
                 "EXPLAIN CREATE NODE TABLE Planned",
                 "explain",
                 None,
@@ -724,7 +755,7 @@ mod tests {
             let failure = sink.failure.lock().unwrap().clone();
             drop(sink);
             writer.join().unwrap();
-            let result = result.unwrap();
+            let result = result.unwrap_or_else(|error| panic!("{query}: {error:?}"));
             assert!(observed, "missing {statement_kind} observation for {query}");
             assert!(
                 completed,

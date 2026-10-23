@@ -109,6 +109,11 @@ published view while a direct writer holds the owner. Generated reads use one
 preparation lookup, retain parameter/row/payload checks, and reject a stale
 generated context after an ordinary data commit during admission. Plain EXPLAIN
 observation covers read, DML and DDL plans while a writer and fresh reader finish.
+Generated parameter rejection uses an explicitly typed `Thread.id` property; an
+undeclared `Any` property correctly accepts integers. EXPLAIN observation uses a
+separate 64 KiB host result budget for retained plan/schema metadata; ordinary
+App reads keep 16 KiB. Failed observations surface the original query error
+after releasing the waiting writer, without panicking inside telemetry.
 `api::query_runtime::tests` checks that plain EXPLAIN never executes write plans,
 ANALYZE rejects DML/DDL, zero diagnostic budgets fail, and direct/forked read
 snapshots retain captured query settings with statement-local overrides. These
@@ -558,3 +563,15 @@ platform matrix in a separate concurrency group, preserving an ongoing full run.
 `scope=runtime` selects both runtime platforms in another independent group for
 query/adapter changes. Partial runs do not qualify their skipped lanes.
 Scheduled and default `scope=all` manual runs continue to include every lane.
+
+### Parameterized PageRank persistence
+
+`api::tests::pagerank` exercises score updates and clearing through bounded
+parameterized Cypher in explicit transactions. The root general unit owner
+retains first-duplicate input normalization, missing IDs, preservation of
+projected entities without external IDs, null clearing, exact commit epochs,
+one WAL batch and reopen values. Its input-normalization fixture validates the
+whole input before opening a transaction, including invalid scores and labels;
+it performs no graph reads or mutations. The old PageRank CRUD methods, helpers
+and response/request DTOs are removed from test builds as well as production.
+These runtime regressions remain CI-owned; local strict Clippy compiles them.

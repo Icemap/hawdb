@@ -20,65 +20,6 @@ use super::graph_read::KnowledgeEntityRequest;
 use hawdb_core::Value;
 use std::collections::BTreeMap;
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct KnowledgePageRankScoreUpdate {
-    pub label: String,
-    pub external_id: String,
-    pub score: f64,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct KnowledgePageRankScoreBatchRequest {
-    pub updates: Vec<KnowledgePageRankScoreUpdate>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgePageRankScoreBatchRow {
-    pub label: String,
-    pub external_id: String,
-    pub node_id: Option<u64>,
-    pub matched: bool,
-    pub updated: bool,
-    pub duplicate: bool,
-    pub non_writable: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgePageRankScoreBatchOutput {
-    pub graph_commit_epoch_before: u64,
-    pub graph_commit_epoch_after: u64,
-    pub rows: Vec<KnowledgePageRankScoreBatchRow>,
-    pub matched_count: usize,
-    pub missing_count: usize,
-    pub duplicate_count: usize,
-    pub non_writable_count: usize,
-    pub updated_count: usize,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgePageRankClearRequest {
-    pub labels: Vec<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgePageRankClearRow {
-    pub label: String,
-    pub external_id: Option<String>,
-    pub node_id: u64,
-    pub cleared: bool,
-    pub non_writable: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgePageRankClearOutput {
-    pub graph_commit_epoch_before: u64,
-    pub graph_commit_epoch_after: u64,
-    pub rows: Vec<KnowledgePageRankClearRow>,
-    pub candidate_count: usize,
-    pub cleared_count: usize,
-    pub non_writable_count: usize,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KnowledgeCommunityAssignmentClearRequest {
     pub labels: Vec<String>,

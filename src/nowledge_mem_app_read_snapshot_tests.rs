@@ -195,9 +195,15 @@ fn snapshot_governor() -> hawdb_qos::RuntimeGovernor {
 }
 
 pub(super) fn app_read_handle() -> NowledgeMemEmbeddedStoreHandle {
+    app_read_handle_with_result_budget(16 * 1024)
+}
+
+pub(super) fn app_read_handle_with_result_budget(
+    max_read_result_payload_bytes: usize,
+) -> NowledgeMemEmbeddedStoreHandle {
     let mut database = Database::new_with_config(DatabaseConfig {
         max_read_result_rows: Some(16),
-        max_read_result_payload_bytes: Some(16 * 1024),
+        max_read_result_payload_bytes: Some(max_read_result_payload_bytes),
         ..DatabaseConfig::default()
     });
     database
