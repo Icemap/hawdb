@@ -3,7 +3,6 @@ load("@crate_index//:defs.bzl", "aliases", "all_crate_deps")
 load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_test")
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
 load("//:benchmarks.bzl", "HAWDB_BENCHMARKS", "HAWDB_BENCHMARK_TARGETS", "hawdb_benchmark_binaries")
-
 load("//:windows_native_features.bzl", "WINDOWS_NATIVE_FEATURE_PROFILES", "windows_native_features")
 
 package(default_visibility = ["//visibility:public"])
@@ -843,6 +842,7 @@ rust_test(
 [
     rust_test(
         name = "hawdb_mvcc_staging_session" + suffix + "_tests",
+        crate_features = windows_native_features("hawdb", []),
         crate_root = "tests/mvcc_staging_session.rs",
         srcs = [
             "tests/mvcc_staging_session.rs",
