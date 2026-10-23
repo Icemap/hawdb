@@ -68,7 +68,8 @@ jobs:
         run: cargo test --locked -p hawdb-core --lib schema::tests
 
       - name: Test request context constraints
-        run: cargo test --locked -p hawdb-core --lib cancellation::
+        run: |
+          cargo test --locked -p hawdb-core --lib cancellation::
 
       - name: Test shared query request contracts
         run: |
