@@ -28,7 +28,10 @@ use hawdb_storage::{
     durability::{
         durable_replace_file, WalSyncGroupFlush, WalSyncGroupProgress, WalSyncGroupState,
     },
-    pressure::{available_storage_space, StorageDebtController, StoragePressureSignals},
+    pressure::{
+        available_storage_space, StorageDebtController, StoragePressureSignals,
+        StoragePressureSnapshot,
+    },
     telemetry::WalAppendTelemetry,
 };
 use std::io::Write;
@@ -78,6 +81,26 @@ impl WalAppendFile {
         // file again through the original operation's descriptor domain.
         Ok(identity == crate::native_file_identity::of_metadata(&context.metadata(path)?))
     }
+}
+
+fn wal_admission_refusal(
+    mut signals: StoragePressureSignals,
+    generation_bytes: impl FnOnce() -> u64,
+) -> Option<StoragePressureSnapshot> {
+    // More retained debt cannot make admission less restrictive. If even its
+    // upper bound permits a write, inventory I/O cannot change that decision.
+    // Refusals and public pressure reports retain the actual measured debt.
+    signals.obsolete_generation_bytes = u64::MAX;
+    if StorageDebtController
+        .evaluate(signals)
+        .state
+        .admits_mutation()
+    {
+        return None;
+    }
+    signals.obsolete_generation_bytes = generation_bytes();
+    let pressure = StorageDebtController.evaluate(signals);
+    (!pressure.state.admits_mutation()).then_some(pressure)
 }
 
 impl DurableStore {
@@ -444,17 +467,16 @@ impl DurableStore {
         signals.generation_reclamation_pending_files = reclamation.pending_file_count;
         signals.generation_reclamation_pending_bytes = reclamation.pending_bytes;
         signals.oldest_reader_commit_epoch = self.oldest_reader_commit_epoch;
-        signals.obsolete_generation_bytes =
-            self.obsolete_generation_bytes(self.oldest_reader_commit_epoch);
         signals.estimated_checkpoint_temporary_bytes = signals
             .estimated_checkpoint_temporary_bytes
             .saturating_add(pending_wal_bytes.saturating_mul(CHECKPOINT_TEMPORARY_SPACE_MULTIPLIER))
             .max(MIN_CHECKPOINT_TEMPORARY_SPACE_BYTES);
         signals.available_free_space_bytes = Some(available_free_space_bytes);
-        let pressure = StorageDebtController.evaluate(signals);
-        if pressure.state.admits_mutation() {
+        let Some(pressure) = wal_admission_refusal(signals, || {
+            self.obsolete_generation_bytes(self.oldest_reader_commit_epoch)
+        }) else {
             return Ok(());
-        }
+        };
         let reasons = pressure
             .reason_codes
             .iter()
@@ -681,6 +703,69 @@ mod tests {
     use crate::store::{set_wal_append_failpoint, GraphStore, WalAppendFailure};
     use hawdb_core::{schema::Catalog, Value};
     use std::collections::BTreeMap;
+
+    #[test]
+    fn admitted_wal_pressure_does_not_observe_generation_inventory() {
+        let signals = StoragePressureSignals {
+            current_commit_epoch: 10,
+            checkpoint_commit_epoch: 2,
+            oldest_reader_commit_epoch: Some(1),
+            ..Default::default()
+        };
+        assert!(wal_admission_refusal(signals, || {
+            panic!("admitted WAL must not enumerate generation files")
+        })
+        .is_none());
+    }
+
+    #[test]
+    fn lazy_wal_pressure_matches_complete_refusals_and_diagnostics() {
+        for mask in 0..128 {
+            for oldest in [None, Some(0), Some(10)] {
+                for obsolete in [0, 1, 1 << 40, u64::MAX] {
+                    let signals = StoragePressureSignals {
+                        current_commit_epoch: 10,
+                        checkpoint_commit_epoch: 2,
+                        oldest_reader_commit_epoch: oldest,
+                        obsolete_generation_bytes: obsolete,
+                        wal_bytes: if mask & 1 != 0 {
+                            100
+                        } else if mask & 2 != 0 {
+                            95
+                        } else {
+                            10
+                        },
+                        max_wal_bytes: Some(100),
+                        delta_bytes: if mask & 4 != 0 { 95 } else { 10 },
+                        max_delta_bytes: Some(100),
+                        integrity_poisoned: mask & 8 != 0,
+                        estimated_checkpoint_temporary_bytes: 128,
+                        available_free_space_bytes: Some(if mask & 16 != 0 { 64 } else { 256 }),
+                        generation_reclamation_retry_required: mask & 32 != 0,
+                        cache_capacity_bytes: 100,
+                        cache_resident_bytes: 100,
+                        cache_pinned_bytes: if mask & 64 != 0 { 95 } else { 0 },
+                        ..Default::default()
+                    };
+                    let expected = StorageDebtController.evaluate(signals);
+                    let expected = (!expected.state.admits_mutation()).then_some(expected);
+                    let observed = std::cell::Cell::new(false);
+                    let actual = wal_admission_refusal(signals, || {
+                        observed.set(true);
+                        obsolete
+                    });
+                    assert_eq!(
+                        actual, expected,
+                        "mask={mask}, oldest={oldest:?}, obsolete={obsolete}"
+                    );
+                    if let Some(refusal) = actual {
+                        assert!(observed.get());
+                        assert_eq!(refusal.obsolete_generation_bytes, obsolete);
+                    }
+                }
+            }
+        }
+    }
 
     fn path() -> std::path::PathBuf {
         std::env::temp_dir().join(format!(

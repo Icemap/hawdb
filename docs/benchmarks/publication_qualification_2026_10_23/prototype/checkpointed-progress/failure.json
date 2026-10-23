@@ -1,0 +1,24 @@
+{
+  "command": [
+    "/build/release/deps/consumer_publication-ee5e1a723b428eea",
+    "--mode",
+    "detached",
+    "--writers",
+    "8",
+    "--documents",
+    "512",
+    "--payload",
+    "1024",
+    "--writes",
+    "100000",
+    "--quiet-samples",
+    "32",
+    "--root",
+    "/fixtures/checkpointed-progress-1/consumer-publication-1-0-5",
+    "--sustained",
+    "true"
+  ],
+  "returncode": 101,
+  "stdout": "",
+  "stderr": "\nthread '<unnamed>' (79) panicked at benches/consumer_publication/workload.rs:165:10:\ncalled `Result::unwrap()` on an `Err` value: Feed(Incomplete)\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\nthread 'main' (69) panicked at benches/consumer_publication.rs:291:80:\ncalled `Result::unwrap()` on an `Err` value: Any { .. }\n"
+}

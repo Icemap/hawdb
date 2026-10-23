@@ -8,8 +8,9 @@ writes must complete during expensive preparation, Consumer watermarks must
 continue advancing under that workload, and the final publication section must
 not scale with total preparation work. No such improvement is implied by an
 old-snapshot retention test or by the separate MVCC transaction campaign.
-The remaining publication acceptance is tracked in #232; the closed #231 issue
-is referenced for the underlying MVCC/dependency-protocol context.
+The remaining publication acceptance is tracked in #1119 and the acceptance
+ledger below. #232 is administratively closed; that status does not qualify its
+performance gates. The closed #231 issue records the underlying MVCC context.
 
 ## Deterministic evidence
 
@@ -44,13 +45,13 @@ qualification. Changing it requires the dependency/publication proof tracked in
   age is explicitly 3,600 seconds so its periodic work is outside these short
   cases. This does not qualify group-commit interaction. Source residency uses the
   default `Auto` configuration; the resolved residency mode is not recorded.
-- 1,024 foreground writes per case and three repetitions with reversed case
-  order on alternating rounds. Each concurrent phase stops attempting publication
-  after the writers finish or after 128 attempts, whichever occurs first.
-  The result records whether the limit was reached with active writers; a capped
-  phase does not establish unbounded fairness or sustained maintenance. Cleanup
-  runs after every enabled attempt.
-  Each enabled case also records 32 successful quiescent publications separately.
+- 4,096 foreground writes per case and three repetitions with reversed case
+  order on alternating rounds. Each concurrent phase performs the same 16
+  maintenance-trigger commits in all modes and 16 successful publications in
+  enabled modes, including attempts after foreground writers drain. Cleanup
+  runs after every enabled attempt. Each enabled case also records 32 successful
+  quiescent publications separately. This fixed-work control does not establish
+  sustained concurrent progress; see the separate 100,000-write cohort below.
 - Coverage comparison admits 64 MiB per compressed/expanded segment lookup and
   512 GiB cumulatively for each. These are pessimistic reservation totals, not
   measured I/O or resident-memory allocations: every document lookup prepays
@@ -81,8 +82,8 @@ host load, and preserves failure output. Shared-host
 measurements do not establish exclusive-machine or cold-device performance.
 
 ```console
-cargo bench --locked --bench consumer_publication --no-default-features --features full-text-search,background-maintenance --no-run --message-format=json
-python scripts/measure-consumer-publication.py --binary target/release/deps/consumer_publication-BINARY_HASH --output /tmp/consumer-publication-results --fixture-parent target/consumer-publication-fixtures
+cargo bench --locked --bench consumer_publication --no-default-features --features full-text-search,background-maintenance --no-run --message-format=json > /tmp/consumer-build.jsonl
+python3 scripts/measure-consumer-publication.py --build-artifacts /tmp/consumer-build.jsonl --binary target/release/deps/consumer_publication-BINARY_HASH --output /tmp/consumer-publication-results --fixture-parent target/consumer-publication-fixtures
 ```
 
 Use the executable path from Cargo's `compiler-artifact` JSON, replacing the
@@ -99,3 +100,29 @@ contains all 54 completed release cases, raw samples, source/binary digests,
 the initial budget-refusal attempt and explicit cap-hit limitations. All 18
 covered cases recorded zero active-writer watermark advances. Faster refusals
 are not evidence of an equivalent-work p95/p99 improvement.
+
+The [2026-10-23 follow-up](benchmarks/publication_qualification_2026_10_23/README.md)
+contains both clean-main and prototype 54-case matrices, failed sustained
+cohorts, writer failures and separate syscall attribution. Their source scopes
+and unmet acceptance are retained explicitly.
+
+## Separate sustained fixed-work cohort
+
+The manual driver accepts `--sustained --writes 100000` for detached publication
+through the writer phase, with ordinary checkpoints every 16,384 foreground
+commits and an explicit 4,096-attempt publication ceiling. Three rounds cover
+both existing document shapes and all 1/4/8-writer counts: 18 cases, separately
+from the unchanged 54-case latency controls. Source epochs, final rows/documents,
+checkpoint samples and actual post-E progress remain mandatory. A cap hit with
+active writers is not successful sustained progress. The existing 64 MiB
+retention-byte ceiling and production live-row limit remain unchanged; entry
+reservation includes the declared maximum trigger count.
+
+The driver requires matching Cargo compiler-artifact JSON for the executable
+and records its actual features and profile instead of assuming a default build.
+A checked-profile or mismatched executable refuses before timing. Preflight
+contracts run manually with `python3 scripts/measure-consumer-publication.test.py`.
+Completed processes do not by themselves satisfy the sustained gate; the final
+receipt records unmet progress and the driver fails after retaining every
+completed case. Correctness/process errors stop with original failure evidence.
+This finite workload is not an open-loop or starvation-freedom proof.

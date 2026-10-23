@@ -12,7 +12,7 @@ use hawdb::*;
 use serde_json::{json, Value as Json};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Barrier;
+use std::sync::{Barrier, Mutex};
 use std::time::Instant;
 
 fn ns(start: Instant) -> u64 {
@@ -177,7 +177,7 @@ fn attempt(
     })
 }
 
-fn run(
+struct Case {
     root: PathBuf,
     mode: Mode,
     documents: usize,
@@ -185,10 +185,25 @@ fn run(
     writers: usize,
     writes: usize,
     quiet: usize,
-) -> Json {
+    sustained: bool,
+}
+
+fn run(case: Case) -> Json {
+    let Case {
+        root,
+        mode,
+        documents,
+        payload,
+        writers,
+        writes,
+        quiet,
+        sustained,
+    } = case;
+    let publication_limit = if sustained { 4096 } else { 16 };
+    let checkpoint_interval = 16_384;
     // create_dir refuses existing paths; cleanup is confined to this fixture.
     std::fs::create_dir(&root).unwrap();
-    let retention_entries = writes + quiet + 64;
+    let retention_entries = writes + quiet + 64 + if sustained { publication_limit } else { 0 };
     let (database, mut consumer) =
         workload::setup(&root, documents, payload, writers, retention_entries);
     let initial = consumer.projection().receipt().source_epoch;
@@ -196,69 +211,103 @@ fn run(
     let ready = Barrier::new(writers + 2);
     let active = AtomicUsize::new(writers);
     let completed = AtomicUsize::new(0);
-    let (workers, attempts, triggers, elapsed, elapsed_all) = std::thread::scope(|scope| {
-        let handles = (0..writers)
-            .map(|writer| {
-                let owner = &owner;
-                let ready = &ready;
-                let active = &active;
-                let completed = &completed;
-                scope.spawn(move || {
-                    let mut samples = Vec::new();
-                    ready.wait();
-                    for sequence in (writer..writes).step_by(writers) {
-                        let started = Instant::now();
-                        let (_, wait, held) =
-                            exclusive(owner, |db| update(db, writer, sequence + 1));
-                        samples.push((ns(started), wait, held));
-                        completed.fetch_add(1, Ordering::Release);
-                    }
-                    active.fetch_sub(1, Ordering::Release);
-                    samples
+    let checkpoint_writes = AtomicUsize::new(0);
+    let checkpoint_samples = Mutex::new(Vec::new());
+    let (workers, attempts, triggers, publisher_exit_active, elapsed, elapsed_all) =
+        std::thread::scope(|scope| {
+            let handles = (0..writers)
+                .map(|writer| {
+                    let owner = &owner;
+                    let ready = &ready;
+                    let active = &active;
+                    let completed = &completed;
+                    let checkpoint_writes = &checkpoint_writes;
+                    let checkpoint_samples = &checkpoint_samples;
+                    scope.spawn(move || {
+                        let mut samples = Vec::new();
+                        ready.wait();
+                        for sequence in (writer..writes).step_by(writers) {
+                            let started = Instant::now();
+                            let (_, wait, held) = exclusive(owner, |db| {
+                                update(db, writer, sequence + 1);
+                                if sustained {
+                                    let count =
+                                        checkpoint_writes.fetch_add(1, Ordering::Relaxed) + 1;
+                                    if count.is_multiple_of(checkpoint_interval) {
+                                        // Exercise normal maintenance instead of raising the live-view ceiling.
+                                        let started = Instant::now();
+                                        db.checkpoint().unwrap();
+                                        checkpoint_samples
+                                            .lock()
+                                            .unwrap()
+                                            .push((count, ns(started)));
+                                    }
+                                }
+                            });
+                            samples.push((ns(started), wait, held));
+                            completed.fetch_add(1, Ordering::Release);
+                        }
+                        active.fetch_sub(1, Ordering::Release);
+                        samples
+                    })
                 })
-            })
-            .collect::<Vec<_>>();
-        let publisher = scope.spawn(|| {
-            ready.wait();
-            let mut attempts = Vec::new();
-            let mut triggers = Vec::new();
-            for sequence in 1..=16 {
-                // All modes perform the same trigger writes. Each enabled
-                // attempt must build a new E even after foreground writers drain.
-                let (_, wait, held) = exclusive(&owner, |db| {
-                    db.query_sql_with_params(
-                        "UPDATE maintenance_trigger SET value=$1 WHERE id=0",
-                        &[Value::Int(sequence)],
-                    )
-                    .unwrap();
-                });
-                triggers.push((wait, held));
-                if mode != Mode::Disabled {
-                    let before = completed.load(Ordering::Acquire);
-                    let mut row = attempt(&owner, &mut consumer, mode, &completed);
-                    row["writes_before"] = json!(before);
-                    row["writes_after"] = json!(completed.load(Ordering::Acquire));
-                    row["writers_active_after"] = json!(active.load(Ordering::Acquire));
-                    attempts.push(row);
+                .collect::<Vec<_>>();
+            let publisher = scope.spawn(|| {
+                ready.wait();
+                let mut attempts = Vec::new();
+                let mut triggers = Vec::new();
+                for sequence in 1..=publication_limit {
+                    if sustained && active.load(Ordering::Acquire) == 0 {
+                        break;
+                    }
+                    // All modes perform the same trigger writes. Each enabled
+                    // attempt must build a new E even after foreground writers drain.
+                    let (_, wait, held) = exclusive(&owner, |db| {
+                        db.query_sql_with_params(
+                            "UPDATE maintenance_trigger SET value=$1 WHERE id=0",
+                            &[Value::Int(sequence.try_into().unwrap())],
+                        )
+                        .unwrap();
+                    });
+                    triggers.push((wait, held));
+                    if mode != Mode::Disabled {
+                        let before = completed.load(Ordering::Acquire);
+                        let mut row = attempt(&owner, &mut consumer, mode, &completed);
+                        row["writes_before"] = json!(before);
+                        row["writes_after"] = json!(completed.load(Ordering::Acquire));
+                        row["writers_active_after"] = json!(active.load(Ordering::Acquire));
+                        attempts.push(row);
+                    }
                 }
-            }
-            (attempts, triggers)
+                (attempts, triggers, active.load(Ordering::Acquire))
+            });
+            let started = Instant::now();
+            ready.wait();
+            let workers = handles
+                .into_iter()
+                .map(|thread| thread.join().unwrap())
+                .collect::<Vec<_>>();
+            let elapsed = ns(started);
+            let (attempts, triggers, publisher_exit_active) = publisher.join().unwrap();
+            (
+                workers,
+                attempts,
+                triggers,
+                publisher_exit_active,
+                elapsed,
+                ns(started),
+            )
         });
-        let started = Instant::now();
-        ready.wait();
-        let workers = handles
-            .into_iter()
-            .map(|thread| thread.join().unwrap())
-            .collect::<Vec<_>>();
-        let elapsed = ns(started);
-        let (attempts, triggers) = publisher.join().unwrap();
-        (workers, attempts, triggers, elapsed, ns(started))
-    });
     assert_eq!(completed.load(Ordering::Acquire), writes);
     let source_after_writers = owner.with_read(Database::commit_epoch).unwrap();
-    assert_eq!(source_after_writers, initial + writes as u64 + 16);
+    assert_eq!(
+        source_after_writers,
+        initial + writes as u64 + triggers.len() as u64
+    );
     if matches!(mode, Mode::ScopedBlocking | Mode::Detached) {
-        assert_eq!(attempts.len(), 16);
+        if !sustained {
+            assert_eq!(attempts.len(), 16);
+        }
         assert!(attempts
             .iter()
             .all(|row| row["outcome"] == "published" && row["advanced"] == true));
@@ -318,16 +367,29 @@ fn run(
         .iter()
         .map(|row| row["publication_exclusive_callback_ns"].as_u64().unwrap())
         .collect::<Vec<_>>();
-    let result = json!({
+    let checkpoint_samples = checkpoint_samples.into_inner().unwrap();
+    if sustained {
+        assert_eq!(checkpoint_writes.load(Ordering::Relaxed), writes);
+        assert_eq!(checkpoint_samples.len(), writes / checkpoint_interval);
+    }
+    let post_e_advances = attempts
+        .iter()
+        .filter(|row| {
+            row["committed_post_e_advance"] == true
+                && row["writers_active_after"].as_u64().unwrap() > 0
+        })
+        .count();
+    let publisher_cap_reached = sustained && publisher_exit_active > 0;
+    let mut result = json!({
         "schema": "consumer-publication-qualification-v2", "mode": mode.name(),
         "documents": documents, "payload_bytes_per_document": payload, "writers": writers, "writes": writes,
         "durability": "SyncOnEveryWrite", "automatic_checkpoint_max_age_seconds": 3600,
         "changefeed_retention_entries": retention_entries, "changefeed_retention_bytes": 64 << 20,
         "governor_memory_bytes": 512_u64 << 20, "background_tasks": 1, "io_slots": [4,1],
-        "data_shape": "fixed Memory projection plus disjoint relational foreground counters and 16 shared maintenance trigger writes",
-        "control": "same binary; scoped-blocking and detached perform the same full native construction and 16 concurrent-phase publications; disabled performs no projection maintenance",
+        "data_shape": "fixed Memory projection plus disjoint relational foreground counters and shared maintenance trigger writes",
+        "control": if sustained {"separate fixed-work progress cohort; publish until writers finish or the explicit attempt ceiling is reached"} else {"same binary; scoped-blocking and detached perform the same full native construction and 16 concurrent-phase publications; disabled performs no projection maintenance"},
         "elapsed_concurrent_phase_ns": elapsed_all, "maintenance_trigger_samples_wait_hold_ns": triggers,
-        "maintenance_trigger_writes": 16,
+        "maintenance_trigger_writes": triggers.len(),
         "elapsed_writer_ns": elapsed, "writes_per_second": writes as f64 * 1e9 / elapsed as f64,
         "foreground_write": latency(&transaction_samples), "writer_wait_plus_entry": latency(&waits),
         "writer_exclusive_callback": latency(&holds), "quiescent_publication_exclusive_callback": latency(&publication),
@@ -335,11 +397,19 @@ fn run(
         "watermark_after_concurrent_phase": watermark_after_writers, "watermark_advances_with_active_writers": active_advances,
         "publication_attempts": attempts, "quiescent_publication_samples": quiet_samples,
         "concurrent_phase_publication_attempts": attempts.len(),
-        "simultaneous_committed_post_e_advances": attempts.iter().filter(|row| row["committed_post_e_advance"] == true && row["writers_active_after"].as_u64().unwrap() > 0).count(),
+        "simultaneous_committed_post_e_advances": post_e_advances,
         "writer_samples": workers, "verified_documents": documents,
-        "simultaneous_progress_qualified": attempts.iter().filter(|row| row["committed_post_e_advance"] == true && row["writers_active_after"].as_u64().unwrap() > 0).count() >= 2,
+        "simultaneous_progress_qualified": post_e_advances >= 2,
         "qualification_note": "Progress requires successful captured-E publication after a real post-E commit while writers remain active; repeated progress requires at least two such advances. Quiet samples are separate.",
         "lock_measurement": "wait includes entry overhead; exclusive callback is a lower bound on outer owner hold time, not inner selector mutex time",
+    });
+    result["sustained_workload"] = json!({
+        "enabled": sustained, "publication_attempt_limit": publication_limit,
+        "publisher_exit_active_writers": publisher_exit_active, "publisher_cap_reached": publisher_cap_reached,
+        "checkpoint_every_foreground_writes": sustained.then_some(checkpoint_interval),
+        "checkpoint_samples_write_count_elapsed_ns": checkpoint_samples,
+        "checkpoint_admission": "caller-triggered blocking API; not a phase heap or governor-accounting claim",
+        "qualified": sustained && post_e_advances >= 2 && !publisher_cap_reached,
     });
     drop(consumer);
     drop(owner);
@@ -354,6 +424,7 @@ fn main() {
     let mut payload = 128;
     let mut writes = 4096;
     let mut quiet = 32;
+    let mut sustained = false;
     let mut root = None;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
@@ -377,6 +448,7 @@ fn main() {
             "--payload" => payload = value.parse().unwrap(),
             "--writes" => writes = value.parse().unwrap(),
             "--quiet-samples" => quiet = value.parse().unwrap(),
+            "--sustained" => sustained = value.parse().unwrap(),
             "--root" => root = Some(PathBuf::from(value)),
             _ => panic!("unknown argument: {arg}"),
         }
@@ -384,9 +456,19 @@ fn main() {
     assert!([1, 4, 8].contains(&writers));
     assert!((1..=4096).contains(&documents) && (1..=2048).contains(&payload));
     assert!((writers..=100_000).contains(&writes) && (1..=1024).contains(&quiet));
+    assert!(!sustained || mode == Mode::Detached);
     let root = root.expect("--root must name a new fixture directory on the measured filesystem");
     println!(
         "{}",
-        run(root, mode, documents, payload, writers, writes, quiet)
+        run(Case {
+            root,
+            mode,
+            documents,
+            payload,
+            writers,
+            writes,
+            quiet,
+            sustained
+        })
     );
 }

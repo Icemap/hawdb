@@ -1,0 +1,68 @@
+{
+  "id": "459b0cf35c167579111de8f4c8bde77ed2b5e0b0e55ab1b37d2bf1cf2ce34936",
+  "image": "sha256:77fac8b98f9f46062bb680b6d25d5bcaabfc400143952ebc572e924bcbedc3fa",
+  "state": {
+    "Dead": false,
+    "Error": "",
+    "ExitCode": 0,
+    "FinishedAt": "2026-10-23T13:40:01.401871419Z",
+    "OOMKilled": false,
+    "Paused": false,
+    "Pid": 798,
+    "Restarting": false,
+    "Running": true,
+    "StartedAt": "2026-10-23T13:42:31.305191711Z",
+    "Status": "running"
+  },
+  "nano_cpus": 4000000000,
+  "memory_bytes": 6442450944,
+  "memory_swap_bytes": 6442450944,
+  "mounts": [
+    {
+      "Destination": "/build",
+      "Driver": "local",
+      "Mode": "z",
+      "Name": "hawdb-1119-publication-build",
+      "Propagation": "",
+      "RW": true,
+      "Source": "/var/lib/docker/volumes/hawdb-1119-publication-build/_data",
+      "Type": "volume"
+    },
+    {
+      "Destination": "/cargo",
+      "Driver": "local",
+      "Mode": "z",
+      "Name": "hawdb-1119-publication-cargo",
+      "Propagation": "",
+      "RW": true,
+      "Source": "/var/lib/docker/volumes/hawdb-1119-publication-cargo/_data",
+      "Type": "volume"
+    },
+    {
+      "Destination": "/evidence",
+      "Mode": "",
+      "Propagation": "rprivate",
+      "RW": true,
+      "Source": "/private/tmp/hawdb-publication-qualification",
+      "Type": "bind"
+    },
+    {
+      "Destination": "/fixtures",
+      "Driver": "local",
+      "Mode": "z",
+      "Name": "hawdb-1119-publication-fixtures",
+      "Propagation": "",
+      "RW": true,
+      "Source": "/var/lib/docker/volumes/hawdb-1119-publication-fixtures/_data",
+      "Type": "volume"
+    },
+    {
+      "Destination": "/work",
+      "Mode": "",
+      "Propagation": "rprivate",
+      "RW": false,
+      "Source": "/private/tmp/hawdb-publication-qualification/source",
+      "Type": "bind"
+    }
+  ]
+}

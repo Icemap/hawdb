@@ -1,0 +1,34 @@
+{
+  "schema": "consumer-long-fixed-work-progress-v1",
+  "declared_utc": "2026-10-23T13:43:42.946735+00:00",
+  "source": "0f641a98f17898a8ea3dae6ddaaa46d641604ae3",
+  "driver_sha256": "1c006b7f4f40a82812a331f76362b4afa8b65958170d6e4800fe4ea136598865",
+  "same_binary_as_54_case_matrix": true,
+  "shape_documents_payload": [
+    [
+      32,
+      128
+    ],
+    [
+      512,
+      1024
+    ]
+  ],
+  "writers": [
+    1,
+    4,
+    8
+  ],
+  "mode": "detached",
+  "repetitions": 3,
+  "writes_per_case": 100000,
+  "quiet_publications_per_case": 32,
+  "concurrent_phase_publications_per_case": 16,
+  "expected_cases": 18,
+  "acceptance": "Every case passes internal exact counter/document/epoch checks and reports at least two successful captured-E publications after a real post-E commit while writers remain active. All declared cases run despite finite-progress refusal; correctness/process failure stops with original evidence.",
+  "order": "reverse shape/writer order in odd repetitions",
+  "scope": "Separate finite fixed-work progress cohort, no paired latency comparison or infinite fairness claim; does not substitute for complete 54-case controls or strict writer gate.",
+  "default_retention_byte_cap_unchanged": 67108864,
+  "retention_entries": "existing harness formula writes+quiet+64",
+  "container_resources": "same 4 CPU quota / 6 GiB memory / disk-backed Docker volume as the initial 54-case cohort; run only after that cohort is terminal"
+}
