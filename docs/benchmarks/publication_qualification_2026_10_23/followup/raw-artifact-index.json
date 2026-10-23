@@ -4116,16 +4116,16 @@
     "uncompressed_bytes": 683
   },
   {
-    "path": "followup/read-probe-proof-v1/source.patch",
-    "compression": "none",
-    "sha256": "174b9d7e9b41b6165c0c62fad67867d27e29ba03110dd6609f7ead2baa670fcd",
+    "path": "followup/read-probe-proof-v1/source.patch.gz",
+    "compression": "gzip",
+    "sha256": "3b096496e0e24e94e68634431271f8c0bc69405fb39c51dd0677550afad495e5",
     "uncompressed_sha256": "174b9d7e9b41b6165c0c62fad67867d27e29ba03110dd6609f7ead2baa670fcd",
     "uncompressed_bytes": 19610
   },
   {
-    "path": "followup/integrated-qualification/fuzz-integrated.log",
-    "compression": "none",
-    "sha256": "6bcf0dc01fc91691352142a0dfbcac5ef1de99892868c7d2c960d7f221c8724c",
+    "path": "followup/integrated-qualification/fuzz-integrated.log.gz",
+    "compression": "gzip",
+    "sha256": "597d45779042c65b2d3d36b94312170e826dac5e10e065301713c81c545acc28",
     "uncompressed_sha256": "6bcf0dc01fc91691352142a0dfbcac5ef1de99892868c7d2c960d7f221c8724c",
     "uncompressed_bytes": 59968
   },
@@ -4158,9 +4158,9 @@
     "uncompressed_bytes": 885
   },
   {
-    "path": "followup/integrated-qualification/fuzz-build-fix.log",
-    "compression": "none",
-    "sha256": "fa25697fc054329f41cf1bdf25fe9d93b003dcfb8df7840aed475026b0e7100b",
+    "path": "followup/integrated-qualification/fuzz-build-fix.log.gz",
+    "compression": "gzip",
+    "sha256": "b032d39b0f1ffe4614eda8bdb75baa2b91a5d75570fb6c2582b064c91d69d9b5",
     "uncompressed_sha256": "fa25697fc054329f41cf1bdf25fe9d93b003dcfb8df7840aed475026b0e7100b",
     "uncompressed_bytes": 11262
   },
@@ -4179,9 +4179,9 @@
     "uncompressed_bytes": 15622
   },
   {
-    "path": "followup/integrated-qualification/fuzz-read-probe.log",
-    "compression": "none",
-    "sha256": "75dc48a78bd826350183d636e6abf64c5aec16febe1be60cb2256cd082a393d0",
+    "path": "followup/integrated-qualification/fuzz-read-probe.log.gz",
+    "compression": "gzip",
+    "sha256": "3bb41d4fc971f6faa33df3d292f2029f637634a9343a95fbb12f1390ec322910",
     "uncompressed_sha256": "75dc48a78bd826350183d636e6abf64c5aec16febe1be60cb2256cd082a393d0",
     "uncompressed_bytes": 11043
   },
@@ -4270,9 +4270,9 @@
     "uncompressed_bytes": 434512
   },
   {
-    "path": "followup/ci-root-integrated/build-log.txt",
-    "compression": "none",
-    "sha256": "7fccde072eac0bdd0ff3e8259c721573e76afc8dd84e3f51b34b4358ff2b199a",
+    "path": "followup/ci-root-integrated/build-log.txt.gz",
+    "compression": "gzip",
+    "sha256": "e7ffa11695dcd5bb455a14700a9a255a7ebc683047d0e61539f7a5258dacc8e6",
     "uncompressed_sha256": "7fccde072eac0bdd0ff3e8259c721573e76afc8dd84e3f51b34b4358ff2b199a",
     "uncompressed_bytes": 16611
   },
@@ -4522,9 +4522,9 @@
     "uncompressed_bytes": 875
   },
   {
-    "path": "followup/read-probe-gated-v1/source.patch",
-    "compression": "none",
-    "sha256": "279e69ea03005604c7b9e2a0229666b25dcec58d52bd4c12b068cd24b51bb022",
+    "path": "followup/read-probe-gated-v1/source.patch.gz",
+    "compression": "gzip",
+    "sha256": "0b5ba29e9bec278a9fba6d7777db1634895aa3d5833934af57caf0b69be66400",
     "uncompressed_sha256": "279e69ea03005604c7b9e2a0229666b25dcec58d52bd4c12b068cd24b51bb022",
     "uncompressed_bytes": 27092
   },
