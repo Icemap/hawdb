@@ -164,7 +164,7 @@ impl SearchIndex {
                 .keys()
                 .map(String::as_str)
                 .collect::<BTreeSet<_>>();
-            let scored = projection.score_terms_accounted(
+            let scored = projection.score_terms_with_stable_filter(
                 &terms,
                 ScoringInputs {
                     complete_candidate_limit: complete.then_some(max_candidates),

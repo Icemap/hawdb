@@ -18,6 +18,10 @@ use crate::lexical_projection::{
 };
 use hawdb_executor::{QueryMemoryAccount, QueryMemoryLease};
 
+#[cfg(all(test, feature = "full-text-search"))]
+#[path = "text_seed_reuse_tests.rs"]
+mod reuse_tests;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SearchTextSeedReport {
     pub generation: u64,
@@ -304,7 +308,7 @@ impl SearchOutOfCoreReader {
                 io_scope: None,
             }),
         )?;
-        let mut metadata = AdmittedMetadataLookup::new(self, memory, task);
+        let mut metadata = AdmittedMetadataLookup::new(self, memory, task, &predicates.predicates);
         let mut output = self.text_seed_scores(
             query_text,
             max_candidates,
@@ -312,7 +316,7 @@ impl SearchOutOfCoreReader {
             task,
             |id| {
                 observe_candidate(id)?;
-                metadata.matches(id, &predicates.predicates)
+                metadata.matches(id)
             },
             complete,
         )?;
@@ -350,7 +354,10 @@ struct AdmittedMetadataLookup<'a> {
     reader: &'a SearchOutOfCoreReader,
     memory: &'a QueryMemoryAccount,
     task: &'a crate::RuntimeTaskContext,
+    predicates: &'a crate::SearchPredicateSet,
     cached: Option<AdmittedMetadataSegment>,
+    last_document: Option<usize>,
+    last_match: Option<bool>,
 }
 
 impl<'a> AdmittedMetadataLookup<'a> {
@@ -358,21 +365,32 @@ impl<'a> AdmittedMetadataLookup<'a> {
         reader: &'a SearchOutOfCoreReader,
         memory: &'a QueryMemoryAccount,
         task: &'a crate::RuntimeTaskContext,
+        predicates: &'a crate::SearchPredicateSet,
     ) -> Self {
         Self {
             reader,
             memory,
             task,
+            predicates,
             cached: None,
+            last_document: None,
+            last_match: None,
         }
     }
 
-    fn matches(&mut self, id: &str, predicates: &crate::SearchPredicateSet) -> Result<bool> {
+    fn matches(&mut self, id: &str) -> Result<bool> {
+        crate::query_control::checkpoint(self.task)?;
+        let predicates = self.predicates;
         if predicates.is_empty() {
             return Ok(true);
         }
         if predicates.is_unsatisfiable() {
             return Ok(false);
+        }
+        if self.cached_document(id)
+            && let Some(matches) = self.last_match
+        {
+            return Ok(matches);
         }
         let memory = self.memory;
         let document = self.get(id)?;
@@ -390,15 +408,33 @@ impl<'a> AdmittedMetadataLookup<'a> {
             .and_then(|bytes| bytes.checked_add(predicates.predicates().len().saturating_mul(1024)))
             .ok_or_else(|| HawDBError::Execution("text filter scratch overflow".into()))?;
         let _scratch = memory.reserve(scratch_bytes)?;
-        Ok(crate::search_metadata_matches_predicates(
-            &document.id,
-            &document.metadata,
-            predicates,
-        ))
+        let matches =
+            crate::search_metadata_matches_predicates(&document.id, &document.metadata, predicates);
+        self.last_match = Some(matches);
+        Ok(matches)
+    }
+
+    fn cached_document(&self, id: &str) -> bool {
+        self.last_document
+            .and_then(|index| self.cached.as_ref()?.documents.get(index))
+            .is_some_and(|document| document.id == id)
     }
 
     fn get(&mut self, id: &str) -> Result<&SearchMetadataDocument> {
         crate::query_control::checkpoint(self.task)?;
+        // Only this exact ID has completed the cross-layer membership check.
+        // A cached segment's range does not establish ownership of other IDs.
+        if self.cached_document(id) {
+            return Ok(&self
+                .cached
+                .as_ref()
+                .expect("validated metadata is retained")
+                .documents[self
+                .last_document
+                .expect("validated document offset exists")]);
+        }
+        self.last_document = None;
+        self.last_match = None;
         // Descriptor bounds are only a routing hint: a sparse newer artifact
         // can span IDs that still belong to an older layer. Use the existing
         // admitted exact-membership route before decoding any metadata.
@@ -450,6 +486,7 @@ impl<'a> AdmittedMetadataLookup<'a> {
             .binary_search_by(|document| document.id.as_str().cmp(id))
             .map_err(|_| HawDBError::Storage(format!("text seed document {id} is missing")))?;
         crate::query_control::checkpoint(self.task)?;
+        self.last_document = Some(offset);
         Ok(&cached.documents[offset])
     }
 

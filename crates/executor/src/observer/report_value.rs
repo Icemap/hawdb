@@ -603,6 +603,19 @@ fn scan_pruning_strategy_value(strategy: &ScanPruningStrategy) -> Value {
                 Value::List(properties.iter().cloned().map(Value::String).collect()),
             ),
         ])),
+        ScanPruningStrategy::CompositePropertyOrdered {
+            properties,
+            descending,
+            continuation,
+        } => Value::Map(BTreeMap::from([
+            kind_value_pair("composite_property_ordered"),
+            (
+                "properties".into(),
+                Value::List(properties.iter().cloned().map(Value::String).collect()),
+            ),
+            ("descending".into(), Value::Bool(*descending)),
+            ("continuation".into(), Value::Bool(*continuation)),
+        ])),
         ScanPruningStrategy::PropertyRange { property } => {
             scan_pruning_property_strategy_value("property_range", property)
         }

@@ -34,8 +34,8 @@ use hawdb_optimizer::graph::{
     NODE_INDEX_SMALL_LABEL_SCAN_THRESHOLD,
 };
 use hawdb_plan_cache::{
-    bind_physical_plan_parameters, parameterize_logical_plan, parameterize_value_list,
-    resolve_plan_template_value, LfuCache, PlanParameterCacheKey,
+    bind_physical_plan_parameters, parameter_scalar_types, parameterize_logical_plan,
+    parameterize_value_list, resolve_plan_template_value, LfuCache, PlanParameterCacheKey,
 };
 pub use hawdb_plan_cache::{PlanCacheBypassReason, PlanCacheLookup, PlanCacheStats};
 use hawdb_plan_cypher::{BatchMutationOperation, ProjectionExpression};
@@ -240,6 +240,8 @@ pub(super) struct OptimizerEnvironmentKey {
     // Query-local point estimates do not depend on published advanced statistics.
     statistics_generation: Option<u64>,
     ordered_range_indexes: Vec<(String, String)>,
+    // None is an unrelated query; Some(empty) still tracks capability gains.
+    ordered_composite_indexes: Option<Arc<Vec<OrderedCompositeCapability>>>,
     node_index_size_classes: Vec<(LabelId, bool)>,
 }
 
@@ -268,6 +270,68 @@ fn node_index_size_classes<R: hawdb_storage::graph_engine::GraphReadEngine>(
         .map(|label| {
             let count = statistics.label_counts.get(&label).copied().unwrap_or(0);
             (label, count > NODE_INDEX_SMALL_LABEL_SCAN_THRESHOLD)
+        })
+        .collect()
+}
+
+type OrderedCompositeCapability = (String, Vec<(String, PropertyType)>);
+
+fn ordered_composite_indexes<R: hawdb_storage::graph_engine::GraphReadEngine>(
+    catalog: &Catalog,
+    store: &R,
+) -> Vec<OrderedCompositeCapability> {
+    catalog
+        .composite_property_indexes()
+        .filter_map(|index| {
+            if index.properties.len() < 3
+                || !store.supports_ordered_node_composite(index.label_id, &index.properties)
+            {
+                return None;
+            }
+            let label = catalog.label_name(index.label_id)?;
+            let table_id = catalog.table_id(TableKind::Node, label)?;
+            let table = catalog.table_descriptor(table_id)?;
+            if table.state != hawdb_core::SchemaObjectState::Public
+                || catalog
+                    .unique_constraint_id(index.label_id, index.properties.last()?)
+                    .is_none()
+            {
+                return None;
+            }
+            let suffix_start = index.properties.len() - 2;
+            let columns = index
+                .properties
+                .iter()
+                .enumerate()
+                .map(|(position, property)| {
+                    let descriptor = catalog
+                        .property_descriptor_id(table_id, property)
+                        .and_then(|id| catalog.property_descriptor(id));
+                    let active = descriptor.filter(|descriptor| {
+                        descriptor.state == hawdb_core::SchemaObjectState::Public
+                    });
+                    if position >= suffix_start {
+                        let descriptor = active?;
+                        if descriptor.nullable
+                            || !matches!(
+                                descriptor.value_type,
+                                PropertyType::Int | PropertyType::String
+                            )
+                        {
+                            return None;
+                        }
+                        Some((property.clone(), descriptor.value_type))
+                    } else {
+                        // Equality supplies prefix presence. Keep declared types for
+                        // the initial conservative numeric-prefix opt-in.
+                        Some((
+                            property.clone(),
+                            active.map_or(PropertyType::Any, |descriptor| descriptor.value_type),
+                        ))
+                    }
+                })
+                .collect::<Option<Vec<_>>>()?;
+            Some((label.to_owned(), columns))
         })
         .collect()
 }
@@ -423,6 +487,13 @@ impl OptimizerSchemaKey {
 }
 
 impl OptimizerEnvironmentKey {
+    fn ordered_composite_proofs(&self) -> impl Iterator<Item = OrderedCompositeCapability> + '_ {
+        self.ordered_composite_indexes
+            .iter()
+            .flat_map(|proofs| proofs.iter())
+            .cloned()
+    }
+
     /// A prepared query may reuse a physical plan across data and statistics
     /// generations because those affect cost only. Schema and runtime ordering
     /// capabilities affect legality and therefore require re-planning.
@@ -433,6 +504,10 @@ impl OptimizerEnvironmentKey {
     ) -> bool {
         self.schema == OptimizerSchemaKey::from_catalog(catalog)
             && self.ordered_range_indexes == ordered_range_indexes(catalog, store)
+            && self
+                .ordered_composite_indexes
+                .as_ref()
+                .is_none_or(|proofs| proofs.as_ref() == &ordered_composite_indexes(catalog, store))
     }
 }
 
@@ -452,6 +527,7 @@ impl OptimizerPlanningCache {
         catalog: &Catalog,
         store: &R,
         query_local_statistics: bool,
+        tracks_composite_ordering: bool,
     ) -> OptimizerEnvironmentKey {
         // A cache lookup must retain the last published statistics generation:
         // ordinary data commits do not make a physical plan illegal. A cache
@@ -467,6 +543,8 @@ impl OptimizerPlanningCache {
             schema: OptimizerSchemaKey::from_catalog(catalog),
             statistics_generation: (!query_local_statistics).then_some(self.statistics_generation),
             ordered_range_indexes: ordered_range_indexes(catalog, store),
+            ordered_composite_indexes: tracks_composite_ordering
+                .then(|| Arc::new(ordered_composite_indexes(catalog, store))),
             node_index_size_classes: node_index_size_classes(catalog, store),
         }
     }
@@ -519,6 +597,7 @@ impl OptimizerPlanningCache {
         catalog: &Catalog,
         store: &R,
         statistics_commit_lag: Option<u64>,
+        tracks_composite_ordering: bool,
     ) -> OptimizerCatalogAccess {
         let mut decisions = Vec::new();
         // This path is reached only after the physical-plan cache missed or
@@ -564,6 +643,8 @@ impl OptimizerPlanningCache {
             schema: OptimizerSchemaKey::from_catalog(catalog),
             statistics_generation: Some(self.statistics_generation),
             ordered_range_indexes: ordered_range_indexes(catalog, store),
+            ordered_composite_indexes: tracks_composite_ordering
+                .then(|| Arc::new(ordered_composite_indexes(catalog, store))),
             node_index_size_classes: node_index_size_classes(catalog, store),
         };
         // The catalog depends on runtime capabilities as well as schema and
@@ -589,7 +670,8 @@ impl OptimizerPlanningCache {
 
         let optimized = Arc::new(
             optimizer_catalog_from_graph_statistics(catalog, statistics)
-                .with_ordered_range_indexes(environment.ordered_range_indexes.clone()),
+                .with_ordered_range_indexes(environment.ordered_range_indexes.clone())
+                .with_ordered_composite_indexes(environment.ordered_composite_proofs()),
         );
         decisions.push(format!(
             "optimizer catalog cache refresh: statistics_epoch={} statistics_generation={} graph_commit_epoch={}",
@@ -658,6 +740,9 @@ pub(super) fn optimized_query_plan_for<S: crate::executor::ExecutionStore>(
             context.catalog,
             context.store,
             point_statistics.is_some(),
+            parameterized
+                .as_ref()
+                .is_some_and(|plan| ordered_query_shape(plan.logical())),
         )
     });
     let mut key = parameterized.as_ref().map(|parameterized| PlanCacheKey {
@@ -724,11 +809,36 @@ pub(super) fn optimized_query_plan_for<S: crate::executor::ExecutionStore>(
         point_statistics.as_ref(),
         environment_hint.as_ref(),
     );
+    // Shape proofs are needed only on an ordered-query miss. Point queries and
+    // all cache hits retain the shared catalog without cloning it.
+    let has_parameter_slots = parameterized
+        .as_ref()
+        .is_some_and(|plan| plan.slot_count() > 0);
+    let query_catalog = (has_parameter_slots
+        && catalog_access
+            .environment
+            .ordered_composite_indexes
+            .as_ref()
+            .is_some_and(|proofs| !proofs.is_empty())
+        && ordered_query_shape(&logical))
+    .then(|| {
+        catalog_access
+            .catalog
+            .as_ref()
+            .clone()
+            .with_parameter_scalar_types(parameter_scalar_types(
+                parameterized
+                    .as_ref()
+                    .expect("parameter proofs require a parameterized plan"),
+                parameters,
+            ))
+    });
+    let planning_catalog = query_catalog.as_ref().unwrap_or(&catalog_access.catalog);
     let logical_root = LogicalPlanRoot::new(logical);
     let physical_root = query_optimizer
         .optimize_root_with_catalog_and_directive(
             &logical_root,
-            &catalog_access.catalog,
+            planning_catalog,
             context.optimizer_search,
         )
         .map_err(|error| {
@@ -818,6 +928,16 @@ pub(super) fn optimized_query_plan_for<S: crate::executor::ExecutionStore>(
     unreachable!("plan cache mode must be either use or bypass")
 }
 
+fn ordered_query_shape(logical: &LogicalPlan) -> bool {
+    match logical {
+        LogicalPlan::Sort { .. } => true,
+        LogicalPlan::Limit { input, .. } | LogicalPlan::Project { input, .. } => {
+            ordered_query_shape(input)
+        }
+        _ => false,
+    }
+}
+
 fn refresh_materialized_plan_trace(trace: &mut OptimizerTrace, physical_plan: &PhysicalPlan) {
     trace.selected_plan = physical_plan.explain(0);
     trace.selected_plan_fingerprint = physical_plan.fingerprint();
@@ -840,6 +960,7 @@ fn optimizer_catalog_access_for_logical<S: crate::executor::ExecutionStore>(
         let catalog = Arc::new(
             optimizer_catalog_from_graph_statistics(context.catalog, &statistics)
                 .with_ordered_range_indexes(environment.ordered_range_indexes.clone())
+                .with_ordered_composite_indexes(environment.ordered_composite_proofs())
                 .with_property_equality_row_count(
                     point.label.to_owned(),
                     point.property.to_owned(),
@@ -858,7 +979,7 @@ fn optimizer_catalog_access_for_logical<S: crate::executor::ExecutionStore>(
             operation: BatchMutationOperation::CreateNode { .. },
             ..
         } => "UnwindCreateNode",
-        _ => return optimizer_catalog_access(context),
+        _ => return optimizer_catalog_access(context, ordered_query_shape(logical)),
     };
     // These bound leaves have no graph input or competing access path. Keep
     // schema and maintained counts current without scanning data or publishing
@@ -871,13 +992,15 @@ fn optimizer_catalog_access_for_logical<S: crate::executor::ExecutionStore>(
         schema: OptimizerSchemaKey::from_catalog(context.catalog),
         statistics_generation: Some(context.planning_cache.borrow().statistics_generation),
         ordered_range_indexes: ordered_range_indexes(context.catalog, context.store),
+        ordered_composite_indexes: None,
         // Mutation plans bypass the physical cache and have no graph input.
         // Do not add a second basic-count clone to their planning path.
         node_index_size_classes: Vec::new(),
     };
     let catalog = Arc::new(
         optimizer_catalog_from_graph_statistics(context.catalog, &statistics)
-            .with_ordered_range_indexes(environment.ordered_range_indexes.clone()),
+            .with_ordered_range_indexes(environment.ordered_range_indexes.clone())
+            .with_ordered_composite_indexes(environment.ordered_composite_proofs()),
     );
     OptimizerCatalogAccess {
         environment,
@@ -890,11 +1013,13 @@ fn optimizer_catalog_access_for_logical<S: crate::executor::ExecutionStore>(
 
 fn optimizer_catalog_access<S: crate::executor::ExecutionStore>(
     context: &PlanCacheContext<'_, S>,
+    tracks_composite_ordering: bool,
 ) -> OptimizerCatalogAccess {
     context.planning_cache.borrow_mut().optimizer_catalog(
         context.catalog,
         context.store,
         context.config.optimizer_statistics_inline_commit_lag,
+        tracks_composite_ordering,
     )
 }
 
@@ -908,7 +1033,7 @@ fn refresh_plan_trace<S: crate::executor::ExecutionStore>(
     match trace_mode {
         PlanTraceMode::Template => refresh_materialized_plan_trace(trace, physical_plan),
         PlanTraceMode::Bound => {
-            let catalog = optimizer_catalog_access(context).catalog;
+            let catalog = optimizer_catalog_access(context, true).catalog;
             optimizer.refresh_trace_for_physical_plan(trace, physical_plan, &catalog);
             trace.decisions.push(
                 "selected physical plan estimates refreshed for bound parameters".to_string(),
@@ -2084,7 +2209,7 @@ mod tests {
         let mut cache = OptimizerPlanningCache::default();
         store.create_node(&mut catalog, "T", node_props(0)).unwrap();
 
-        let access = cache.optimizer_catalog(&catalog, &store, Some(8));
+        let access = cache.optimizer_catalog(&catalog, &store, Some(8), false);
         assert!(
             access
                 .decisions
@@ -2095,7 +2220,7 @@ mod tests {
         );
 
         store.create_node(&mut catalog, "T", node_props(1)).unwrap();
-        let access = cache.optimizer_catalog(&catalog, &store, Some(8));
+        let access = cache.optimizer_catalog(&catalog, &store, Some(8), false);
         assert!(
             access
                 .decisions

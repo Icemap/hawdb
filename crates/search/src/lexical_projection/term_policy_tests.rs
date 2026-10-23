@@ -135,7 +135,7 @@ fn term_policy_query_and_delta_exact_memory_boundaries() {
             .max()
             .unwrap()
             * 4
-            * std::mem::size_of::<Posting>() as u64
+            * std::mem::size_of::<QueryPosting>() as u64
         + blocks.len() as u64 * 2 * std::mem::size_of::<&BlockDescriptor>() as u64
         + 5202 * 3
         + 32;

@@ -44,6 +44,7 @@ mod access;
 mod ddl;
 mod join;
 mod mutation;
+mod ordered;
 mod procedure;
 mod simple;
 mod traversal;
@@ -307,6 +308,34 @@ fn best_physical(
         .to_physical(memo, catalog, optimizer_context, decisions, stage_events)
 }
 
+fn ordered_alternative(
+    input: PhysicalPlan,
+    items: &[SortItem],
+    catalog: &OptimizerCatalog,
+    decisions: &mut Vec<String>,
+) -> PhysicalPlan {
+    let Some(candidate) = ordered::candidate(&input, items, catalog) else {
+        return input;
+    };
+    let ordered_cost = estimate_physical_plan_cost(&candidate, catalog);
+    let sort_cost = estimate_physical_plan_cost(
+        &PhysicalPlan::SortExec {
+            items: items.to_vec(),
+            input: Box::new(input.clone()),
+        },
+        catalog,
+    );
+    if satisfies_ordering(&candidate, items, catalog) && ordered_cost.cost <= sort_cost.cost {
+        decisions.push(format!(
+            "choose composite ordered seek: ordered_cost={} sort_cost={}",
+            ordered_cost.cost, sort_cost.cost
+        ));
+        candidate
+    } else {
+        input
+    }
+}
+
 fn select_bounded_sort_plan(
     items: Vec<SortItem>,
     offset: usize,
@@ -315,6 +344,7 @@ fn select_bounded_sort_plan(
     catalog: &OptimizerCatalog,
     decisions: &mut Vec<String>,
 ) -> PhysicalPlan {
+    let input = ordered_alternative(input, &items, catalog, decisions);
     if satisfies_ordering(&input, &items, catalog) {
         decisions.push("elide bounded sort: access path satisfies required ordering".to_string());
         return PhysicalPlan::LimitExec {
@@ -802,6 +832,7 @@ fn lower_logical(
             let bounded_catalog = scan.mode.requires_eligible_domain().then(|| {
                 let mut catalog = catalog.clone();
                 catalog.ordered_range_indexes.clear();
+                catalog.ordered_composite_indexes.clear();
                 catalog
             });
             let input_catalog = bounded_catalog.as_ref().unwrap_or(catalog);
@@ -1089,6 +1120,7 @@ fn lower_logical(
                 decisions,
                 stage_events,
             );
+            let input = ordered_alternative(input, items, catalog, decisions);
             if satisfies_ordering(&input, items, catalog) {
                 decisions
                     .push("elide SortExec: access path satisfies required ordering".to_string());
@@ -1589,6 +1621,9 @@ fn collect_access_properties(access: &NodeProjectionAccess, required: &mut BTree
                     .map(|(property, _)| property.clone()),
             );
             required.insert(seek.range_property.clone());
+        }
+        NodeProjectionAccess::CompositeOrdered { seek } => {
+            required.extend(seek.index_properties.iter().cloned());
         }
         NodeProjectionAccess::PropertyUnion { branches } => {
             required.extend(branches.iter().map(|branch| branch.property.clone()));

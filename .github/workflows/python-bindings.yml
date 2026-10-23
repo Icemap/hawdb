@@ -46,7 +46,9 @@ jobs:
         uses: bazel-contrib/setup-bazel@0.19.1
         with:
           bazelisk-cache: true
+          disk-cache: ${{ github.workflow }}-${{ github.job }}
           repository-cache: true
+          external-cache: true
 
       - name: Build the Python package and native extension
         run: bazel build //bindings/python:hawdb

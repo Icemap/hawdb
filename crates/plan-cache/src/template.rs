@@ -200,6 +200,45 @@ pub fn resolve_plan_template_value<'a>(
     Ok(template)
 }
 
+/// Returns scalar type proofs using the same private marker owner as binding.
+/// The caller must use a parameterized plan whose cache key retains value shapes.
+#[doc(hidden)]
+pub fn parameter_scalar_types(
+    plan: &ParameterizedLogicalPlan,
+    parameters: &BTreeMap<String, Value>,
+) -> BTreeMap<Value, hawdb_core::PropertyType> {
+    fn visit(
+        name: &str,
+        value: &Value,
+        path: &mut Vec<usize>,
+        output: &mut BTreeMap<Value, hawdb_core::PropertyType>,
+    ) {
+        use hawdb_core::PropertyType;
+        if let Value::List(values) = value {
+            for (index, value) in values.iter().enumerate() {
+                path.push(index);
+                visit(name, value, path, output);
+                path.pop();
+            }
+        } else {
+            let kind = match value {
+                Value::Int(_) => PropertyType::Int,
+                Value::String(_) => PropertyType::String,
+                Value::Bool(_) => PropertyType::Bool,
+                _ => return,
+            };
+            output.insert(parameter_marker(name, value, path), kind);
+        }
+    }
+    let mut output = BTreeMap::new();
+    for name in plan.cache_key.values.keys() {
+        if let Some(value) = parameters.get(name) {
+            visit(name, value, &mut Vec::new(), &mut output);
+        }
+    }
+    output
+}
+
 fn parameter_value_shape(value: &Value) -> ParameterValueShape {
     match value {
         Value::Null => ParameterValueShape::Null,
@@ -834,6 +873,15 @@ fn bind_node_projection_access(
         hawdb_plan_cypher::NodeProjectionAccess::CompositeRange { seek } => {
             bind_composite_range_seek(seek, parameters)
         }
+        hawdb_plan_cypher::NodeProjectionAccess::CompositeOrdered { seek } => {
+            for (_, value) in &mut seek.equality_prefix {
+                bind_value(value, parameters)?;
+            }
+            if let Some(after) = &mut seek.after {
+                bind_values(after, parameters)?;
+            }
+            Ok(())
+        }
         hawdb_plan_cypher::NodeProjectionAccess::PropertyRange { lower, upper, .. } => {
             for (value, _) in lower.iter_mut().chain(upper.iter_mut()) {
                 bind_value(value, parameters)?;
@@ -1173,8 +1221,9 @@ fn bind_value(value: &mut Value, parameters: &BTreeMap<String, Value>) -> Result
 mod tests {
     use super::{
         bind_physical_plan_parameters, marker_use_in_logical_plan, parameter_marker,
-        parameterize_logical_plan, resolve_plan_template_value, MarkerUse, ParameterCacheValue,
-        PARAMETER_SLOT_NAME_KEY, PARAMETER_SLOT_PATH_KEY,
+        parameter_scalar_types, parameter_value_shape, parameterize_logical_plan,
+        resolve_plan_template_value, MarkerUse, ParameterCacheValue, PARAMETER_SLOT_NAME_KEY,
+        PARAMETER_SLOT_PATH_KEY,
     };
     use hawdb_core::Value;
     use hawdb_cypher as cypher;
@@ -1184,6 +1233,53 @@ mod tests {
         PhysicalPlan,
     };
     use std::collections::BTreeMap;
+
+    #[test]
+    fn parameter_type_proofs_share_binding_markers_and_distinguish_numeric_shapes() {
+        use hawdb_core::PropertyType;
+        let parameters = BTreeMap::from([
+            ("rank".into(), Value::Int(12)),
+            (
+                "keys".into(),
+                Value::List(vec![
+                    Value::String("id".into()),
+                    Value::List(vec![Value::Bool(true), Value::Float(12.5)]),
+                ]),
+            ),
+        ]);
+        let mut parameters = parameters;
+        parameters.insert(
+            "unused".into(),
+            Value::List(vec![Value::String("omitted".into()); 64]),
+        );
+        let statement = cypher::parse(
+            "MATCH (n:Item) WHERE n.rank > $rank AND n.id IN $keys RETURN n.id AS id",
+        )
+        .unwrap();
+        let plan = parameterize_logical_plan(&statement, &parameters).unwrap();
+        let types = parameter_scalar_types(&plan, &parameters);
+        assert_eq!(types.len(), 3);
+        for (marker, kind) in &types {
+            let value = resolve_plan_template_value(marker, &parameters, true).unwrap();
+            assert!(matches!(
+                (kind, value),
+                (PropertyType::Int, Value::Int(_))
+                    | (PropertyType::String, Value::String(_))
+                    | (PropertyType::Bool, Value::Bool(_))
+            ));
+        }
+        let int_marker = parameter_marker("rank", &Value::Int(12), &[]);
+        assert_eq!(types.get(&int_marker), Some(&PropertyType::Int));
+        let mut changed = parameters.clone();
+        changed.insert("rank".into(), Value::Float(12.5));
+        let changed_plan = parameterize_logical_plan(&statement, &changed).unwrap();
+        assert!(!parameter_scalar_types(&changed_plan, &changed).contains_key(&int_marker));
+        assert_ne!(plan.cache_key(), changed_plan.cache_key());
+        assert_ne!(
+            parameter_value_shape(&parameters["rank"]),
+            parameter_value_shape(&changed["rank"])
+        );
+    }
 
     #[test]
     fn cost_operand_resolution_borrows_values_and_preserves_literal_markers() {

@@ -1,9 +1,15 @@
-# Materialized Views for Mem Workloads
+# Real-Time Materialized Views
 
 ## Status and decision boundary
 
 **Status: exploratory proposal; no implemented materialized-view surface.**
-Tracking issue: https://github.com/nowledge-co/hawdb/issues/1142.
+Initial workload design: https://github.com/nowledge-co/hawdb/issues/1142.
+Execution protocol follow-up: https://github.com/nowledge-co/hawdb/issues/1204.
+
+Real-time means continuous, asynchronous incremental maintenance with explicit
+source epochs and bounded resource admission. It does not promise zero lag or
+make an installed view immediately ready. The first adoption remains the Mem
+workloads below; the execution mechanisms are reusable engine contracts.
 
 This document proposes engine capabilities and prospective acceptance criteria.
 It does not change existing API contracts, Mem business semantics, canonical
@@ -30,7 +36,7 @@ The first useful delivery MUST support actual graph workloads:
    the current query's multiplicity semantics.
 2. **Memory and Space inventories:** maintain the distinct Active, Stored,
    Archived, and Crystals axes used across lists, statistics, MCP, and Space
-   usage; optionally maintain separately defined physical graph counters.
+   usage. Separately defined physical graph counters are outside phase one.
 
 A SQL-only `CREATE MATERIALIZED VIEW ... COUNT(*)` demonstration over an
 unrelated table does not satisfy this milestone. It must exercise graph node
@@ -41,13 +47,49 @@ Source/Thread rollups and deterministic search-document inputs are later
 consumers with additional contracts, not reasons to build a general streaming
 platform in the first change.
 
+### Phase-one scope and completion
+
+Phase one is a Mem delivery, not a general streaming-platform milestone. Its
+required outputs are exactly the Entity association counts and Memory/Space
+inventories above. Existing pinned Mem queries and visibility/count contracts
+set the supported shapes. Register their versioned definitions through the
+embedded query runtime; do not hard-code Mem routes or lifecycle rules in the
+engine. New primitives need reusable ownership, but do not require speculative
+operators or frontends without a phase-one consumer.
+
+Deliver the two workloads as vertical slices. Start with Memory/Space inventory
+to qualify node reclassification, grouped counts and exact indexed reads, then
+extend the same capture/publication path to Entity usage with one-hop expansion,
+endpoint scope changes and bag counts. Both are required to complete phase one;
+a usable inventory slice alone is partial delivery.
+
+Phase-one acceptance includes a development/nightly Mem query-path integration
+or shadow comparison for the designated callers, preserving response fields,
+zero-count entities, scope/lifecycle rules, read-only snapshot transactions
+and explicit post-commit freshness.
+Record reference-query equality and actual indexed access before measuring
+query latency, maintenance lag and writer overhead. Thresholds come from the
+same Mem workload baseline. Engine fixtures, capture APIs, DDL syntax or a
+working background scheduler alone do not complete the milestone. Stable/GA
+inclusion and activation remain subject to the existing AGENTS.md prohibitions
+and separately authorized gates.
+
+Physical graph inventories, Community membership/count relations, Source and
+Thread rollups, search-document inputs and health/time-window summaries are
+later deliveries. Phase one also excludes arbitrary query incrementalization,
+view DAGs, automatic query substitution, full SQL materialized-view DDL and a
+general external changefeed. Add only capture fields, arrangements, operators,
+serving indexes and read interfaces needed by the two named workloads. Graph
+and relational effects still share a complete transaction boundary; unrelated
+relational tables need not gain row-image capture merely to ship this phase.
+
 ### Business coverage
 
 | Priority | Mem business | Proposed relation | Required maintenance | Read contract |
 | --- | --- | --- | --- | --- |
 | P0 | Entity search and community seed ranking | `entity_usage`, grouped by entity identity and both endpoint scope keys | Graph expansion, endpoint changes, bag counts, indexed grouping | Exact snapshot shared with candidate filtering and ranking |
-| P0 | Memory headlines, archive inventory, Space usage | `memory_inventory`, keyed by scope and predicate version | Deterministic visibility projection, grouped counts, old/new classification | Exact snapshot; read-your-write floor for refresh after mutations |
-| P0 extension | Graph statistics and density inputs | `graph_inventory`, with explicit node/edge kinds and scope policy | Node/edge counts, deletion and endpoint handling | One coherent snapshot; preserve each existing response's definitions |
+| P0 | Memory headlines, archive inventory, Space usage | `memory_inventory`, keyed by scope and predicate version | Deterministic visibility projection, grouped counts, old/new classification | Exact snapshot; committed-source floor for refresh after commit |
+| Later | Graph statistics and density inputs | `graph_inventory`, with explicit node/edge kinds and scope policy | Node/edge counts, deletion and endpoint handling | One coherent snapshot; preserve each existing response's definitions |
 | P1 | Community detail, representative memories, GraphRAG candidates | `community_memory` and membership support | Graph/derived-relation join, distinct reference counts, generation fencing | One community generation and one canonical snapshot; scope before Top-K |
 | P1 | Source library counts and Thread activity | `source_memory_usage`, `thread_message_activity` | Edge counts, relational grouping, retractable extrema | Exact list/detail snapshot; preserve source provenance separately |
 | P2 | Search catch-up and rebuild inputs | `search_document_input` | Deterministic graph/relational projection, deletion tombstones | Complete source coverage handed to the existing search pipeline |
@@ -300,6 +342,15 @@ complete-through cursor is not generally an exact historical result snapshot.
 It cannot be reinterpreted as a tuple retraction stream. Current catch-up
 source-coherence checks remain binding; none are removed by this proposal.
 
+The execution follow-up also checks HawDB main at
+`7876b78845bd2e23453b7c10e3bbcabc0315f8ea` against `SearchProjectionChange` in
+`crates/storage/src/projection.rs` and detached preparation in
+`src/api/search_projection_consumer/covered/preparation.rs`. The former records
+identities rather than old/new tuple images; the latter releases the database
+owner before artifact preparation. Neither implements an incremental query
+plan, a general view catalog, or the historical publication permit proposed
+below. These source observations do not establish new qualification results.
+
 ## 4. Definition, catalog, and query surface
 
 ### 4.1 Proposed first interface
@@ -315,9 +366,11 @@ operations. A definition contains:
   versions, plan fingerprint, and application predicate/mapping version;
 - refresh policy, explicitly supported operator set, and resource limits.
 
-First delivery accepts the qualified Cypher graph subset and relational SQL
-subset, lowering both into shared logical operators. View contents are tabular.
-SQL can explicitly name a view in `FROM`. For Cypher consumers, propose a
+Phase one accepts the qualified graph query shapes needed by the two named
+Mem workloads and lowers them into shared logical operators. View contents are
+tabular; relational SQL definitions and SQL `FROM` integration are later scope
+unless a designated phase-one caller requires them. For Cypher consumers,
+propose a
 generic `CALL hawdb.materialized_view('view_name') YIELD ...` table source
 that lowers to the same relation-scan operator and composes with graph queries.
 The name is a bound catalog identifier, not executable dynamic query text.
@@ -409,7 +462,79 @@ between canonical publication and derived capture, including a lost gap marker.
 Publication waits for the covered source durability barrier; relaxed canonical
 durability cannot cause a durable view to cite lost source commits.
 
-### 5.2 Operator state and retractions
+### 5.2 Complete transaction delta protocol
+
+The following is a logical protocol, not an existing Rust API or a canonical
+WAL format change. One envelope identifies the database/branch incarnation,
+source schema/capture revision, previous covered boundary, and committed epoch.
+It contains typed graph-node, relationship and relational-row changes, each
+with stable identity and old/new projected values, plus a completeness record.
+Insert has no old row; delete has no new row; update carries both. Relationship
+images retain endpoints and referenced properties; node deletion must preserve
+all contributions needed to retract incident relationships.
+
+Capture observes the actual transactional before/after states, not a later
+lookup by identity. Coalescing repeated writes within one transaction is valid
+only when the normalized transition preserves the committed result. No-op or
+irrelevant commits may carry empty data but still advance contiguous coverage.
+Rolled-back transactions produce no committed envelope. Schema changes that
+invalidate capture produce an explicit rebuild boundary.
+
+An incremental worker admits a complete commit before changing its candidate
+state. It can page or spill private work inside that commit, but may neither
+publish partial effects nor expose a resume cursor in its middle. Adjacent
+commits may be batched only with equivalent ordered transition semantics and
+retained complete boundaries. Duplicate delivery is handled by durable progress
+and operation identity; equal row values are not evidence of duplicate delivery.
+A missing interval, conflicting epoch payload, incompatible schema revision or
+unverifiable source identity stops incremental advancement.
+
+The capture protocol must not introduce a second authoritative transaction
+commit. Persist covered data before certifying its coverage; on reopen compare
+journal coverage with the canonical source boundary. A canonical commit may
+succeed while derived capture fails, but no consumer can certify a range across
+that gap. Missing or torn coverage metadata is not evidence of an empty commit.
+Repair requires exact retained-source reconstruction or an explicit rebuild.
+
+### 5.3 Incremental plan and operator state
+
+Bind an ordinary deterministic query before deriving its maintenance plan.
+The maintenance compiler accepts only qualified logical operators, records
+schema/expression dependencies and versions, and produces both a full-build
+plan and a delta plan with identical output schema and bag semantics. Existing
+batch executors are semantic references, not automatically incremental
+executors. Unsupported shapes fail at definition admission.
+
+Prepare the maintenance plan once per bound definition revision, including
+referenced-field dependencies, changed-key routing and typed input bindings.
+Reuse that plan for admitted commit batches rather than reparsing generated
+query text per mutation. Bind labels, properties and schema objects through
+catalog identities; bind changed values as typed inputs. Schema/expression or
+definition incompatibility invalidates the plan under the existing rebuild
+contract. A reusable plan does not authorize stale source reads, bypass query
+admission, or prove that maintenance is cheaper than the reference query.
+
+```text
+canonical commits -> complete transaction deltas -> incremental operators
+                  -> private state/results/indexes -> sealed manifest
+                  -> fenced head selection -> SQL/Cypher view reads
+```
+
+Each operator consumes typed signed row batches and produces typed signed row
+batches. Filter/project retain only needed dependencies; joins maintain keyed
+input arrangements; grouped aggregates retain their support state. Propagate
+only affected keys through the plan. Consolidation preserves multiplicities,
+NULL behavior and checked arithmetic. State and output updates remain private
+until the complete source boundary is ready for publication.
+
+Maintenance state lives behind existing internal ownership boundaries. The
+embedded facade owns definitions, maintenance handles and typed diagnostics;
+query planning owns qualification and delta derivation; derived storage owns
+arrangements, result indexes and recovery. No new public crate, daemon, external
+connector or process-per-view scheduler is required by this proposal. Broad
+cross-view plan sharing is deferred until independent view ownership is sound.
+
+### 5.4 Qualified operator semantics
 
 Use signed bag deltas over engine-owned source arrangements. An update is an
 old-row retraction plus a new-row insertion. Persist the arrangements needed to
@@ -428,11 +553,31 @@ This includes the cross-term once. Comparing a full reference query at the
 same before/after snapshots is the correctness oracle. Evaluate NULL, equality,
 numeric overflow, and collation with the source dialect's existing semantics.
 
+Contribution identity and delivery identity are different. Preserve independent
+source matches even when their projected values or endpoints are equal. When
+several maintenance branches discover the same source match for the same
+transition, account for that match exactly once. Use the qualified operator's
+algebra or bounded support identity/refcounts; do not globally deduplicate
+output tuples or enumerate arbitrary paths to repair overlap. If a plan cannot
+establish correct multiplicity within its budget, reject its shape or require
+an explicit rebuild before advancing coverage.
+
+For Entity usage, two distinct `MENTIONS` relationships from the same Memory to
+the same Entity contribute two rows to `COUNT(m)`. Deleting one must change two
+to one, not zero. Deleting the remaining edge removes the usage group; the
+canonical Entity left join still supplies zero. An endpoint scope/property
+update retracts each affected relationship contribution once even if both
+endpoint and edge-change routes encounter it. Replaying an already covered
+commit makes no additional change. These rules do not enable variable-length
+paths or automatic query substitution in phase one.
+
 | Operator | Initial contract | Important boundary |
 | --- | --- | --- |
-| Node/relational scan, deterministic filter/project | Required | Referenced-field updates and predicate entry/exit |
+| Node scan, deterministic filter/project | Required for phase one | Referenced-field updates and predicate entry/exit |
+| Relational base scans | Later unless a designated definition needs them | Preserve the same transaction/epoch contract |
 | Directed one-hop graph expansion / inner equijoin | Required for entity counts | Indexed endpoint arrangements; duplicate edges preserved |
-| Grouped `COUNT(*)`, `COUNT(expr)`, exact integer `SUM` | Required | NULL differences, checked arithmetic, group disappearance |
+| Grouped `COUNT(*)`, `COUNT(expr)` | Required for the two phase-one workloads | NULL differences, checked arithmetic, group disappearance |
+| Incrementally maintained exact integer `SUM` | Later unless a phase-one definition requires it | Preserve NULL/non-null support state and checked arithmetic |
 | Zero-fill / left join to a canonical entity | Required serving capability | No-match entities must remain candidates with zero usage |
 | `COUNT(DISTINCT key)` | Community milestone | Reference counts, including final-reference deletion |
 | `AVG` | Later | Sum and non-null count, numeric semantics, NULL on empty input |
@@ -477,6 +622,15 @@ Reuse the qualified consumer lifecycle where its contract fits, or define an
 explicit MV-owned registry extension. Do not silently charge ordinary reads to
 the existing search registry's finite capacity or allocate registrations per
 restart. Capacity refusal occurs before build callbacks and publication effects.
+
+Persist snapshot scan progress together with the private build generation and
+its retained delta boundary if resumable initialization is enabled. A progress
+record binds source identity, snapshot epoch, definition revision and scan
+position. Restore it only while the snapshot and post-snapshot coverage remain
+valid; otherwise discard/reclaim the candidate through validated custody and
+start an explicit rebuild. Never expose a partly scanned result as ready.
+Initialization status distinguishes snapshot rows scanned, catch-up progress,
+retained bytes and live lag; a scan finishing is not catch-up completion.
 
 ### 6.2 Derived storage and serving indexes
 
@@ -539,19 +693,109 @@ graph scan when that coverage is intact. Missing capture after crash, source
 replacement, retention expiry or incompatible codecs require explicit rebuild.
 Search documents and aggregate state remain outside the canonical WAL.
 
+### 6.4 Publication under continuous writes
+
+A future historical publication permit certifies a complete result at retained
+source epoch `E`; it does not assert that the canonical head still equals `E`.
+A later canonical commit alone must not invalidate this permit when the exact
+source, complete delta coverage and definition remain retained and compatible.
+This capability requires separate implementation and qualification; the current
+prepared-publication validator remains unchanged until then.
+
+The permit binds instance/branch incarnation, definition revision, covered
+source boundary, candidate manifest digest and expected previous view head.
+Final selection holds the publication fence across identity/drop/schema
+validation and durable head selection. It rejects a replaced target, expired
+source, changed definition, incomplete coverage or stale expected head. A
+candidate cannot overwrite a view head that has already advanced beyond it.
+
+Source advancement beyond `E` may be harmless to publishing that historical
+result, while dependency-changing DDL or target replacement is not. Serving an
+exact join still requires the canonical snapshot at `E`; historical publication
+does not authorize mixing it with current canonical rows. Keep source commit,
+derived publication, read visibility and durability boundaries distinct.
+
+Preparation, source scanning, delta evaluation, artifact construction and
+compaction occur outside the canonical owner write guard. Final publication
+holds only the authority needed for bounded validation and selector commit.
+Required synchronization may still dominate this interval: record actual lock
+hold and writer latency rather than assuming a metadata-sized publish is fast.
+Retire old artifacts after selection under pinned-reader and GC rules.
+
+A worker chooses a fixed complete boundary per admitted batch rather than
+restarting whenever writers advance the source. With sufficient maintenance
+capacity and retained coverage, published source watermarks must advance while
+writers continue committing; catching the instantaneous head is not required
+for each publication. If input outruns maintenance, report backlog and bounded
+lag, throttle maintenance admission or require rebuild on retention exhaustion.
+Do not claim bounded freshness under arbitrary input load or block canonical
+writes indefinitely to hide lag. Exact reads retain their wait/fallback/error
+contract during overload.
+
 ## 7. Read consistency and Mem admission
 
-The first Mem adoption uses **asynchronous maintenance with exact reads and an
-explicit bounded canonical fallback**. Synchronous maintenance in every
-canonical transaction is deferred because graph fan-out can extend writer
-latency. Asynchrony does not permit silent result staleness.
+Phase one supports standalone materialized-view reads and **explicit read-only
+snapshot transactions**. Physical maintenance is asynchronous, with exact reads
+and a bounded canonical fallback. Querying materialized views inside explicit
+read-write transactions, transaction-private view deltas and reading pending
+writes through a view are deferred. This limits the new materialized-view
+surface; it does not remove HawDB's existing canonical read-write transactions.
+All materialized-view capabilities here remain proposed and unimplemented.
 
-Proposed read modes:
+### 7.1 Read-only transaction contract and extension boundary
+
+For a read-only transaction `T`, select and retain one canonical snapshot `S_E`
+under the existing supported isolation rules. Reads of its base data, named
+views and their joins must agree with that same snapshot:
+
+```text
+ReadView(T, D) = Q_D(S_E)
+```
+
+Repeated reads remain at `E` even if canonical writers commit or background
+maintenance publishes a newer head. A view at another epoch cannot be combined
+with canonical rows at `E`. Use a retained matching manifest, wait within the
+read deadline, evaluate the reference query against `S_E` within its budget,
+or return a typed not-ready/resource error. Never silently return mixed epochs
+or a partial result. These rules do not upgrade the existing isolation level
+to serializability.
+
+Reject unsupported materialized-view access in a read-write transaction with
+a specific capability diagnostic, including when that transaction has not yet
+written data. Do not silently ignore transaction mode, commit it, switch it to
+read-only, or serve committed-only view state as if it included pending writes.
+DML inside a read-only transaction follows existing rejection/abort rules.
+Application DML cannot write derived view rows. Transactional view creation,
+drop, refresh and savepoints are outside phase one.
+
+Canonical graph/relational writes continue using existing transaction commit,
+rollback, conflict and durability rules. Maintenance consumes complete committed
+changes only; rolled-back or losing transactions contribute nothing. Async
+materialization can lag after a successful canonical commit. A subsequent
+separate read may carry its committed source floor through a typed read context
+or commit receipt and use the exact wait/fallback/error path below. Such a floor
+is a freshness request over committed data, not read-your-own-uncommitted-writes
+or an atomic writable view transaction. View lag is not evidence that a lost
+canonical commit response means rollback.
+
+Keep definition versions, source epochs, contribution identities and publication
+progress separate so a later separately qualified transaction-aware read path
+can be added. A possible extension would evaluate `Q_D(S_E + W_T)` through a
+bounded private delta or same-transaction reference execution, where `W_T` is
+pending canonical state. Its isolation, rollback, conflicts, resource admission
+and commit integration need their own design and tests. Phase one reserves no
+public stub, transaction-private state storage or private-delta implementation
+for that extension, and has no acceptance dependency on it.
+
+### 7.2 Committed snapshots and read admission
+
+Proposed read modes (logical contracts, not existing method signatures):
 
 | Mode | Guarantee | Failure behavior |
 | --- | --- | --- |
+| `ReadOnlyTransaction(T)` | Evaluate the definition at the transaction's retained committed snapshot | Match the manifest/source epoch, execute the same-snapshot reference query, or fail within budget |
 | `ExactSnapshot(E)` | View and every canonical join/filter use `S_E` | Wait within deadline for the retained epoch, execute the canonical reference query at `S_E`, or return typed not-ready/budget status |
-| `ReadYourWrites(C)` | Choose a snapshot `E >= C`, then the same exact contract | Never return an older generation as the post-write refresh |
+| `AfterCommit(C)` | Choose a committed snapshot `E >= C`, then the same exact contract | Never return an older generation as the post-write refresh |
 | `BoundedStale` | Explicitly allowed view-only result with source epoch and bounded lag | Reject if the limit/authorization contract cannot be established |
 
 Epoch selection and source snapshot capture occur once per logical read.
@@ -647,16 +891,43 @@ not tasks completed by the specification PR.
 
 | Slice | Scope and dependency | Exit gate |
 | --- | --- | --- |
-| A: Semantic and publication foundation | Catalog/definition binding, exact source capture, bounded coverage/gaps, identity and publication model; depends on qualified MVCC pins and publication fences | Executable model and native negative controls cover every invariant below; unsupported operators reject before installation |
-| B: First Mem value | Node scan/filter/project, one-hop joins, grouped counts, complete refresh plus incremental arrangements, indexed reads, Cypher/SQL view sources | Entity and Memory inventory business fixtures pass exact differential comparison, deletion/reclassification, reopen and contention cases; read path uses serving indexes |
+| A: Phase-one prerequisites | Only definition binding, referenced-field capture, bounded coverage/gaps and publication needed by the two Mem workloads; depends on qualified MVCC pins and publication fences | Models/native negative controls cover the enabled subset; foundation completion alone is not a Mem delivery |
+| B: Phase-one Mem delivery | Memory/Space inventory first, then Entity usage; the necessary node filter/project, one-hop joins, grouped counts, indexed reads and embedded Cypher composition | Both workloads pass business fixtures and development/nightly Mem query-path shadow comparison, deletion/reclassification, reopen, continuous writers and indexed-read cost gates |
 | C: Community retrieval | Distinct reference counts, explicit community-generation dependency/rebuild, pinned candidate queries | Duplicate/delete/replacement and scope-before-Top-K scenarios pass; no mixed membership generation |
 | D: Source and Thread rollups | Audit current write/delete/import paths, retractable extrema, relational messages and provenance resolution | Existing denormalization compares successfully before removal; imported time/completeness contract preserved |
 | E: Search inputs and health | Existing search handoff, deterministic mapping versions, large-value handling; scheduled-time semantics only if separately adopted | No skipped search identities/deletes or weakened readiness; health values state their input epoch/evaluation time |
 
-A and B are the minimum usable capability. Do not claim first delivery after
+A supports B; together they form phase one. C through E are later scope, as
+are physical graph inventories. Do not claim first delivery after
 only catalog syntax or background refresh of an unrelated SQL table. Broad
 optimizer substitution, arbitrary view DAGs, synchronous transaction maintenance,
 recursive paths, rolling-window engines and distributed execution are deferred.
+
+### First implementation PR
+
+Start with the bounded complete-transaction delta seam needed by Memory/Space
+inventory and its native reference oracle, not a general CDC API or full view
+DDL. Capture old/new values only for the referenced node identity, scope and
+classification fields. Mixed graph/relational transactions retain one complete
+commit boundary even when their unrelated effects have no captured row images.
+Cover rollback, repeated writes, empty relevant deltas, overflow and missing
+coverage. Compare the captured transition on the referenced before-state
+projection with that projection of the actual after-state at the same epoch.
+Cover recovery and missing/torn sidecar records without weakening canonical
+durability. Keep this seam internal; if capture and durable replay need separate
+owners, split them into sequential PRs against main.
+
+Follow promptly with the inventory vertical slice: the required grouped-count
+state, bounded bootstrap, serving key lookup, exact publication/read behavior
+and designated Mem shadow comparison. Then extend capture/arrangements for the
+Entity usage workload, including relationship and endpoint-property changes.
+Do not expand generic capture, SQL frontends or operator coverage before these
+slices demonstrate their Mem value. All graph/relational data actually consumed
+by an enabled definition must still obey the exact transaction protocol.
+
+Each implementation PR names existing runtime/formal test owners and updates
+the test index. This documentation change neither registers nor executes those
+future tests, and no individual foundation PR completes phase one.
 
 ### Formal and native correctness qualification
 
@@ -689,6 +960,53 @@ were hydrated. Small deterministic graph/relational differential sequences
 compare bag results against full queries after every complete source epoch.
 Any exploratory fuzzing remains local under repository policy.
 
+### Phase-one transaction regression matrix
+
+These are future native facade and Mem query-path acceptance cases, not executed
+results of this documentation change. They qualify only the read-only view
+surface and committed-source maintenance boundary.
+
+| Fixture | Required result / negative control |
+| --- | --- |
+| Read-only transaction reads base and view repeatedly while another writer commits | One retained snapshot; a newer background view cannot change the pinned result or produce a mixed-epoch join |
+| Two views plus canonical filtering in one read-only transaction | Both views and filtering agree at the same source epoch, or take the bounded reference/error path |
+| Query a view inside an explicit read-write transaction, before or after writes | Return the unsupported-capability diagnostic; preserve existing transaction error semantics and never silently change transaction mode |
+| Attempt DML inside a read-only transaction or against derived rows | Reject through the applicable transaction/read-only relation rules |
+| Commit a canonical Space move and archive together | A later view snapshot includes the complete transaction or none of it, with no intermediate Space/classification combination |
+| Canonical transaction rolls back or loses a supported write conflict | No contribution from that transaction enters public view state or maintenance progress |
+| Separate read requests the committed floor while physical materialization lags | Wait, use the same-snapshot reference query or report a bounded failure; never return a snapshot below the floor |
+| Snapshot/coverage is unavailable or a read budget is exhausted | Return the specific not-ready/resource error without silently advancing the transaction snapshot |
+| Commit response is lost, then reopen/retry | Resolve the canonical operation and resume complete capture without double-counting or inferring rollback from view lag |
+
+Negative controls must catch mixed epochs, visible partial source transactions,
+rollback contributions and a silently accepted unsupported read-write view
+query. Pending-write overlays and transaction-local aggregate/arrangement state
+are later work and are not required for phase-one completion.
+
+### Phase-one contribution regression matrix
+
+These are future focused regressions and differential fixtures, not test
+results of this specification. Compare full result bags and classification axes
+at the same pinned epoch after every complete transaction, not just total row
+counts. Keep stable relationship identities in minimized replay fixtures.
+
+| Fixture | Required result / negative control |
+| --- | --- |
+| Two distinct mentions with equal endpoints | Entity usage is two; output-value or endpoint deduplication must fail the oracle |
+| Delete one, then the final mention | Counts become one, then zero through serving composition; no duplicate retraction or lost zero-count Entity |
+| Overlapping endpoint and edge routes | A scope change plus a related edge update in one commit yields exactly the reference bag; maintenance-branch overlap cannot retract the same contribution twice |
+| Both endpoints change scope | Retract each old contribution and add each new contribution exactly once; never expose mixed endpoint scopes |
+| Repeated lifecycle updates / rollback | Inventory axes equal the final committed classification; rollback has no effect and equal-valued distinct source rows remain distinct contributions |
+| Duplicate delivery / lost acknowledgement | Reapplying the same covered commit or resolving the same selected publication leaves state and counts unchanged |
+| Delete and recreate an equivalent relationship | Stable relationship identity and ordered commit transitions preserve the reference multiplicity; equal endpoints alone do not establish replay identity |
+| Unsupported recursive/repeated-binding shape | Definition admission rejects it before installation; do not extend phase-one syntax to exercise an unqualified maintenance algorithm |
+
+A mutation test/negative control must demonstrate that replacing bag semantics
+with a set, applying an overlapping retraction twice, or advancing progress
+without aggregate state causes the reference oracle to fail. Support identity
+and counters are part of the same durable selected state as results/progress;
+restart and lost-ack tests must not reset only the deduplication state.
+
 ### Performance and business acceptance
 
 Measure against the same canonical query and dataset, in release builds, with
@@ -705,6 +1023,13 @@ Required evidence:
   ordinary reopen when durable coverage is intact.
 - Query p50/p95/p99, writer latency, maintenance lag, affected keys, CPU,
   page reads, peak memory, disk amplification and rebuild duration.
+- Continuous-writer qualification uses a coordinated fixture that keeps writes
+  active throughout snapshot build, catch-up and at least multiple successive
+  publications. Independently observe committed-write and published-source
+  progress; prove unrelated writes complete during preparation. Report source
+  arrival/service rates, retained coverage and lag, and distinguish bounded
+  overload from a stalled worker. Measure publication guard wait/hold time and
+  writer p95/p99 against the same workload before/after the publication change.
 - Direct-query fallback frequency under the proposed exact-read contract.
   A fast stale view with frequent expensive fallbacks is not a successful P0.
 - Worst-case fan-out and retention exhaustion produce bounded, observable
@@ -733,3 +1058,20 @@ graph/SQL operators, durable derived arrangements and indexed serving, with
 exact snapshot reads and explicit bounded canonical fallback. Start with Entity
 usage and Memory inventories. That delivers reusable engine semantics for
 existing Mem businesses without embedding Mem routes in the database kernel.
+
+
+## 12. References
+
+The following are background references only. They do not define HawDB APIs,
+provide HawDB test evidence, require upstream dependencies, or imply adoption
+of a distributed runtime. The contracts and qualification gates above are
+specific to HawDB's embedded execution and durability model.
+
+- [RisingWave: stream row operation representation](https://github.com/risingwavelabs/risingwave/blob/73219848e4fb2193d0da283068824613973008db/src/common/src/array/stream_chunk.rs): insertion, deletion and paired update images.
+- [RisingWave: materialization executor](https://github.com/risingwavelabs/risingwave/blob/73219848e4fb2193d0da283068824613973008db/src/stream/src/executor/mview/materialize.rs): persisted materialization state and barrier handling.
+- [RisingWave: materialized-view creation](https://github.com/risingwavelabs/risingwave/blob/73219848e4fb2193d0da283068824613973008db/src/frontend/src/handler/create_mv.rs): query planning and maintained-job creation.
+- [RisingWave: historical initialization and continuous maintenance](https://risingwave.com/blog/backfilling-in-risingwave-from-historical-initialization-to-continuous-streaming/): snapshot initialization, retained changes, resumable progress and catch-up.
+
+- [MV4PG: Materialized Views for Property Graphs, arXiv:2411.18847v1](https://arxiv.org/abs/2411.18847v1): workload-selected graph views and pre-generated maintenance templates. Property-update maintenance is outside its evaluated views; overlapping-match deduplication remains future work. Its reported speedups are not HawDB measurements or evidence for HawDB recovery/concurrency guarantees.
+
+- [RisingWave: transaction statement handling](https://github.com/risingwavelabs/risingwave/blob/73219848e4fb2193d0da283068824613973008db/src/frontend/src/handler/transaction.rs) and [transaction context](https://github.com/risingwavelabs/risingwave/blob/73219848e4fb2193d0da283068824613973008db/src/frontend/src/session/transaction.rs): explicit read-only snapshots are supported; explicit read-write transactions are not started, and implicit read-write mode is single-statement. This is a comparison for the proposed read-only view scope, not a restriction on HawDB's existing canonical transactions.

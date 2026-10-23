@@ -1076,6 +1076,13 @@ fn node_projection_access_strategy(access: &NodeProjectionAccess) -> ScanPruning
                 properties: seek.index_properties.clone(),
             }
         }
+        NodeProjectionAccess::CompositeOrdered { seek } => {
+            ScanPruningStrategy::CompositePropertyOrdered {
+                properties: seek.index_properties.clone(),
+                descending: seek.descending,
+                continuation: seek.after.is_some(),
+            }
+        }
         NodeProjectionAccess::PropertyRange { property, .. } => {
             ScanPruningStrategy::PropertyRange {
                 property: property.clone(),

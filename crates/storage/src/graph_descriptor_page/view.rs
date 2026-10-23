@@ -199,6 +199,31 @@ impl GraphDescriptorPageView {
         Ok((low, comparisons))
     }
 
+    /// Return the first leaf key or child lower bound strictly above target.
+    pub(crate) fn upper_bound(
+        &self,
+        target: &[u8],
+    ) -> Result<(usize, u64), GraphDescriptorPageError> {
+        let mut low = 0;
+        let mut high = self.count;
+        let mut comparisons = 0;
+        while low < high {
+            comparisons += 1;
+            let middle = low + (high - low) / 2;
+            let key = if self.leaf {
+                self.leaf_entry(middle)?.0
+            } else {
+                self.child_bounds(middle)?.0
+            };
+            if key <= target {
+                low = middle + 1;
+            } else {
+                high = middle;
+            }
+        }
+        Ok((low, comparisons))
+    }
+
     pub(crate) fn leaf_entry(
         &self,
         index: usize,

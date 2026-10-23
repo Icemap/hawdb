@@ -1,0 +1,10 @@
+{
+  "source": "cac072479786f01c658022916e3ada75314ed129",
+  "benchmark_build": "4m52s incremental with competing qualification",
+  "point_build": "2m08s incremental with competing qualification",
+  "sha256": {
+    "composite-ordered-final": "6a161153be73aee926dedc203929e2b28509a0df026e2f90e59ebc6243133597",
+    "point-candidate-final": "4ca99a20e2c9b09c0c7c113e33fbb6fdde188cc2b21d2d50faa63d86bbe9f24c",
+    "point-baseline-v1": "05b5867d339615b074f4413d6f683afe221aab7ea043c0e50dfa6ec6a89d6fd1"
+  }
+}

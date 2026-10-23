@@ -206,35 +206,19 @@ impl SearchOutOfCoreReader {
                 Ok(self.visibility.is_visible(segment.content_segment_id, id)
                     && candidates.contains(id, metrics)?)
             };
-            let report = if context.is_some() {
-                segment.lexical_projection.score_terms_accounted(
-                    terms,
-                    ScoringInputs {
-                        complete_candidate_limit: None,
-                        delta: &crate::lexical_projection::LexicalMiniDelta::default(),
-                        max_term_bytes: self.lexical_term_policy.max_term_bytes(),
-                        retained_score_limit: retained_limit,
-                        global_statistics: Some(statistics),
-                        prune_blocks: prune,
-                        context,
-                    },
-                    allowed,
-                )?
-            } else {
-                crate::lexical_projection::AccountedQueryReport {
-                    report: segment
-                        .lexical_projection
-                        .score_with_global_statistics_and_pruning(
-                            terms,
-                            self.lexical_term_policy.max_term_bytes(),
-                            retained_limit,
-                            statistics,
-                            prune,
-                            allowed,
-                        )?,
-                    _memory: None,
-                }
-            };
+            let report = segment.lexical_projection.score_terms_with_stable_filter(
+                terms,
+                ScoringInputs {
+                    complete_candidate_limit: None,
+                    delta: &crate::lexical_projection::LexicalMiniDelta::default(),
+                    max_term_bytes: self.lexical_term_policy.max_term_bytes(),
+                    retained_score_limit: retained_limit,
+                    global_statistics: Some(statistics),
+                    prune_blocks: prune,
+                    context,
+                },
+                allowed,
+            )?;
             output.matching_count = output
                 .matching_count
                 .checked_add(report.report.matching_document_count)

@@ -47,11 +47,14 @@ pub struct OptimizerIndexStatistics {
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct OptimizerCatalog {
+    pub(super) parameter_scalar_types: BTreeMap<Value, hawdb_core::PropertyType>,
     pub(super) assume_all_indexes: bool,
     pub(super) equality_property_indexes: BTreeSet<(String, String)>,
     pub(super) composite_property_indexes: BTreeSet<(String, Vec<String>)>,
     pub(super) range_property_indexes: BTreeSet<(String, String)>,
     pub(super) ordered_range_indexes: BTreeSet<(String, String)>,
+    pub(super) ordered_composite_indexes:
+        BTreeMap<(String, Vec<String>), Vec<hawdb_core::PropertyType>>,
     pub(super) full_text_property_indexes: BTreeSet<(String, String)>,
     pub(super) label_counts: BTreeMap<String, u64>,
     pub(super) rel_type_counts: BTreeMap<String, u64>,
@@ -377,11 +380,13 @@ pub fn optimizer_catalog_from_graph_statistics(
 impl OptimizerCatalog {
     pub fn new(indexes: OptimizerCatalogIndexes, statistics: OptimizerCatalogStatistics) -> Self {
         Self {
+            parameter_scalar_types: BTreeMap::new(),
             assume_all_indexes: false,
             equality_property_indexes: indexes.equality_property_indexes,
             composite_property_indexes: indexes.composite_property_indexes,
             range_property_indexes: indexes.range_property_indexes,
             ordered_range_indexes: BTreeSet::new(),
+            ordered_composite_indexes: BTreeMap::new(),
             full_text_property_indexes: indexes.full_text_property_indexes,
             label_counts: statistics.label_counts,
             rel_type_counts: statistics.rel_type_counts,
@@ -440,6 +445,60 @@ impl OptimizerCatalog {
             .filter(|index| self.range_property_indexes.contains(index))
             .collect();
         self
+    }
+
+    /// Opt in only with enforced non-NULL ordered suffixes, a unique final key and a
+    /// read-view capability that supports complete bidirectional delivery.
+    pub fn with_ordered_composite_indexes(
+        mut self,
+        indexes: impl IntoIterator<Item = (String, Vec<(String, hawdb_core::PropertyType)>)>,
+    ) -> Self {
+        self.ordered_composite_indexes = indexes
+            .into_iter()
+            .filter_map(|(label, columns)| {
+                let properties = columns
+                    .iter()
+                    .map(|(property, _)| property.clone())
+                    .collect::<Vec<_>>();
+                (properties.len() >= 3
+                    && self
+                        .composite_property_indexes
+                        .contains(&(label.clone(), properties.clone()))
+                    && columns[columns.len() - 2..].iter().all(|(_, kind)| {
+                        matches!(
+                            kind,
+                            hawdb_core::PropertyType::Int | hawdb_core::PropertyType::String
+                        )
+                    }))
+                .then(|| {
+                    (
+                        (label, properties),
+                        columns.into_iter().map(|(_, kind)| kind).collect(),
+                    )
+                })
+            })
+            .collect();
+        self
+    }
+
+    /// Query-local proofs for opaque parameter slots; never shared across shapes.
+    #[doc(hidden)]
+    pub fn with_parameter_scalar_types(
+        mut self,
+        types: BTreeMap<Value, hawdb_core::PropertyType>,
+    ) -> Self {
+        self.parameter_scalar_types = types;
+        self
+    }
+
+    pub(super) fn scalar_type(&self, value: &Value) -> Option<hawdb_core::PropertyType> {
+        use hawdb_core::PropertyType;
+        match value {
+            Value::Int(_) => Some(PropertyType::Int),
+            Value::String(_) => Some(PropertyType::String),
+            Value::Bool(_) => Some(PropertyType::Bool),
+            _ => self.parameter_scalar_types.get(value).cloned(),
+        }
     }
 
     pub(super) fn optimistic() -> Self {

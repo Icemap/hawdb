@@ -48,17 +48,44 @@ pub enum ScanPruningStrategy {
     IdEq,
     IdIn,
     IdRange,
-    PropertyEq { property: String },
-    PropertyNotEq { property: String },
-    PropertyMissingOrNull { property: String },
-    PropertyExists { property: String },
-    PropertyDefaultIfNullEq { property: String },
-    PropertyDefaultIfNullNotEq { property: String },
-    PropertyIn { property: String },
-    CompositePropertyEq { properties: Vec<String> },
-    CompositePropertyRange { properties: Vec<String> },
-    PropertyRange { property: String },
-    FullText { property: String },
+    PropertyEq {
+        property: String,
+    },
+    PropertyNotEq {
+        property: String,
+    },
+    PropertyMissingOrNull {
+        property: String,
+    },
+    PropertyExists {
+        property: String,
+    },
+    PropertyDefaultIfNullEq {
+        property: String,
+    },
+    PropertyDefaultIfNullNotEq {
+        property: String,
+    },
+    PropertyIn {
+        property: String,
+    },
+    CompositePropertyEq {
+        properties: Vec<String>,
+    },
+    CompositePropertyRange {
+        properties: Vec<String>,
+    },
+    CompositePropertyOrdered {
+        properties: Vec<String>,
+        descending: bool,
+        continuation: bool,
+    },
+    PropertyRange {
+        property: String,
+    },
+    FullText {
+        property: String,
+    },
     OrUnion,
 }
 

@@ -18,8 +18,9 @@ use std::hash::Hash;
 mod template;
 
 pub use template::{
-    bind_physical_plan_parameters, parameterize_logical_plan, parameterize_value_list,
-    resolve_plan_template_value, ParameterizedLogicalPlan, PlanParameterCacheKey,
+    bind_physical_plan_parameters, parameter_scalar_types, parameterize_logical_plan,
+    parameterize_value_list, resolve_plan_template_value, ParameterizedLogicalPlan,
+    PlanParameterCacheKey,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

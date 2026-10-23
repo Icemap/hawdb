@@ -148,7 +148,24 @@ pub(super) fn decode(bytes: &[u8]) -> Result<Vec<Posting>> {
     Ok(postings)
 }
 
+#[cfg(test)]
 pub(super) fn decode_prefix(bytes: &[u8]) -> Result<(Vec<Posting>, usize)> {
+    let mut output = Vec::new();
+    let length = decode_prefix_into(bytes, &mut output)?;
+    Ok((output, length))
+}
+
+/// Append a validated frame without discarding the caller's reusable capacity.
+pub(super) fn decode_prefix_into(bytes: &[u8], output: &mut Vec<Posting>) -> Result<usize> {
+    let start = output.len();
+    let result = decode_frame(bytes, output);
+    if result.is_err() {
+        output.truncate(start);
+    }
+    result
+}
+
+fn decode_frame(bytes: &[u8], output: &mut Vec<Posting>) -> Result<usize> {
     let header = parse_header(bytes)?;
     let count = header.count;
     let mode = header.mode;
@@ -171,7 +188,7 @@ pub(super) fn decode_prefix(bytes: &[u8]) -> Result<(Vec<Posting>, usize)> {
         2 if count == BLOCK_LEN && doc_bits == 0 && tf_bits == 0 => {}
         _ => return Err("invalid posting encoding"),
     }
-    let mut output = Vec::with_capacity(count);
+    output.reserve(count);
     let mut position = 0;
     let mut ordinal = header.base;
     let mut actual_max_tf = 0u32;
@@ -200,7 +217,7 @@ pub(super) fn decode_prefix(bytes: &[u8]) -> Result<(Vec<Posting>, usize)> {
     {
         return Err("inconsistent posting summary");
     }
-    Ok((output, length))
+    Ok(length)
 }
 
 /// Frame metadata that does not require decoding the packed postings.
@@ -256,6 +273,40 @@ pub(super) fn parse_header(bytes: &[u8]) -> Result<FrameHeader> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reused_decoder_preserves_prefix_and_recovers_after_invalid_frames() {
+        let prefix = Posting { ordinal: 1, tf: 1 };
+        let mut output = Vec::with_capacity(BLOCK_LEN + 1);
+        for count in [1, 127, 128] {
+            for stride in [1, u64::from(u32::MAX) + 1] {
+                let postings = (0..count)
+                    .map(|index| Posting {
+                        ordinal: 8 + index as u64 * stride,
+                        tf: if index % 2 == 0 {
+                            u32::from(u16::MAX) + 1
+                        } else {
+                            1
+                        },
+                    })
+                    .collect::<Vec<_>>();
+                let encoded = encode(&postings).unwrap();
+                output.clear();
+                output.push(prefix);
+                let mut invalid = encoded.clone();
+                let last = postings.last().unwrap().ordinal + 1;
+                invalid[20..28].copy_from_slice(&last.to_le_bytes());
+                assert!(decode_prefix_into(&invalid, &mut output).is_err());
+                assert_eq!(output, [prefix]);
+                assert_eq!(
+                    decode_prefix_into(&encoded, &mut output).unwrap(),
+                    encoded.len()
+                );
+                assert_eq!(output[0], prefix);
+                assert_eq!(output[1..], postings);
+            }
+        }
+    }
 
     fn next(seed: &mut u64) -> u64 {
         *seed ^= *seed << 13;

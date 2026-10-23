@@ -112,7 +112,9 @@ jobs:
         uses: bazel-contrib/setup-bazel@0.19.1
         with:
           bazelisk-cache: true
+          disk-cache: ${{ github.workflow }}-${{ github.job }}
           repository-cache: true
+          external-cache: true
 
       - name: Build the C ABI libraries and Go package
         run: |
@@ -420,7 +422,9 @@ jobs:
         uses: bazel-contrib/setup-bazel@0.19.1
         with:
           bazelisk-cache: true
+          disk-cache: ${{ github.workflow }}-${{ github.job }}
           repository-cache: true
+          external-cache: true
 
       - name: Install Go for provenance
         uses: actions/setup-go@v7

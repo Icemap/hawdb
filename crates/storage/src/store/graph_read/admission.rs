@@ -108,6 +108,22 @@ impl<'a> ProjectionAdmission<'a> {
         self.work.has_work_limit()
     }
 
+    pub(super) fn scratch(
+        &self,
+        bytes: usize,
+    ) -> std::result::Result<Box<dyn GraphReadAllocation>, CanonicalSegmentError> {
+        self.checkpoint()?;
+        self.reserve(bytes)
+    }
+
+    pub(super) fn checkpoint(&self) -> std::result::Result<(), CanonicalSegmentError> {
+        let result = match &self.admission {
+            ProjectionAllocationPolicy::Required(admission) => admission.borrow().checkpoint(),
+            ProjectionAllocationPolicy::Controlled(admission) => admission.borrow().checkpoint(),
+        };
+        result.map_err(|error| self.refusal(error))
+    }
+
     fn charge_work(&self, units: usize) -> std::result::Result<(), CanonicalSegmentError> {
         self.work
             .charge_work(units)
@@ -559,6 +575,31 @@ impl GraphStore {
 #[cfg(test)]
 mod work_tests {
     use super::*;
+
+    #[test]
+    fn ordered_scratch_checkpoint_preserves_cancellation_without_payload_admission() {
+        for bounded in [false, true] {
+            let task = if bounded {
+                hawdb_core::RuntimeTaskContext::default().with_work_limit(100)
+            } else {
+                hawdb_core::RuntimeTaskContext::default()
+            };
+            task.cancellation().cancel();
+            let calls = Cell::new(0);
+            let mut allocate = |bytes| -> Result<Box<dyn GraphReadAllocation>> {
+                calls.set(calls.get() + 1);
+                Ok(Box::new(UnaccountedReadAllocation(bytes)))
+            };
+            let mut allocator = GraphReadAllocator::new(&mut allocate, Some(&task));
+            let admission = ProjectionAdmission::new(&mut allocator);
+            assert!(admission.scratch(64).is_err());
+            assert!(
+                matches!(admission.finish(Ok(GraphScanControl::Continue)), Err(HawDBError::Execution(message)) if message.contains("runtime task stopped"))
+            );
+            assert_eq!(calls.get(), 0);
+            assert_eq!(task.work_units(), 0);
+        }
+    }
 
     #[test]
     fn projection_work_admission_never_reserves_payload_and_preserves_refusal() {

@@ -1511,6 +1511,34 @@ fn write_node_projection_access(output: &mut String, access: &NodeProjectionAcce
             write_optional_range_bound(output, seek.upper.as_ref());
             output.push(')');
         }
+        NodeProjectionAccess::CompositeOrdered { seek } => {
+            output.push_str("composite_ordered(index=");
+            write_identifier_list(output, &seek.index_properties);
+            output.push_str(",prefix=");
+            for (property, value) in &seek.equality_prefix {
+                write_identifier(output, property);
+                output.push('=');
+                write_value(output, value);
+                output.push(',');
+            }
+            output.push_str(if seek.descending {
+                "desc,after="
+            } else {
+                "asc,after="
+            });
+            match &seek.after {
+                None => output.push_str("none"),
+                Some(after) => {
+                    output.push('[');
+                    for value in after {
+                        write_value(output, value);
+                        output.push(',');
+                    }
+                    output.push(']');
+                }
+            }
+            output.push(')');
+        }
         NodeProjectionAccess::PropertyRange {
             property,
             lower,

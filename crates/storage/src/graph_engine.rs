@@ -52,6 +52,16 @@ pub trait GraphReadEngine {
         false
     }
 
+    /// Whether a declared composite index can deliver its complete non-NULL
+    /// key domain in either direction on this immutable read view.
+    fn supports_ordered_node_composite(
+        &self,
+        _label: hawdb_core::LabelId,
+        _properties: &[String],
+    ) -> bool {
+        false
+    }
+
     fn storage_recovery_report(&self) -> StorageRecoveryReport;
 
     fn segment_cache_snapshot(&self) -> Option<SegmentCacheSnapshot>;
