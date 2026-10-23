@@ -137,6 +137,7 @@ pub use publication::{DatabasePublicationOwner, DatabasePublicationState};
 mod query_request;
 mod query_runtime;
 mod sql_runtime;
+#[cfg(feature = "tokio-runtime")]
 pub(crate) use sql_runtime::PreparedRuntimeSql;
 mod retained_query;
 pub use retained_query::{
