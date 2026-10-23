@@ -1,0 +1,3314 @@
+[
+  {
+    "statements": null,
+    "writers": 1,
+    "durable": false,
+    "grouped": false,
+    "serialized_control": true,
+    "pairs": 5,
+    "elapsed_ns": {
+      "baseline_median": 25580833,
+      "candidate_median": 25646625,
+      "paired_ratio_median": 1.0097306932164152,
+      "paired_ratios": [
+        1.0097306932164152,
+        0.9786251213044314,
+        1.2400106917076668,
+        0.528125648467797,
+        1.139562499782552
+      ]
+    },
+    "commit_latency/p50_ns": {
+      "baseline_median": 14292,
+      "candidate_median": 14750,
+      "paired_ratio_median": 1.009009009009009,
+      "paired_ratios": [
+        1.009009009009009,
+        0.9861442588172898,
+        1.1969454545454545,
+        0.8691254083940688,
+        1.0320458998040862
+      ]
+    },
+    "commit_latency/p95_ns": {
+      "baseline_median": 17209,
+      "candidate_median": 15667,
+      "paired_ratio_median": 1.0203130434782608,
+      "paired_ratios": [
+        1.0203130434782608,
+        0.9103957231681097,
+        1.348023937164942,
+        0.15160329731008915,
+        1.8717762237762239
+      ]
+    },
+    "commit_latency/p99_ns": {
+      "baseline_median": 20959,
+      "candidate_median": 20625,
+      "paired_ratio_median": 0.8429314375685862,
+      "paired_ratios": [
+        0.8429314375685862,
+        0.8305146170572603,
+        1.6411666666666667,
+        0.10225655738177125,
+        2.8050590051287156
+      ]
+    },
+    "transaction_latency/p50_ns": {
+      "baseline_median": 98667,
+      "candidate_median": 97291,
+      "paired_ratio_median": 0.9890135506298965,
+      "paired_ratios": [
+        1.00960219478738,
+        0.9802619647355164,
+        1.2432633746659072,
+        0.8506284793301161,
+        0.9890135506298965
+      ]
+    },
+    "transaction_latency/p95_ns": {
+      "baseline_median": 111291,
+      "candidate_median": 111667,
+      "paired_ratio_median": 1.015439429928741,
+      "paired_ratios": [
+        1.015439429928741,
+        0.9365384289897263,
+        1.4010196049031,
+        0.2812182843385388,
+        2.0535532972118142
+      ]
+    },
+    "transaction_latency/p99_ns": {
+      "baseline_median": 122333,
+      "candidate_median": 133917,
+      "paired_ratio_median": 1.01,
+      "paired_ratios": [
+        1.01,
+        0.8595939431674487,
+        1.4084868826631962,
+        0.22241694998919007,
+        2.3133578020648558
+      ]
+    }
+  },
+  {
+    "statements": null,
+    "writers": 1,
+    "durable": false,
+    "grouped": false,
+    "serialized_control": false,
+    "pairs": 5,
+    "elapsed_ns": {
+      "baseline_median": 25444583,
+      "candidate_median": 26160458,
+      "paired_ratio_median": 1.001900552157796,
+      "paired_ratios": [
+        1.02763398556686,
+        1.001900552157796,
+        0.9804830927910009,
+        0.7608777326941099,
+        1.1424058708291662
+      ]
+    },
+    "commit_latency/p50_ns": {
+      "baseline_median": 14459,
+      "candidate_median": 14958,
+      "paired_ratio_median": 0.9970176808918554,
+      "paired_ratios": [
+        0.9970176808918554,
+        0.9862581366296272,
+        0.9879274199378298,
+        1.2389352948510162,
+        1.034511376997026
+      ]
+    },
+    "commit_latency/p95_ns": {
+      "baseline_median": 17584,
+      "candidate_median": 16875,
+      "paired_ratio_median": 0.9331453218314533,
+      "paired_ratios": [
+        1.0316779637570894,
+        0.9715081892629663,
+        0.8921240447167309,
+        0.310831955922865,
+        0.9331453218314533
+      ]
+    },
+    "commit_latency/p99_ns": {
+      "baseline_median": 22166,
+      "candidate_median": 23125,
+      "paired_ratio_median": 0.7784098559310624,
+      "paired_ratios": [
+        1.2010578512396695,
+        0.7784098559310624,
+        0.7011639447802941,
+        0.17130134797032923,
+        1.4223295872282324
+      ]
+    },
+    "transaction_latency/p50_ns": {
+      "baseline_median": 98458,
+      "candidate_median": 98000,
+      "paired_ratio_median": 0.998312415368136,
+      "paired_ratios": [
+        1.0235647377525376,
+        0.998312415368136,
+        0.9872921498807619,
+        1.2363705574330597,
+        0.995348270328465
+      ]
+    },
+    "transaction_latency/p95_ns": {
+      "baseline_median": 112625,
+      "candidate_median": 112625,
+      "paired_ratio_median": 0.9886584091926578,
+      "paired_ratios": [
+        1.0214211623193095,
+        0.9886584091926578,
+        0.985742763890789,
+        0.4984644931876741,
+        1.0155382907880133
+      ]
+    },
+    "transaction_latency/p99_ns": {
+      "baseline_median": 121500,
+      "candidate_median": 147125,
+      "paired_ratio_median": 0.9512227811681871,
+      "paired_ratios": [
+        1.066699307020187,
+        0.9019157088122606,
+        0.9512227811681871,
+        0.3718678075735522,
+        2.0219423868312756
+      ]
+    }
+  },
+  {
+    "statements": null,
+    "writers": 1,
+    "durable": true,
+    "grouped": false,
+    "serialized_control": true,
+    "pairs": 5,
+    "elapsed_ns": {
+      "baseline_median": 1463100166,
+      "candidate_median": 1778675541,
+      "paired_ratio_median": 1.1283476236913363,
+      "paired_ratios": [
+        1.8102641306104534,
+        1.1283476236913363,
+        0.9939018145873018,
+        0.9282135584988723,
+        1.2170546973948637
+      ]
+    },
+    "commit_latency/p50_ns": {
+      "baseline_median": 5378375,
+      "candidate_median": 6023791,
+      "paired_ratio_median": 0.9918766697540393,
+      "paired_ratios": [
+        0.9811306666666667,
+        1.0190239116145767,
+        0.9918766697540393,
+        0.857398238809323,
+        1.1430651451414229
+      ]
+    },
+    "commit_latency/p95_ns": {
+      "baseline_median": 7042292,
+      "candidate_median": 10052500,
+      "paired_ratio_median": 1.0421277117190768,
+      "paired_ratios": [
+        1.0421277117190768,
+        1.5023802189841806,
+        1.0386000750891897,
+        0.9823290222257011,
+        1.6727945215512505
+      ]
+    },
+    "commit_latency/p99_ns": {
+      "baseline_median": 9814458,
+      "candidate_median": 12805791,
+      "paired_ratio_median": 1.1163237286100178,
+      "paired_ratios": [
+        15.046229144798419,
+        1.0710727680615375,
+        1.1163237286100178,
+        0.8763196769801399,
+        2.105348169995978
+      ]
+    },
+    "transaction_latency/p50_ns": {
+      "baseline_median": 5480291,
+      "candidate_median": 6374709,
+      "paired_ratio_median": 0.9890610229004688,
+      "paired_ratios": [
+        0.9824525574734214,
+        1.0125094028034358,
+        0.9890610229004688,
+        0.8909385032036462,
+        1.1632062968918986
+      ]
+    },
+    "transaction_latency/p95_ns": {
+      "baseline_median": 7582542,
+      "candidate_median": 10546208,
+      "paired_ratio_median": 1.0418044573195095,
+      "paired_ratios": [
+        1.0418044573195095,
+        1.4594387540463822,
+        1.0075941550999652,
+        1.012565586175564,
+        1.6764657581988638
+      ]
+    },
+    "transaction_latency/p99_ns": {
+      "baseline_median": 9899917,
+      "candidate_median": 12969292,
+      "paired_ratio_median": 1.0548928879582407,
+      "paired_ratios": [
+        14.928197478827348,
+        1.0548928879582407,
+        1.037239788018772,
+        0.8990398135931357,
+        2.001562548829651
+      ]
+    }
+  },
+  {
+    "statements": null,
+    "writers": 1,
+    "durable": true,
+    "grouped": false,
+    "serialized_control": false,
+    "pairs": 5,
+    "elapsed_ns": {
+      "baseline_median": 1501783167,
+      "candidate_median": 1659028917,
+      "paired_ratio_median": 1.0796768770191723,
+      "paired_ratios": [
+        1.3269633387187882,
+        1.1592262477605728,
+        0.9967794994242942,
+        1.0796768770191723,
+        0.9155751677166055
+      ]
+    },
+    "commit_latency/p50_ns": {
+      "baseline_median": 5444709,
+      "candidate_median": 6002292,
+      "paired_ratio_median": 1.0224404880596307,
+      "paired_ratios": [
+        1.3013976266332143,
+        1.0224404880596307,
+        0.98543621736989,
+        1.0765167878147863,
+        0.961958297495789
+      ]
+    },
+    "commit_latency/p95_ns": {
+      "baseline_median": 7054500,
+      "candidate_median": 8757958,
+      "paired_ratio_median": 1.0438455349959774,
+      "paired_ratios": [
+        0.9639047950696441,
+        1.679492575572362,
+        1.0438455349959774,
+        1.4511008576086186,
+        0.975342011289022
+      ]
+    },
+    "commit_latency/p99_ns": {
+      "baseline_median": 8190875,
+      "candidate_median": 10248500,
+      "paired_ratio_median": 1.1624376245689196,
+      "paired_ratios": [
+        0.9638729852693949,
+        1.8903204229488937,
+        1.1624376245689196,
+        1.5022611137393747,
+        0.6267813521551593
+      ]
+    },
+    "transaction_latency/p50_ns": {
+      "baseline_median": 5581166,
+      "candidate_median": 6409167,
+      "paired_ratio_median": 1.0270259783310882,
+      "paired_ratios": [
+        1.3851802210316815,
+        1.0270259783310882,
+        0.9920799748248271,
+        1.0904507825375003,
+        0.9597756096127583
+      ]
+    },
+    "transaction_latency/p95_ns": {
+      "baseline_median": 7624375,
+      "candidate_median": 9268334,
+      "paired_ratio_median": 1.0321619652493874,
+      "paired_ratios": [
+        1.0072269296780327,
+        1.6677358490869867,
+        1.0321619652493874,
+        1.4162090663169111,
+        0.9687057835741649
+      ]
+    },
+    "transaction_latency/p99_ns": {
+      "baseline_median": 8553333,
+      "candidate_median": 10941583,
+      "paired_ratio_median": 1.1408205358295795,
+      "paired_ratios": [
+        1.0183071464302749,
+        1.8769242610837438,
+        1.1408205358295795,
+        1.5489624921653349,
+        0.6312137414202822
+      ]
+    }
+  },
+  {
+    "statements": null,
+    "writers": 1,
+    "durable": true,
+    "grouped": true,
+    "serialized_control": true,
+    "pairs": 5,
+    "elapsed_ns": {
+      "baseline_median": 1567291125,
+      "candidate_median": 1685993542,
+      "paired_ratio_median": 1.0008052672670824,
+      "paired_ratios": [
+        1.2929964361933517,
+        0.9693783565237009,
+        1.0008052672670824,
+        1.2575511613946588,
+        0.8760745550702969
+      ]
+    },
+    "commit_latency/p50_ns": {
+      "baseline_median": 6037541,
+      "candidate_median": 6031292,
+      "paired_ratio_median": 0.987488596376906,
+      "paired_ratios": [
+        1.2317778872663454,
+        0.9449688107708256,
+        0.987488596376906,
+        1.2521480790314679,
+        0.873161772317571
+      ]
+    },
+    "commit_latency/p95_ns": {
+      "baseline_median": 9115125,
+      "candidate_median": 8137875,
+      "paired_ratio_median": 0.9581438139769999,
+      "paired_ratios": [
+        0.892788085736619,
+        0.965527657679249,
+        0.9581438139769999,
+        1.160610519869692,
+        0.8732378910579007
+      ]
+    },
+    "commit_latency/p99_ns": {
+      "baseline_median": 10794708,
+      "candidate_median": 12648166,
+      "paired_ratio_median": 1.0499858873538788,
+      "paired_ratios": [
+        1.1947868344377635,
+        0.9809279186429931,
+        1.60239012345679,
+        1.0499858873538788,
+        0.9787369738881603
+      ]
+    },
+    "transaction_latency/p50_ns": {
+      "baseline_median": 6196333,
+      "candidate_median": 6415333,
+      "paired_ratio_median": 0.9971180664840396,
+      "paired_ratios": [
+        1.339563876199935,
+        0.9434829964903788,
+        0.9971180664840396,
+        1.3432358510028652,
+        0.870077834745163
+      ]
+    },
+    "transaction_latency/p95_ns": {
+      "baseline_median": 9217250,
+      "candidate_median": 8964125,
+      "paired_ratio_median": 0.9709954595724,
+      "paired_ratios": [
+        0.9725379044725921,
+        0.9675512473514265,
+        0.9709954595724,
+        1.1882579916387588,
+        0.8711628036300818
+      ]
+    },
+    "transaction_latency/p99_ns": {
+      "baseline_median": 10884875,
+      "candidate_median": 13244375,
+      "paired_ratio_median": 1.074329159488587,
+      "paired_ratios": [
+        1.239655944602028,
+        0.9835064024360957,
+        1.593508759956525,
+        1.074329159488587,
+        0.9765313890840946
+      ]
+    }
+  },
+  {
+    "statements": null,
+    "writers": 1,
+    "durable": true,
+    "grouped": true,
+    "serialized_control": false,
+    "pairs": 5,
+    "elapsed_ns": {
+      "baseline_median": 1737802125,
+      "candidate_median": 2132513541,
+      "paired_ratio_median": 1.2106147923357888,
+      "paired_ratios": [
+        1.3165613130481675,
+        1.1296583072724284,
+        0.9521497592828643,
+        1.4756859217083524,
+        1.2106147923357888
+      ]
+    },
+    "commit_latency/p50_ns": {
+      "baseline_median": 6162958,
+      "candidate_median": 6446125,
+      "paired_ratio_median": 1.2070547480279943,
+      "paired_ratios": [
+        1.2070547480279943,
+        1.2788310098880105,
+        0.9746131646524283,
+        1.2955167801734138,
+        0.7915185243294202
+      ]
+    },
+    "commit_latency/p95_ns": {
+      "baseline_median": 9140375,
+      "candidate_median": 9530583,
+      "paired_ratio_median": 1.0426905898280978,
+      "paired_ratios": [
+        1.0426905898280978,
+        1.26542810814248,
+        0.8915785215274443,
+        1.3681937739874344,
+        0.5477754679850649
+      ]
+    },
+    "commit_latency/p99_ns": {
+      "baseline_median": 10091792,
+      "candidate_median": 21308875,
+      "paired_ratio_median": 2.293064485755024,
+      "paired_ratios": [
+        2.581805292855818,
+        1.324301847564145,
+        0.9284162596235892,
+        2.293064485755024,
+        7.647457984184026
+      ]
+    },
+    "transaction_latency/p50_ns": {
+      "baseline_median": 6490250,
+      "candidate_median": 7103708,
+      "paired_ratio_median": 1.274713454797581,
+      "paired_ratios": [
+        1.3054288888733707,
+        1.274713454797581,
+        0.973593583379886,
+        1.3784632159456343,
+        0.7771328863911149
+      ]
+    },
+    "transaction_latency/p95_ns": {
+      "baseline_median": 9239292,
+      "candidate_median": 10449917,
+      "paired_ratio_median": 1.1310300616107813,
+      "paired_ratios": [
+        1.1310300616107813,
+        1.265081767351915,
+        0.9052156136035869,
+        1.3800523874778217,
+        0.5511398728869336
+      ]
+    },
+    "transaction_latency/p99_ns": {
+      "baseline_median": 10181000,
+      "candidate_median": 21967875,
+      "paired_ratio_median": 2.3425528511636586,
+      "paired_ratios": [
+        2.599642373047834,
+        1.3228868563305463,
+        0.9325766753823349,
+        2.3425528511636586,
+        7.522850141875869
+      ]
+    }
+  },
+  {
+    "statements": null,
+    "writers": 4,
+    "durable": false,
+    "grouped": false,
+    "serialized_control": true,
+    "pairs": 5,
+    "elapsed_ns": {
+      "baseline_median": 29068916,
+      "candidate_median": 27817541,
+      "paired_ratio_median": 0.957949270595832,
+      "paired_ratios": [
+        1.0118385717825968,
+        0.957949270595832,
+        0.9106685610063909,
+        0.9787714488030365,
+        0.9428872063891203
+      ]
+    },
+    "commit_latency/p50_ns": {
+      "baseline_median": 15625,
+      "candidate_median": 15000,
+      "paired_ratio_median": 0.9768046019669697,
+      "paired_ratios": [
+        0.9768046019669697,
+        0.983445249650954,
+        0.8414305783188949,
+        0.96,
+        0.9917584228918046
+      ]
+    },
+    "commit_latency/p95_ns": {
+      "baseline_median": 19167,
+      "candidate_median": 18125,
+      "paired_ratio_median": 0.8859614820608075,
+      "paired_ratios": [
+        1.0065216257108571,
+        0.7926601700186606,
+        0.8859614820608075,
+        0.8533333333333334,
+        0.956202079613486
+      ]
+    },
+    "commit_latency/p99_ns": {
+      "baseline_median": 26375,
+      "candidate_median": 18750,
+      "paired_ratio_median": 0.8230056497175141,
+      "paired_ratios": [
+        0.9531255859301758,
+        0.8230056497175141,
+        0.7109004739336493,
+        0.7793483366784815,
+        0.8546681998590452
+      ]
+    },
+    "transaction_latency/p50_ns": {
+      "baseline_median": 111209,
+      "candidate_median": 106791,
+      "paired_ratio_median": 0.9609344970796966,
+      "paired_ratios": [
+        1.014801331853496,
+        0.9609344970796966,
+        0.915636400919336,
+        0.9876624277456647,
+        0.9224343353505562
+      ]
+    },
+    "transaction_latency/p95_ns": {
+      "baseline_median": 130209,
+      "candidate_median": 120834,
+      "paired_ratio_median": 0.9247978250351359,
+      "paired_ratios": [
+        1.0165411721331234,
+        0.8934373655281042,
+        0.8107438016528926,
+        0.9247978250351359,
+        0.944015625
+      ]
+    },
+    "transaction_latency/p99_ns": {
+      "baseline_median": 7762583,
+      "candidate_median": 7188250,
+      "paired_ratio_median": 0.9467328307234653,
+      "paired_ratios": [
+        1.0154420705879705,
+        1.0002258044723635,
+        0.8281316645328741,
+        0.9260126429566035,
+        0.9467328307234653
+      ]
+    }
+  },
+  {
+    "statements": null,
+    "writers": 4,
+    "durable": false,
+    "grouped": false,
+    "serialized_control": false,
+    "pairs": 5,
+    "elapsed_ns": {
+      "baseline_median": 9806875,
+      "candidate_median": 10504625,
+      "paired_ratio_median": 1.0545396822030098,
+      "paired_ratios": [
+        1.0545396822030098,
+        1.071149066343764,
+        1.1173774492695625,
+        0.984620391022405,
+        0.9769811320754717
+      ]
+    },
+    "commit_latency/p50_ns": {
+      "baseline_median": 28917,
+      "candidate_median": 28833,
+      "paired_ratio_median": 1.0861244019138756,
+      "paired_ratios": [
+        1.0080258054606197,
+        0.9970951343500363,
+        1.0861244019138756,
+        1.1388888888888888,
+        1.251056888918478
+      ]
+    },
+    "commit_latency/p95_ns": {
+      "baseline_median": 59167,
+      "candidate_median": 72333,
+      "paired_ratio_median": 1.0210002818829782,
+      "paired_ratios": [
+        1.0210002818829782,
+        1.3978738147954095,
+        1.6118774373259053,
+        1.015680034979474,
+        0.47440179873427724
+      ]
+    },
+    "commit_latency/p99_ns": {
+      "baseline_median": 74042,
+      "candidate_median": 109042,
+      "paired_ratio_median": 0.8806893384835633,
+      "paired_ratios": [
+        0.8806893384835633,
+        1.9208325228554757,
+        2.146848164397945,
+        0.7800359107524805,
+        0.511235294117647
+      ]
+    },
+    "transaction_latency/p50_ns": {
+      "baseline_median": 138334,
+      "candidate_median": 137334,
+      "paired_ratio_median": 1.0360497607655503,
+      "paired_ratios": [
+        1.0201547485336329,
+        0.9927711191753292,
+        1.0360497607655503,
+        1.053662888013551,
+        1.262510608305404
+      ]
+    },
+    "transaction_latency/p95_ns": {
+      "baseline_median": 218042,
+      "candidate_median": 287083,
+      "paired_ratio_median": 1.213295930604202,
+      "paired_ratios": [
+        1.213295930604202,
+        1.3305922712138027,
+        1.5680483715036349,
+        0.9101876945272288,
+        0.7819634703196348
+      ]
+    },
+    "transaction_latency/p99_ns": {
+      "baseline_median": 386333,
+      "candidate_median": 395833,
+      "paired_ratio_median": 0.9483119752274141,
+      "paired_ratios": [
+        0.9483119752274141,
+        1.2345668615984406,
+        0.9703416482671685,
+        0.900272417452654,
+        0.9342562330288817
+      ]
+    }
+  },
+  {
+    "statements": null,
+    "writers": 4,
+    "durable": true,
+    "grouped": false,
+    "serialized_control": true,
+    "pairs": 5,
+    "elapsed_ns": {
+      "baseline_median": 1881428875,
+      "candidate_median": 1490914417,
+      "paired_ratio_median": 0.9516441846439312,
+      "paired_ratios": [
+        0.956862595722626,
+        1.681597342194112,
+        0.44930192756572634,
+        0.7221997401556263,
+        0.9516441846439312
+      ]
+    },
+    "commit_latency/p50_ns": {
+      "baseline_median": 6167917,
+      "candidate_median": 5317750,
+      "paired_ratio_median": 1.002693179851768,
+      "paired_ratios": [
+        1.009862811059228,
+        1.0084685993779234,
+        0.8184774104513854,
+        0.7892129493998404,
+        1.002693179851768
+      ]
+    },
+    "commit_latency/p95_ns": {
+      "baseline_median": 8943209,
+      "candidate_median": 8242708,
+      "paired_ratio_median": 0.9216722990595434,
+      "paired_ratios": [
+        0.9304673349516551,
+        0.9216722990595434,
+        0.6845296944328674,
+        0.7233979136972739,
+        0.9426004343433412
+      ]
+    },
+    "commit_latency/p99_ns": {
+      "baseline_median": 16479666,
+      "candidate_median": 9749833,
+      "paired_ratio_median": 0.5916280706174506,
+      "paired_ratios": [
+        0.6225732428346255,
+        13.767156219953902,
+        0.02913142395029213,
+        0.540004741302673,
+        0.5916280706174506
+      ]
+    },
+    "transaction_latency/p50_ns": {
+      "baseline_median": 6695417,
+      "candidate_median": 5434083,
+      "paired_ratio_median": 0.9708972126110714,
+      "paired_ratios": [
+        0.9708972126110714,
+        1.0105691570970292,
+        0.776694267138253,
+        0.7367487310295306,
+        1.0012299322382145
+      ]
+    },
+    "transaction_latency/p95_ns": {
+      "baseline_median": 10334584,
+      "candidate_median": 9254292,
+      "paired_ratio_median": 0.9065354599052918,
+      "paired_ratios": [
+        0.9603984747594769,
+        1.163422102351767,
+        0.49252544046696256,
+        0.627669967170425,
+        0.9065354599052918
+      ]
+    },
+    "transaction_latency/p99_ns": {
+      "baseline_median": 583573375,
+      "candidate_median": 342299500,
+      "paired_ratio_median": 0.6769118073626988,
+      "paired_ratios": [
+        0.6769118073626988,
+        0.9851100102274023,
+        0.21721343814408645,
+        0.7163969201819056,
+        0.5902419550040153
+      ]
+    }
+  },
+  {
+    "statements": null,
+    "writers": 4,
+    "durable": true,
+    "grouped": false,
+    "serialized_control": false,
+    "pairs": 5,
+    "elapsed_ns": {
+      "baseline_median": 1613662000,
+      "candidate_median": 1318887500,
+      "paired_ratio_median": 0.9299575392693538,
+      "paired_ratios": [
+        0.9507931039533807,
+        0.9299575392693538,
+        0.7672046057856281,
+        0.862506894971933,
+        0.9931260648140688
+      ]
+    },
+    "commit_latency/p50_ns": {
+      "baseline_median": 15602875,
+      "candidate_median": 14490375,
+      "paired_ratio_median": 0.9318955641187923,
+      "paired_ratios": [
+        0.9318955641187923,
+        0.9369436680181754,
+        0.8905143684370052,
+        0.887201833059108,
+        0.9922763251541327
+      ]
+    },
+    "commit_latency/p95_ns": {
+      "baseline_median": 31237541,
+      "candidate_median": 20870375,
+      "paired_ratio_median": 0.7652146085127356,
+      "paired_ratios": [
+        0.8578935616939851,
+        0.7652146085127356,
+        0.7307788909048656,
+        0.645776131321178,
+        0.8614701458094925
+      ]
+    },
+    "commit_latency/p99_ns": {
+      "baseline_median": 35965000,
+      "candidate_median": 25565875,
+      "paired_ratio_median": 0.6427633456100718,
+      "paired_ratios": [
+        0.6427633456100718,
+        0.7364336016425493,
+        0.6198109272904212,
+        0.4639209939749697,
+        0.8496487980307607
+      ]
+    },
+    "transaction_latency/p50_ns": {
+      "baseline_median": 21571000,
+      "candidate_median": 20939208,
+      "paired_ratio_median": 1.0014067099291086,
+      "paired_ratios": [
+        0.9805641833943721,
+        1.0442155219629286,
+        0.8033098230361219,
+        1.0014067099291086,
+        1.0514030075660856
+      ]
+    },
+    "transaction_latency/p95_ns": {
+      "baseline_median": 42389042,
+      "candidate_median": 31636417,
+      "paired_ratio_median": 0.8186704141925365,
+      "paired_ratios": [
+        0.8186704141925365,
+        0.8187019588912278,
+        0.7396734689012325,
+        0.6599215243973577,
+        0.9067241245980506
+      ]
+    },
+    "transaction_latency/p99_ns": {
+      "baseline_median": 54214792,
+      "candidate_median": 36692458,
+      "paired_ratio_median": 0.7969251306091034,
+      "paired_ratios": [
+        0.948250188295009,
+        0.7969251306091034,
+        0.6718069673678726,
+        0.5172007559637881,
+        0.8726243461107468
+      ]
+    }
+  },
+  {
+    "statements": null,
+    "writers": 4,
+    "durable": true,
+    "grouped": true,
+    "serialized_control": true,
+    "pairs": 5,
+    "elapsed_ns": {
+      "baseline_median": 1768269375,
+      "candidate_median": 1458869917,
+      "paired_ratio_median": 0.9571966773324769,
+      "paired_ratios": [
+        1.0062883329517964,
+        0.917578515410923,
+        0.7236382607146606,
+        1.0106382849637565,
+        0.9571966773324769
+      ]
+    },
+    "commit_latency/p50_ns": {
+      "baseline_median": 6161750,
+      "candidate_median": 5356875,
+      "paired_ratio_median": 1.005954556158437,
+      "paired_ratios": [
+        1.0163907769410148,
+        0.9871292012119219,
+        0.7837802572321175,
+        1.0443407406407283,
+        1.005954556158437
+      ]
+    },
+    "commit_latency/p95_ns": {
+      "baseline_median": 8518000,
+      "candidate_median": 6882916,
+      "paired_ratio_median": 0.7481837056361759,
+      "paired_ratios": [
+        1.2207336811845135,
+        0.6704478883740747,
+        0.6686226084793297,
+        1.018333763794318,
+        0.7481837056361759
+      ]
+    },
+    "commit_latency/p99_ns": {
+      "baseline_median": 12946667,
+      "candidate_median": 9900250,
+      "paired_ratio_median": 0.7371939706166709,
+      "paired_ratios": [
+        0.9019516001926757,
+        0.7646948824743851,
+        0.5528235626767201,
+        0.6626239386457351,
+        0.7371939706166709
+      ]
+    },
+    "transaction_latency/p50_ns": {
+      "baseline_median": 6684959,
+      "candidate_median": 5475416,
+      "paired_ratio_median": 1.000532846048424,
+      "paired_ratios": [
+        1.0298232616247034,
+        0.999039424540047,
+        0.7571225193752124,
+        1.0301669747274957,
+        1.000532846048424
+      ]
+    },
+    "transaction_latency/p95_ns": {
+      "baseline_median": 9557250,
+      "candidate_median": 7123250,
+      "paired_ratio_median": 0.7453242302963718,
+      "paired_ratios": [
+        1.2548367847240858,
+        0.6759536507332933,
+        0.6150210775319324,
+        1.0210215723663945,
+        0.7453242302963718
+      ]
+    },
+    "transaction_latency/p99_ns": {
+      "baseline_median": 461847875,
+      "candidate_median": 370326083,
+      "paired_ratio_median": 0.9387746241707071,
+      "paired_ratios": [
+        1.1163505990395104,
+        0.9387746241707071,
+        0.7068566679017415,
+        1.0187409996058188,
+        0.9164978611193949
+      ]
+    }
+  },
+  {
+    "statements": null,
+    "writers": 4,
+    "durable": true,
+    "grouped": true,
+    "serialized_control": false,
+    "pairs": 5,
+    "elapsed_ns": {
+      "baseline_median": 409374458,
+      "candidate_median": 435323666,
+      "paired_ratio_median": 1.0342923066931469,
+      "paired_ratios": [
+        1.0342923066931469,
+        1.0743424870563452,
+        1.026788155040666,
+        1.387325737048047,
+        1.0179416029907757
+      ]
+    },
+    "commit_latency/p50_ns": {
+      "baseline_median": 6236250,
+      "candidate_median": 6271875,
+      "paired_ratio_median": 1.097017525804401,
+      "paired_ratios": [
+        1.097017525804401,
+        1.129978112594302,
+        1.0174478450642848,
+        1.3068220550273617,
+        1.0057125676488274
+      ]
+    },
+    "commit_latency/p95_ns": {
+      "baseline_median": 10477667,
+      "candidate_median": 10601667,
+      "paired_ratio_median": 0.9955123537742484,
+      "paired_ratios": [
+        0.9730509745127436,
+        0.9955123537742484,
+        1.0217719754915702,
+        1.1695153129031493,
+        0.9706264271358318
+      ]
+    },
+    "commit_latency/p99_ns": {
+      "baseline_median": 12297167,
+      "candidate_median": 17276791,
+      "paired_ratio_median": 1.4049407477348237,
+      "paired_ratios": [
+        1.1500448903584257,
+        1.4049407477348237,
+        1.6004284496019447,
+        2.2450106856549135,
+        1.1148638017900538
+      ]
+    },
+    "transaction_latency/p50_ns": {
+      "baseline_median": 6424041,
+      "candidate_median": 6423667,
+      "paired_ratio_median": 1.0937460877638503,
+      "paired_ratios": [
+        1.0937460877638503,
+        1.1512453690387006,
+        1.0167257628067556,
+        1.3376252254804037,
+        0.9999417811934886
+      ]
+    },
+    "transaction_latency/p95_ns": {
+      "baseline_median": 10792000,
+      "candidate_median": 11195333,
+      "paired_ratio_median": 1.0006547358895557,
+      "paired_ratios": [
+        0.9459893591927664,
+        1.009221185676571,
+        1.0006547358895557,
+        1.5296941252779837,
+        0.9763218704335119
+      ]
+    },
+    "transaction_latency/p99_ns": {
+      "baseline_median": 12414125,
+      "candidate_median": 17510708,
+      "paired_ratio_median": 1.1209339920481252,
+      "paired_ratios": [
+        1.0471877884085492,
+        1.4105470985671564,
+        1.0749939989640316,
+        2.1959285190336346,
+        1.1209339920481252
+      ]
+    }
+  },
+  {
+    "statements": null,
+    "writers": 8,
+    "durable": false,
+    "grouped": false,
+    "serialized_control": true,
+    "pairs": 5,
+    "elapsed_ns": {
+      "baseline_median": 29403542,
+      "candidate_median": 29263167,
+      "paired_ratio_median": 0.9952259152995921,
+      "paired_ratios": [
+        1.013510201122808,
+        0.9908220948717148,
+        0.9858977564770908,
+        0.9952259152995921,
+        1.0434454636366772
+      ]
+    },
+    "commit_latency/p50_ns": {
+      "baseline_median": 15750,
+      "candidate_median": 15208,
+      "paired_ratio_median": 0.9761904761904762,
+      "paired_ratios": [
+        0.9893968253968254,
+        0.9831932773109243,
+        0.8721804511278195,
+        0.9707027510052978,
+        0.9761904761904762
+      ]
+    },
+    "commit_latency/p95_ns": {
+      "baseline_median": 19625,
+      "candidate_median": 18750,
+      "paired_ratio_median": 0.9630667846955837,
+      "paired_ratios": [
+        0.9630667846955837,
+        0.9714285714285714,
+        0.9193375796178344,
+        1.002245028864657,
+        0.9540068286804579
+      ]
+    },
+    "commit_latency/p99_ns": {
+      "baseline_median": 24541,
+      "candidate_median": 20834,
+      "paired_ratio_median": 0.8878005756197196,
+      "paired_ratios": [
+        0.9281100917431193,
+        0.9189908397727854,
+        0.8489466606902735,
+        0.8878005756197196,
+        0.8471414634146341
+      ]
+    },
+    "transaction_latency/p50_ns": {
+      "baseline_median": 112375,
+      "candidate_median": 112875,
+      "paired_ratio_median": 1.0044493882091212,
+      "paired_ratios": [
+        1.0274298879246133,
+        0.995571968791236,
+        0.9858203009605314,
+        1.0044493882091212,
+        1.0514363103683366
+      ]
+    },
+    "transaction_latency/p95_ns": {
+      "baseline_median": 129500,
+      "candidate_median": 125875,
+      "paired_ratio_median": 0.9674980694980695,
+      "paired_ratios": [
+        1.0173299232736572,
+        0.9543029913760016,
+        0.9674980694980695,
+        1.0089079981946456,
+        0.03330833609414345
+      ]
+    },
+    "transaction_latency/p99_ns": {
+      "baseline_median": 18565125,
+      "candidate_median": 18555291,
+      "paired_ratio_median": 1.0034114512634742,
+      "paired_ratios": [
+        1.0120357574579457,
+        0.9915987174348697,
+        0.9893752398650696,
+        1.0034114512634742,
+        1.386860376609002
+      ]
+    }
+  },
+  {
+    "statements": null,
+    "writers": 8,
+    "durable": false,
+    "grouped": false,
+    "serialized_control": false,
+    "pairs": 5,
+    "elapsed_ns": {
+      "baseline_median": 13942583,
+      "candidate_median": 16349750,
+      "paired_ratio_median": 1.008128673586406,
+      "paired_ratios": [
+        1.008128673586406,
+        1.1260772626165283,
+        0.9957175797339703,
+        0.9923317430610041,
+        1.33173657527635
+      ]
+    },
+    "commit_latency/p50_ns": {
+      "baseline_median": 171209,
+      "candidate_median": 166916,
+      "paired_ratio_median": 0.9566094339347867,
+      "paired_ratios": [
+        0.9566094339347867,
+        0.8646615762372956,
+        0.8463375886524823,
+        1.028228656203821,
+        1.5229750231267345
+      ]
+    },
+    "commit_latency/p95_ns": {
+      "baseline_median": 485458,
+      "candidate_median": 438458,
+      "paired_ratio_median": 0.986870130886709,
+      "paired_ratios": [
+        0.8273448084565191,
+        0.986870130886709,
+        0.7021542001300914,
+        1.0319307787391843,
+        2.6405678492122453
+      ]
+    },
+    "commit_latency/p99_ns": {
+      "baseline_median": 646333,
+      "candidate_median": 763042,
+      "paired_ratio_median": 0.9135442223453345,
+      "paired_ratios": [
+        0.9135442223453345,
+        1.180571005967512,
+        0.6702820247933884,
+        0.8969531481961395,
+        2.9026173800259403
+      ]
+    },
+    "transaction_latency/p50_ns": {
+      "baseline_median": 355541,
+      "candidate_median": 454042,
+      "paired_ratio_median": 1.087758725847497,
+      "paired_ratios": [
+        0.9417985493675503,
+        1.3177101937610571,
+        1.087758725847497,
+        1.0507365542822849,
+        1.1843286599282687
+      ]
+    },
+    "transaction_latency/p95_ns": {
+      "baseline_median": 882208,
+      "candidate_median": 873125,
+      "paired_ratio_median": 1.067336478244978,
+      "paired_ratios": [
+        1.067336478244978,
+        1.0894063531502776,
+        0.8788474864934732,
+        0.8464560327198364,
+        1.8391497731899378
+      ]
+    },
+    "transaction_latency/p99_ns": {
+      "baseline_median": 1172166,
+      "candidate_median": 1089417,
+      "paired_ratio_median": 0.9633941620738926,
+      "paired_ratios": [
+        0.9762809712382639,
+        0.9633941620738926,
+        0.8454043874586797,
+        0.9294050501379497,
+        1.9147357827298555
+      ]
+    }
+  },
+  {
+    "statements": null,
+    "writers": 8,
+    "durable": true,
+    "grouped": false,
+    "serialized_control": true,
+    "pairs": 5,
+    "elapsed_ns": {
+      "baseline_median": 1750691333,
+      "candidate_median": 1801416750,
+      "paired_ratio_median": 1.0289745062672335,
+      "paired_ratios": [
+        1.0361745257414845,
+        1.0289745062672335,
+        0.9808584457621498,
+        1.0192545143279432,
+        1.1207616317520788
+      ]
+    },
+    "commit_latency/p50_ns": {
+      "baseline_median": 6028459,
+      "candidate_median": 6244625,
+      "paired_ratio_median": 1.0081256771397618,
+      "paired_ratios": [
+        1.0201240154250872,
+        1.0358575881498073,
+        0.9889173135301059,
+        0.9714554076211266,
+        1.0081256771397618
+      ]
+    },
+    "commit_latency/p95_ns": {
+      "baseline_median": 8033958,
+      "candidate_median": 8278791,
+      "paired_ratio_median": 1.0246189356668667,
+      "paired_ratios": [
+        1.0246189356668667,
+        0.9928533358028508,
+        0.9916375104250386,
+        1.1737424617880456,
+        1.3018758083855877
+      ]
+    },
+    "commit_latency/p99_ns": {
+      "baseline_median": 10765333,
+      "candidate_median": 11941333,
+      "paired_ratio_median": 1.0036806762270727,
+      "paired_ratios": [
+        1.0036806762270727,
+        1.261321038559606,
+        0.7890424880285577,
+        0.9104723090143344,
+        1.7209486033864998
+      ]
+    },
+    "transaction_latency/p50_ns": {
+      "baseline_median": 6540833,
+      "candidate_median": 6850292,
+      "paired_ratio_median": 1.015846703725957,
+      "paired_ratios": [
+        1.015846703725957,
+        1.0473118637947185,
+        0.9884444237355264,
+        0.9711744606726518,
+        1.0257113563842155
+      ]
+    },
+    "transaction_latency/p95_ns": {
+      "baseline_median": 11354709,
+      "candidate_median": 11815291,
+      "paired_ratio_median": 1.0247510526249506,
+      "paired_ratios": [
+        1.076126966532804,
+        1.0247510526249506,
+        0.9570414355124743,
+        0.9051965191726549,
+        1.8193114810894042
+      ]
+    },
+    "transaction_latency/p99_ns": {
+      "baseline_median": 880442125,
+      "candidate_median": 1187986250,
+      "paired_ratio_median": 1.0136985900748103,
+      "paired_ratios": [
+        1.0136985900748103,
+        1.523069140146929,
+        0.7769485510162136,
+        1.1235835950896857,
+        0.9049928091525608
+      ]
+    }
+  },
+  {
+    "statements": null,
+    "writers": 8,
+    "durable": true,
+    "grouped": false,
+    "serialized_control": false,
+    "pairs": 5,
+    "elapsed_ns": {
+      "baseline_median": 1692640375,
+      "candidate_median": 1714766500,
+      "paired_ratio_median": 0.982067120864834,
+      "paired_ratios": [
+        0.9926271237915478,
+        2.3495030904009955,
+        0.8978584436050425,
+        0.9237814767278675,
+        0.982067120864834
+      ]
+    },
+    "commit_latency/p50_ns": {
+      "baseline_median": 28074667,
+      "candidate_median": 28342417,
+      "paired_ratio_median": 0.9455398292272673,
+      "paired_ratios": [
+        1.0212958892798265,
+        0.9562904560465283,
+        0.877267621532287,
+        0.908694029594062,
+        0.9455398292272673
+      ]
+    },
+    "commit_latency/p95_ns": {
+      "baseline_median": 61246500,
+      "candidate_median": 66449125,
+      "paired_ratio_median": 0.9985570359072562,
+      "paired_ratios": [
+        1.074840139080484,
+        2.8602709379311473,
+        0.6470989857725896,
+        0.7795160680447563,
+        0.9985570359072562
+      ]
+    },
+    "commit_latency/p99_ns": {
+      "baseline_median": 84373083,
+      "candidate_median": 89053875,
+      "paired_ratio_median": 0.7505109080941281,
+      "paired_ratios": [
+        1.1135390101317293,
+        9.54171071659317,
+        0.4914965949507854,
+        0.6543382002441263,
+        0.7505109080941281
+      ]
+    },
+    "transaction_latency/p50_ns": {
+      "baseline_median": 45344000,
+      "candidate_median": 47016833,
+      "paired_ratio_median": 0.9797562673614977,
+      "paired_ratios": [
+        0.9797562673614977,
+        0.9420532643940918,
+        0.9747628418208415,
+        1.0368920474594212,
+        0.9993218082862753
+      ]
+    },
+    "transaction_latency/p95_ns": {
+      "baseline_median": 97740792,
+      "candidate_median": 98943917,
+      "paired_ratio_median": 1.0123093436771005,
+      "paired_ratios": [
+        1.0123093436771005,
+        3.990766262406215,
+        0.741843698244641,
+        0.8523406052898215,
+        1.0506777705421697
+      ]
+    },
+    "transaction_latency/p99_ns": {
+      "baseline_median": 115436167,
+      "candidate_median": 120977416,
+      "paired_ratio_median": 0.8787119799021866,
+      "paired_ratios": [
+        1.1138712386880107,
+        8.585664006053449,
+        0.6178559012618636,
+        0.8418526461381134,
+        0.8787119799021866
+      ]
+    }
+  },
+  {
+    "statements": null,
+    "writers": 8,
+    "durable": true,
+    "grouped": true,
+    "serialized_control": true,
+    "pairs": 5,
+    "elapsed_ns": {
+      "baseline_median": 1808280250,
+      "candidate_median": 1430295125,
+      "paired_ratio_median": 0.9403614716749691,
+      "paired_ratios": [
+        0.9483847856998077,
+        0.7909698316950594,
+        1.0179722329326213,
+        0.8005774802893199,
+        0.9403614716749691
+      ]
+    },
+    "commit_latency/p50_ns": {
+      "baseline_median": 6255875,
+      "candidate_median": 5334542,
+      "paired_ratio_median": 0.9327225701910193,
+      "paired_ratios": [
+        0.9327225701910193,
+        0.8492017503546666,
+        1.026221598259246,
+        0.8749401375497209,
+        1.016409709822981
+      ]
+    },
+    "commit_latency/p95_ns": {
+      "baseline_median": 7845417,
+      "candidate_median": 7827958,
+      "paired_ratio_median": 0.9998353840613714,
+      "paired_ratios": [
+        1.0169693184724242,
+        1.1388388915464913,
+        0.9998353840613714,
+        0.7920997241498923,
+        0.8599277500306546
+      ]
+    },
+    "commit_latency/p99_ns": {
+      "baseline_median": 12421875,
+      "candidate_median": 10014291,
+      "paired_ratio_median": 0.7804990793511618,
+      "paired_ratios": [
+        1.2597278122946431,
+        0.7804990793511618,
+        0.6757095974104228,
+        0.9258814682052088,
+        0.4432
+      ]
+    },
+    "transaction_latency/p50_ns": {
+      "baseline_median": 6927959,
+      "candidate_median": 5434916,
+      "paired_ratio_median": 0.9777535785953178,
+      "paired_ratios": [
+        0.9777535785953178,
+        0.7812246002033211,
+        1.023939611790079,
+        0.8405420584698665,
+        1.006217539262993
+      ]
+    },
+    "transaction_latency/p95_ns": {
+      "baseline_median": 11420708,
+      "candidate_median": 9620333,
+      "paired_ratio_median": 0.9327679598732639,
+      "paired_ratios": [
+        1.1296030350813293,
+        0.8423587224189604,
+        0.985983483610011,
+        0.9327679598732639,
+        0.5791890664916519
+      ]
+    },
+    "transaction_latency/p99_ns": {
+      "baseline_median": 1151610666,
+      "candidate_median": 904731167,
+      "paired_ratio_median": 0.9620708924614293,
+      "paired_ratios": [
+        1.0297170482368843,
+        0.7856224275366341,
+        1.0104294617227187,
+        0.8360669448994418,
+        0.9620708924614293
+      ]
+    }
+  },
+  {
+    "statements": null,
+    "writers": 8,
+    "durable": true,
+    "grouped": true,
+    "serialized_control": false,
+    "pairs": 5,
+    "elapsed_ns": {
+      "baseline_median": 340171333,
+      "candidate_median": 231298583,
+      "paired_ratio_median": 0.849981850175482,
+      "paired_ratios": [
+        0.8089885222374842,
+        0.6645957881520707,
+        1.0240401885257366,
+        0.849981850175482,
+        1.146712176826778
+      ]
+    },
+    "commit_latency/p50_ns": {
+      "baseline_median": 8716916,
+      "candidate_median": 6301333,
+      "paired_ratio_median": 0.9282192234042407,
+      "paired_ratios": [
+        0.8985866434456428,
+        0.6353766601671492,
+        1.0146947959770238,
+        0.9282192234042407,
+        1.0172600585333536
+      ]
+    },
+    "commit_latency/p95_ns": {
+      "baseline_median": 15676708,
+      "candidate_median": 10508708,
+      "paired_ratio_median": 0.6926258968275978,
+      "paired_ratios": [
+        0.6926258968275978,
+        0.6703389512645129,
+        0.9702102531063046,
+        0.6387696756365727,
+        1.3282711291726994
+      ]
+    },
+    "commit_latency/p99_ns": {
+      "baseline_median": 19781417,
+      "candidate_median": 12570792,
+      "paired_ratio_median": 0.7671594001582395,
+      "paired_ratios": [
+        0.7671594001582395,
+        0.4183184112709262,
+        0.9097572190882438,
+        0.5284033611195312,
+        1.722114766169495
+      ]
+    },
+    "transaction_latency/p50_ns": {
+      "baseline_median": 9270833,
+      "candidate_median": 6510375,
+      "paired_ratio_median": 0.926862495045145,
+      "paired_ratios": [
+        0.926862495045145,
+        0.6278195488721805,
+        1.011299398357499,
+        0.9123460642641281,
+        1.0183333236876184
+      ]
+    },
+    "transaction_latency/p95_ns": {
+      "baseline_median": 16109875,
+      "candidate_median": 12199500,
+      "paired_ratio_median": 0.7467935039843574,
+      "paired_ratios": [
+        0.6911234863757972,
+        0.7467935039843574,
+        1.0224169017165536,
+        0.6286120588914096,
+        1.8713375716317235
+      ]
+    },
+    "transaction_latency/p99_ns": {
+      "baseline_median": 20345333,
+      "candidate_median": 13080667,
+      "paired_ratio_median": 0.7658062416574848,
+      "paired_ratios": [
+        0.7658062416574848,
+        0.49116046362883137,
+        0.9520625182297627,
+        0.5553614081422642,
+        1.727927687535439
+      ]
+    }
+  },
+  {
+    "statements": 1,
+    "writers": 1,
+    "durable": false,
+    "grouped": null,
+    "serialized_control": null,
+    "pairs": 5,
+    "elapsed_ns": {
+      "baseline_median": 14228833,
+      "candidate_median": 15891833,
+      "paired_ratio_median": 1.0639035133717882,
+      "paired_ratios": [
+        1.1168753614579636,
+        1.0639035133717882,
+        1.543113726074328,
+        0.9452102063680737,
+        0.9946265034145841
+      ]
+    },
+    "commit_latency/p50_ns": {
+      "baseline_median": 9834,
+      "candidate_median": 10667,
+      "paired_ratio_median": 1.0847061216188734,
+      "paired_ratios": [
+        1.0847061216188734,
+        1.0870945265928622,
+        1.5211267605633803,
+        0.8982610748288614,
+        0.9884850166481687
+      ]
+    },
+    "commit_latency/p95_ns": {
+      "baseline_median": 12125,
+      "candidate_median": 13000,
+      "paired_ratio_median": 1.0480824742268042,
+      "paired_ratios": [
+        1.0480824742268042,
+        1.1240134558157588,
+        1.4578894246944039,
+        0.8973144784639335,
+        0.9677062596770626
+      ]
+    },
+    "commit_latency/p99_ns": {
+      "baseline_median": 17667,
+      "candidate_median": 17084,
+      "paired_ratio_median": 0.9697272727272728,
+      "paired_ratios": [
+        1.0799295044578063,
+        0.8689214690085644,
+        1.464426538659352,
+        0.8820399615101602,
+        0.9697272727272728
+      ]
+    },
+    "staging_latency/p50_ns": {
+      "baseline_median": 40125,
+      "candidate_median": 44041,
+      "paired_ratio_median": 1.0975950155763239,
+      "paired_ratios": [
+        1.0975950155763239,
+        1.1502606076220299,
+        1.5415878354705346,
+        0.9338163771712159,
+        1.0013976955069204
+      ]
+    },
+    "staging_latency/p95_ns": {
+      "baseline_median": 50083,
+      "candidate_median": 54166,
+      "paired_ratio_median": 1.0682267436056148,
+      "paired_ratios": [
+        1.0682267436056148,
+        1.1604287672126867,
+        1.4959264271313761,
+        0.896356328655202,
+        0.999970000599988
+      ]
+    },
+    "staging_latency/p99_ns": {
+      "baseline_median": 66500,
+      "candidate_median": 79084,
+      "paired_ratio_median": 0.9824045888832192,
+      "paired_ratios": [
+        0.9541987785008147,
+        1.0675053656034448,
+        1.9044692527439482,
+        0.9035037593984963,
+        0.9824045888832192
+      ]
+    }
+  },
+  {
+    "statements": 1,
+    "writers": 1,
+    "durable": true,
+    "grouped": null,
+    "serialized_control": null,
+    "pairs": 5,
+    "elapsed_ns": {
+      "baseline_median": 1509469208,
+      "candidate_median": 1446535416,
+      "paired_ratio_median": 0.9671520409082911,
+      "paired_ratios": [
+        0.978579390802651,
+        0.5781248898244934,
+        0.9671520409082911,
+        1.0530957865544066,
+        0.915090299091161
+      ]
+    },
+    "commit_latency/p50_ns": {
+      "baseline_median": 5445625,
+      "candidate_median": 5303667,
+      "paired_ratio_median": 0.9917415554183097,
+      "paired_ratios": [
+        0.9938785679229538,
+        0.9917415554183097,
+        0.9469375921821631,
+        1.0030457471484517,
+        0.9845747733272122
+      ]
+    },
+    "commit_latency/p95_ns": {
+      "baseline_median": 6864250,
+      "candidate_median": 6669917,
+      "paired_ratio_median": 0.9783537612015444,
+      "paired_ratios": [
+        0.971689113887169,
+        0.9614037889244564,
+        0.9783537612015444,
+        1.1569904821129364,
+        0.9884293868042267
+      ]
+    },
+    "commit_latency/p99_ns": {
+      "baseline_median": 8863875,
+      "candidate_median": 9625958,
+      "paired_ratio_median": 0.8669105482382078,
+      "paired_ratios": [
+        0.8669105482382078,
+        0.08119933625867673,
+        1.0883951029291739,
+        1.3429274957584494,
+        0.8477339763929432
+      ]
+    },
+    "staging_latency/p50_ns": {
+      "baseline_median": 258000,
+      "candidate_median": 257417,
+      "paired_ratio_median": 0.9345020493067934,
+      "paired_ratios": [
+        0.9081085271317829,
+        1.113848317428428,
+        0.9345020493067934,
+        1.0361433691756272,
+        0.9074152046783626
+      ]
+    },
+    "staging_latency/p95_ns": {
+      "baseline_median": 457292,
+      "candidate_median": 435834,
+      "paired_ratio_median": 1.039718822403024,
+      "paired_ratios": [
+        0.832670700416685,
+        1.039718822403024,
+        0.9476088530060727,
+        1.1295671037324073,
+        1.423754716981132
+      ]
+    },
+    "staging_latency/p99_ns": {
+      "baseline_median": 695250,
+      "candidate_median": 830042,
+      "paired_ratio_median": 1.1938755843221862,
+      "paired_ratios": [
+        1.3018730733101793,
+        1.160231895463707,
+        0.860970615663052,
+        1.1938755843221862,
+        1.3844419889502761
+      ]
+    }
+  },
+  {
+    "statements": 1,
+    "writers": 4,
+    "durable": false,
+    "grouped": null,
+    "serialized_control": null,
+    "pairs": 5,
+    "elapsed_ns": {
+      "baseline_median": 9778375,
+      "candidate_median": 11600792,
+      "paired_ratio_median": 0.9724796975191055,
+      "paired_ratios": [
+        1.2040088460505964,
+        1.700808283048349,
+        0.9446603729278894,
+        0.9724796975191055,
+        0.897093134051548
+      ]
+    },
+    "commit_latency/p50_ns": {
+      "baseline_median": 28958,
+      "candidate_median": 33250,
+      "paired_ratio_median": 0.9603781112850259,
+      "paired_ratios": [
+        1.148214655708267,
+        1.8368333333333333,
+        0.9603781112850259,
+        0.9194643530743116,
+        0.903998865570051
+      ]
+    },
+    "commit_latency/p95_ns": {
+      "baseline_median": 55958,
+      "candidate_median": 61375,
+      "paired_ratio_median": 0.9554011259676284,
+      "paired_ratios": [
+        1.2557544757033248,
+        1.955162267796759,
+        0.8716206848745321,
+        0.9554011259676284,
+        0.7513134851138353
+      ]
+    },
+    "commit_latency/p99_ns": {
+      "baseline_median": 79959,
+      "candidate_median": 84833,
+      "paired_ratio_median": 0.9155817356395153,
+      "paired_ratios": [
+        1.0881885117627441,
+        1.1231830500123183,
+        0.8920961222043917,
+        0.9155817356395153,
+        0.8235586206896551
+      ]
+    },
+    "staging_latency/p50_ns": {
+      "baseline_median": 62000,
+      "candidate_median": 76375,
+      "paired_ratio_median": 1.0139590637244793,
+      "paired_ratios": [
+        1.2318548387096775,
+        1.753210903653721,
+        1.012057784725841,
+        1.0139590637244793,
+        1.0099449541284404
+      ]
+    },
+    "staging_latency/p95_ns": {
+      "baseline_median": 101208,
+      "candidate_median": 100375,
+      "paired_ratio_median": 0.930272141186315,
+      "paired_ratios": [
+        1.2352789890228077,
+        2.1457490494296576,
+        0.930272141186315,
+        0.864683028522695,
+        0.6455319737570152
+      ]
+    },
+    "staging_latency/p99_ns": {
+      "baseline_median": 208750,
+      "candidate_median": 218791,
+      "paired_ratio_median": 1.1368665882304936,
+      "paired_ratios": [
+        1.5466355231143551,
+        1.9825169828218638,
+        1.1344671208418649,
+        1.1368665882304936,
+        1.0481005988023953
+      ]
+    }
+  },
+  {
+    "statements": 1,
+    "writers": 4,
+    "durable": true,
+    "grouped": null,
+    "serialized_control": null,
+    "pairs": 5,
+    "elapsed_ns": {
+      "baseline_median": 1513077625,
+      "candidate_median": 1446921833,
+      "paired_ratio_median": 0.9996802630877405,
+      "paired_ratios": [
+        0.9519300934742194,
+        1.0336932659113587,
+        0.9996802630877405,
+        1.020130086239675,
+        0.6144400393626033
+      ]
+    },
+    "commit_latency/p50_ns": {
+      "baseline_median": 13943584,
+      "candidate_median": 14528208,
+      "paired_ratio_median": 1.005657355617518,
+      "paired_ratios": [
+        1.041927814254929,
+        1.005657355617518,
+        1.0740859142404207,
+        0.9631184775826677,
+        0.9776657864395433
+      ]
+    },
+    "commit_latency/p95_ns": {
+      "baseline_median": 23982792,
+      "candidate_median": 23476917,
+      "paired_ratio_median": 0.9990822483948659,
+      "paired_ratios": [
+        0.9453913872913545,
+        1.0397167358639583,
+        0.9990822483948659,
+        1.0187463915908377,
+        0.8889698920354233
+      ]
+    },
+    "commit_latency/p99_ns": {
+      "baseline_median": 26909833,
+      "candidate_median": 26583083,
+      "paired_ratio_median": 0.9832885987302834,
+      "paired_ratios": [
+        1.0030807075636061,
+        1.1305019589164005,
+        0.8463975603267401,
+        0.9832885987302834,
+        0.06867906010104825
+      ]
+    },
+    "staging_latency/p50_ns": {
+      "baseline_median": 310667,
+      "candidate_median": 306084,
+      "paired_ratio_median": 0.9923481674131869,
+      "paired_ratios": [
+        0.8888604179465728,
+        0.985247869905719,
+        1.0881057417528595,
+        0.9923481674131869,
+        1.6058955596208215
+      ]
+    },
+    "staging_latency/p95_ns": {
+      "baseline_median": 533125,
+      "candidate_median": 594750,
+      "paired_ratio_median": 1.036979047705395,
+      "paired_ratios": [
+        1.036979047705395,
+        1.162566946392543,
+        0.939115592028136,
+        0.8894673963815957,
+        2.0791598019483484
+      ]
+    },
+    "staging_latency/p99_ns": {
+      "baseline_median": 726459,
+      "candidate_median": 780208,
+      "paired_ratio_median": 1.0739876579407786,
+      "paired_ratios": [
+        1.621071734029255,
+        1.0739876579407786,
+        1.0375294160935429,
+        0.6805200222081483,
+        1.9588281097917073
+      ]
+    }
+  },
+  {
+    "statements": 1,
+    "writers": 8,
+    "durable": false,
+    "grouped": null,
+    "serialized_control": null,
+    "pairs": 5,
+    "elapsed_ns": {
+      "baseline_median": 15121666,
+      "candidate_median": 15061375,
+      "paired_ratio_median": 0.9447372982563893,
+      "paired_ratios": [
+        0.9447372982563893,
+        0.8193312642385857,
+        1.0039210626659787,
+        0.8822461247830831,
+        1.102074759026707
+      ]
+    },
+    "commit_latency/p50_ns": {
+      "baseline_median": 93542,
+      "candidate_median": 89000,
+      "paired_ratio_median": 0.9705907506788395,
+      "paired_ratios": [
+        0.9776228950603286,
+        0.8033340002546426,
+        0.9705907506788395,
+        0.8137142857142857,
+        1.1950951168651733
+      ]
+    },
+    "commit_latency/p95_ns": {
+      "baseline_median": 218250,
+      "candidate_median": 193333,
+      "paired_ratio_median": 0.8403524040624563,
+      "paired_ratios": [
+        0.8325681557846506,
+        0.8403524040624563,
+        1.0488123012708819,
+        0.7927432655305112,
+        1.017542105263158
+      ]
+    },
+    "commit_latency/p99_ns": {
+      "baseline_median": 263000,
+      "candidate_median": 221125,
+      "paired_ratio_median": 0.9495700401055027,
+      "paired_ratios": [
+        0.8143231939163498,
+        0.9903620575512749,
+        1.0859724787707588,
+        0.8037255792821445,
+        0.9495700401055027
+      ]
+    },
+    "staging_latency/p50_ns": {
+      "baseline_median": 149000,
+      "candidate_median": 142541,
+      "paired_ratio_median": 0.9629967073585635,
+      "paired_ratios": [
+        0.9854358974358974,
+        0.9483086232980333,
+        0.9180671140939597,
+        0.9629967073585635,
+        1.0224075973518294
+      ]
+    },
+    "staging_latency/p95_ns": {
+      "baseline_median": 331583,
+      "candidate_median": 284833,
+      "paired_ratio_median": 0.9478780380268164,
+      "paired_ratios": [
+        0.9478780380268164,
+        0.810567485257604,
+        1.0846967425953682,
+        0.783153373671749,
+        1.0935851461656005
+      ]
+    },
+    "staging_latency/p99_ns": {
+      "baseline_median": 422083,
+      "candidate_median": 462334,
+      "paired_ratio_median": 0.9735909449855225,
+      "paired_ratios": [
+        1.1326242541324185,
+        0.9735909449855225,
+        1.069868566031796,
+        0.7259638507118268,
+        0.867928301113599
+      ]
+    }
+  },
+  {
+    "statements": 1,
+    "writers": 8,
+    "durable": true,
+    "grouped": null,
+    "serialized_control": null,
+    "pairs": 5,
+    "elapsed_ns": {
+      "baseline_median": 1543234625,
+      "candidate_median": 1509371209,
+      "paired_ratio_median": 0.9780568583341629,
+      "paired_ratios": [
+        0.9763115659993086,
+        1.0323850674206947,
+        1.039421394049712,
+        0.9780568583341629,
+        0.9716734941441146
+      ]
+    },
+    "commit_latency/p50_ns": {
+      "baseline_median": 26499333,
+      "candidate_median": 26094291,
+      "paired_ratio_median": 0.9907077071037458,
+      "paired_ratios": [
+        0.992266395671038,
+        0.9600542524590813,
+        1.0320917875101199,
+        0.9878220331055125,
+        0.9907077071037458
+      ]
+    },
+    "commit_latency/p95_ns": {
+      "baseline_median": 47274833,
+      "candidate_median": 46135417,
+      "paired_ratio_median": 0.9802238840410143,
+      "paired_ratios": [
+        0.9679842362774184,
+        1.0403309177132873,
+        1.0295270720796266,
+        0.9758980428339112,
+        0.9802238840410143
+      ]
+    },
+    "commit_latency/p99_ns": {
+      "baseline_median": 54316291,
+      "candidate_median": 51173625,
+      "paired_ratio_median": 1.0275048051421627,
+      "paired_ratios": [
+        0.9154269107194418,
+        2.0664091224471326,
+        1.1123905244083516,
+        0.9584907851865305,
+        1.0275048051421627
+      ]
+    },
+    "staging_latency/p50_ns": {
+      "baseline_median": 297917,
+      "candidate_median": 285542,
+      "paired_ratio_median": 0.984427200667501,
+      "paired_ratios": [
+        1.0962214308011964,
+        1.0534077558140915,
+        0.984427200667501,
+        0.8888466926070039,
+        0.9747321274763135
+      ]
+    },
+    "staging_latency/p95_ns": {
+      "baseline_median": 843167,
+      "candidate_median": 843209,
+      "paired_ratio_median": 1.012423247328642,
+      "paired_ratios": [
+        1.197245172804991,
+        0.5949659500051435,
+        0.9616055684454756,
+        1.080005503061671,
+        1.012423247328642
+      ]
+    },
+    "staging_latency/p99_ns": {
+      "baseline_median": 1340875,
+      "candidate_median": 1348917,
+      "paired_ratio_median": 1.093309893401805,
+      "paired_ratios": [
+        1.9899632702526335,
+        0.21203982688750733,
+        0.8667455621301775,
+        1.093309893401805,
+        1.2262756926654261
+      ]
+    }
+  },
+  {
+    "statements": 8,
+    "writers": 1,
+    "durable": false,
+    "grouped": null,
+    "serialized_control": null,
+    "pairs": 5,
+    "elapsed_ns": {
+      "baseline_median": 66165958,
+      "candidate_median": 47430084,
+      "paired_ratio_median": 0.6951264576264429,
+      "paired_ratios": [
+        0.7259401210201107,
+        0.6699126521988221,
+        0.6951264576264429,
+        0.8273833353929585,
+        0.6677727586147387
+      ]
+    },
+    "commit_latency/p50_ns": {
+      "baseline_median": 10125,
+      "candidate_median": 11792,
+      "paired_ratio_median": 1.1797894736842105,
+      "paired_ratios": [
+        1.225142857142857,
+        1.159686102746601,
+        1.1797894736842105,
+        1.2336218768443832,
+        1.0946172839506172
+      ]
+    },
+    "commit_latency/p95_ns": {
+      "baseline_median": 15291,
+      "candidate_median": 17083,
+      "paired_ratio_median": 1.103590347263096,
+      "paired_ratios": [
+        1.103590347263096,
+        0.9959594976146432,
+        1.1263268939144195,
+        1.6091862682771774,
+        1.064236668164025
+      ]
+    },
+    "commit_latency/p99_ns": {
+      "baseline_median": 18375,
+      "candidate_median": 22500,
+      "paired_ratio_median": 1.1685454545454546,
+      "paired_ratios": [
+        1.345695511749638,
+        0.7877358490566038,
+        1.1685454545454546,
+        1.6981132075471699,
+        0.9909659863945578
+      ]
+    },
+    "staging_latency/p50_ns": {
+      "baseline_median": 232250,
+      "candidate_median": 165166,
+      "paired_ratio_median": 0.7092447945976365,
+      "paired_ratios": [
+        0.7541826484018265,
+        0.7062939304806405,
+        0.7092447945976365,
+        0.742751713231418,
+        0.6533907427341227
+      ]
+    },
+    "staging_latency/p95_ns": {
+      "baseline_median": 350000,
+      "candidate_median": 234916,
+      "paired_ratio_median": 0.6332142857142857,
+      "paired_ratios": [
+        0.6744800339944644,
+        0.5925553235908142,
+        0.6332142857142857,
+        1.1525510204081633,
+        0.5999308437067773
+      ]
+    },
+    "staging_latency/p99_ns": {
+      "baseline_median": 410583,
+      "candidate_median": 296917,
+      "paired_ratio_median": 0.7161572690540037,
+      "paired_ratios": [
+        0.8301923756125558,
+        0.5217848977490198,
+        0.7161572690540037,
+        1.3281949278965688,
+        0.5965219978358458
+      ]
+    }
+  },
+  {
+    "statements": 8,
+    "writers": 1,
+    "durable": true,
+    "grouped": null,
+    "serialized_control": null,
+    "pairs": 5,
+    "elapsed_ns": {
+      "baseline_median": 1944682083,
+      "candidate_median": 1703252250,
+      "paired_ratio_median": 0.900954640927546,
+      "paired_ratios": [
+        0.8758512586141824,
+        0.5735781431222027,
+        0.900954640927546,
+        0.9818962552127941,
+        1.4956273967121139
+      ]
+    },
+    "commit_latency/p50_ns": {
+      "baseline_median": 5612917,
+      "candidate_median": 5590959,
+      "paired_ratio_median": 1.027538501696685,
+      "paired_ratios": [
+        1.037219592926819,
+        0.9505604661533388,
+        0.9754734914634074,
+        1.027538501696685,
+        1.036375965536738
+      ]
+    },
+    "commit_latency/p95_ns": {
+      "baseline_median": 7500458,
+      "candidate_median": 6940792,
+      "paired_ratio_median": 0.989497976892869,
+      "paired_ratios": [
+        0.989497976892869,
+        0.8365045174574672,
+        0.965921217787544,
+        1.0053915328005065,
+        1.3310667458655079
+      ]
+    },
+    "commit_latency/p99_ns": {
+      "baseline_median": 11504500,
+      "candidate_median": 9469708,
+      "paired_ratio_median": 0.7907146877853828,
+      "paired_ratios": [
+        0.7403656268052833,
+        0.049866955227271366,
+        0.7907146877853828,
+        0.9872150897474901,
+        12.640359359043861
+      ]
+    },
+    "staging_latency/p50_ns": {
+      "baseline_median": 1259084,
+      "candidate_median": 887834,
+      "paired_ratio_median": 0.6675759588987762,
+      "paired_ratios": [
+        0.7664206986091352,
+        0.6701633886222047,
+        0.6675759588987762,
+        0.6544467031535054,
+        0.6342348107943586
+      ]
+    },
+    "staging_latency/p95_ns": {
+      "baseline_median": 2380041,
+      "candidate_median": 1404583,
+      "paired_ratio_median": 0.579069016037959,
+      "paired_ratios": [
+        0.416671759185371,
+        0.579069016037959,
+        0.6639106514664016,
+        0.7325536577924529,
+        0.5739271512912903
+      ]
+    },
+    "staging_latency/p99_ns": {
+      "baseline_median": 3386542,
+      "candidate_median": 2206541,
+      "paired_ratio_median": 0.5739053372105033,
+      "paired_ratios": [
+        0.25742099462902446,
+        0.7087295940900149,
+        0.5739053372105033,
+        0.778805932423103,
+        0.4674636511386591
+      ]
+    }
+  },
+  {
+    "statements": 8,
+    "writers": 4,
+    "durable": false,
+    "grouped": null,
+    "serialized_control": null,
+    "pairs": 5,
+    "elapsed_ns": {
+      "baseline_median": 36042375,
+      "candidate_median": 27058958,
+      "paired_ratio_median": 0.7329278106673048,
+      "paired_ratios": [
+        0.7329278106673048,
+        0.9139331661807769,
+        0.755014314015458,
+        0.7275322452199092,
+        0.7261467829990377
+      ]
+    },
+    "commit_latency/p50_ns": {
+      "baseline_median": 37417,
+      "candidate_median": 40125,
+      "paired_ratio_median": 1.0698,
+      "paired_ratios": [
+        1.1093124259687517,
+        1.0723735200577278,
+        1.0492646048109966,
+        1.0035785458675295,
+        1.0698
+      ]
+    },
+    "commit_latency/p95_ns": {
+      "baseline_median": 70542,
+      "candidate_median": 78584,
+      "paired_ratio_median": 1.114003005301806,
+      "paired_ratios": [
+        1.114003005301806,
+        1.31021409455843,
+        1.2157598499061915,
+        0.9513802112916051,
+        0.9872068775826116
+      ]
+    },
+    "commit_latency/p99_ns": {
+      "baseline_median": 87584,
+      "candidate_median": 109125,
+      "paired_ratio_median": 1.1901096875288044,
+      "paired_ratios": [
+        1.1901096875288044,
+        1.319400783479228,
+        1.2606924865968574,
+        0.8771684775898259,
+        1.1731594811837778
+      ]
+    },
+    "staging_latency/p50_ns": {
+      "baseline_median": 425833,
+      "candidate_median": 293041,
+      "paired_ratio_median": 0.6881594427862566,
+      "paired_ratios": [
+        0.6686779673701542,
+        0.8224703454106881,
+        0.6881594427862566,
+        0.6890403775563713,
+        0.6640474013179603
+      ]
+    },
+    "staging_latency/p95_ns": {
+      "baseline_median": 599250,
+      "candidate_median": 453959,
+      "paired_ratio_median": 0.7668226351351352,
+      "paired_ratios": [
+        0.7035177304964539,
+        0.8940655353841971,
+        0.769855761050248,
+        0.7214333335989525,
+        0.7668226351351352
+      ]
+    },
+    "staging_latency/p99_ns": {
+      "baseline_median": 1136917,
+      "candidate_median": 776708,
+      "paired_ratio_median": 0.7040871080139373,
+      "paired_ratios": [
+        0.7040871080139373,
+        1.1197436924309172,
+        0.7315837479780846,
+        0.5663057461873401,
+        0.6919447661469933
+      ]
+    }
+  },
+  {
+    "statements": 8,
+    "writers": 4,
+    "durable": true,
+    "grouped": null,
+    "serialized_control": null,
+    "pairs": 5,
+    "elapsed_ns": {
+      "baseline_median": 1647932000,
+      "candidate_median": 1569700667,
+      "paired_ratio_median": 0.9826407638118665,
+      "paired_ratios": [
+        0.9525275721328307,
+        0.9969381231925737,
+        1.0098079078137274,
+        0.9482125645019223,
+        0.9826407638118665
+      ]
+    },
+    "commit_latency/p50_ns": {
+      "baseline_median": 14717542,
+      "candidate_median": 15069042,
+      "paired_ratio_median": 1.0050574235407734,
+      "paired_ratios": [
+        1.0000027857912688,
+        1.3024002679986393,
+        0.8946595096644139,
+        1.0393786650472618,
+        1.0050574235407734
+      ]
+    },
+    "commit_latency/p95_ns": {
+      "baseline_median": 24585875,
+      "candidate_median": 23628000,
+      "paired_ratio_median": 1.0408351894783097,
+      "paired_ratios": [
+        0.9434295505041004,
+        1.0475416222450882,
+        1.0435917953912384,
+        0.9862685077824398,
+        1.0408351894783097
+      ]
+    },
+    "commit_latency/p99_ns": {
+      "baseline_median": 28621084,
+      "candidate_median": 26100250,
+      "paired_ratio_median": 0.8804154277300793,
+      "paired_ratios": [
+        0.8603307877564829,
+        0.8804154277300793,
+        0.903787396731724,
+        0.8499058026205482,
+        1.079742244804401
+      ]
+    },
+    "staging_latency/p50_ns": {
+      "baseline_median": 1821209,
+      "candidate_median": 1142750,
+      "paired_ratio_median": 0.6325188444839032,
+      "paired_ratios": [
+        0.6325188444839032,
+        0.7624847064412792,
+        0.6996171646567699,
+        0.5909755919711098,
+        0.6302132264885578
+      ]
+    },
+    "staging_latency/p95_ns": {
+      "baseline_median": 3573458,
+      "candidate_median": 2194375,
+      "paired_ratio_median": 0.6692008439367508,
+      "paired_ratios": [
+        0.6692008439367508,
+        0.8074984201222034,
+        0.6811935760322138,
+        0.614076057421131,
+        0.6373271424245484
+      ]
+    },
+    "staging_latency/p99_ns": {
+      "baseline_median": 4513500,
+      "candidate_median": 3120000,
+      "paired_ratio_median": 0.8497405725933476,
+      "paired_ratios": [
+        0.7002452580502867,
+        0.9764134299868169,
+        0.8863424850088805,
+        0.598990140689044,
+        0.8497405725933476
+      ]
+    }
+  },
+  {
+    "statements": 8,
+    "writers": 8,
+    "durable": false,
+    "grouped": null,
+    "serialized_control": null,
+    "pairs": 5,
+    "elapsed_ns": {
+      "baseline_median": 41027667,
+      "candidate_median": 29796625,
+      "paired_ratio_median": 0.7513949690180147,
+      "paired_ratios": [
+        0.8090413605934165,
+        0.786524159302206,
+        0.7262568695412294,
+        0.7513949690180147,
+        0.6554356268477008
+      ]
+    },
+    "commit_latency/p50_ns": {
+      "baseline_median": 96708,
+      "candidate_median": 109458,
+      "paired_ratio_median": 1.127456635490915,
+      "paired_ratios": [
+        1.1921661082847335,
+        1.1752167595292398,
+        1.127456635490915,
+        0.9736011298965647,
+        1.0323187250996015
+      ]
+    },
+    "commit_latency/p95_ns": {
+      "baseline_median": 223000,
+      "candidate_median": 236209,
+      "paired_ratio_median": 1.011375881959987,
+      "paired_ratios": [
+        1.1608744394618835,
+        1.0142995825289665,
+        0.9660899795501022,
+        0.9799429968994935,
+        1.011375881959987
+      ]
+    },
+    "commit_latency/p99_ns": {
+      "baseline_median": 288333,
+      "candidate_median": 284084,
+      "paired_ratio_median": 0.9245036179450072,
+      "paired_ratios": [
+        1.0771677192690396,
+        0.9245036179450072,
+        0.8490688409154081,
+        1.0041968167686834,
+        0.820753108348135
+      ]
+    },
+    "staging_latency/p50_ns": {
+      "baseline_median": 758542,
+      "candidate_median": 521583,
+      "paired_ratio_median": 0.6599832309878688,
+      "paired_ratios": [
+        0.7013267285994925,
+        0.7076773828950624,
+        0.6599832309878688,
+        0.6470886536012878,
+        0.5999011169024572
+      ]
+    },
+    "staging_latency/p95_ns": {
+      "baseline_median": 1659958,
+      "candidate_median": 1110959,
+      "paired_ratio_median": 0.6511224516153667,
+      "paired_ratios": [
+        0.9566347361514669,
+        0.59801790004175,
+        0.6511224516153667,
+        0.7399812433475829,
+        0.4352019749897287
+      ]
+    },
+    "staging_latency/p99_ns": {
+      "baseline_median": 2457917,
+      "candidate_median": 1373209,
+      "paired_ratio_median": 0.5523041591247877,
+      "paired_ratios": [
+        0.6596540892145667,
+        0.5523041591247877,
+        0.5135903329850543,
+        0.8168597267356817,
+        0.4873926247288503
+      ]
+    }
+  },
+  {
+    "statements": 8,
+    "writers": 8,
+    "durable": true,
+    "grouped": null,
+    "serialized_control": null,
+    "pairs": 5,
+    "elapsed_ns": {
+      "baseline_median": 1507657000,
+      "candidate_median": 1522356166,
+      "paired_ratio_median": 0.9844163825061005,
+      "paired_ratios": [
+        0.9516572847418202,
+        0.9703437824002046,
+        0.9844163825061005,
+        1.4290937222532825,
+        1.1375830154933877
+      ]
+    },
+    "commit_latency/p50_ns": {
+      "baseline_median": 24769042,
+      "candidate_median": 25008208,
+      "paired_ratio_median": 0.999277203827901,
+      "paired_ratios": [
+        1.0096558437746603,
+        0.9481599200938173,
+        0.9661847229156265,
+        0.999277203827901,
+        1.0992208958095095
+      ]
+    },
+    "commit_latency/p95_ns": {
+      "baseline_median": 42773084,
+      "candidate_median": 44452625,
+      "paired_ratio_median": 1.0294326893003,
+      "paired_ratios": [
+        0.9813492183159593,
+        0.9903414726887592,
+        1.0294326893003,
+        2.578048679100804,
+        1.136269534204527
+      ]
+    },
+    "commit_latency/p99_ns": {
+      "baseline_median": 48034041,
+      "candidate_median": 46827250,
+      "paired_ratio_median": 0.9767990376535751,
+      "paired_ratios": [
+        0.9497817858232109,
+        0.9767990376535751,
+        0.9585710683804429,
+        10.705354120548986,
+        1.1178569038462656
+      ]
+    },
+    "staging_latency/p50_ns": {
+      "baseline_median": 1917417,
+      "candidate_median": 1213542,
+      "paired_ratio_median": 0.6353788065565427,
+      "paired_ratios": [
+        0.6353788065565427,
+        0.6597266782330174,
+        0.5847710748366162,
+        0.5696933620697344,
+        1.0789714883956005
+      ]
+    },
+    "staging_latency/p95_ns": {
+      "baseline_median": 4538750,
+      "candidate_median": 2641375,
+      "paired_ratio_median": 0.62579609621399,
+      "paired_ratios": [
+        0.6945101624896722,
+        0.62579609621399,
+        0.5990253959908173,
+        0.3704150515527682,
+        0.8569285048055477
+      ]
+    },
+    "staging_latency/p99_ns": {
+      "baseline_median": 5674416,
+      "candidate_median": 4105166,
+      "paired_ratio_median": 0.6786726725682186,
+      "paired_ratios": [
+        0.7234517173220998,
+        0.6786726725682186,
+        0.9729810333694499,
+        0.34443066046998755,
+        0.6591954982236105
+      ]
+    }
+  },
+  {
+    "statements": 32,
+    "writers": 1,
+    "durable": false,
+    "grouped": null,
+    "serialized_control": null,
+    "pairs": 5,
+    "elapsed_ns": {
+      "baseline_median": 234807375,
+      "candidate_median": 132785541,
+      "paired_ratio_median": 0.5830469888705835,
+      "paired_ratios": [
+        0.5614827722462824,
+        0.6000918412011497,
+        0.5865630894899693,
+        0.5830469888705835,
+        0.5369956629343521
+      ]
+    },
+    "commit_latency/p50_ns": {
+      "baseline_median": 16917,
+      "candidate_median": 16959,
+      "paired_ratio_median": 0.9927185879885827,
+      "paired_ratios": [
+        1.0024827097003015,
+        0.9927185879885827,
+        0.9923664122137404,
+        1.0093646610217013,
+        0.9901384185825461
+      ]
+    },
+    "commit_latency/p95_ns": {
+      "baseline_median": 23833,
+      "candidate_median": 25750,
+      "paired_ratio_median": 1.0804346913942853,
+      "paired_ratios": [
+        0.9307850229738978,
+        1.249584541062802,
+        1.1527345581653097,
+        1.0804346913942853,
+        0.8447843137254902
+      ]
+    },
+    "commit_latency/p99_ns": {
+      "baseline_median": 36500,
+      "candidate_median": 35792,
+      "paired_ratio_median": 0.9798681631925886,
+      "paired_ratios": [
+        0.6818040144620372,
+        0.9798681631925886,
+        1.0924657534246576,
+        1.0386836530369425,
+        0.6795520593245816
+      ]
+    },
+    "staging_latency/p50_ns": {
+      "baseline_median": 848750,
+      "candidate_median": 467333,
+      "paired_ratio_median": 0.5506132547864506,
+      "paired_ratios": [
+        0.5506132547864506,
+        0.555523629489603,
+        0.5435817383386995,
+        0.5647321477620566,
+        0.5451464419351947
+      ]
+    },
+    "staging_latency/p95_ns": {
+      "baseline_median": 1202000,
+      "candidate_median": 717417,
+      "paired_ratio_median": 0.5968527454242929,
+      "paired_ratios": [
+        0.5580756013745705,
+        0.6739522949729164,
+        0.6520834064837154,
+        0.5968527454242929,
+        0.45549388410119035
+      ]
+    },
+    "staging_latency/p99_ns": {
+      "baseline_median": 1638042,
+      "candidate_median": 894458,
+      "paired_ratio_median": 0.5460531537042396,
+      "paired_ratios": [
+        0.5338357744062837,
+        0.5510258259780644,
+        0.6208033047346679,
+        0.5460531537042396,
+        0.3742751751148151
+      ]
+    }
+  },
+  {
+    "statements": 32,
+    "writers": 1,
+    "durable": true,
+    "grouped": null,
+    "serialized_control": null,
+    "pairs": 5,
+    "elapsed_ns": {
+      "baseline_median": 2573700584,
+      "candidate_median": 2389362667,
+      "paired_ratio_median": 0.934839201049754,
+      "paired_ratios": [
+        1.537211822424834,
+        0.5956291968067788,
+        0.934839201049754,
+        0.9280860301291931,
+        0.980741608286475
+      ]
+    },
+    "commit_latency/p50_ns": {
+      "baseline_median": 5389625,
+      "candidate_median": 5450958,
+      "paired_ratio_median": 1.0415248830284984,
+      "paired_ratios": [
+        1.0415248830284984,
+        1.0231745492489506,
+        1.0113798269823968,
+        1.0473512309230055,
+        1.0533419400829183
+      ]
+    },
+    "commit_latency/p95_ns": {
+      "baseline_median": 7746708,
+      "candidate_median": 8019125,
+      "paired_ratio_median": 1.0351655180497317,
+      "paired_ratios": [
+        1.437829938807197,
+        0.8196071948333558,
+        0.9975538720205717,
+        1.0351655180497317,
+        1.0438757414541675
+      ]
+    },
+    "commit_latency/p99_ns": {
+      "baseline_median": 10582584,
+      "candidate_median": 10425500,
+      "paired_ratio_median": 0.9912408932624999,
+      "paired_ratios": [
+        9.956262123972662,
+        0.10688166921285136,
+        1.012431251645631,
+        0.8318620480593397,
+        0.9912408932624999
+      ]
+    },
+    "staging_latency/p50_ns": {
+      "baseline_median": 2757958,
+      "candidate_median": 1992084,
+      "paired_ratio_median": 0.722303965470105,
+      "paired_ratios": [
+        0.5558810603369244,
+        0.5961952031377111,
+        0.722303965470105,
+        0.7516976270643014,
+        0.8493722350380678
+      ]
+    },
+    "staging_latency/p95_ns": {
+      "baseline_median": 4116084,
+      "candidate_median": 3606750,
+      "paired_ratio_median": 0.7967830922213539,
+      "paired_ratios": [
+        0.520838161620562,
+        0.5676360698527126,
+        0.8762576273953593,
+        0.7967830922213539,
+        0.8749664441096404
+      ]
+    },
+    "staging_latency/p99_ns": {
+      "baseline_median": 6715917,
+      "candidate_median": 4186500,
+      "paired_ratio_median": 0.9401879657287844,
+      "paired_ratios": [
+        0.13358516340755067,
+        0.5355002153838411,
+        0.9401879657287844,
+        1.0025508942181116,
+        0.9600807141876596
+      ]
+    }
+  },
+  {
+    "statements": 32,
+    "writers": 4,
+    "durable": false,
+    "grouped": null,
+    "serialized_control": null,
+    "pairs": 5,
+    "elapsed_ns": {
+      "baseline_median": 106254917,
+      "candidate_median": 69033875,
+      "paired_ratio_median": 0.6200841475330258,
+      "paired_ratios": [
+        0.876601019217611,
+        0.6121150732655912,
+        0.6200841475330258,
+        0.648967097532315,
+        0.6139292358583274
+      ]
+    },
+    "commit_latency/p50_ns": {
+      "baseline_median": 64667,
+      "candidate_median": 62750,
+      "paired_ratio_median": 0.9708852948817874,
+      "paired_ratios": [
+        0.9645568837274034,
+        0.9916775431861804,
+        0.9708852948817874,
+        0.9647612312044526,
+        1.010401559454191
+      ]
+    },
+    "commit_latency/p95_ns": {
+      "baseline_median": 113042,
+      "candidate_median": 118792,
+      "paired_ratio_median": 1.0402611534276387,
+      "paired_ratios": [
+        1.2163086437450086,
+        1.0361209603098984,
+        1.0402611534276387,
+        1.0689460539846751,
+        0.9749296721572512
+      ]
+    },
+    "commit_latency/p99_ns": {
+      "baseline_median": 179250,
+      "candidate_median": 150375,
+      "paired_ratio_median": 0.9826137754534328,
+      "paired_ratios": [
+        1.1691626297577855,
+        1.094142259414226,
+        0.9826137754534328,
+        0.9066696668746357,
+        0.7803256740768416
+      ]
+    },
+    "staging_latency/p50_ns": {
+      "baseline_median": 1343167,
+      "candidate_median": 791916,
+      "paired_ratio_median": 0.5927222750410038,
+      "paired_ratios": [
+        0.8997342735201336,
+        0.5945127856328855,
+        0.5737278225458626,
+        0.5927222750410038,
+        0.5693841225675589
+      ]
+    },
+    "staging_latency/p95_ns": {
+      "baseline_median": 2095542,
+      "candidate_median": 1407584,
+      "paired_ratio_median": 0.609169847228068,
+      "paired_ratios": [
+        1.1627964378956213,
+        0.5802928411313015,
+        0.5461267686734624,
+        0.6684611541581263,
+        0.609169847228068
+      ]
+    },
+    "staging_latency/p99_ns": {
+      "baseline_median": 3315917,
+      "candidate_median": 2065959,
+      "paired_ratio_median": 0.6230430375669838,
+      "paired_ratios": [
+        1.2510691607521525,
+        0.3777912955669999,
+        0.6422593540023208,
+        0.6230430375669838,
+        0.5960348919485534
+      ]
+    }
+  },
+  {
+    "statements": 32,
+    "writers": 4,
+    "durable": true,
+    "grouped": null,
+    "serialized_control": null,
+    "pairs": 5,
+    "elapsed_ns": {
+      "baseline_median": 1931486333,
+      "candidate_median": 1916299750,
+      "paired_ratio_median": 0.8872698474330856,
+      "paired_ratios": [
+        1.38375759699388,
+        0.8872698474330856,
+        0.8359702493616595,
+        0.621294974631712,
+        0.8932591592000512
+      ]
+    },
+    "commit_latency/p50_ns": {
+      "baseline_median": 14544458,
+      "candidate_median": 15775042,
+      "paired_ratio_median": 1.0213103469134683,
+      "paired_ratios": [
+        1.1931599100552672,
+        1.0116768875127558,
+        1.1749353080783356,
+        1.0151032156132047,
+        1.0213103469134683
+      ]
+    },
+    "commit_latency/p95_ns": {
+      "baseline_median": 23309375,
+      "candidate_median": 26172667,
+      "paired_ratio_median": 0.9995352513741789,
+      "paired_ratios": [
+        1.9181673633111291,
+        0.9995352513741789,
+        1.0088460582182168,
+        0.8321364284891045,
+        0.9742125106394854
+      ]
+    },
+    "commit_latency/p99_ns": {
+      "baseline_median": 25957167,
+      "candidate_median": 30442708,
+      "paired_ratio_median": 1.095018451252682,
+      "paired_ratios": [
+        3.4424676622067425,
+        1.188657529967592,
+        1.009268815717911,
+        0.0729866059810575,
+        1.095018451252682
+      ]
+    },
+    "staging_latency/p50_ns": {
+      "baseline_median": 6092709,
+      "candidate_median": 2839125,
+      "paired_ratio_median": 0.5812462890419733,
+      "paired_ratios": [
+        1.2539440830038147,
+        0.46600963131709466,
+        0.3704106247798844,
+        0.6592169427425468,
+        0.5812462890419733
+      ]
+    },
+    "staging_latency/p95_ns": {
+      "baseline_median": 10606667,
+      "candidate_median": 5872750,
+      "paired_ratio_median": 0.6393947094109409,
+      "paired_ratios": [
+        1.9399573471046718,
+        0.6199843186802271,
+        0.45446693556823864,
+        0.6578723551894294,
+        0.6393947094109409
+      ]
+    },
+    "staging_latency/p99_ns": {
+      "baseline_median": 12084292,
+      "candidate_median": 8462584,
+      "paired_ratio_median": 0.7031102687335004,
+      "paired_ratios": [
+        2.857612739775606,
+        1.8106935076252724,
+        0.5675791349629751,
+        0.6006767545762419,
+        0.7031102687335004
+      ]
+    }
+  },
+  {
+    "statements": 32,
+    "writers": 8,
+    "durable": false,
+    "grouped": null,
+    "serialized_control": null,
+    "pairs": 5,
+    "elapsed_ns": {
+      "baseline_median": 105742042,
+      "candidate_median": 69164583,
+      "paired_ratio_median": 0.6532248923280676,
+      "paired_ratios": [
+        0.6728648068255256,
+        0.6769366898726874,
+        0.651578968619028,
+        0.6487271205888612,
+        0.6532248923280676
+      ]
+    },
+    "commit_latency/p50_ns": {
+      "baseline_median": 161250,
+      "candidate_median": 171792,
+      "paired_ratio_median": 1.0361899247249566,
+      "paired_ratios": [
+        1.2317829457364342,
+        1.0361899247249566,
+        1.0224845112089138,
+        1.0250182758080517,
+        1.2206782902366082
+      ]
+    },
+    "commit_latency/p95_ns": {
+      "baseline_median": 319208,
+      "candidate_median": 337750,
+      "paired_ratio_median": 1.0554451849663513,
+      "paired_ratios": [
+        1.0554451849663513,
+        1.0726764200972487,
+        0.9842046565248991,
+        1.0507622149837132,
+        1.0660190068585027
+      ]
+    },
+    "commit_latency/p99_ns": {
+      "baseline_median": 374500,
+      "candidate_median": 445542,
+      "paired_ratio_median": 1.164881687557322,
+      "paired_ratios": [
+        1.0308427525622255,
+        1.3041842456608812,
+        1.164881687557322,
+        1.371075646698958,
+        1.0257260274708018
+      ]
+    },
+    "staging_latency/p50_ns": {
+      "baseline_median": 2649417,
+      "candidate_median": 1542667,
+      "paired_ratio_median": 0.5917545480138939,
+      "paired_ratios": [
+        0.5949976202495132,
+        0.5917545480138939,
+        0.6075749231525983,
+        0.5841345178770058,
+        0.5822665892156652
+      ]
+    },
+    "staging_latency/p95_ns": {
+      "baseline_median": 4455375,
+      "candidate_median": 2876666,
+      "paired_ratio_median": 0.640605521560649,
+      "paired_ratios": [
+        0.5536684114314456,
+        0.640605521560649,
+        0.6522178267822574,
+        0.6949065017986635,
+        0.6381890342495957
+      ]
+    },
+    "staging_latency/p99_ns": {
+      "baseline_median": 6101584,
+      "candidate_median": 3912667,
+      "paired_ratio_median": 0.6412543038004558,
+      "paired_ratios": [
+        0.618816897702035,
+        0.6412543038004558,
+        0.7608533033643899,
+        0.6848285371169328,
+        0.6298272355197434
+      ]
+    }
+  },
+  {
+    "statements": 32,
+    "writers": 8,
+    "durable": true,
+    "grouped": null,
+    "serialized_control": null,
+    "pairs": 5,
+    "elapsed_ns": {
+      "baseline_median": 1902816291,
+      "candidate_median": 1934012875,
+      "paired_ratio_median": 1.0163949531794292,
+      "paired_ratios": [
+        1.42052862613729,
+        1.0012684548777862,
+        1.567184325865496,
+        1.0163949531794292,
+        0.9492702141957688
+      ]
+    },
+    "commit_latency/p50_ns": {
+      "baseline_median": 25878666,
+      "candidate_median": 27093459,
+      "paired_ratio_median": 1.0840050091330793,
+      "paired_ratios": [
+        1.4518059259523852,
+        1.0840050091330793,
+        1.1266537745498566,
+        1.0469418709604275,
+        1.0000762766239069
+      ]
+    },
+    "commit_latency/p95_ns": {
+      "baseline_median": 46335709,
+      "candidate_median": 48216958,
+      "paired_ratio_median": 1.1168965260730492,
+      "paired_ratios": [
+        1.4817886204875959,
+        1.0384514935217286,
+        1.1168965260730492,
+        1.122388480124476,
+        0.9846165099444373
+      ]
+    },
+    "commit_latency/p99_ns": {
+      "baseline_median": 50573917,
+      "candidate_median": 57812917,
+      "paired_ratio_median": 1.1431370245654495,
+      "paired_ratios": [
+        1.2571514939820714,
+        1.038150154016453,
+        14.68216284404325,
+        1.1431370245654495,
+        1.0292591016486703
+      ]
+    },
+    "staging_latency/p50_ns": {
+      "baseline_median": 6061875,
+      "candidate_median": 3907542,
+      "paired_ratio_median": 0.6457717580263653,
+      "paired_ratios": [
+        0.6358149571785016,
+        0.6606643719809939,
+        0.7084921744509743,
+        0.5529573169653123,
+        0.6457717580263653
+      ]
+    },
+    "staging_latency/p95_ns": {
+      "baseline_median": 12676541,
+      "candidate_median": 9876375,
+      "paired_ratio_median": 0.7833838232305146,
+      "paired_ratios": [
+        0.9608319286918264,
+        0.794863282428925,
+        0.7793200842406458,
+        0.6705157843662839,
+        0.7833838232305146
+      ]
+    },
+    "staging_latency/p99_ns": {
+      "baseline_median": 13640208,
+      "candidate_median": 12787833,
+      "paired_ratio_median": 1.0021026741936339,
+      "paired_ratios": [
+        1.0021026741936339,
+        0.8993844522019019,
+        1.3625258060683978,
+        1.1598018436709991,
+        0.8890755329169427
+      ]
+    }
+  }
+]

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use super::super::transaction_locks::{LockRequest, LockTable, LockWaitQueue};
+use super::metrics::{Metrics, PhaseTimer};
 use super::publication::PublishedConcurrentRead;
 use super::{
     Database, QueryOutput, WalGroupCommitConfig, WalGroupCommitDelayPolicy, WalGroupCommitSnapshot,
@@ -51,6 +52,7 @@ const GROUP_COMMIT_LIVENESS_CHECK_INTERVAL: Duration = Duration::from_millis(250
 
 pub(super) struct CommitSequencer {
     database: Mutex<Database>,
+    pub(super) metrics: Metrics,
     published_read: Mutex<Option<Arc<PublishedConcurrentRead>>>,
     read_publication_failed: AtomicBool,
     checkpoint_control: Arc<super::super::automatic_checkpoint::Control>,
@@ -64,6 +66,7 @@ impl CommitSequencer {
         let checkpoint_control = database.runtime.checkpoint_control();
         Self {
             database: Mutex::new(database),
+            metrics: Metrics::default(),
             // Opening a concurrent project must not take main's writer lease.
             // The first data operation publishes a complete, validated view;
             // a failed admission leaves this empty and remains retryable.
@@ -77,11 +80,16 @@ impl CommitSequencer {
     }
 
     pub(super) fn lock(&self) -> Result<CommitGuard<'_>> {
+        let waiting = self.metrics.sequencer_wait.start();
         let database = self.database.lock().map_err(|_| {
             HawDBError::Execution("concurrent commit sequencer is poisoned".to_string())
         })?;
+        drop(waiting);
         Ok(CommitGuard {
             database,
+            _hold_timer: self.metrics.sequencer_hold.start(),
+            metrics: &self.metrics,
+            retired: None,
             published: &self.published_read,
             read_publication_failed: &self.read_publication_failed,
             mutated: false,
@@ -123,7 +131,7 @@ impl CommitSequencer {
                     // Admission can invoke a host recovery callback. Do not
                     // hold the publication mutex across that callback.
                     drop(publication);
-                    let view = Arc::new(PublishedConcurrentRead::capture(&database)?);
+                    let view = capture_read_publication(&database, &self.metrics)?;
                     publication = self
                         .published_read
                         .lock()
@@ -153,8 +161,8 @@ impl CommitSequencer {
         if self.checkpoint_control.has_pending_handoff() {
             return Ok(());
         }
-        let next = match PublishedConcurrentRead::capture(&database) {
-            Ok(next) => Arc::new(next),
+        let next = match capture_read_publication(&database, &self.metrics) {
+            Ok(next) => next,
             Err(error) => {
                 self.read_publication_failed.store(true, Ordering::Release);
                 return Err(error);
@@ -281,6 +289,7 @@ impl CommitSequencer {
     ) -> Result<QueryOutput> {
         if !self.group_commit.config.is_enabled() {
             let mut database = self.lock()?;
+            let _execution = self.metrics.commit_execution.start();
             return task(&mut database);
         }
         let request = Arc::new(QueuedCommit::new_with_admission(Box::new(task), admission));
@@ -465,7 +474,10 @@ impl CommitSequencer {
                 )),
             ));
             let result_index = completed.len() - 1;
-            let result = task(&mut database);
+            let result = {
+                let _execution = self.metrics.commit_execution.start();
+                task(&mut database)
+            };
             completed[result_index].1 = result;
             #[cfg(test)]
             if completed.len() == 1 {
@@ -488,7 +500,10 @@ impl CommitSequencer {
 
         #[cfg(test)]
         group_commit_process_crash("before_group_sync");
-        let flush = database.finish_wal_sync_group();
+        let flush = {
+            let _durability = self.metrics.group_durability.start();
+            database.finish_wal_sync_group()
+        };
         Ok(match flush {
             Ok(flush) => {
                 #[cfg(test)]
@@ -592,7 +607,12 @@ impl CommitSequencer {
 }
 
 pub(super) struct CommitGuard<'a> {
+    // Fields drop in declaration order after Drop::drop: unlock first, record
+    // the completed hold, then release the retired view and its COW/pin owners.
     database: MutexGuard<'a, Database>,
+    _hold_timer: PhaseTimer<'a>,
+    metrics: &'a Metrics,
+    retired: Option<Arc<PublishedConcurrentRead>>,
     published: &'a Mutex<Option<Arc<PublishedConcurrentRead>>>,
     read_publication_failed: &'a AtomicBool,
     mutated: bool,
@@ -640,23 +660,31 @@ impl Drop for CommitGuard<'_> {
         if self.read_publication_failed.load(Ordering::Acquire) {
             return;
         }
-        let next = match PublishedConcurrentRead::capture(&self.database) {
-            Ok(next) => Some(Arc::new(next)),
+        let next = match capture_read_publication(&self.database, self.metrics) {
+            Ok(next) => Some(next),
             Err(_) => {
                 self.read_publication_failed.store(true, Ordering::Release);
                 return;
             }
         };
-        let previous = std::mem::replace(
+        self.retired = std::mem::replace(
             &mut *self
                 .published
                 .lock()
                 .unwrap_or_else(|error| error.into_inner()),
             next,
         );
-        // Final pin release can acquire the pin registry; do it outside publication.
-        drop(previous);
+        // The retired view is dropped after the database mutex field, rather
+        // than extending the writer critical section with COW destruction.
     }
+}
+
+fn capture_read_publication(
+    database: &Database,
+    metrics: &Metrics,
+) -> Result<Arc<PublishedConcurrentRead>> {
+    let _publication = metrics.read_publication.start();
+    PublishedConcurrentRead::capture(database).map(Arc::new)
 }
 
 fn read_publication_poisoned_error() -> HawDBError {
@@ -1064,6 +1092,12 @@ pub(super) struct LockManager {
 #[derive(Debug, Clone)]
 pub(super) struct LockSavepoint {
     requests: Vec<LockRequest>,
+}
+
+impl LockSavepoint {
+    pub(super) fn is_empty(&self) -> bool {
+        self.requests.is_empty()
+    }
 }
 
 #[derive(Debug, Default)]

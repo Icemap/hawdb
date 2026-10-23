@@ -1876,6 +1876,122 @@ fn sparse_composite_prefix_range_keeps_rows_across_checkpoint_and_reopen() {
     }
 }
 
+fn assert_mixed_numeric_ranges(db: &mut Database) {
+    for (lower, upper) in [
+        (Value::Int(0), Value::Int(10)),
+        (Value::Int(90), Value::Int(200)),
+        (Value::Float(1.5), Value::Float(101.0)),
+    ] {
+        let params = BTreeMap::from([("lower".into(), lower), ("upper".into(), upper)]);
+        for (lower_op, upper_op) in [(">", "<"), (">=", "<"), (">", "<="), (">=", "<=")] {
+            let query = format!("MATCH (n:Memory) WHERE n.kind = 'note' AND n.rank {lower_op} $lower AND n.rank {upper_op} $upper RETURN n.id AS id ORDER BY id");
+            let reference = query
+                .replace("n.kind", "coalesce(n.kind, '')")
+                .replace("n.rank", "coalesce(n.rank, 0)");
+            assert_eq!(
+                db.query_with_params(&query, &params).unwrap().rows,
+                db.query_with_params(&reference, &params).unwrap().rows,
+                "{query} {params:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn mixed_numeric_index_ranges_match_reference_after_checkpoint() {
+    for composite in [false, true] {
+        let path = unique_test_dir("mixed-numeric-range");
+        let config = DatabaseConfig {
+            storage_residency_mode: hawdb_storage::config::StorageResidencyMode::OutOfCore,
+            ..DatabaseConfig::default()
+        };
+        let mut db = Database::open_with_config(&path, config.clone()).unwrap();
+        for rank in 100..164 {
+            let params = BTreeMap::from([
+                ("rank".into(), Value::Int(rank)),
+                ("id".into(), Value::String(format!("integer-{rank}"))),
+            ]);
+            db.query_with_params(
+                "CREATE (:Memory {kind: 'note', rank: $rank, id: $id})",
+                &params,
+            )
+            .unwrap();
+        }
+        db.query("CREATE (:Memory {kind: 'note', rank: 1.5, id: 'float-match'})")
+            .unwrap();
+        db.query(if composite {
+            "CREATE INDEX ON :Memory(kind, rank)"
+        } else {
+            "CREATE RANGE INDEX ON :Memory(rank)"
+        })
+        .unwrap();
+        let query = "MATCH (n:Memory) WHERE n.kind = 'note' AND n.rank > 0 AND n.rank < 10 RETURN n.id AS id ORDER BY id";
+        let original = db.query(query).unwrap().rows;
+        assert_eq!(original.len(), 1);
+        assert_mixed_numeric_ranges(&mut db);
+        db.checkpoint().unwrap();
+        assert_mixed_numeric_ranges(&mut db);
+        drop(db);
+        let mut db = Database::open_with_config(&path, config.clone()).unwrap();
+        // Cold opens can legitimately prefer a scan without property histograms.
+        // Persist bounded statistics so this regression actually exercises the
+        // native range projection, while retaining the original data and checks.
+        let spill_path = unique_test_dir("mixed-numeric-range-statistics");
+        let refresh = db
+            .refresh_optimizer_statistics_external(&crate::OptimizerStatisticsRefreshOptions {
+                memory_budget_bytes: 64 * 1024,
+                max_spill_bytes: 1024 * 1024,
+                max_spill_runs: 64,
+                max_input_records: 1_000,
+                max_generated_facts: 10_000,
+                max_path_expansions: 1_000,
+                spill_directory: spill_path.clone(),
+            })
+            .unwrap();
+        assert!(refresh.checkpoint_persisted);
+        drop(db);
+        let mut db = Database::open_with_config(&path, config.clone()).unwrap();
+        let plan = db.explain_query(query).unwrap().physical_plan.explain(0);
+        assert!(
+            plan.contains(if composite {
+                "IndexNodeCompositeRangeSeek"
+            } else {
+                "IndexNodeRangeSeek"
+            }),
+            "composite={composite}: {plan}"
+        );
+        assert_mixed_numeric_ranges(&mut db);
+        let mut retained = db.begin_read_transaction().unwrap();
+        for statement in [
+            "MATCH (n:Memory) WHERE n.id = 'integer-100' SET n.rank = 2.0",
+            "MATCH (n:Memory) WHERE n.id = 'float-match' SET n.rank = 200",
+            "MATCH (n:Memory) WHERE n.id = 'integer-101' DELETE n",
+            "CREATE (:Memory {kind: 'note', rank: 3.0, id: 'new-float'})",
+        ] {
+            db.query(statement).unwrap();
+        }
+        assert_mixed_numeric_ranges(&mut db);
+        assert_eq!(
+            retained
+                .query_with_params(query, &BTreeMap::new())
+                .unwrap()
+                .rows,
+            original
+        );
+        drop(retained);
+        drop(db);
+        let mut db = Database::open_with_config(&path, config).unwrap();
+        assert_mixed_numeric_ranges(&mut db);
+        db.checkpoint().unwrap();
+        assert_mixed_numeric_ranges(&mut db);
+        drop(db);
+        std::fs::remove_dir_all(path).unwrap();
+        if spill_path.exists() {
+            std::fs::remove_dir_all(spill_path).unwrap();
+        }
+    }
+}
+
 #[test]
 fn composite_range_requires_a_leading_equality_prefix() {
     let mut db = Database::new();

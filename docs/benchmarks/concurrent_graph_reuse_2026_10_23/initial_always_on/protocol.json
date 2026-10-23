@@ -1,0 +1,20 @@
+{
+  "pairs": 5,
+  "order": "baseline/candidate on even pairs, reversed on odd pairs",
+  "profile": "repository bench profile, Rust 1.97.1, default features",
+  "fixture": "new database per case; checkpoint before timing; one warmup process per binary",
+  "durability": "SyncOnEveryWrite; grouped candidate remains explicit",
+  "reopen_before_measure": true,
+  "reader_workers": 0,
+  "binaries": {
+    "baseline": {
+      "path": "/private/tmp/hawdb-writers-main1181-baseline-20261023",
+      "sha256": "edc52d1967669a6674a0f69b6f39ae3d90914811c2b1e526a2ff222d62e52b0d"
+    },
+    "candidate": {
+      "path": "/private/tmp/hawdb-writers-main1181-candidate-20261023",
+      "sha256": "c0f2e4c94a4de9858d1edfa7d7a8f9c7c712cfcb398e9d21cdabcf24980d739b"
+    }
+  },
+  "note": "Local supporting evidence, not the canonical strict writer gate or proof of remote speedup; retain every sample."
+}

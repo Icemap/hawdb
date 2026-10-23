@@ -3209,13 +3209,12 @@ fn composite_range_block_might_match(
     if max_order.is_lt() || min_order.is_gt() {
         return false;
     }
-    if max_order.is_eq() && !range_bounds_match(&max_values[prefix_len], lower, None) {
-        return false;
-    }
-    if min_order.is_eq() && !range_bounds_match(&min_values[prefix_len], None, upper) {
-        return false;
-    }
-    true
+    range_key_bounds_might_match(
+        min_order.is_eq().then_some(&min_values[prefix_len]),
+        max_order.is_eq().then_some(&max_values[prefix_len]),
+        lower,
+        upper,
+    )
 }
 
 fn composite_prefix_ordering(values: &[Value], expected: &[&Value]) -> Option<std::cmp::Ordering> {
@@ -3236,14 +3235,31 @@ fn range_block_might_match(
     lower: Option<&(Value, bool)>,
     upper: Option<&(Value, bool)>,
 ) -> bool {
+    range_key_bounds_might_match(Some(&block.min_key), Some(&block.max_key), lower, upper)
+}
+
+fn range_key_bounds_might_match(
+    minimum: Option<&Value>,
+    maximum: Option<&Value>,
+    lower: Option<&(Value, bool)>,
+    upper: Option<&(Value, bool)>,
+) -> bool {
+    // Keys use Value::cmp (all Ints precede Floats), while predicates compare
+    // numeric values across types. A Float maximum cannot bound earlier Ints,
+    // nor can an Int minimum bound later Floats. Composite prefix boundaries
+    // may leave the opposite endpoint unknown, requiring the same caution.
     if let Some((lower, inclusive)) = lower
-        && let Some(ordering) = comparable_value_ordering(&block.max_key, lower)
+        && let Some(maximum) = maximum
+        && (!matches!(maximum, Value::Float(_)) || matches!(minimum, Some(Value::Float(_))))
+        && let Some(ordering) = comparable_value_ordering(maximum, lower)
         && (ordering.is_lt() || (ordering.is_eq() && !inclusive))
     {
         return false;
     }
     if let Some((upper, inclusive)) = upper
-        && let Some(ordering) = comparable_value_ordering(&block.min_key, upper)
+        && let Some(minimum) = minimum
+        && (!matches!(minimum, Value::Int(_)) || matches!(maximum, Some(Value::Int(_))))
+        && let Some(ordering) = comparable_value_ordering(minimum, upper)
         && (ordering.is_gt() || (ordering.is_eq() && !inclusive))
     {
         return false;
@@ -4517,6 +4533,267 @@ mod tests {
         let error =
             decode_composite_property_identity("hawdb-composite-property-v1:zz:61").unwrap_err();
         assert!(error.to_string().contains("invalid hexadecimal data"));
+    }
+
+    fn mixed_range_values() -> Vec<Value> {
+        let mut values = vec![
+            Value::Null,
+            Value::Bool(false),
+            Value::Int(i64::MIN),
+            Value::Int(-100),
+            Value::Int(0),
+            Value::Int(100),
+            Value::Int(i64::MAX),
+            Value::Float(f64::NEG_INFINITY),
+            Value::Float(-1000.0),
+            Value::Float(-0.0),
+            Value::Float(1.5),
+            Value::Float(1000.0),
+            Value::Float(f64::INFINITY),
+            Value::Float(f64::NAN),
+            Value::String("a".into()),
+            Value::String("z".into()),
+        ];
+        values.sort();
+        values
+    }
+
+    #[test]
+    fn mixed_numeric_range_envelopes_never_prune_a_matching_value() {
+        let values = mixed_range_values();
+        let bounds = std::iter::once(None)
+            .chain(
+                values
+                    .iter()
+                    .flat_map(|value| [Some((value.clone(), false)), Some((value.clone(), true))]),
+            )
+            .collect::<Vec<_>>();
+        for start in 0..values.len() {
+            for end in start..values.len() {
+                for lower in &bounds {
+                    for upper in &bounds {
+                        if values[start..=end]
+                            .iter()
+                            .any(|value| range_bounds_match(value, lower.as_ref(), upper.as_ref()))
+                        {
+                            assert!(
+                                range_key_bounds_might_match(
+                                    Some(&values[start]),
+                                    Some(&values[end]),
+                                    lower.as_ref(),
+                                    upper.as_ref()
+                                ),
+                                "{start}..={end}: {lower:?} {upper:?}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        for (minimum, maximum) in [
+            (Value::Int(100), Value::Int(200)),
+            (Value::Float(100.0), Value::Float(200.0)),
+        ] {
+            assert!(!range_key_bounds_might_match(
+                Some(&minimum),
+                Some(&maximum),
+                None,
+                Some(&(Value::Int(10), true))
+            ));
+            assert!(!range_key_bounds_might_match(
+                Some(&minimum),
+                Some(&maximum),
+                Some(&(Value::Int(300), true)),
+                None
+            ));
+        }
+    }
+
+    #[test]
+    fn composite_numeric_range_envelopes_preserve_clipped_prefixes() {
+        let values = mixed_range_values();
+        let keys = [-1, 0, 1]
+            .into_iter()
+            .flat_map(|prefix| {
+                values
+                    .iter()
+                    .map(move |value| Value::List(vec![Value::Int(prefix), value.clone()]))
+            })
+            .collect::<Vec<_>>();
+        let bounds = [
+            None,
+            Some((Value::Int(0), false)),
+            Some((Value::Int(10), true)),
+            Some((Value::Float(1000.0), false)),
+        ];
+        for start in 0..keys.len() {
+            for end in start..keys.len() {
+                for prefix in [-1, 0, 1] {
+                    let equality = Value::Int(prefix);
+                    for lower in &bounds {
+                        for upper in &bounds {
+                            if keys[start..=end].iter().any(|key| {
+                                composite_range_key_matches(
+                                    key,
+                                    &[&equality],
+                                    lower.as_ref(),
+                                    upper.as_ref(),
+                                )
+                            }) {
+                                assert!(
+                                    composite_range_block_might_match(
+                                        &keys[start],
+                                        &keys[end],
+                                        &[&equality],
+                                        lower.as_ref(),
+                                        upper.as_ref()
+                                    ),
+                                    "{start}..={end}, prefix={prefix}: {lower:?} {upper:?}"
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn mixed_numeric_projection_ranges_match_the_full_predicate_domain() {
+        let root = checkpoint_unit_directory();
+        let path = root.join("mixed-ranges.hawdb");
+        let descriptor_paths = test_descriptor_paths(&root, "mixed-ranges");
+        let properties = vec!["text".to_string(), "rank".to_string()];
+        let definitions = [
+            (PersistentPropertyProjectionKind::Range, "rank".to_string()),
+            (
+                PersistentPropertyProjectionKind::RelationshipRange,
+                "rank".to_string(),
+            ),
+            (
+                PersistentPropertyProjectionKind::CompositeEquality,
+                persistent_composite_property_identity(&properties).unwrap(),
+            ),
+        ]
+        .into_iter()
+        .map(|(kind, property)| PersistentPropertyProjectionDefinition {
+            label_id: LabelId(1),
+            property,
+            kind,
+            complete: false,
+        })
+        .collect();
+        let values = [
+            Value::Int(100),
+            Value::Int(101),
+            Value::Float(1.5),
+            Value::Float(2.0),
+        ];
+        let mut records = Vec::new();
+        for (index, value) in values.iter().enumerate() {
+            let id = index as u64 + 1;
+            let mut record = node(id, 0, "note");
+            record.properties.insert("rank".into(), value.clone());
+            records.push(PersistentPropertyProjectionRecord::Node(record));
+            let mut record = relationship(id, 0);
+            record.properties.insert("rank".into(), value.clone());
+            records.push(PersistentPropertyProjectionRecord::Relationship(record));
+        }
+        let output =
+            PersistentPropertyProjectionWriter::new(PersistentPropertyProjectionConfig::default())
+                .write_fallible(
+                    &path,
+                    ManifestGeneration(9),
+                    31,
+                    definitions,
+                    records.into_iter().map(Ok),
+                    PersistentPropertyProjectionDescriptorTree::new(
+                        descriptor_paths.clone(),
+                        GraphDescriptorTreeBuildConfig::default(),
+                    ),
+                )
+                .unwrap();
+        // One mixed block per definition makes unsafe extrema pruning observable.
+        assert_eq!(output.manifest.block_count, 3);
+        let reader = PersistentPropertyProjectionReader::open(
+            &path,
+            output.manifest,
+            PersistentPropertyProjectionDescriptorTree::new(
+                descriptor_paths,
+                GraphDescriptorTreeBuildConfig::default(),
+            ),
+            Arc::new(SegmentCache::new(1024 * 1024)),
+            StoreId(23),
+            NonZeroU64::new(1024 * 1024).unwrap(),
+        )
+        .unwrap();
+        for (lower, upper) in [
+            (None, Some((Value::Int(10), false))),
+            (Some((Value::Int(90), false)), None),
+            (
+                Some((Value::Float(1.5), true)),
+                Some((Value::Int(100), true)),
+            ),
+            (
+                Some((Value::Int(2), false)),
+                Some((Value::Float(101.0), false)),
+            ),
+        ] {
+            let mut expected = values
+                .iter()
+                .enumerate()
+                .filter(|(_, value)| range_bounds_match(value, lower.as_ref(), upper.as_ref()))
+                .map(|(index, _)| index as u64 + 1)
+                .collect::<Vec<_>>();
+            expected.sort_unstable();
+            for kind in 0..3 {
+                let mut actual = Vec::new();
+                let mut accept = |id: NodeId| {
+                    actual.push(id.0);
+                    Ok(CanonicalScanControl::Continue)
+                };
+                let (report, _) = match kind {
+                    0 => reader.scan_range_candidates(
+                        LabelId(1),
+                        "rank",
+                        lower.as_ref(),
+                        upper.as_ref(),
+                        &mut accept,
+                    ),
+                    1 => reader.scan_relationship_range_candidates(
+                        RelTypeId(1),
+                        "rank",
+                        lower.as_ref(),
+                        upper.as_ref(),
+                        |id| accept(NodeId(id.0)),
+                    ),
+                    _ => reader.scan_composite_range_candidates(
+                        LabelId(1),
+                        &properties,
+                        &[&Value::String("note".into())],
+                        lower.as_ref(),
+                        upper.as_ref(),
+                        &mut accept,
+                    ),
+                }
+                .unwrap();
+                actual.sort_unstable();
+                assert_eq!(actual, expected, "kind={kind}: {lower:?} {upper:?}");
+                assert_eq!(report.blocks_read, 1);
+                assert_eq!(report.candidates_returned, expected.len() as u64);
+            }
+            let (estimate, _) = reader
+                .estimate_relationship_range_entries(
+                    RelTypeId(1),
+                    "rank",
+                    lower.as_ref(),
+                    upper.as_ref(),
+                )
+                .unwrap();
+            assert!(estimate >= expected.len() as u64);
+        }
+        drop(reader);
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

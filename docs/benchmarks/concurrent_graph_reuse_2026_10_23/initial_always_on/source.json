@@ -1,0 +1,28 @@
+{
+  "baseline_revision": "2fb566e16d5f8890852dc46ccb5107a0f9a0f4bb",
+  "candidate": "working tree reproduced by source.patch.gz; documentation artifacts excluded",
+  "source_patch_sha256": "32bb30d81675254b091a8ce9350359deb7ae7f7ae705ed3a7fa26e2965f99932",
+  "source_files": {
+    "benches/concurrent_writers.rs": "802a8f19ef71ff149fb4a5a4c21b2d810d2b0d2b25eef07941792a38e562a498",
+    "src/api/concurrent.rs": "03bc57ec93ead6341ef3bd71020a23e003182ee5c5e9d5b1adb561ca60d50a1c",
+    "src/api/concurrent/coordinator.rs": "ad1e9aa21b4d6cbe2524e1080be23704849de8f69f152a92f65c5dd38b769b8f",
+    "src/api/concurrent/metrics.rs": "1b49edba51447c04a9377975d302697c92e1546d87261a2a8dc922db48f8a94a",
+    "src/api/mod.rs": "37a98ab342f55feafbbf9b23af9d4f83a664c2cceb5da819828e123988d73655",
+    "src/api/tests/concurrent_transactions.rs": "c8bf228944a5a128e1ad67624faa54783c421b16bb020bc4264de19f604797a9",
+    "src/api/tests/concurrent_transactions/covered_graph.rs": "2007487a61f133f98280603a19a7da38ae1277ba34bf9a93de6644bf0ecb5351",
+    "src/lib.rs": "e884c7dad074b2cc482d7fcb57312ec6cca28e4cf30af329ddb14b264cdfa479"
+  },
+  "harness_sha256": "802a8f19ef71ff149fb4a5a4c21b2d810d2b0d2b25eef07941792a38e562a498",
+  "baseline_harness_sha256": "802a8f19ef71ff149fb4a5a4c21b2d810d2b0d2b25eef07941792a38e562a498",
+  "os": "macOS-27.0.1-arm64-arm-64bit",
+  "cpu": "Apple M3 Max",
+  "memory_bytes": 137438953472,
+  "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+  "profile": "repository bench, opt-level=3, thin LTO, one codegen unit",
+  "features": "default",
+  "residency": "DatabaseConfig default Auto; observed mode not collected",
+  "storage": "local APFS /private/tmp on /dev/disk3s5; device model not collected",
+  "physical_cpus": 16,
+  "logical_cpus": 16,
+  "cpu_selection": "Explicit 1/4/8 writer matrix on macOS; no Linux affinity/cgroup acceptance claim"
+}

@@ -1,0 +1,30 @@
+{
+  "baseline_revision": "2fb566e16d5f8890852dc46ccb5107a0f9a0f4bb",
+  "candidate": "Final opt-in working tree reproduced by source.patch.gz; documentation artifacts excluded",
+  "source_patch_sha256": "3fea2129d2e09779b7c5da214e796fdde231e927bb9a03abbe09755f554f7f25",
+  "source_files": {
+    "benches/concurrent_writers.rs": "802a8f19ef71ff149fb4a5a4c21b2d810d2b0d2b25eef07941792a38e562a498",
+    "src/api/concurrent.rs": "7a90c4285f957648ed6ad8b2e57e0154e7a7e1e2d824507cd9a595f2c981d842",
+    "src/api/concurrent/coordinator.rs": "d067dce269392f53fd4b6244051781c9b5c804b12bfa258d8f8d8ab3ea1cee9a",
+    "src/api/concurrent/metrics.rs": "b75d229cbe648f507e6b691608496d366c5004c96766f052a5939972a4da84ae",
+    "src/api/mod.rs": "37a98ab342f55feafbbf9b23af9d4f83a664c2cceb5da819828e123988d73655",
+    "src/api/tests/concurrent_transactions.rs": "c8bf228944a5a128e1ad67624faa54783c421b16bb020bc4264de19f604797a9",
+    "src/api/tests/concurrent_transactions/covered_graph.rs": "0fb0f7bde585932eba9c4263d559b9337d27b47c18a3e9f51d0bc817a3d5a7e3",
+    "src/lib.rs": "e884c7dad074b2cc482d7fcb57312ec6cca28e4cf30af329ddb14b264cdfa479"
+  },
+  "harness_sha256": "802a8f19ef71ff149fb4a5a4c21b2d810d2b0d2b25eef07941792a38e562a498",
+  "baseline_harness_sha256": "802a8f19ef71ff149fb4a5a4c21b2d810d2b0d2b25eef07941792a38e562a498",
+  "os": "macOS-27.0.1-arm64-arm-64bit",
+  "cpu": "Apple M3 Max",
+  "memory_bytes": 137438953472,
+  "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+  "profile": "repository bench, opt-level=3, thin LTO, one codegen unit",
+  "features": "default",
+  "residency": "DatabaseConfig default Auto; observed mode not collected",
+  "storage": "local APFS /private/tmp on /dev/disk3s5; device model not collected",
+  "physical_cpus": 16,
+  "logical_cpus": 16,
+  "cpu_selection": "Explicit 1/4/8 writer matrix on macOS; no Linux affinity/cgroup acceptance claim",
+  "metrics": "Disabled by default in both performance cohorts; final candidate records only after enable_concurrency_metrics()",
+  "source_scope": "Production code, tests and identical benchmark overlay on baseline 2fb566e16; no later main changes included"
+}
