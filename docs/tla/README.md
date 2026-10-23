@@ -2210,6 +2210,16 @@ schema changes before acquisition invalidate admission. Execution and publicatio
 must retain the scoped versions. The existing transaction/durability and prepared
 admission models own WAL ordering, memory ownership and waiting source pins.
 
+SQL autocommit uses the same acquire-before-snapshot ordering. Its keys represent
+primary-key predicate ranges, complete tables, or the conservative database scope
+for foreign keys/DDL/append. `preparedSchema` represents scope compatibility for
+schema-neutral SQL: the Rust adapter recomputes the fresh required scope and
+requires held-lock coverage. Compatible schema edits can bind afresh; newly
+required protection is refused. The native SQL autocommit family distinguishes
+constraint expansion, excluded candidates, FK cascades and fresh snapshots from
+unsafe binding before lock waiting. The model abstracts compatibility as a bit;
+it does not prove SQL constraint dependency discovery or repeated commit work.
+
 This model does not prove the AST-to-scope mapping, unique lookup/index completeness,
 lock-manager fairness, Rust ownership or physical latency. Native tests cover the
 mapping and actual adapter boundaries. The three unsafe controls remove predicate

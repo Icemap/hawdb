@@ -50,6 +50,11 @@ prepared-mutation cases rebind current schemas/parameters and append routing;
 its existing manual statement compiler campaign reuses templates across inputs
 and compares independent typed writes. No new fuzz CI owner is introduced.
 
+`hawdb-sql::template_cache::tests` keeps branch-catalog inspection out of the
+selected branch's data-query cache without reparsing its returned template.
+The SQL crate unit owner covers eviction/hit behavior; the existing root recovery
+`branch_lifecycle` family preserves the ordinary database cache-isolation check.
+
 The executor `result_delivery::tests::borrowed` family checks native columnar
 payload pointer identity for immediate consumers, compact validated delivery
 across source retirement and segment boundaries, logical quota refusal before
@@ -130,6 +135,16 @@ post-commit telemetry is not a prepublication synchronization point.
 admitted report adapter with two such writers, captured plans, one preparation
 per statement and full admission refund. These are correctness/operation-count
 checks, not release latency or allocation evidence.
+
+`api::concurrent::autocommit::sql::tests` covers two ordinary SQL point writers
+and advancing readers, old publication release before lock waiting, fresh-snapshot
+arithmetic, changed constraint scopes, excluded predicate candidates versus
+explicit writers, independent table inserts with UUID defaults, FK cascades,
+RETURNING refusal, precommit cancellation and durable reopen. Prepared DDL/Strict
+Append execution receives diagnostic-only text to detect parser fallback. The
+root concurrent unit suite and an exact required macOS/Windows runtime filter own
+these cases. Existing explicit-transaction stale-snapshot tests remain unchanged.
+These assertions establish scope/ownership behavior, not release speedup.
 
 `HawDBAutocommitScope` joins the existing `docs/tla:storage_models` positive
 owner. Its three manual controls (`UnprotectedPredicate`, `EarlySnapshot`,

@@ -70,7 +70,8 @@ impl RelationalPlanTemplateCache {
         if is_cacheable_query(&template.statement) {
             entries.insert(key, Arc::clone(&template));
         } else {
-            // Literal-heavy mutations must not evict reusable query templates.
+            // Mutations and project-catalog commands must not evict reusable
+            // data-query templates from the selected branch's cache.
             entries.record_bypass();
         }
         Ok(PreparedRelationalSql {
@@ -92,7 +93,7 @@ impl RelationalPlanTemplateCache {
 
 fn is_cacheable_query(statement: &SqlStatement) -> bool {
     match statement {
-        SqlStatement::Select(_) | SqlStatement::Branch(_) => true,
+        SqlStatement::Select(_) => true,
         SqlStatement::Explain(explain) => {
             matches!(explain.statement.as_ref(), SqlStatement::Select(_))
         }
@@ -101,6 +102,35 @@ fn is_cacheable_query(statement: &SqlStatement) -> bool {
         | SqlStatement::Delete(_)
         | SqlStatement::CreateTable(_)
         | SqlStatement::CreateIndex(_)
-        | SqlStatement::AlterTableAddColumn(_) => false,
+        | SqlStatement::AlterTableAddColumn(_)
+        | SqlStatement::Branch(_) => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn branch_inspection_does_not_replace_data_query_templates() {
+        let cache = RelationalPlanTemplateCache::new(Some(1));
+        let first = cache.prepare("SELECT id FROM items WHERE id = $1").unwrap();
+        let before = cache.stats();
+        for sql in [
+            "SHOW BRANCHES LIMIT 2",
+            "SHOW BRANCHES LIMIT 2",
+            "SHOW CURRENT BRANCH",
+        ] {
+            assert!(matches!(
+                cache.prepare(sql).unwrap().statement(),
+                SqlStatement::Branch(_)
+            ));
+        }
+        let inspected = cache.stats();
+        assert_eq!(inspected.entries, before.entries);
+        assert_eq!(inspected.hits, before.hits);
+        let reused = cache.prepare("SELECT id FROM items WHERE id = $1").unwrap();
+        assert!(Arc::ptr_eq(&first.template, &reused.template));
+        assert_eq!(cache.stats().hits, before.hits + 1);
     }
 }

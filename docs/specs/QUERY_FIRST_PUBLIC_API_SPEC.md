@@ -138,9 +138,27 @@ MUST NOT replace three-valued expression evaluation for RETURN. EXPLAIN ANALYZE
 remains diagnostic and MUST NOT enter the mutation path. Positive legacy mutation
 summary row caps remain enforced independently of explicit RETURN output limits.
 
-SQL autocommit and control/projection procedures still require separate adapter
-work. Release A/B and actual owner-lock measurements
-remain required; the new Cypher path alone does not establish their performance.
+Ordinary SQL schema/data mutations through `ConcurrentDatabase` MUST acquire
+semantic scopes before capturing their private workspace. Scope derivation uses
+schema and predicate syntax only; it MUST NOT bind volatile INSERT defaults or
+read old DELETE rows before waiting. Constraint-preserving UPDATE uses primary-key
+ranges when derivable, otherwise a table scope. INSERT/DELETE protect the table;
+foreign-key participants (including referenced parents), constraint-key updates,
+DDL and Strict Append use a conservative logical database scope. Different table
+inserts and independent primary-key updates can stage concurrently.
+
+After capture, SQL MUST recompute the required scope against the fresh schema and
+refuse execution unless held locks cover it. A schema-neutral template may bind a
+changed schema only within that protection. No old source survives lock waiting,
+and defaults are bound once into the private writes. RETURNING budgets and
+cancellation are checked before publication; the existing sequencer returns the
+durable outcome. Autocommit locking SELECT remains unsupported. Branch lifecycle
+commands retain their catalog path.
+
+Control/projection procedures and Tokio mutation adapter convergence still require
+separate work. SQL private staging does not eliminate storage preparation at the
+serialized commit boundary. Release A/B and actual owner-lock measurements remain
+required; concurrency correctness alone does not establish a performance gain.
 
 The Mem production resource-profile entry point MUST use the same detached read
 admission path and consume its preparation once. Evidence identity MUST match the

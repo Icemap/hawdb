@@ -10,6 +10,8 @@ use hawdb_storage::read_view::GraphReadAllocator;
 use hawdb_storage::scan::GraphScanControl;
 use std::collections::BTreeSet;
 
+mod sql;
+
 #[cfg(test)]
 mod tests;
 
@@ -18,6 +20,7 @@ mod tests;
 pub(crate) enum AutocommitMutationPhase {
     BeforeLocks,
     BeforeExecution,
+    Staged,
 }
 
 #[cfg(test)]
