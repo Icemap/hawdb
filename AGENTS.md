@@ -78,6 +78,11 @@
 
 ## Test Ownership and CI Cost
 
+- Strict append preparation diagnostics use
+  `cargo bench --locked -p hawdb-storage --bench strict_append_prepare` manually.
+  Keep preparation-only results separate from synchronized commit throughput
+  and p99; the workload and existing CI regression owners are in TEST_INDEX.
+
 - Maintain [docs/TEST_INDEX.md](docs/TEST_INDEX.md) as the test-family index:
   purpose/failure mode, owning target and execution lane, exact feature or
   fixture scope, known slow paths/issues and local replay entry points.

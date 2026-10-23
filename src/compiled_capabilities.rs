@@ -34,7 +34,7 @@ mod tests {
 
         assert_eq!(
             capabilities.is_enabled(RuntimeCapability::SearchProjectionPublication),
-            cfg!(not(windows))
+            cfg!(any(unix, windows))
         );
 
         assert_eq!(
