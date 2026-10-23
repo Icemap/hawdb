@@ -56,6 +56,13 @@ impl PreparedRuntimeSql {
     pub(crate) fn uses_snapshot(&self) -> bool {
         super::concurrent::sql_statement_uses_snapshot(self.statement.statement())
     }
+    #[cfg(feature = "tokio-runtime")]
+    pub(crate) fn uses_catalog(&self) -> bool {
+        matches!(
+            self.statement.statement(),
+            crate::sql::SqlStatement::Branch(_)
+        )
+    }
     pub(crate) fn work_request(&self, result_bytes: u64) -> RuntimeWorkRequest {
         // SQL binds access paths to the execution snapshot. Admit the configured
         // working ceiling until relational physical preparation exposes a shared

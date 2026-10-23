@@ -2220,6 +2220,17 @@ constraint expansion, excluded candidates, FK cascades and fresh snapshots from
 unsafe binding before lock waiting. The model abstracts compatibility as a bit;
 it does not prove SQL constraint dependency discovery or repeated commit work.
 
+Tokio's ordinary writer closure holds a shared administrative execution lease;
+direct host callbacks/context replacement require the exclusive side. This maps
+administrative replacement to a transition outside active writer scopes, while
+different ordinary writers remain enabled. The original database-instance token
+survives admission-state eviction; `HawDBPreparedAdmission` owns source validation
+and retained-funding lifetime. Owner guards publish the completed immutable view
+before unlocking and retire old sources afterward; capture/unwind failures refuse
+subsequent query work. Native Tokio tests cover actual writer overlap, source
+replacement, direct-callback exclusion and admission refund. This correspondence
+does not prove RwLock fairness or arbitrary callback reentrancy.
+
 This model does not prove the AST-to-scope mapping, unique lookup/index completeness,
 lock-manager fairness, Rust ownership or physical latency. Native tests cover the
 mapping and actual adapter boundaries. The three unsafe controls remove predicate

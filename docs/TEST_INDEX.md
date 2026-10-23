@@ -129,12 +129,22 @@ IDs after reopen. The root concurrent suite and macOS/Windows runtime lane own t
 cases, along with out-of-core unique lookup, EXPLAIN ANALYZE rejection, mutation
 summary ceilings and expression/NULL predicate parity.
 The expression fallback uses a supported `COALESCE` comparison. The concurrent
-read-observation case pauses Cypher private execution before publication;
+read-observation cases pause SQL and Cypher private execution before publication;
 post-commit telemetry is not a prepublication synchronization point.
 `nowledge_mem::read_execution::tests` additionally exercises the actual
 admitted report adapter with two such writers, captured plans, one preparation
 per statement and full admission refund. These are correctness/operation-count
 checks, not release latency or allocation evidence.
+
+`embedded_tokio::concurrency_tests` covers both ordinary languages with two
+writers and advancing readers, preparation reuse across intervening commits,
+direct-host mutation exclusion, database replacement refusal, cancellation and
+complete admission refund. It uses the same concurrent kernel phase gates as the
+facade regressions. Root Tokio and the existing macOS/Windows Tokio-entrypoint
+lane own this family; these are correctness checks, not release benchmarks.
+Planning regressions now test compatibility across data/checkpoint changes,
+configuration refusal and durable execution/reopen rather than the retired
+whole-publication equality fence. Existing explicit transaction fences remain.
 
 `api::concurrent::autocommit::sql::tests` covers two ordinary SQL point writers
 and advancing readers, old publication release before lock waiting, fresh-snapshot

@@ -563,6 +563,17 @@ impl ConcurrentDatabase {
         let sql_text = request.sql;
         let started = Instant::now();
         let prepared = self.inner.commits.prepare_sql(sql_text)?;
+        self.query_prepared_sql_request(request, prepared, started)
+    }
+
+    pub(crate) fn query_prepared_sql_request(
+        &self,
+        request: super::SqlQueryRequest<'_>,
+        prepared: crate::relational_sql::PreparedRelationalSql,
+        started: Instant,
+    ) -> Result<QueryOutput> {
+        super::query_runtime::query_runtime_checkpoint(request.task_context)?;
+        let sql_text = request.sql;
         if let SqlStatement::Branch(statement) = prepared.statement() {
             if matches!(statement, crate::sql::BranchSqlStatement::UseBranch(_)) {
                 return Err(HawDBError::BranchCommandUnsupported {
@@ -641,7 +652,7 @@ impl ConcurrentDatabase {
             })
     }
 
-    fn with_autocommit_exclusive(
+    pub(crate) fn with_autocommit_exclusive(
         &self,
         execute: impl FnOnce(&mut Database) -> Result<QueryOutput>,
     ) -> Result<QueryOutput> {

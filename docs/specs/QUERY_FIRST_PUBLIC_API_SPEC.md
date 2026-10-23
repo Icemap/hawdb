@@ -155,10 +155,28 @@ cancellation are checked before publication; the existing sequencer returns the
 durable outcome. Autocommit locking SELECT remains unsupported. Branch lifecycle
 commands retain their catalog path.
 
-Control/projection procedures and Tokio mutation adapter convergence still require
-separate work. SQL private staging does not eliminate storage preparation at the
-serialized commit boundary. Release A/B and actual owner-lock measurements remain
-required; concurrency correctness alone does not establish a performance gain.
+Tokio ordinary Cypher and SQL mutations MUST use that same concurrent owner and
+kernel after execution admission. Its blocking task retains the admitted permit
+through queued commit/durability; no second query permit is acquired. Preparation
+funding moves with the template and no planning source survives semantic lock
+waiting. Data-only commits and physical checkpoints do not impose a global epoch
+fence. Admission captures the database instance separately from reusable syntax;
+rebuilding discarded preparation MUST NOT silently select a replacement instance.
+
+Direct `with_embedded_mut` callbacks and resource reconfiguration exclude active
+Tokio writers through an administrative gate shared by ordinary writers. These
+callbacks MUST NOT reenter the same owner. They invalidate the published view
+without eagerly opening a selected branch. Coordinator guards publish a complete
+new immutable view before unlocking; capture failure or unwind fails closed. A
+parked explicit user transaction continues to reject autocommit calls. SQL branch
+commands keep their catalog path; context replacement selects a coordinator for
+the new instance. Read execution and streaming callbacks hold neither the owner
+mutex nor the administrative gate after snapshot capture.
+
+Control/projection procedures retain their conservative exclusive publication
+path. SQL private staging does not eliminate storage preparation at serialized
+commit. Release A/B and actual owner-lock measurements remain required;
+concurrency correctness alone does not establish a performance gain.
 
 The Mem production resource-profile entry point MUST use the same detached read
 admission path and consume its preparation once. Evidence identity MUST match the

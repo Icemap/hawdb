@@ -36,7 +36,6 @@ pub(crate) struct RuntimePlanningSnapshot {
     branch_id: Option<hawdb_core::Uuid>,
     catalog: Catalog,
     store: GraphStore,
-    published_read_view: PublishedReadView,
     optimizer: CascadesOptimizer,
     config: DatabaseConfig,
     system_variables: QuerySystemVariables,
@@ -63,26 +62,6 @@ impl RuntimePlanningSnapshot {
             &self.system_variables,
             &self.catalog,
             &self.store,
-        )
-    }
-
-    pub(crate) fn is_current_for(
-        &self,
-        database: &Database,
-        prepared: &PreparedRuntimeQuery,
-    ) -> Result<bool> {
-        let runtime = database.runtime.get()?;
-        Ok(
-            self.branch_id == database.current_branch()?.map(|current| current.info.id)
-                && self.published_read_view == runtime.store.published_read_view()
-                && self.config == database.config
-                && self.system_variables == database.system_variables
-                && prepared
-                    .optimizer_environment
-                    .as_ref()
-                    .is_none_or(|environment| {
-                        environment.is_execution_compatible(&runtime.catalog, &runtime.store)
-                    }),
         )
     }
 
@@ -341,16 +320,13 @@ impl Database {
     pub(crate) fn runtime_planning_snapshot(&self) -> Result<RuntimePlanningSnapshot> {
         let runtime = self.runtime.get()?;
         Ok({
-            let (published_read_view, pin) = Self::pin_runtime_read_view(&runtime);
+            let (_, pin) = Self::pin_runtime_read_view(&runtime);
             RuntimePlanningSnapshot {
                 branch_id: self
                     .current_branch_from_runtime(&runtime)
                     .map(|current| current.info.id),
                 catalog: runtime.catalog.clone(),
                 store: runtime.store.snapshot_for_read(),
-                // Store snapshots omit the writable durable handle and its checkpoint
-                // metadata. Freshness must compare the original pinned publication.
-                published_read_view,
                 optimizer: runtime.optimizer.clone(),
                 config: self.config.clone(),
                 system_variables: self.system_variables.clone(),
@@ -1250,79 +1226,71 @@ mod tests {
     }
 
     #[test]
-    fn mutation_planning_freshness_checks_data_schema_and_configuration() {
+    fn mutation_preparation_reuses_data_changes_but_checks_configuration() {
         let mut db = Database::new();
+        db.query("CREATE (:Memory {id: 'initial'})").unwrap();
         let query = "CREATE (:Memory {id: 'new'})";
-        let parameters = BTreeMap::new();
         let old = db.runtime_planning_snapshot().unwrap();
-        let prepared = old.prepare(query.to_string(), &parameters).unwrap();
-        assert!(old.is_current_for(&db, &prepared).unwrap());
+        let prepared = old.prepare(query.to_string(), &BTreeMap::new()).unwrap();
+        assert!(db.accepts_prepared_query(&prepared).unwrap());
         db.query("CREATE (:Memory {id: 'other'})").unwrap();
-        assert!(!old.is_current_for(&db, &prepared).unwrap());
-        let current = db.runtime_planning_snapshot().unwrap();
-        let prepared = current.prepare(query.to_string(), &parameters).unwrap();
-        assert!(current.is_current_for(&db, &prepared).unwrap());
+        assert!(db.accepts_prepared_query(&prepared).unwrap());
         db.config.max_read_result_rows = Some(1);
-        assert!(!current.is_current_for(&db, &prepared).unwrap());
+        assert!(!db.accepts_prepared_query(&prepared).unwrap());
         let current = db.runtime_planning_snapshot().unwrap();
-        assert!(current.is_current_for(&db, &prepared).unwrap());
+        let prepared = current
+            .prepare(query.to_string(), &BTreeMap::new())
+            .unwrap();
+        assert!(db.accepts_prepared_query(&prepared).unwrap());
         db.system_variables.estimated_operations += 1;
-        assert!(!current.is_current_for(&db, &prepared).unwrap());
+        assert!(!db.accepts_prepared_query(&prepared).unwrap());
     }
 
     #[test]
-    fn durable_mutation_planning_preserves_checkpoint_identity() {
+    fn mutation_preparation_rebinds_after_checkpoint_and_reopen() {
         use hawdb_storage::config::StorageResidencyMode;
 
         for mode in [
             StorageResidencyMode::Materialized,
             StorageResidencyMode::OutOfCore,
         ] {
-            let nonce = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos();
             let path = std::env::temp_dir().join(format!(
-                "hawdb-planning-durable-{}-{nonce}-{mode:?}",
-                std::process::id()
+                "hawdb-planning-durable-{}-{mode:?}",
+                hawdb_core::generate_uuidv7().unwrap()
             ));
             let config = DatabaseConfig {
                 storage_residency_mode: mode,
-                ..DatabaseConfig::default()
+                ..Default::default()
             };
-            let parameters = BTreeMap::new();
-            let query = "CREATE (:Memory {id: 'planned'})";
             let mut db = Database::open_with_config(&path, config.clone()).unwrap();
             db.query("CREATE (:Memory {id: 'existing'})").unwrap();
-            let before = db.runtime_planning_snapshot().unwrap();
-            let prepared = before.prepare(query.to_string(), &parameters).unwrap();
-            assert!(before.is_current_for(&db, &prepared).unwrap());
-            let epoch = db.runtime.get().unwrap().store.commit_epoch();
-            db.checkpoint().unwrap();
-            assert_eq!(db.runtime.get().unwrap().store.commit_epoch(), epoch);
-            assert!(!before.is_current_for(&db, &prepared).unwrap());
-            drop(before);
-
-            let checkpointed = db.runtime_planning_snapshot().unwrap();
-            let prepared = checkpointed
-                .prepare(query.to_string(), &parameters)
+            for id in ["checkpointed", "reopened"] {
+                let planning = db.runtime_planning_snapshot().unwrap();
+                let request_text = "CREATE (:Memory {id: $id})";
+                let parameters = BTreeMap::from([("id".into(), Value::String(id.into()))]);
+                let prepared = planning.prepare(request_text.into(), &parameters).unwrap();
+                drop(planning);
+                db.checkpoint().unwrap();
+                // Physical generation replacement alone must not reject compatible
+                // syntax. The fresh kernel workspace owns the actual write source.
+                assert!(db.accepts_prepared_query(&prepared).unwrap(), "{mode:?}");
+                db.query_prepared_request(
+                    prepared,
+                    QueryRequest::new(request_text).with_params(&parameters),
+                )
                 .unwrap();
-            assert!(
-                checkpointed.is_current_for(&db, &prepared).unwrap(),
-                "{mode:?}"
+                drop(db);
+                db = Database::open_with_config(&path, config.clone()).unwrap();
+            }
+            assert_eq!(
+                db.query("MATCH (m:Memory) RETURN m.id AS id")
+                    .unwrap()
+                    .rows
+                    .len(),
+                3
             );
-            drop(checkpointed);
             drop(db);
-
-            let mut db = Database::open_with_config(&path, config).unwrap();
-            let reopened = db.runtime_planning_snapshot().unwrap();
-            let prepared = reopened.prepare(query.to_string(), &parameters).unwrap();
-            assert!(reopened.is_current_for(&db, &prepared).unwrap(), "{mode:?}");
-            db.query("CREATE (:Memory {id: 'concurrent'})").unwrap();
-            assert!(!reopened.is_current_for(&db, &prepared).unwrap());
-            drop(reopened);
-            drop(db);
-            std::fs::remove_dir_all(&path).unwrap();
+            std::fs::remove_dir_all(path).unwrap();
         }
     }
 
