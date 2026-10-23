@@ -123,6 +123,7 @@ use vector::*;
 
 pub type Row = hawdb_executor::Row;
 pub type RowRef<'a> = hawdb_executor::RowRef<'a>;
+pub type ProjectedRowRef<'a> = hawdb_executor::ProjectedRowRef<'a>;
 pub type QueryRow = hawdb_executor::QueryRow;
 pub type QueryRowRef<'a> = hawdb_executor::QueryRowRef<'a>;
 pub type QueryRows = hawdb_executor::QueryRows;

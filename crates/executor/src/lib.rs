@@ -104,9 +104,9 @@ pub use morsel::{
 mod retrieval_report;
 pub use profile::{
     BlockingOperatorMemoryReport, OperatorCardinalityProfile, PipelineMemoryReport,
-    ProfiledQueryRows, ProfiledQueryStream, QueryRow, QueryRowRef, QueryRows, QueryRowsBuilder,
-    QueryRowsIntoIter, QueryRowsIter, QuerySchema, QueryValueRows, ReadExecutionProfile, Row,
-    RowRef, RowRefIter,
+    ProfiledQueryRows, ProfiledQueryStream, ProjectedRowRef, QueryRow, QueryRowRef, QueryRows,
+    QueryRowsBuilder, QueryRowsIntoIter, QueryRowsIter, QuerySchema, QueryValueRows,
+    ReadExecutionProfile, Row, RowRef, RowRefIter,
 };
 pub use read_output::{BoundedReadQueryOutput, QueryStreamOptions, QueryStreamReport};
 pub use retrieval_report::{

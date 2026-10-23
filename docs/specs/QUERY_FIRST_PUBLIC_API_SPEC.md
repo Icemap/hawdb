@@ -155,10 +155,20 @@ must not expose a successful prefix. Compact retained storage shares its schema
 and admits copied payloads before allocation. Callback error, cancellation and
 unwind MUST retire storage before releasing its result reservation.
 
-The common accumulator accepts native columnar views and exposes validated
-compact views through `RowRef::Compact`. The scalar binding path still constructs
-maps. Native producer integration and its allocation/performance evidence remain
-required; a borrowed callback signature alone does not establish zero copy.
+The common accumulator accepts native columnar/projected views and exposes
+validated compact views through `RowRef::Compact`. Eligible root numeric
+projections, including a surrounding SKIP/LIMIT, use `RowRef::Projected` over
+the existing lending, owned-input or ordered parallel-morsel scan protocol.
+Projection names are admitted once, retain duplicate-alias suffixes, and follow
+the same sorted schema as named maps. Payloads remain source/plan-owned during
+immediate callbacks; retained output copies only admitted values into compact
+segments. `native_projection_rows` records this path in execution reports.
+
+The existing work-limit and out-of-core node-projection eligibility boundaries
+remain in force. Other scalar/operator shapes still construct bindings and use
+the shared accumulator. This path-specific integration does not establish
+allocation or latency improvement for every query; release measurements remain
+required.
 
 ## Preparation and admission ownership
 

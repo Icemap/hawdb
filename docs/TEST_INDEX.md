@@ -208,6 +208,17 @@ These remain existing storage/root and native branch-power-loss CI families.
 
 ## CI benchmark smoke owners
 
+Native numeric result delivery is covered by the executor `numeric::` family
+and the facade's query-execution family. The deterministic native oracle covers
+row, lending, owned-typed and columnar-morsel inputs, scalar/NULL values, output
+ceilings, stop and error. Ownership cases verify source/literal pointer identity,
+duplicate aliases, schema refusal, cancellation and panic cleanup. The existing
+parallel resource-refusal case exercises both binding and native sinks. The
+facade case checks compact owned parity, immediate native versus validated
+compact callbacks, fail-closed row/payload limits and SKIP/LIMIT. The native
+Runtime Platform lane selects these cases; the ignored long campaign remains
+local-only. Report-value tests include the native projection counter.
+
 The local-only `mixed_point_growth` probe additionally separates plain EXPLAIN,
 EXPLAIN ANALYZE, no diagnostic, and their original combined sequence. Full and
 minimal parameter maps isolate unused binding variants, with database-cache

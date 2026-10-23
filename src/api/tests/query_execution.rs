@@ -886,6 +886,152 @@ fn read_transaction_borrowed_stream_refuses_limits_without_delivering_a_prefix()
 }
 
 #[test]
+fn native_numeric_results_preserve_borrowing_validation_and_owned_parity() {
+    let mut db = Database::new_with_config(DatabaseConfig {
+        max_read_result_rows: None,
+        max_read_result_payload_bytes: None,
+        ..DatabaseConfig::default()
+    });
+    db.query("CREATE NODE TABLE Item").unwrap();
+    db.query("CREATE PROPERTY ON NODE TABLE Item(score) TYPE INT")
+        .unwrap();
+    for score in 0..3 {
+        db.query_with_params(
+            "CREATE (:Item {score: $score, body: $body})",
+            &BTreeMap::from([
+                ("score".into(), Value::Int(score)),
+                ("body".into(), Value::String(format!("body-{score}"))),
+            ]),
+        )
+        .unwrap();
+    }
+    let query = "MATCH (n:Item) WHERE n.score >= 0 RETURN n.score AS score, n.body AS body";
+    let parameters = BTreeMap::new();
+    let mut tx = db.begin_read_transaction().unwrap();
+    let expected = tx
+        .query_with_params_bounded_profile(query, &parameters, Some(3))
+        .unwrap();
+    assert_eq!(
+        expected
+            .execution_profile
+            .pipeline_memory_report
+            .native_projection_rows,
+        3
+    );
+    for bounded in [false, true] {
+        let mut rows = Vec::new();
+        let report = tx
+            .query_with_params_streaming_ref(
+                query,
+                &parameters,
+                QueryStreamOptions {
+                    max_rows: bounded.then_some(3),
+                    max_payload_bytes: bounded.then_some(1024),
+                },
+                |row| {
+                    assert!(if bounded {
+                        matches!(row, crate::RowRef::Compact(_))
+                    } else {
+                        matches!(row, crate::RowRef::Projected(_))
+                    });
+                    rows.push(row.to_owned_row());
+                    Ok(())
+                },
+            )
+            .unwrap();
+        assert_eq!(rows, expected.output.rows);
+        assert_eq!(
+            report
+                .execution_profile
+                .pipeline_memory_report
+                .native_projection_rows,
+            3
+        );
+        assert_eq!(
+            report
+                .execution_profile
+                .pipeline_memory_report
+                .query_memory_completion_bytes,
+            0
+        );
+    }
+    for options in [
+        QueryStreamOptions {
+            max_rows: Some(2),
+            max_payload_bytes: Some(1024),
+        },
+        QueryStreamOptions {
+            max_rows: Some(3),
+            max_payload_bytes: Some(1),
+        },
+    ] {
+        let mut calls = 0;
+        let error = tx
+            .query_with_params_streaming_ref(query, &parameters, options, |_| {
+                calls += 1;
+                Ok(())
+            })
+            .unwrap_err();
+        assert!(matches!(error, crate::HawDBError::ReadBudgetExceeded(_)));
+        assert_eq!(calls, 0);
+        assert_eq!(tx.query(query).unwrap().rows, expected.output.rows);
+    }
+    for (suffix, offset, limit) in [
+        (" SKIP 1 LIMIT 1", 1, 1),
+        (" SKIP 3 LIMIT 2", 3, 2),
+        (" LIMIT 0", 0, 0),
+        (" LIMIT 2", 0, 2),
+    ] {
+        let mut rows = Vec::new();
+        tx.query_with_params_streaming_ref(
+            &format!("{query}{suffix}"),
+            &parameters,
+            QueryStreamOptions::default(),
+            |row| {
+                assert!(matches!(row, crate::RowRef::Projected(_)));
+                rows.push(row.to_owned_row());
+                Ok(())
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            rows,
+            expected
+                .output
+                .rows
+                .iter()
+                .skip(offset)
+                .take(limit)
+                .map(|row| row.to_owned_row())
+                .collect::<Vec<_>>()
+        );
+    }
+    let context = hawdb_core::RuntimeTaskContext::default().with_work_limit(100);
+    let mut rows = Vec::new();
+    let report = tx
+        .query_with_params_streaming_context(
+            query,
+            &parameters,
+            QueryStreamOptions::default(),
+            &context,
+            |row| {
+                rows.push(row);
+                Ok(())
+            },
+        )
+        .unwrap();
+    assert_eq!(rows, expected.output.rows);
+    assert_eq!(
+        report
+            .execution_profile
+            .pipeline_memory_report
+            .native_projection_rows,
+        0
+    );
+    assert!(context.work_units() > 0);
+}
+
+#[test]
 fn blocking_memory_refusals_expose_effective_limits_and_preserve_complete_results() {
     use crate::{HawDBError, ResourceBudgetKind, ResourceBudgetScope};
     use std::num::NonZeroUsize;

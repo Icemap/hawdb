@@ -207,17 +207,30 @@ fn execute_profiled_output<S: ExecutionStore>(
             observer: context.observer,
             host_scorer: context.host_scorer,
         };
-        execute_prepared_binding_batches(
-            batch_plan,
-            batch_context,
+        let native = hawdb_executor::numeric::try_stream_native_projection(
+            batch_plan.plan(),
+            batch_context.numeric_context(),
             execution_limit,
-            &mut |batch| {
-                for binding in batch {
-                    output.emit(binding)?;
-                }
+            &mut |row| {
+                output.emit_borrowed(row)?;
                 Ok(BatchControl::Continue)
             },
-        )?;
+        );
+        if let Some(result) = native {
+            result?;
+        } else {
+            execute_prepared_binding_batches(
+                batch_plan,
+                batch_context,
+                execution_limit,
+                &mut |batch| {
+                    for binding in batch {
+                        output.emit(binding)?;
+                    }
+                    Ok(BatchControl::Continue)
+                },
+            )?;
+        }
     } else {
         observer.record_operator_start(plan);
         let bindings =

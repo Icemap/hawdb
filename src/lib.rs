@@ -281,7 +281,8 @@ pub use error::{
     ResourceBudgetKind, ResourceBudgetScope, Result,
 };
 pub use executor::{
-    QueryRow, QueryRowRef, QueryRows, QuerySchema, ReadExecutionProfile, Row, RowRef,
+    ProjectedRowRef, QueryRow, QueryRowRef, QueryRows, QuerySchema, ReadExecutionProfile, Row,
+    RowRef,
 };
 pub use graph_route_evidence::{
     nowledge_graph_route_evidence_json, nowledge_mem_graph_augmentation_state_route_query,

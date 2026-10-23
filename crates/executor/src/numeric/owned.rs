@@ -91,6 +91,24 @@ pub fn stream_owned_numeric_nodes<'plan>(
     execution_limit: ExecutionLimit,
     emit: &mut dyn FnMut(BindingBatch) -> Result<BatchControl>,
 ) -> Result<(usize, bool)> {
+    stream_owned_numeric_nodes_with_output(
+        fragment,
+        items,
+        label_id,
+        context,
+        execution_limit,
+        super::NumericOutput::Bindings(emit),
+    )
+}
+
+pub(super) fn stream_owned_numeric_nodes_with_output<'plan>(
+    fragment: NumericFragment<'plan>,
+    items: &'plan [Projection],
+    label_id: LabelId,
+    context: NumericExecutionContext<'_>,
+    execution_limit: ExecutionLimit,
+    emit: super::NumericOutput<'_>,
+) -> Result<(usize, bool)> {
     let properties = selected_properties(fragment, items);
     let input_account = context.memory_ledger.source_account(
         "numeric owned input",
@@ -178,6 +196,26 @@ pub fn stream_owned_typed_numeric_nodes(
     context: NumericExecutionContext<'_>,
     execution_limit: ExecutionLimit,
     emit: &mut dyn FnMut(BindingBatch) -> Result<BatchControl>,
+) -> Result<(usize, bool)> {
+    stream_owned_typed_numeric_nodes_with_output(
+        fragment,
+        items,
+        label_id,
+        scan,
+        context,
+        execution_limit,
+        super::NumericOutput::Bindings(emit),
+    )
+}
+
+pub(super) fn stream_owned_typed_numeric_nodes_with_output(
+    fragment: NumericFragment<'_>,
+    items: &[Projection],
+    label_id: LabelId,
+    scan: LendingNumericScan,
+    context: NumericExecutionContext<'_>,
+    execution_limit: ExecutionLimit,
+    emit: super::NumericOutput<'_>,
 ) -> Result<(usize, bool)> {
     let properties = selected_properties(fragment, items);
     let scratch_account = context.memory_ledger.account(

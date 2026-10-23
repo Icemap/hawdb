@@ -79,8 +79,10 @@ jobs:
       - name: Test borrowed result delivery
         run: |
           cargo test --locked -p hawdb-executor --lib result_delivery::tests::borrowed::
+          cargo test --locked -p hawdb-executor --lib numeric::
           cargo test --locked -p hawdb --lib api::tests::query_execution::read_transaction_exposes_validated_compact_borrowed_rows
           cargo test --locked -p hawdb --lib api::tests::query_execution::read_transaction_borrowed_stream_refuses_limits_without_delivering_a_prefix
+          cargo test --locked -p hawdb --lib api::tests::query_execution::native_numeric_results_preserve_borrowing_validation_and_owned_parity
 
       - name: Test Tokio query entrypoints
         run: |
