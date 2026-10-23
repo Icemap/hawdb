@@ -183,17 +183,43 @@ mod tests {
     }
     const NAME: &str = "search_projection_segment_payloads.17.hawdb";
 
+    fn publication_before_replacement(
+        named: &Path,
+        moved: &Path,
+        project: &ProjectFileDescriptors,
+    ) -> SearchProjectionPublishLease {
+        let directory = SourceDirectory::capture(named, &project.io_context()).unwrap();
+        // Windows refuses ancestor moves once the child lock is open. Move
+        // after native directory capture, before acquiring the child lease;
+        // Unix additionally exercises replacement after lease/source binding.
+        if cfg!(windows) {
+            std::fs::rename(named, moved).unwrap();
+        }
+        let task = RuntimeTaskContext::default();
+        let memory = BuildMemory::new(&task).unwrap();
+        let publication =
+            SearchProjectionPublishLease::acquire_captured(directory, &memory, &task).unwrap();
+        if cfg!(windows) {
+            assert!(publication.matches_source_directory(moved).unwrap());
+            assert!(!named.exists());
+        }
+        publication
+    }
+
     #[test]
-    fn relative_enumeration_and_unlink_cannot_follow_replacement_after_source_binding() {
+    fn relative_enumeration_and_unlink_cannot_follow_replacement_after_capture() {
         let fixture = Fixture::new();
         let named = fixture.0.join("named");
         let moved = fixture.0.join("moved");
         let project = ProjectFileDescriptors::acquire(&named, 8).unwrap();
         std::fs::write(named.join(NAME), b"captured").unwrap();
-        let publication = SearchProjectionPublishLease::acquire_for_cleanup(&named).unwrap();
+        let publication = publication_before_replacement(&named, &moved, &project);
+        let bound_name = if cfg!(windows) { &moved } else { &named };
         publication
-            .with_cleanup_source(&named, |source| {
-                std::fs::rename(&named, &moved).unwrap();
+            .with_cleanup_source(bound_name, |source| {
+                if !cfg!(windows) {
+                    std::fs::rename(&named, &moved).unwrap();
+                }
                 std::fs::create_dir(&named).unwrap();
                 std::fs::write(named.join(NAME), b"foreign").unwrap();
                 std::fs::write(named.join("foreign-only.hawdb"), b"foreign only").unwrap();
@@ -236,7 +262,6 @@ mod tests {
         let moved = fixture.0.join("moved");
         let project = ProjectFileDescriptors::acquire(&named, 8).unwrap();
         std::fs::write(named.join(NAME), b"captured").unwrap();
-        let publication = SearchProjectionPublishLease::acquire_for_cleanup(&named).unwrap();
         let options = SearchProjectionCleanupOptions::default();
         let generations = SearchProjectionGenerations {
             out_of_core: Some(30),
@@ -253,7 +278,10 @@ mod tests {
         let task = RuntimeTaskContext::default();
         let memory = BuildMemory::new(&task).unwrap();
         let immediate = PreparedCleanup::prepare(&named, &memory, &task).unwrap();
-        std::fs::rename(&named, &moved).unwrap();
+        let publication = publication_before_replacement(&named, &moved, &project);
+        if !cfg!(windows) {
+            std::fs::rename(&named, &moved).unwrap();
+        }
         std::fs::create_dir(&named).unwrap();
         std::fs::write(named.join(NAME), b"foreign").unwrap();
         assert!(publication
