@@ -14,7 +14,11 @@
 # limitations under the License.
 
 set -euo pipefail
-runner="$(cd "$(dirname "$0")" && pwd)/run-mvcc-joined-read-shard.sh"
+if [[ -n "${TEST_SRCDIR:-}" && -n "${TEST_WORKSPACE:-}" ]]; then
+  runner="${TEST_SRCDIR}/${TEST_WORKSPACE}/scripts/run-mvcc-joined-read-shard.sh"
+else
+  runner="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/run-mvcc-joined-read-shard.sh"
+fi
 fixture="$(mktemp -d "${TEST_TMPDIR:-${TMPDIR:-/tmp}}/hawdb-joined-shard-test.XXXXXX")"
 trap 'rm -rf "$fixture"' EXIT
 export JOINED_SHARD_RECORD="$fixture/selected"
