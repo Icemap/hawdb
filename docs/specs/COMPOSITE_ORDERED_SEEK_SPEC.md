@@ -45,7 +45,9 @@ through the fallback plan. The optimizer never interprets an opaque parameter ma
 as a scalar type: the plan-cache marker owner supplies shape-specific proofs only
 on eligible cache misses, and binding retains ownership of marker interpretation.
 Cache hits and ordinary point queries do not clone the optimizer catalog for this
-proof. The marker owner supplies proofs only for bindings retained by the verified
+proof. Unrelated cache keys carry no composite capability vector; ordered keys
+share an immutable proof owner, including an explicitly tracked empty proof set
+so later capability gains still invalidate prepared plans. The marker owner supplies proofs only for bindings retained by the verified
 parameterized plan, omitting unused lists and other request fields.
 
 ## Ordering, snapshots and continuation

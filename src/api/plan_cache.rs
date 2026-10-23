@@ -240,8 +240,8 @@ pub(super) struct OptimizerEnvironmentKey {
     // Query-local point estimates do not depend on published advanced statistics.
     statistics_generation: Option<u64>,
     ordered_range_indexes: Vec<(String, String)>,
-    ordered_composite_indexes: Vec<OrderedCompositeCapability>,
-    tracks_composite_ordering: bool,
+    // None is an unrelated query; Some(empty) still tracks capability gains.
+    ordered_composite_indexes: Option<Arc<Vec<OrderedCompositeCapability>>>,
     node_index_size_classes: Vec<(LabelId, bool)>,
 }
 
@@ -487,6 +487,13 @@ impl OptimizerSchemaKey {
 }
 
 impl OptimizerEnvironmentKey {
+    fn ordered_composite_proofs(&self) -> impl Iterator<Item = OrderedCompositeCapability> + '_ {
+        self.ordered_composite_indexes
+            .iter()
+            .flat_map(|proofs| proofs.iter())
+            .cloned()
+    }
+
     /// A prepared query may reuse a physical plan across data and statistics
     /// generations because those affect cost only. Schema and runtime ordering
     /// capabilities affect legality and therefore require re-planning.
@@ -497,8 +504,10 @@ impl OptimizerEnvironmentKey {
     ) -> bool {
         self.schema == OptimizerSchemaKey::from_catalog(catalog)
             && self.ordered_range_indexes == ordered_range_indexes(catalog, store)
-            && (!self.tracks_composite_ordering
-                || self.ordered_composite_indexes == ordered_composite_indexes(catalog, store))
+            && self
+                .ordered_composite_indexes
+                .as_ref()
+                .is_none_or(|proofs| proofs.as_ref() == &ordered_composite_indexes(catalog, store))
     }
 }
 
@@ -534,12 +543,8 @@ impl OptimizerPlanningCache {
             schema: OptimizerSchemaKey::from_catalog(catalog),
             statistics_generation: (!query_local_statistics).then_some(self.statistics_generation),
             ordered_range_indexes: ordered_range_indexes(catalog, store),
-            tracks_composite_ordering,
-            ordered_composite_indexes: if tracks_composite_ordering {
-                ordered_composite_indexes(catalog, store)
-            } else {
-                Vec::new()
-            },
+            ordered_composite_indexes: tracks_composite_ordering
+                .then(|| Arc::new(ordered_composite_indexes(catalog, store))),
             node_index_size_classes: node_index_size_classes(catalog, store),
         }
     }
@@ -638,12 +643,8 @@ impl OptimizerPlanningCache {
             schema: OptimizerSchemaKey::from_catalog(catalog),
             statistics_generation: Some(self.statistics_generation),
             ordered_range_indexes: ordered_range_indexes(catalog, store),
-            tracks_composite_ordering,
-            ordered_composite_indexes: if tracks_composite_ordering {
-                ordered_composite_indexes(catalog, store)
-            } else {
-                Vec::new()
-            },
+            ordered_composite_indexes: tracks_composite_ordering
+                .then(|| Arc::new(ordered_composite_indexes(catalog, store))),
             node_index_size_classes: node_index_size_classes(catalog, store),
         };
         // The catalog depends on runtime capabilities as well as schema and
@@ -670,7 +671,7 @@ impl OptimizerPlanningCache {
         let optimized = Arc::new(
             optimizer_catalog_from_graph_statistics(catalog, statistics)
                 .with_ordered_range_indexes(environment.ordered_range_indexes.clone())
-                .with_ordered_composite_indexes(environment.ordered_composite_indexes.clone()),
+                .with_ordered_composite_indexes(environment.ordered_composite_proofs()),
         );
         decisions.push(format!(
             "optimizer catalog cache refresh: statistics_epoch={} statistics_generation={} graph_commit_epoch={}",
@@ -814,10 +815,11 @@ pub(super) fn optimized_query_plan_for<S: crate::executor::ExecutionStore>(
         .as_ref()
         .is_some_and(|plan| plan.slot_count() > 0);
     let query_catalog = (has_parameter_slots
-        && !catalog_access
+        && catalog_access
             .environment
             .ordered_composite_indexes
-            .is_empty()
+            .as_ref()
+            .is_some_and(|proofs| !proofs.is_empty())
         && ordered_query_shape(&logical))
     .then(|| {
         catalog_access
@@ -958,7 +960,7 @@ fn optimizer_catalog_access_for_logical<S: crate::executor::ExecutionStore>(
         let catalog = Arc::new(
             optimizer_catalog_from_graph_statistics(context.catalog, &statistics)
                 .with_ordered_range_indexes(environment.ordered_range_indexes.clone())
-                .with_ordered_composite_indexes(environment.ordered_composite_indexes.clone())
+                .with_ordered_composite_indexes(environment.ordered_composite_proofs())
                 .with_property_equality_row_count(
                     point.label.to_owned(),
                     point.property.to_owned(),
@@ -990,8 +992,7 @@ fn optimizer_catalog_access_for_logical<S: crate::executor::ExecutionStore>(
         schema: OptimizerSchemaKey::from_catalog(context.catalog),
         statistics_generation: Some(context.planning_cache.borrow().statistics_generation),
         ordered_range_indexes: ordered_range_indexes(context.catalog, context.store),
-        ordered_composite_indexes: Vec::new(),
-        tracks_composite_ordering: false,
+        ordered_composite_indexes: None,
         // Mutation plans bypass the physical cache and have no graph input.
         // Do not add a second basic-count clone to their planning path.
         node_index_size_classes: Vec::new(),
@@ -999,7 +1000,7 @@ fn optimizer_catalog_access_for_logical<S: crate::executor::ExecutionStore>(
     let catalog = Arc::new(
         optimizer_catalog_from_graph_statistics(context.catalog, &statistics)
             .with_ordered_range_indexes(environment.ordered_range_indexes.clone())
-            .with_ordered_composite_indexes(environment.ordered_composite_indexes.clone()),
+            .with_ordered_composite_indexes(environment.ordered_composite_proofs()),
     );
     OptimizerCatalogAccess {
         environment,
