@@ -39,6 +39,14 @@ Implementation correspondence:
 - `Retire`: prepared-state and retained-memory RAII owners release reservations
   after the AST/plan, including rejection, cancellation and panic.
 
+Both owned Cypher requests and admitted SQL use these transitions. SQL retains
+a schema-neutral template and validates its original database instance and
+configuration before binding access paths against the execution snapshot.
+Host-scorer callback ownership is separate from prepared plan memory: only its
+descriptor participates in preparation. The model covers reservation ownership,
+not callback behavior, SQL binding correctness, or cumulative output budgets;
+request regressions own those checks.
+
 Recommended verification:
 
 ```console

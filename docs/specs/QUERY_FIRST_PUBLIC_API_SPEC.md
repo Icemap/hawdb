@@ -121,10 +121,29 @@ and scoring-plan shape. Changed scoring coefficients, query parameters and
 reference clocks MUST bind to the current execution. A mismatch uses the normal
 planner rather than a plan prepared with different permissions.
 
-The synchronous implementation does not by itself establish Tokio attachment
-parity, general multi-statement snapshot budgets, lock-free callback execution,
-or end-to-end borrowed result delivery. Those remain separate acceptance items
-in issue #1193.
+`OwnedQueryRequest` and `OwnedSqlQueryRequest` own this same contract across
+asynchronous admission. Their borrowed views use the synchronous statement
+kernel. Tokio collection and streaming MUST retain authorization, scoring,
+cancellation and output limits. `OwnedHostScoringRequest` owns a `Send` host
+scorer; preparation reads its validated descriptor without invoking the scorer.
+Execution borrows the scorer exclusively, and cancellation or future drop
+releases it with the request. A busy or poisoned scorer fails closed. Admitted
+autocommit requests MUST reject an open Embedded explicit transaction.
+
+`DatabaseReadTransaction::into_bounded` consumes a pinned transaction and creates
+one `BudgetedReadSnapshot`. All Cypher and SQL statements share its
+`ReadSnapshotBudget`; per-statement limits intersect the remaining budget.
+Successful owned results debit rows and logical payload bytes atomically. A
+failed statement delivers no owned result and consumes no output quota. Payload
+accounting charges column names per row and value payloads regardless of compact
+physical schema storage. EXPLAIN charges its delivered report, not the inner
+execution's row count. `ReadSnapshotUsage` counts completed statements and
+delivered output. Mem snapshots use this same ledger, including their projection
+visit charges, while retaining their existing positive-budget entry contract.
+
+These request contracts do not by themselves establish execution outside outer
+locks or end-to-end borrowed result delivery. Those remain separate acceptance
+items in issue #1193.
 
 ## Preparation and admission ownership
 
@@ -146,6 +165,16 @@ error and panic MUST release the associated ownership. An adapter that queues
 execution MUST release rebuildable preparation on a retryable admission refusal,
 then reprepare under the execution reservation. This prevents multiple prepared
 queries from holding all available memory while waiting for one another.
+
+Admitted SQL retains a parameter-neutral relational template, database instance
+identity and configuration, without a source snapshot. Relational access paths
+bind against the execution snapshot, so schema and parameter changes cannot
+reuse stale physical bindings. A database-instance or configuration change
+during admission fails the request. SQL currently admits the configured query
+working-memory ceiling conservatively; this is not a physical-plan estimate.
+After a retryable refusal, Tokio reparses through the originally captured
+template cache under the execution reservation and still checks that original
+identity before execution. SQL mutation RETURNING limits apply before commit.
 
 This transition is modeled by
 [`HawDBPreparedAdmission`](../tla/PREPARED_ADMISSION_PROOF.md). It does not introduce

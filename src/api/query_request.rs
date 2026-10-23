@@ -20,9 +20,13 @@ use hawdb_plan_cypher::{
 };
 use std::collections::BTreeMap;
 
+mod budget;
 mod host;
+mod owned;
 mod sql;
+pub use budget::{BudgetedReadSnapshot, ReadSnapshotBudget, ReadSnapshotUsage};
 pub use host::HostScoringRequest;
+pub use owned::{OwnedHostScoringRequest, OwnedQueryRequest, OwnedSqlQueryRequest};
 pub use sql::SqlQueryRequest;
 
 #[derive(Clone, Copy)]
@@ -514,12 +518,21 @@ mod tests {
     fn snapshot_request_collects_compact_rows_with_owned_result_accounting() {
         let mut database = Database::new();
         let parameters = BTreeMap::from([(
-            "ids".into(),
-            Value::List((0..2_048).map(Value::Int).collect()),
+            "rows".into(),
+            Value::List(
+                (0..2_048)
+                    .map(|id| {
+                        Value::Map(BTreeMap::from([
+                            ("id".into(), Value::Int(id)),
+                            ("title".into(), Value::String("payload".into())),
+                        ]))
+                    })
+                    .collect(),
+            ),
         )]);
         database
             .query_with_params(
-                "UNWIND $ids AS id CREATE (:Sample {id: id, title: 'payload'})",
+                "UNWIND $rows AS row CREATE (:Sample {id: row.id, title: row.title})",
                 &parameters,
             )
             .unwrap();
@@ -1112,3 +1125,7 @@ mod expansion_budget_tests;
 #[cfg(test)]
 #[path = "query_request/adapter_tests.rs"]
 mod adapter_tests;
+
+#[cfg(test)]
+#[path = "query_request/budget_tests.rs"]
+mod budget_tests;

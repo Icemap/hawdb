@@ -133,6 +133,8 @@ pub(crate) mod publication;
 pub use publication::{DatabasePublicationOwner, DatabasePublicationState};
 mod query_request;
 mod query_runtime;
+mod sql_runtime;
+pub(crate) use sql_runtime::PreparedRuntimeSql;
 mod retained_query;
 pub use retained_query::{
     ArrowArray, ArrowArrayStream, ArrowSchema, RetainedArrowCodeOwner, RetainedArrowExport,
@@ -174,7 +176,11 @@ pub use hawdb_storage::branch_create_recovery::{
     BranchCreateRecoveryStatus,
 };
 use query_request::BoundScoringRequest;
-pub use query_request::{HostScoringRequest, QueryRequest, ScoringRequest, SqlQueryRequest};
+pub use query_request::{
+    BudgetedReadSnapshot, HostScoringRequest, OwnedHostScoringRequest, OwnedQueryRequest,
+    OwnedSqlQueryRequest, QueryRequest, ReadSnapshotBudget, ReadSnapshotUsage, ScoringRequest,
+    SqlQueryRequest,
+};
 pub(crate) use query_runtime::PreparedRuntimeQuery;
 #[cfg(feature = "tokio-runtime")]
 pub(crate) use query_runtime::RuntimePlanningSnapshot;
@@ -22317,22 +22323,6 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
             .output)
     }
 
-    pub(crate) fn query_prepared_with_params_owned_context(
-        &mut self,
-        prepared: PreparedRuntimeQuery,
-        parameters: &BTreeMap<String, Value>,
-        options: QueryStreamOptions,
-        task_context: &hawdb_core::RuntimeTaskContext,
-    ) -> Result<QueryOutput> {
-        self.query_prepared_with_params_profiled_context(
-            prepared,
-            parameters,
-            options,
-            task_context,
-        )
-        .map(|result| result.output)
-    }
-
     pub(crate) fn query_prepared_with_params_profiled_context(
         &mut self,
         prepared: PreparedRuntimeQuery,
@@ -22508,20 +22498,45 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
         options: QueryStreamOptions,
         delivery: executor::StreamDelivery,
         task_context: &hawdb_core::RuntimeTaskContext,
+        consumer: impl FnMut(Row) -> Result<()>,
+    ) -> Result<QueryStreamReport> {
+        self.query_prepared_request_streaming(
+            prepared,
+            QueryRequest::new("")
+                .with_params(parameters)
+                .with_task_context(task_context)
+                .with_output_limits(options),
+            delivery,
+            consumer,
+        )
+    }
+
+    pub(crate) fn query_prepared_request_streaming(
+        &mut self,
+        prepared: PreparedRuntimeQuery,
+        request: QueryRequest<'_>,
+        delivery: executor::StreamDelivery,
         mut consumer: impl FnMut(Row) -> Result<()>,
     ) -> Result<QueryStreamReport> {
+        let task =
+            query_request::bind_request_context(self.task_context.as_ref(), request.task_context)?;
+        let request = QueryRequest {
+            task_context: task.as_ref(),
+            ..request
+        };
+        let execution = query_runtime::QueryExecutionOptions::for_request(request, None);
         let (cypher_text, prepared) = prepared.into_execution(&self.catalog, &self.store);
         self.query_with_params_streaming_prepared_external_internal(
             &cypher_text,
             prepared,
-            parameters,
-            options,
+            request.parameters.unwrap_or(&BTreeMap::new()),
+            execution.output_limits,
             ReadStreamingExecutionContext {
-                task_context: Some(task_context),
+                task_context: execution.task_context,
                 external: None,
                 delivery,
-                scoring: None,
-                access_control: None,
+                scoring: execution.scoring,
+                access_control: execution.access_control,
             },
             &mut consumer,
         )
@@ -23086,7 +23101,7 @@ where
         )
     }
 
-    pub(super) fn query_sql_with_prepared_request(
+    pub(crate) fn query_sql_with_prepared_request(
         &self,
         request: SqlQueryRequest<'_>,
         prepared: crate::relational_sql::PreparedRelationalSql,

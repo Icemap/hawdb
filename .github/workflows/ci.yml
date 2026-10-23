@@ -77,7 +77,9 @@ jobs:
           cargo test --locked -p hawdb --features acl --lib api::query_request::
 
       - name: Test Tokio query entrypoints
-        run: cargo test -p hawdb --features tokio-runtime --lib embedded_tokio::tests
+        run: |
+          cargo test --locked -p hawdb --features tokio-runtime --lib embedded_tokio::
+          cargo test --locked -p hawdb --features tokio-runtime,acl --lib embedded_tokio::request_tests
 
   vector-projection-platform:
     name: Vector Projection (${{ matrix.target }})

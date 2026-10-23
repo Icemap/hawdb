@@ -14,7 +14,7 @@
 
 use crate::{
     EmbeddedQueryEntrypoint, EmbeddedQueryPathReadiness, HawDBEmbedded, HawDBEmbeddedOpenOptions,
-    HawDBError, QueryOutput, QueryStreamOptions, QueryStreamReport, Row, Value,
+    HawDBError, OwnedQueryRequest, QueryOutput, QueryStreamOptions, QueryStreamReport, Row, Value,
 };
 use hawdb_core::{RuntimeCancellationToken, RuntimeTaskContext};
 use hawdb_qos::{
@@ -35,13 +35,12 @@ const DEFAULT_STREAM_CHANNEL_CAPACITY: usize = 2;
 const MAX_MUTATION_PLANNING_ATTEMPTS: usize = 3;
 
 struct RuntimeQueryInput {
-    cypher_text: String,
-    parameters: BTreeMap<String, Value>,
+    request: OwnedQueryRequest,
 }
 
 impl RuntimeQueryInput {
     fn planning_request(&self, priority: RuntimeWorkPriority) -> RuntimeWorkRequest {
-        crate::api::runtime_planning_request(self.cypher_text.len(), priority)
+        crate::api::runtime_planning_request(self.request.as_request().cypher.len(), priority)
     }
 
     fn prepare_for_execution(
@@ -58,7 +57,7 @@ impl RuntimeQueryInput {
             Some(prepared) if planning.accepts_prepared(&prepared) => prepared,
             stale => {
                 drop(stale);
-                planning.prepare(self.cypher_text.clone(), &self.parameters)?
+                planning.prepare_request(self.request.as_request().with_task_context(context))?
             }
         };
         if prepared.admission() != admitted {
@@ -302,10 +301,20 @@ impl HawDBTokioEmbedded {
         parameters: BTreeMap<String, Value>,
         task_context: RuntimeTaskContext,
     ) -> Result<QueryOutput, HawDBTokioEmbeddedError> {
-        let input = Arc::new(RuntimeQueryInput {
-            cypher_text: cypher_text.into(),
-            parameters,
-        });
+        self.query_request(
+            OwnedQueryRequest::new(cypher_text)
+                .with_params(parameters)
+                .with_task_context(task_context),
+        )
+        .await
+    }
+
+    pub async fn query_request(
+        &self,
+        query: OwnedQueryRequest,
+    ) -> Result<QueryOutput, HawDBTokioEmbeddedError> {
+        let task_context = query.as_request().task_context.cloned().unwrap_or_default();
+        let input = Arc::new(RuntimeQueryInput { request: query });
         let prepared = self
             .prepare_query(
                 Arc::clone(&input),
@@ -337,10 +346,22 @@ impl HawDBTokioEmbedded {
         request: RuntimeWorkRequest,
         task_context: RuntimeTaskContext,
     ) -> Result<QueryOutput, HawDBTokioEmbeddedError> {
-        let input = Arc::new(RuntimeQueryInput {
-            cypher_text: cypher_text.into(),
-            parameters,
-        });
+        self.query_request_with_admission(
+            OwnedQueryRequest::new(cypher_text)
+                .with_params(parameters)
+                .with_task_context(task_context),
+            request,
+        )
+        .await
+    }
+
+    pub async fn query_request_with_admission(
+        &self,
+        query: OwnedQueryRequest,
+        request: RuntimeWorkRequest,
+    ) -> Result<QueryOutput, HawDBTokioEmbeddedError> {
+        let task_context = query.as_request().task_context.cloned().unwrap_or_default();
+        let input = Arc::new(RuntimeQueryInput { request: query });
         let prepared = self
             .prepare_query(Arc::clone(&input), request.priority, task_context.clone())
             .await?;
@@ -376,6 +397,85 @@ impl HawDBTokioEmbedded {
             task_context,
         )
         .await
+    }
+
+    pub async fn query_sql_request(
+        &self,
+        query: crate::OwnedSqlQueryRequest,
+    ) -> Result<QueryOutput, HawDBTokioEmbeddedError> {
+        let query = Arc::new(query);
+        let context = query.as_request().task_context.cloned().unwrap_or_default();
+        let planning_request = crate::api::runtime_planning_request(
+            query.as_request().sql.len(),
+            RuntimeWorkPriority::Foreground,
+        );
+        let planning_input = Arc::clone(&query);
+        let embedded = Arc::clone(&self.embedded);
+        let ((planning, prepared), memory) = self
+            .runtime
+            .prepare_blocking(
+                RuntimeWorkPriority::Foreground,
+                planning_request.memory_bytes,
+                context.clone(),
+                move |context| {
+                    context.checkpoint().map_err(|reason| {
+                        HawDBError::Execution(format!("runtime task stopped: {reason}"))
+                    })?;
+                    let planning = {
+                        let embedded = lock_embedded(&embedded);
+                        ensure_autocommit(&embedded)?;
+                        embedded.database().runtime_sql_planning_snapshot()
+                    };
+                    let prepared = planning.prepare(planning_input.as_request().sql)?;
+                    Ok((planning, prepared))
+                },
+            )
+            .await
+            .map_err(HawDBTokioEmbeddedError::Task)?;
+        let prepared = prepared.with_planning_memory(memory);
+        let request =
+            prepared.work_request(self.with_embedded(HawDBEmbedded::admitted_result_budget_bytes));
+        let request =
+            request.with_memory_bytes(request.memory_bytes.max(planning_request.memory_bytes));
+        let embedded = Arc::clone(&self.embedded);
+        self.runtime
+            .execute_blocking_with_reusable_state(
+                prepared,
+                move |_, prepared: Option<&crate::api::PreparedRuntimeSql>| {
+                    request.with_retained_memory_bytes(
+                        prepared.map_or(0, |prepared| prepared.planning_memory_bytes()),
+                    )
+                },
+                context,
+                move |prepared, context| {
+                    context.checkpoint().map_err(|reason| {
+                        HawDBError::Execution(format!("runtime task stopped: {reason}"))
+                    })?;
+                    // The original schema-neutral cache and context survive waiting;
+                    // rebuilding after a refusal cannot silently select another branch.
+                    let prepared = match prepared {
+                        Some(prepared) => prepared,
+                        None => planning.prepare(query.as_request().sql)?,
+                    };
+                    let mut embedded = lock_embedded(&embedded);
+                    ensure_autocommit(&embedded)?;
+                    let uses_snapshot = prepared.uses_snapshot();
+                    let (prepared, _planning_memory) =
+                        prepared.into_statement(embedded.database())?;
+                    let query = query.as_request().with_task_context(context);
+                    if uses_snapshot {
+                        let snapshot = embedded.database().begin_read_transaction()?;
+                        drop(embedded);
+                        snapshot.query_sql_with_prepared_request(query, prepared)
+                    } else {
+                        embedded
+                            .database_mut()
+                            .query_sql_with_prepared_request(query, prepared)
+                    }
+                },
+            )
+            .await
+            .map_err(HawDBTokioEmbeddedError::Task)
     }
 
     pub async fn query_stream(
@@ -429,10 +529,30 @@ impl HawDBTokioEmbedded {
         options: TokioQueryStreamOptions,
         task_context: RuntimeTaskContext,
     ) -> Result<TokioQueryBatchStream, HawDBTokioEmbeddedError> {
-        let input = Arc::new(RuntimeQueryInput {
-            cypher_text: cypher_text.into(),
-            parameters,
-        });
+        self.query_request_stream_with_options(
+            OwnedQueryRequest::new(cypher_text)
+                .with_params(parameters)
+                .with_task_context(task_context),
+            options,
+        )
+        .await
+    }
+
+    pub async fn query_request_stream(
+        &self,
+        query: OwnedQueryRequest,
+    ) -> Result<TokioQueryBatchStream, HawDBTokioEmbeddedError> {
+        self.query_request_stream_with_options(query, TokioQueryStreamOptions::default())
+            .await
+    }
+
+    pub async fn query_request_stream_with_options(
+        &self,
+        query: OwnedQueryRequest,
+        options: TokioQueryStreamOptions,
+    ) -> Result<TokioQueryBatchStream, HawDBTokioEmbeddedError> {
+        let task_context = query.as_request().task_context.cloned().unwrap_or_default();
+        let input = Arc::new(RuntimeQueryInput { request: query });
         let prepared = self
             .prepare_query(
                 Arc::clone(&input),
@@ -505,6 +625,7 @@ impl HawDBTokioEmbedded {
             );
             let (planning, mut read_transaction) = {
                 let embedded = lock_embedded(&embedded);
+                ensure_autocommit(&embedded)?;
                 let database = embedded.database();
                 (
                     database.runtime_planning_snapshot()?,
@@ -516,15 +637,13 @@ impl HawDBTokioEmbedded {
             drop(planning);
             let mut batch = Vec::with_capacity(batch_rows);
             let mut batch_bytes = 0usize;
-            let report = read_transaction.query_prepared_with_params_streaming_context(
+            let report = read_transaction.query_prepared_request_streaming(
                 prepared,
-                &input.parameters,
-                QueryStreamOptions {
-                    max_rows,
-                    max_payload_bytes: Some(max_payload_bytes),
-                },
+                input.request.as_request().with_task_context(&task_context)
+                    .with_restrictive_output_limits(QueryStreamOptions {
+                        max_rows, max_payload_bytes: Some(max_payload_bytes),
+                    }),
                 crate::executor::StreamDelivery::Incremental,
-                &task_context,
                 |row| {
                     let row_bytes = crate::executor::map_memory_bytes(&row);
                     if row_bytes > batch_payload_bytes {
@@ -585,13 +704,15 @@ impl HawDBTokioEmbedded {
                 input.planning_request(priority).memory_bytes,
                 task_context,
                 move |context| {
-                    let planning = lock_embedded(&embedded)
-                        .database()
-                        .runtime_planning_snapshot()?;
+                    let planning = {
+                        let embedded = lock_embedded(&embedded);
+                        ensure_autocommit(&embedded)?;
+                        embedded.database().runtime_planning_snapshot()?
+                    };
                     context.checkpoint().map_err(|reason| {
                         HawDBError::Execution(format!("runtime task stopped: {reason}"))
                     })?;
-                    planning.prepare(input.cypher_text.clone(), &input.parameters)
+                    planning.prepare_request(input.request.as_request().with_task_context(context))
                 },
             )
             .await
@@ -635,9 +756,11 @@ impl HawDBTokioEmbedded {
                     task_context,
                     move |mut prepared, task_context| {
                         for _ in 0..MAX_MUTATION_PLANNING_ATTEMPTS {
-                            let planning = lock_embedded(&embedded)
-                                .database()
-                                .runtime_planning_snapshot()?;
+                            let planning = {
+                                let embedded = lock_embedded(&embedded);
+                                ensure_autocommit(&embedded)?;
+                                embedded.database().runtime_planning_snapshot()?
+                            };
                             let prepared = input.prepare_for_execution(
                                 &planning,
                                 prepared.take(),
@@ -645,11 +768,11 @@ impl HawDBTokioEmbedded {
                                 task_context,
                             )?;
                             let mut embedded = lock_embedded(&embedded);
+                            ensure_autocommit(&embedded)?;
                             if planning.is_current_for(embedded.database(), &prepared)? {
-                                return embedded.database_mut().query_prepared_with_params_context(
+                                return embedded.database_mut().query_prepared_request(
                                     prepared,
-                                    &input.parameters,
-                                    task_context,
+                                    input.request.as_request().with_task_context(task_context),
                                 );
                             }
                             // Drop both the stale plan and lock before another planning attempt.
@@ -674,6 +797,7 @@ impl HawDBTokioEmbedded {
                     move |prepared, task_context| {
                         let (planning, mut read_transaction) = {
                             let embedded = lock_embedded(&embedded);
+                            ensure_autocommit(&embedded)?;
                             let database = embedded.database();
                             (
                                 database.runtime_planning_snapshot()?,
@@ -692,29 +816,41 @@ impl HawDBTokioEmbedded {
                             // append WAL. Use the guarded live runtime while
                             // retaining their query admission/result budget.
                             drop(read_transaction);
-                            return lock_embedded(&embedded)
-                                .database_mut()
-                                .query_prepared_with_params_context(
-                                    prepared,
-                                    &input.parameters,
-                                    task_context,
-                                );
+                            let mut embedded = lock_embedded(&embedded);
+                            ensure_autocommit(&embedded)?;
+                            return embedded.database_mut().query_prepared_request(
+                                prepared,
+                                input.request.as_request().with_task_context(task_context),
+                            );
                         }
-                        read_transaction.query_prepared_with_params_owned_context(
-                            prepared,
-                            &input.parameters,
-                            QueryStreamOptions {
-                                max_rows,
-                                max_payload_bytes: Some(max_payload_bytes),
-                            },
-                            task_context,
-                        )
+                        read_transaction
+                            .query_prepared_request(
+                                prepared,
+                                input
+                                    .request
+                                    .as_request()
+                                    .with_task_context(task_context)
+                                    .with_restrictive_output_limits(QueryStreamOptions {
+                                        max_rows,
+                                        max_payload_bytes: Some(max_payload_bytes),
+                                    }),
+                            )
+                            .map(|profiled| profiled.output)
                     },
                 )
                 .await
                 .map_err(HawDBTokioEmbeddedError::Task)
         }
     }
+}
+
+fn ensure_autocommit(embedded: &HawDBEmbedded) -> Result<(), HawDBError> {
+    if embedded.transaction_active() {
+        return Err(HawDBError::Execution(
+            "a user transaction is open on this database".into(),
+        ));
+    }
+    Ok(())
 }
 
 fn apply_segment_io_requirement(
@@ -812,7 +948,7 @@ mod tests {
         embedded
             .runtime()
             .block_on(async {
-                for route in 0..3 {
+                for route in 0..4 {
                     let context =
                         RuntimeTaskContext::with_timeout(std::time::Duration::from_millis(20));
                     let result = match route {
@@ -826,7 +962,14 @@ mod tests {
                             )
                             .await
                             .map(|_| ()),
-                        _ => embedded.query_stream("MATCH (", context).await.map(|_| ()),
+                        2 => embedded.query_stream("MATCH (", context).await.map(|_| ()),
+                        _ => embedded
+                            .query_sql_request(
+                                crate::OwnedSqlQueryRequest::new("SELECT (")
+                                    .with_task_context(context),
+                            )
+                            .await
+                            .map(|_| ()),
                     };
                     assert!(matches!(
                         result,
@@ -1658,3 +1801,7 @@ mod tests {
         ))
     }
 }
+
+#[cfg(test)]
+#[path = "embedded_tokio/request_tests.rs"]
+mod request_tests;

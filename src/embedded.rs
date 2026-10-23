@@ -532,6 +532,57 @@ impl HawDBEmbedded {
         result.map_err(EmbeddedQueryError::Database)
     }
 
+    pub fn query_sql_request_admitted(
+        &mut self,
+        query: crate::SqlQueryRequest<'_>,
+    ) -> std::result::Result<QueryOutput, EmbeddedQueryError> {
+        if self.transaction.is_some() {
+            return Err(HawDBError::Execution(
+                "a user transaction is open on this database".into(),
+            )
+            .into());
+        }
+        let default_context = RuntimeTaskContext::default();
+        let context = query.task_context.unwrap_or(&default_context);
+        self.check_admitted_query_context(context)?;
+        let planning_request = crate::api::runtime_planning_request(
+            query.sql.len(),
+            hawdb_qos::RuntimeWorkPriority::Foreground,
+        );
+        let prepared = {
+            let permit = self.try_admit_query(planning_request)?;
+            self.database
+                .runtime_sql_planning_snapshot()
+                .prepare(query.sql)?
+                .with_planning_memory(
+                    permit
+                        .into_retained_memory()
+                        .expect("control work owns fixed memory"),
+                )
+        };
+        let uses_snapshot = prepared.uses_snapshot();
+        let request = prepared
+            .work_request(self.admitted_result_budget_bytes())
+            .with_retained_memory_bytes(prepared.planning_memory_bytes());
+        let permit = self.try_admit_query(request)?;
+        let context = permit.bind_task_context(context.clone());
+        self.check_admitted_query_context(&context)?;
+        let (prepared, _planning_memory) = prepared.into_statement(&self.database)?;
+        let query = query.with_task_context(&context);
+        let result = if uses_snapshot {
+            self.database
+                .begin_read_transaction_with_shared_plan_cache()?
+                .query_sql_with_prepared_request(query, prepared)
+        } else {
+            self.database
+                .query_sql_with_prepared_request(query, prepared)
+        };
+        if uses_snapshot {
+            self.check_admitted_query_context(&context)?;
+        }
+        result.map_err(EmbeddedQueryError::Database)
+    }
+
     fn try_admit_query(
         &self,
         request: hawdb_qos::RuntimeWorkRequest,

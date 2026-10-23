@@ -473,7 +473,7 @@ impl Database {
         )
     }
 
-    pub(super) fn query_sql_with_prepared_request(
+    pub(crate) fn query_sql_with_prepared_request(
         &mut self,
         request: super::SqlQueryRequest<'_>,
         prepared: crate::relational_sql::PreparedRelationalSql,

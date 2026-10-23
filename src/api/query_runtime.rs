@@ -88,10 +88,18 @@ impl RuntimePlanningSnapshot {
         )
     }
 
+    #[cfg(test)]
     pub(crate) fn prepare(
         &self,
-        cypher_text: String,
+        cypher: String,
         parameters: &BTreeMap<String, Value>,
+    ) -> Result<PreparedRuntimeQuery> {
+        self.prepare_request(QueryRequest::new(&cypher).with_params(parameters))
+    }
+
+    pub(crate) fn prepare_request(
+        &self,
+        request: QueryRequest<'_>,
     ) -> Result<PreparedRuntimeQuery> {
         RuntimePlanningContext {
             branch_id: self.branch_id,
@@ -102,11 +110,11 @@ impl RuntimePlanningSnapshot {
             system_variables: &self.system_variables,
         }
         .prepare(
-            cypher_text,
-            parameters,
+            request.cypher.to_owned(),
+            request.parameters.unwrap_or(&BTreeMap::new()),
             &self.plan_cache,
             &self.planning_cache,
-            QueryExecutionOptions::default(),
+            QueryExecutionOptions::for_request(request, None),
         )
     }
 }
@@ -633,23 +641,6 @@ impl Database {
         .map(|(output, _)| output)
     }
 
-    #[cfg_attr(not(feature = "tokio-runtime"), allow(dead_code))]
-    pub(crate) fn query_prepared_with_params_context(
-        &mut self,
-        prepared: PreparedRuntimeQuery,
-        parameters: &BTreeMap<String, Value>,
-        task_context: &hawdb_core::RuntimeTaskContext,
-    ) -> Result<QueryOutput> {
-        self.query_prepared_with_params_trace_and_external_context(
-            prepared,
-            parameters,
-            false,
-            &mut executor::NoExternalReadOperator,
-            task_context,
-        )
-        .map(|(output, _)| output)
-    }
-
     pub(crate) fn query_prepared_with_params_trace_and_external_context(
         &mut self,
         prepared: PreparedRuntimeQuery,
@@ -1172,10 +1163,8 @@ mod tests {
         let guard = db.lock().unwrap();
         let (sender, receiver) = std::sync::mpsc::channel();
         let worker = std::thread::spawn(move || {
-            let prepared = planning.prepare(
-                "MATCH (m:Memory) RETURN m.id AS id".to_string(),
-                &BTreeMap::new(),
-            );
+            let prepared =
+                planning.prepare_request(QueryRequest::new("MATCH (m:Memory) RETURN m.id AS id"));
             sender
                 .send(prepared.map(|prepared| prepared.admission.is_mutation))
                 .unwrap();
@@ -1325,7 +1314,9 @@ mod tests {
         let parameters = BTreeMap::new();
         let prepared = {
             let planning = db.runtime_planning_snapshot().unwrap();
-            planning.prepare(query.to_string(), &parameters).unwrap()
+            planning
+                .prepare_request(QueryRequest::new(query).with_params(&parameters))
+                .unwrap()
         };
         assert!(db
             .runtime
@@ -1351,13 +1342,9 @@ mod tests {
         let output = db
             .begin_read_transaction()
             .unwrap()
-            .query_prepared_with_params_owned_context(
-                prepared,
-                &parameters,
-                QueryStreamOptions::default(),
-                &hawdb_core::RuntimeTaskContext::default(),
-            )
-            .unwrap();
+            .query_prepared_request(prepared, QueryRequest::new(query).with_params(&parameters))
+            .unwrap()
+            .output;
         assert_eq!(output.rows.len(), 2);
 
         let prepared = db
@@ -1415,13 +1402,9 @@ mod tests {
         let mut read = db.begin_read_transaction().unwrap();
 
         let output = read
-            .query_prepared_with_params_owned_context(
-                prepared,
-                &parameters,
-                QueryStreamOptions::default(),
-                &hawdb_core::RuntimeTaskContext::default(),
-            )
-            .unwrap();
+            .query_prepared_request(prepared, QueryRequest::new(query).with_params(&parameters))
+            .unwrap()
+            .output;
 
         assert_eq!(output.rows.len(), 1);
         assert_eq!(

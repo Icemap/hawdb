@@ -1050,7 +1050,7 @@ fn reject_optimistic_locking_select(
     Ok(())
 }
 
-fn sql_statement_uses_snapshot(statement: &SqlStatement) -> bool {
+pub(super) fn sql_statement_uses_snapshot(statement: &SqlStatement) -> bool {
     match statement {
         SqlStatement::Select(select) => select.lock_strength.is_none(),
         SqlStatement::Explain(explain) => sql_statement_uses_snapshot(&explain.statement),

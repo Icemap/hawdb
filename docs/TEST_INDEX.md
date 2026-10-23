@@ -25,6 +25,19 @@ the weekly platform runtime lane exercises the request families with ACL enabled
 and disabled. Core cancellation tests cover linked cancellation/waker cleanup,
 controller preservation and common-ancestor work accounting in that lane.
 
+`api::query_request::budget_tests` exercises one mixed Cypher/SQL read budget
+while concurrent writes advance, rejects cumulative row/payload overflow without
+debiting failed owned results, and charges EXPLAIN's delivered report. These
+cases share the request family's root-unit and weekly platform owners.
+`embedded_tokio::request_tests` covers owned request attachments, ACL enabled
+and disabled, host-scorer invocation/disposal, streaming ceilings, cancellation,
+admitted SQL template reuse with rebound parameters, RETURNING rejection before
+commit, and refusal while an explicit Embedded transaction is open. The weekly
+runtime lane runs the complete Tokio family with `tokio-runtime`, then these
+request cases with `tokio-runtime,acl`. Its saturated-admission case also proves
+SQL waits for capacity before parsing. Native CI owns execution; local strict
+Clippy checks compile the same test sources.
+
 ## Execution lanes
 
 | Lane / entry point | Problems covered | Execution policy |

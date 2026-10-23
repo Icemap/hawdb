@@ -56,6 +56,20 @@ impl<'a> SqlQueryRequest<'a> {
         self
     }
 
+    pub(crate) fn with_restrictive_output_limits(mut self, limits: QueryStreamOptions) -> Self {
+        self.output_limits = QueryStreamOptions {
+            max_rows: super::super::restrictive_query_limit(
+                self.output_limits.max_rows,
+                limits.max_rows,
+            ),
+            max_payload_bytes: super::super::restrictive_query_limit(
+                self.output_limits.max_payload_bytes,
+                limits.max_payload_bytes,
+            ),
+        };
+        self
+    }
+
     pub(in crate::api) fn effective_output_limits(
         &self,
         config: &crate::DatabaseConfig,

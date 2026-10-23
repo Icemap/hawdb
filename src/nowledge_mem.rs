@@ -2558,15 +2558,11 @@ impl Drop for EmbeddedStoreWriteGuard<'_> {
 
 pub struct NowledgeMemReadSnapshot<'a> {
     instance_identity: crate::DatabaseInstanceIdentity,
-    transaction: crate::DatabaseReadTransaction,
+    transaction: crate::BudgetedReadSnapshot,
     external: SearchProjectionExternalReadOperator<'a>,
     search_projection_source_graph_commit_epoch: Option<u64>,
     search_projection_durable_source_graph_commit_epoch: Option<u64>,
     budget: NowledgeMemReadSnapshotBudget,
-    cypher_statement_count: usize,
-    sql_statement_count: usize,
-    output_rows: usize,
-    output_payload_bytes: usize,
     task_context: RuntimeTaskContext,
 }
 
@@ -2585,7 +2581,10 @@ impl<'a> NowledgeMemReadSnapshot<'a> {
             (None, None) | (Some(_), Some(_)) => None,
         };
         Self {
-            transaction,
+            transaction: transaction.into_bounded(crate::ReadSnapshotBudget {
+                max_rows: budget.max_rows,
+                max_payload_bytes: budget.max_payload_bytes,
+            }),
             instance_identity,
             external: SearchProjectionExternalReadOperator {
                 projection,
@@ -2599,10 +2598,6 @@ impl<'a> NowledgeMemReadSnapshot<'a> {
                 .as_ref()
                 .and_then(|value| value.durable_source_graph_commit_epoch),
             budget,
-            cypher_statement_count: 0,
-            sql_statement_count: 0,
-            output_rows: 0,
-            output_payload_bytes: 0,
             task_context,
         }
     }
@@ -2654,12 +2649,6 @@ impl<'a> NowledgeMemReadSnapshot<'a> {
         request: crate::QueryRequest<'_>,
         max_rows: usize,
     ) -> Result<BoundedReadQueryOutput> {
-        let completed_statement_count =
-            self.cypher_statement_count.checked_add(1).ok_or_else(|| {
-                HawDBError::Execution(
-                    "bounded read snapshot Cypher statement count overflowed".to_string(),
-                )
-            })?;
         let max_rows = self.statement_row_budget(max_rows)?;
         let max_payload_bytes = self.remaining_payload_bytes()?;
         let result = self.transaction.query_request_profiled_with_external(
@@ -2669,9 +2658,6 @@ impl<'a> NowledgeMemReadSnapshot<'a> {
             }),
             &mut self.external,
         )?;
-        let metrics = &result.execution_profile.pipeline_memory_report;
-        self.consume(metrics.output_rows, metrics.output_payload_bytes)?;
-        self.cypher_statement_count = completed_statement_count;
         Ok(result)
     }
 
@@ -2681,27 +2667,16 @@ impl<'a> NowledgeMemReadSnapshot<'a> {
         parameters: &[Value],
         max_rows: usize,
     ) -> Result<QueryOutput> {
-        let completed_statement_count =
-            self.sql_statement_count.checked_add(1).ok_or_else(|| {
-                HawDBError::Execution(
-                    "bounded read snapshot SQL statement count overflowed".to_string(),
-                )
-            })?;
         let max_rows = self.statement_row_budget(max_rows)?;
         let max_payload_bytes = self.remaining_payload_bytes()?;
-        let output = self.transaction.query_sql_with_params_options(
-            sql,
-            parameters,
-            QueryStreamOptions {
-                max_rows: Some(max_rows),
-                max_payload_bytes: Some(max_payload_bytes),
-            },
-        )?;
-        let output_rows = output.rows.len();
-        let output_payload_bytes = estimate_query_output_payload_bytes(&output);
-        self.consume(output_rows, output_payload_bytes)?;
-        self.sql_statement_count = completed_statement_count;
-        Ok(output)
+        self.transaction.query_sql_request(
+            crate::SqlQueryRequest::new(sql)
+                .with_params(parameters)
+                .with_output_limits(QueryStreamOptions {
+                    max_rows: Some(max_rows),
+                    max_payload_bytes: Some(max_payload_bytes),
+                }),
+        )
     }
 
     /// Visits the complete current projection under this snapshot's retained pin.
@@ -2765,16 +2740,19 @@ impl<'a> NowledgeMemReadSnapshot<'a> {
                 .search_projection_durable_source_graph_commit_epoch,
             max_rows: self.budget.max_rows,
             max_payload_bytes: self.budget.max_payload_bytes,
-            cypher_statement_count: self.cypher_statement_count,
-            sql_statement_count: self.sql_statement_count,
+            cypher_statement_count: self.transaction.usage().cypher_statement_count,
+            sql_statement_count: self.transaction.usage().sql_statement_count,
             vector_seed_execution_count: self.external.vector_seed_execution_count,
-            output_rows: self.output_rows,
-            output_payload_bytes: self.output_payload_bytes,
-            remaining_rows: self.budget.max_rows.saturating_sub(self.output_rows),
+            output_rows: self.transaction.usage().output_rows,
+            output_payload_bytes: self.transaction.usage().output_payload_bytes,
+            remaining_rows: self
+                .budget
+                .max_rows
+                .saturating_sub(self.transaction.usage().output_rows),
             remaining_payload_bytes: self
                 .budget
                 .max_payload_bytes
-                .saturating_sub(self.output_payload_bytes),
+                .saturating_sub(self.transaction.usage().output_payload_bytes),
         }
     }
 
@@ -2784,7 +2762,10 @@ impl<'a> NowledgeMemReadSnapshot<'a> {
                 "bounded read statement requires max_rows greater than zero".to_string(),
             ));
         }
-        let remaining = self.budget.max_rows.saturating_sub(self.output_rows);
+        let remaining = self
+            .budget
+            .max_rows
+            .saturating_sub(self.transaction.usage().output_rows);
         if remaining == 0 {
             return Err(HawDBError::read_budget_exceeded(
                 ReadBudgetResource::Rows,
@@ -2799,7 +2780,7 @@ impl<'a> NowledgeMemReadSnapshot<'a> {
         let remaining = self
             .budget
             .max_payload_bytes
-            .saturating_sub(self.output_payload_bytes);
+            .saturating_sub(self.transaction.usage().output_payload_bytes);
         if remaining == 0 {
             return Err(HawDBError::read_budget_exceeded(
                 ReadBudgetResource::PayloadBytes,
@@ -2811,27 +2792,7 @@ impl<'a> NowledgeMemReadSnapshot<'a> {
     }
 
     fn consume(&mut self, rows: usize, payload_bytes: usize) -> Result<()> {
-        let output_rows = self.output_rows.saturating_add(rows);
-        let output_payload_bytes = self.output_payload_bytes.saturating_add(payload_bytes);
-        if output_rows > self.budget.max_rows {
-            return Err(HawDBError::read_budget_exceeded(
-                ReadBudgetResource::Rows,
-                self.budget.max_rows,
-                format!(
-                    "bounded read snapshot produced {output_rows} rows, exceeding max_rows {}",
-                    self.budget.max_rows
-                ),
-            ));
-        }
-        if output_payload_bytes > self.budget.max_payload_bytes {
-            return Err(HawDBError::read_budget_exceeded(ReadBudgetResource::PayloadBytes, self.budget.max_payload_bytes, format!(
-                "bounded read snapshot produced {output_payload_bytes} payload bytes, exceeding max_payload_bytes {}",
-                self.budget.max_payload_bytes
-            )));
-        }
-        self.output_rows = output_rows;
-        self.output_payload_bytes = output_payload_bytes;
-        Ok(())
+        self.transaction.consume_output(rows, payload_bytes)
     }
 }
 

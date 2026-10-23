@@ -301,6 +301,7 @@ fn refused_sql_returning_never_publishes_or_stages_a_mutation() {
 fn request_context_cannot_replace_snapshot_or_transaction_cancellation() {
     for cancel_parent in [false, true] {
         let mut database = sql_fixture();
+        database.query("CREATE (:Probe {id: 1})").unwrap();
         let parent = RuntimeTaskContext::default();
         let request = RuntimeTaskContext::default();
         let mut snapshot = database
@@ -312,7 +313,8 @@ fn request_context_cannot_replace_snapshot_or_transaction_cancellation() {
         } else {
             request.cancellation().cancel();
         }
-        let graph = QueryRequest::new("RETURN 1 AS value").with_task_context(&request);
+        let graph =
+            QueryRequest::new("MATCH (p:Probe) RETURN p.id AS value").with_task_context(&request);
         let sql = SqlQueryRequest::new("SELECT id FROM records").with_task_context(&request);
         assert!(snapshot.query_request(graph).is_err());
         assert!(snapshot.query_sql_request(sql).is_err());
@@ -322,7 +324,7 @@ fn request_context_cannot_replace_snapshot_or_transaction_cancellation() {
             assert!(!parent.cancellation().is_cancelled());
             assert_eq!(
                 snapshot
-                    .query_request(QueryRequest::new("RETURN 1 AS value"))
+                    .query_request(QueryRequest::new("MATCH (p:Probe) RETURN p.id AS value"))
                     .unwrap()
                     .rows
                     .len(),
