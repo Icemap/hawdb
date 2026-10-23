@@ -118,7 +118,10 @@ The opt-in `composite_ordered_seek` Cargo benchmark compares the same filter and
 scalar projection with inference-disabled sorting, alternates path order and
 retains every sample, including a labelled initial warmup excluded from latency summaries. It records setup cost, latency, index work and
 admitted memory for first, middle and near-end pages in both directions. Its
-persistent fixture checkpoints and reopens without flushing device caches.
+persistent fixture is built and fully validated in explicit Materialized mode,
+then checkpoints and reopens in OutOfCore mode without flushing device caches.
+This isolates read measurements from the existing nested-scan OutOfCore
+uniqueness validators; it does not qualify that write/DDL path.
 Fixture writes use bounded 4,096-row transactions under the unchanged default WAL
 record ceiling. The unique constraint validates the entire loaded fixture before
 index creation; an exact row-count preflight runs after reopen. Complete setup

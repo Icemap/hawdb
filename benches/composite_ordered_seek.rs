@@ -58,7 +58,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let started = Instant::now();
     let mut db = if persistent {
-        Database::open_with_config(&path, config.clone())?
+        Database::open_with_config(
+            &path,
+            DatabaseConfig {
+                storage_residency_mode: StorageResidencyMode::Materialized,
+                ..Default::default()
+            },
+        )?
     } else {
         Database::new()
     };
