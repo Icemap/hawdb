@@ -106,6 +106,10 @@ retains complete paired receipts. See [matrix and replay protocol](CONCURRENT_WR
 Replacement, rotation, symlink/unlink, strict-capacity and captured append
 recovery regressions remain in their existing storage/native CI owners.
 See [protocol, coverage diagnosis and retained evidence](benchmarks/wal_identity_linux_2026_10_23/README.md).
+The [source 823e8e9c publication follow-up](benchmarks/publication_qualification_2026_10_23/FINAL_823E.md)
+retains the completed 18-cohort allocation, all nine read-latency regressions,
+and observational epoch/interval strata. These diagnostics do not change the
+manual execution lane, fixtures, exact checks or strict acceptance thresholds.
 
 ## Search feature and lifecycle matrix
 

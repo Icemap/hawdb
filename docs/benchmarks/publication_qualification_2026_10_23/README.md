@@ -6,6 +6,10 @@ See the [later source-scoped follow-up](followup/README.md) for the corrected
 complete cohorts, paired writer gains and adverse endpoints, and root-CI evidence.
 The original datasets below remain unchanged.
 
+## Final implementation qualification
+
+See [the source 823e8e9c report](FINAL_823E.md) for the complete final publication, CI and strict writer/read results. Correctness checks pass, but strict performance acceptance remains failed, including nine durable read-p50 regressions. All historical adverse allocations remain retained.
+
 ## Status and source boundaries
 
 This is retained evidence, not acceptance. Main `0f641a98f17898a8ea3dae6ddaaa46d641604ae3` completed the 54-case Consumer control matrix but failed the original-baseline strict writer gate. The mixed writer matrix stopped on missing concurrent-overlap coverage. The separate checkpointed sustained prototype stopped on `Feed(Incomplete)` after five completed cases. None of these failures is waived.
