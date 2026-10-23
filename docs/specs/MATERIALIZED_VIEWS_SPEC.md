@@ -504,6 +504,15 @@ plan and a delta plan with identical output schema and bag semantics. Existing
 batch executors are semantic references, not automatically incremental
 executors. Unsupported shapes fail at definition admission.
 
+Prepare the maintenance plan once per bound definition revision, including
+referenced-field dependencies, changed-key routing and typed input bindings.
+Reuse that plan for admitted commit batches rather than reparsing generated
+query text per mutation. Bind labels, properties and schema objects through
+catalog identities; bind changed values as typed inputs. Schema/expression or
+definition incompatibility invalidates the plan under the existing rebuild
+contract. A reusable plan does not authorize stale source reads, bypass query
+admission, or prove that maintenance is cheaper than the reference query.
+
 ```text
 canonical commits -> complete transaction deltas -> incremental operators
                   -> private state/results/indexes -> sealed manifest
@@ -542,6 +551,24 @@ delta(L join R) = (deltaL join R_old) + (L_new join deltaR)
 This includes the cross-term once. Comparing a full reference query at the
 same before/after snapshots is the correctness oracle. Evaluate NULL, equality,
 numeric overflow, and collation with the source dialect's existing semantics.
+
+Contribution identity and delivery identity are different. Preserve independent
+source matches even when their projected values or endpoints are equal. When
+several maintenance branches discover the same source match for the same
+transition, account for that match exactly once. Use the qualified operator's
+algebra or bounded support identity/refcounts; do not globally deduplicate
+output tuples or enumerate arbitrary paths to repair overlap. If a plan cannot
+establish correct multiplicity within its budget, reject its shape or require
+an explicit rebuild before advancing coverage.
+
+For Entity usage, two distinct `MENTIONS` relationships from the same Memory to
+the same Entity contribute two rows to `COUNT(m)`. Deleting one must change two
+to one, not zero. Deleting the remaining edge removes the usage group; the
+canonical Entity left join still supplies zero. An endpoint scope/property
+update retracts each affected relationship contribution once even if both
+endpoint and edge-change routes encounter it. Replaying an already covered
+commit makes no additional change. These rules do not enable variable-length
+paths or automatic query substitution in phase one.
 
 | Operator | Initial contract | Important boundary |
 | --- | --- | --- |
@@ -881,6 +908,30 @@ were hydrated. Small deterministic graph/relational differential sequences
 compare bag results against full queries after every complete source epoch.
 Any exploratory fuzzing remains local under repository policy.
 
+### Phase-one contribution regression matrix
+
+These are future focused regressions and differential fixtures, not test
+results of this specification. Compare full result bags and classification axes
+at the same pinned epoch after every complete transaction, not just total row
+counts. Keep stable relationship identities in minimized replay fixtures.
+
+| Fixture | Required result / negative control |
+| --- | --- |
+| Two distinct mentions with equal endpoints | Entity usage is two; output-value or endpoint deduplication must fail the oracle |
+| Delete one, then the final mention | Counts become one, then zero through serving composition; no duplicate retraction or lost zero-count Entity |
+| Overlapping endpoint and edge routes | A scope change plus a related edge update in one commit yields exactly the reference bag; maintenance-branch overlap cannot retract the same contribution twice |
+| Both endpoints change scope | Retract each old contribution and add each new contribution exactly once; never expose mixed endpoint scopes |
+| Repeated lifecycle updates / rollback | Inventory axes equal the final committed classification; rollback has no effect and equal-valued distinct source rows remain distinct contributions |
+| Duplicate delivery / lost acknowledgement | Reapplying the same covered commit or resolving the same selected publication leaves state and counts unchanged |
+| Delete and recreate an equivalent relationship | Stable relationship identity and ordered commit transitions preserve the reference multiplicity; equal endpoints alone do not establish replay identity |
+| Unsupported recursive/repeated-binding shape | Definition admission rejects it before installation; do not extend phase-one syntax to exercise an unqualified maintenance algorithm |
+
+A mutation test/negative control must demonstrate that replacing bag semantics
+with a set, applying an overlapping retraction twice, or advancing progress
+without aggregate state causes the reference oracle to fail. Support identity
+and counters are part of the same durable selected state as results/progress;
+restart and lost-ack tests must not reset only the deduplication state.
+
 ### Performance and business acceptance
 
 Measure against the same canonical query and dataset, in release builds, with
@@ -945,3 +996,5 @@ specific to HawDB's embedded execution and durability model.
 - [RisingWave: materialization executor](https://github.com/risingwavelabs/risingwave/blob/73219848e4fb2193d0da283068824613973008db/src/stream/src/executor/mview/materialize.rs): persisted materialization state and barrier handling.
 - [RisingWave: materialized-view creation](https://github.com/risingwavelabs/risingwave/blob/73219848e4fb2193d0da283068824613973008db/src/frontend/src/handler/create_mv.rs): query planning and maintained-job creation.
 - [RisingWave: historical initialization and continuous maintenance](https://risingwave.com/blog/backfilling-in-risingwave-from-historical-initialization-to-continuous-streaming/): snapshot initialization, retained changes, resumable progress and catch-up.
+
+- [MV4PG: Materialized Views for Property Graphs, arXiv:2411.18847v1](https://arxiv.org/abs/2411.18847v1): workload-selected graph views and pre-generated maintenance templates. Property-update maintenance is outside its evaluated views; overlapping-match deduplication remains future work. Its reported speedups are not HawDB measurements or evidence for HawDB recovery/concurrency guarantees.
