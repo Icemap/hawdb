@@ -301,6 +301,7 @@ fn main() {
     let mut selected_readers = None;
     let mut reopen_before_measure = false;
     let mut fixture_parent = None;
+    let mut pessimistic_statements = None;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -308,6 +309,19 @@ fn main() {
             "--reopen-before-measure" => {
                 assert!(!reopen_before_measure, "reopen option may appear only once");
                 reopen_before_measure = true;
+            }
+            "--pessimistic-statements" => {
+                assert!(
+                    pessimistic_statements.is_none(),
+                    "duplicate statement count"
+                );
+                let statements = args
+                    .next()
+                    .expect("missing statement count")
+                    .parse::<usize>()
+                    .unwrap();
+                assert!([1, 8, 32].contains(&statements));
+                pessimistic_statements = Some(statements);
             }
             "--fixture-parent" => {
                 assert!(
@@ -358,6 +372,16 @@ fn main() {
             _ => panic!("unknown benchmark argument: {arg}"),
         }
     }
+    if pessimistic_statements.is_some() {
+        assert!(
+            selected_readers.unwrap_or(0) == 0,
+            "covered graph workload has no reader workers"
+        );
+        assert!(
+            selected_writers.is_none_or(|writers| [1, 4, 8].contains(&writers)),
+            "covered graph workload supports 1, 4 or 8 writers"
+        );
+    }
     let root = fixture_parent
         .unwrap_or_else(std::env::temp_dir)
         .join(format!(
@@ -372,6 +396,36 @@ fn main() {
     let writer_counts = selected_writers.map_or_else(|| vec![1, 4, 8], |count| vec![count]);
     for round in 0..ROUNDS {
         if selected_round.is_some_and(|selected| selected != round) {
+            continue;
+        }
+        if let Some(statements) = pessimistic_statements {
+            let mut cases = [
+                (false, 1),
+                (false, 4),
+                (false, 8),
+                (true, 1),
+                (true, 4),
+                (true, 8),
+            ];
+            if round % 2 == 1 {
+                cases.reverse();
+            }
+            for (durable, writers) in cases {
+                if selected_writers.is_some_and(|selected| selected != writers) {
+                    continue;
+                }
+                let result = measure_covered_graph(
+                    &root.join(format!("{round}-{durable}-{writers}")),
+                    durable,
+                    writers,
+                    statements,
+                    reopen_before_measure,
+                );
+                println!(
+                    "{}",
+                    json!({"schema": "covered-graph-writers-v1", "smoke": SMOKE, "round": round, "result": result})
+                );
+            }
             continue;
         }
         // Reverse case order every round to reduce consistent order bias.
@@ -403,4 +457,114 @@ fn main() {
         }
     }
     std::fs::remove_dir(root).unwrap();
+}
+
+/// Fixed disjoint writers. Each wave acquires its first locks before any commit,
+/// then finishes all commits before the next wave. No retries hide epoch aborts.
+/// Barriers are part of both revisions' measured workload, not engine parallelism
+/// evidence. Existing optimistic/default benchmark selection remains unchanged.
+fn measure_covered_graph(
+    path: &Path,
+    durable: bool,
+    writers: usize,
+    statements: usize,
+    reopen_before_measure: bool,
+) -> JsonValue {
+    let mut database = if durable {
+        Database::open(path).unwrap()
+    } else {
+        Database::new()
+    };
+    for id in 0..writers {
+        database
+            .query_with_params(
+                "CREATE (:MvccCounter {id: $id, value: 0})",
+                &BTreeMap::from([("id".into(), Value::Int(id as i64))]),
+            )
+            .unwrap();
+    }
+    database.checkpoint().unwrap();
+    let reopened_before_measure = durable && reopen_before_measure;
+    let database = if reopened_before_measure {
+        drop(database);
+        Database::open(path).unwrap()
+    } else {
+        database
+    }
+    .into_concurrent();
+    let epoch = database.commit_epoch().unwrap();
+    let barrier = Barrier::new(writers);
+    let started = Instant::now();
+    let samples = std::thread::scope(|scope| {
+        let workers = (0..writers)
+            .map(|id| {
+                let database = &database;
+                let barrier = &barrier;
+                scope.spawn(move || {
+                    let mut staging = Vec::new();
+                    let mut commits = Vec::new();
+                    for wave in 0..COMMITS / writers {
+                        let mut tx = database
+                            .begin_transaction(ConcurrentTransactionOptions::pessimistic(
+                                Duration::from_secs(5),
+                            ))
+                            .unwrap();
+                        let stage_started = Instant::now();
+                        for statement in 0..statements {
+                            tx.query_with_params(
+                                "MATCH (n:MvccCounter) WHERE n.id = $id SET n.value = $value",
+                                &BTreeMap::from([
+                                    ("id".into(), Value::Int(id as i64)),
+                                    (
+                                        "value".into(),
+                                        Value::Int((wave * statements + statement + 1) as i64),
+                                    ),
+                                ]),
+                            )
+                            .unwrap();
+                        }
+                        staging.push(nanos(stage_started));
+                        barrier.wait();
+                        let commit_started = Instant::now();
+                        tx.commit().unwrap();
+                        commits.push(nanos(commit_started));
+                        barrier.wait();
+                    }
+                    (staging, commits)
+                })
+            })
+            .collect::<Vec<_>>();
+        workers
+            .into_iter()
+            .map(|worker| worker.join().unwrap())
+            .collect::<Vec<_>>()
+    });
+    let elapsed = nanos(started);
+    let value = (COMMITS / writers * statements) as i64;
+    let expected = (0..writers)
+        .map(|id| {
+            BTreeMap::from([
+                ("id".into(), Value::Int(id as i64)),
+                ("value".into(), Value::Int(value)),
+            ])
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(database.commit_epoch().unwrap(), epoch + COMMITS as u64);
+    assert_eq!(database.query(READ).unwrap().rows, expected);
+    drop(database);
+    if durable {
+        let mut reopened = Database::open(path).unwrap();
+        assert_eq!(reopened.query(READ).unwrap().rows, expected);
+        assert_eq!(reopened.commit_epoch().checked(), epoch + COMMITS as u64);
+        drop(reopened);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+    json!({
+        "durable": durable, "writers": writers, "statements_per_transaction": statements,
+        "commits": COMMITS, "elapsed_ns": elapsed, "group_commit": "disabled",
+        "reopened_before_measure": reopened_before_measure,
+        "staging_latency": latency(&samples.iter().flat_map(|sample| sample.0.iter().copied()).collect::<Vec<_>>()),
+        "commit_latency": latency(&samples.iter().flat_map(|sample| sample.1.iter().copied()).collect::<Vec<_>>()),
+        "verified_rows": writers, "reopen_verified": durable,
+    })
 }

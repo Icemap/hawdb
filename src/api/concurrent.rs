@@ -16,7 +16,10 @@ use crate::sql::{Expr, ExprKind};
 mod coordinator;
 #[cfg(test)]
 mod key_range_tests;
+mod metrics;
 mod publication;
+
+pub use metrics::{ConcurrentDatabaseMetrics, ConcurrentPhaseMetrics};
 
 use self::coordinator::{CommitSequencer, LockManager, TransactionIdAllocator};
 use super::system_sql;
@@ -211,6 +214,20 @@ impl ConcurrentDatabase {
 
     pub fn wal_group_commit_snapshot(&self) -> Result<WalGroupCommitSnapshot> {
         self.inner.commits.group_commit_snapshot()
+    }
+
+    /// Enables recording for future coordinator phases and graph executions.
+    /// This is idempotent and shared by cloned handles. Recording starts at
+    /// phase entry; already-active phases are not included retroactively.
+    pub fn enable_concurrency_metrics(&self) {
+        self.inner.commits.metrics.enable();
+    }
+
+    /// Returns cumulative phase timings and graph replay counts without waiting
+    /// for an active writer. Recording is disabled by default; enable it with
+    /// [`Self::enable_concurrency_metrics`]. Clones observe the same counters.
+    pub fn concurrency_metrics(&self) -> ConcurrentDatabaseMetrics {
+        self.inner.commits.metrics.snapshot()
     }
 
     #[cfg(test)]
@@ -659,6 +676,7 @@ impl ConcurrentDatabaseTransaction {
         let lock_savepoint = (self.options.mode == ConcurrentTransactionMode::Pessimistic)
             .then(|| self.inner.locks.savepoint(self.transaction_id))
             .transpose()?;
+        self.inner.commits.metrics.graph_execution();
         let execution = execute_concurrent_graph_transaction_query(
             &self.runtime,
             &mut self.state,
@@ -686,8 +704,40 @@ impl ConcurrentDatabaseTransaction {
             let graph_savepoint = outcome
                 .savepoint
                 .expect("a staged graph mutation must retain its statement savepoint");
+            let covered = if lock_savepoint
+                .as_ref()
+                .is_some_and(coordinator::LockSavepoint::is_empty)
+            {
+                // A first mutation has no reusable locks; avoid a second
+                // lock-manager acquisition just to establish that fact.
+                Ok(false)
+            } else {
+                self.inner.locks.covers_all(self.transaction_id, &requests)
+            };
+            match covered {
+                Ok(true) => {
+                    // This execution already ran under every required lock. Keep
+                    // its staged result and read dependencies; no lock is released
+                    // until this transaction finishes. New targets/upgrades still
+                    // use the acquisition, epoch fence and replay below.
+                    self.inner.commits.metrics.graph_reuse();
+                    self.successful_statements = self.successful_statements.saturating_add(1);
+                    return Ok(outcome.output);
+                }
+                Ok(false) => {}
+                Err(error) => {
+                    self.state.restore_graph_statement(graph_savepoint);
+                    if let Some(lock_savepoint) = lock_savepoint {
+                        self.inner
+                            .locks
+                            .restore(self.transaction_id, lock_savepoint);
+                    }
+                    return Err(error);
+                }
+            }
             self.state.restore_graph_statement(graph_savepoint);
             self.acquire_graph_statement_locks(&requests, lock_savepoint.clone())?;
+            self.inner.commits.metrics.graph_replay();
             let replayed = execute_concurrent_graph_transaction_query(
                 &self.runtime,
                 &mut self.state,

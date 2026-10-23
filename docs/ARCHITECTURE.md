@@ -980,17 +980,39 @@ Transactions should expose:
 The embedded runtime uses immutable snapshot/COW state under one active root
 handle. `Database` retains a single mutable owner, while `ConcurrentDatabase`
 allows optimistic or pessimistic transactions to prepare concurrently and
-serializes the durable commit/publication decision. Optimistic validation is
-currently coarse first-committer-wins by commit epoch. The planned per-key
-MVCC validation and its storage/recovery boundaries are specified in
-[`MVCC_COMMIT_VALIDATION_PROTOCOL.md`](MVCC_COMMIT_VALIDATION_PROTOCOL.md);
-they are not active yet. Ordinary relational SELECT statements remain snapshot
+serializes the durable commit/publication decision. Optimistic writes validate
+per-key version stamps against their pinned epoch, with conservative table or
+database barriers when a narrower dependency cannot be established. The
+protocol and recovery boundaries are specified in
+[`MVCC_COMMIT_VALIDATION_PROTOCOL.md`](MVCC_COMMIT_VALIDATION_PROTOCOL.md).
+Ordinary relational SELECT statements remain snapshot
 reads. Explicit `FOR SHARE`/`FOR UPDATE` and DML use primary-key point/range
 locks when their access span is known and a bounded table-lock fallback
 otherwise; lock acquisition is deterministic, memory-bounded, and may escalate
-narrow locks. Cypher currently uses the database fallback. This is an
-in-process concurrency contract, not tuple-version MVCC, arbitrary time-travel,
-general serializable isolation, or multi-process writing.
+narrow locks. Pessimistic Cypher mutations derive locks for graph records,
+labels/types, allocation and adjacency from their staged footprint; schema or
+opaque operations retain the database fallback. A statement whose complete
+lock set is already held retains its first staged execution. New targets and
+lock upgrades still acquire locks, fence stale epochs and replay. Locks remain
+held through commit or rollback. Snapshot isolation is the default; explicit
+serializable validation additionally records and validates read dependencies.
+This is an in-process concurrency contract, not tuple-version history,
+arbitrary time-travel or multi-process writing.
+
+`ConcurrentDatabase::concurrency_metrics` exposes cumulative phase counts and
+nanoseconds without waiting for the sequencer. Recording is disabled by default;
+`enable_concurrency_metrics` enables future phases on all cloned handles without
+resetting counters. Disabled phases perform no clock reads or counter updates.
+It reports sequencer acquisition
+wait and guard lifetime, explicit transaction/append commit tasks, shared group
+durability, publication capture and explicit-transaction graph execution/replay/
+reuse counts. Sequencer timings cover the blocking coordinator guards, excluding
+nonblocking checkpoint-handoff adoption. Counters are sampled independently and
+overlapping phases must not be added together.
+Per-write durability is included in ungrouped commit task time; the separate
+group barrier metric applies only to group commit. Retired read views release
+their COW state and pins after the sequencer unlocks. Group commit remains
+disabled by default and requires explicit evidence-validated configuration.
 
 ## Nowledge Integration
 

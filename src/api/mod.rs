@@ -237,14 +237,14 @@ pub use canonical_snapshot::{
     HAWDB_LIGHTNING_RELATIONAL_STREAM_FORMAT_VERSION,
 };
 pub use concurrent::{
-    ConcurrentDatabase, ConcurrentDatabaseTransaction, ConcurrentTransactionMode,
-    ConcurrentTransactionOptions, WalGroupCommitActivation,
-    WalGroupCommitAdaptiveColdStartEvidence, WalGroupCommitAdaptivePolicyEvidence,
-    WalGroupCommitAdaptiveSteadyStateEvidence, WalGroupCommitConfig, WalGroupCommitDelayPolicy,
-    WalGroupCommitEvidence, WalGroupCommitSnapshot, WalGroupCommitTailLatencyEvidence,
-    WalGroupCommitWaitDecision, DEFAULT_PESSIMISTIC_LOCK_TIMEOUT,
-    DEFAULT_WAL_GROUP_COMMIT_MAX_BYTES, DEFAULT_WAL_GROUP_COMMIT_MAX_DELAY,
-    DEFAULT_WAL_GROUP_COMMIT_MAX_ENTRIES,
+    ConcurrentDatabase, ConcurrentDatabaseMetrics, ConcurrentDatabaseTransaction,
+    ConcurrentPhaseMetrics, ConcurrentTransactionMode, ConcurrentTransactionOptions,
+    WalGroupCommitActivation, WalGroupCommitAdaptiveColdStartEvidence,
+    WalGroupCommitAdaptivePolicyEvidence, WalGroupCommitAdaptiveSteadyStateEvidence,
+    WalGroupCommitConfig, WalGroupCommitDelayPolicy, WalGroupCommitEvidence,
+    WalGroupCommitSnapshot, WalGroupCommitTailLatencyEvidence, WalGroupCommitWaitDecision,
+    DEFAULT_PESSIMISTIC_LOCK_TIMEOUT, DEFAULT_WAL_GROUP_COMMIT_MAX_BYTES,
+    DEFAULT_WAL_GROUP_COMMIT_MAX_DELAY, DEFAULT_WAL_GROUP_COMMIT_MAX_ENTRIES,
 };
 pub use hawdb_core::QueryAccessControlContext;
 pub use hawdb_evidence::AccessControlPolicyReadiness;

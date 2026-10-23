@@ -24,6 +24,7 @@ execution lane, fixture size, isolation or known failure mode.
 | --- | --- | --- |
 | `//:hawdb_unit_general_tests` | Embedded API, schema/query and general facade regressions | Shared unit executable; partition script assigns each discovered case an owner. |
 | `//:hawdb_unit_concurrent_tests` | Transaction locks, read observation, commit admission and concurrent publication races | Known long target: [#972](https://github.com/nowledge-co/hawdb/issues/972). Preserve barriers and observations; a deadline is not a substitute for a deterministic schedule. |
+| Covered pessimistic graph mutations (`covered_graph`) and concurrent metrics (`api::concurrent::metrics::tests`) | Retained staged results under existing locks, new-target/upgrade replay, stale-epoch refusal, lock timeout/retry, rollback, failed-statement atomicity, durable reopen, disabled-by-default instrumentation and explicit metrics inspection during writer ownership | Owned by `//:hawdb_unit_concurrent_tests`; local replay with `--test_arg=covered_graph` or `--test_arg=api::concurrent::metrics::tests`. Assertions use work counts and final rows rather than timing thresholds. |
 | `//:hawdb_unit_analytics_core_general_tests` | Graph algorithms, projected artifacts, identity and generation behavior | Separate from isolated dense RSS ownership. |
 | `//:hawdb_unit_analytics_rss_tests` | Dense persistent graph algorithms with bounded reader RSS and streamed adjacency | 128 nodes / 16,256 relationships. Known cost: [#1027](https://github.com/nowledge-co/hawdb/issues/1027). Uses the same repository test profile as every other root partition. |
 | `//:hawdb_unit_recovery_tests`, `//:hawdb_unit_storage_crash_matrix_tests` | Transaction persistence, checkpoint/compaction and recovery boundary regressions | Dedicated crash-job evidence has additional identity and completeness checks. |
@@ -54,6 +55,14 @@ Brace notation describes several concrete labels; expand it before invoking
 Bazel. A family description does not imply every leaf belongs to every lane.
 
 ## Component regression owners
+
+The manual `concurrent_writers` benchmark accepts
+`--pessimistic-statements 1|8|32` for repeated updates of each writer's disjoint
+node under pessimistic transactions. It keeps the 1/4/8-writer matrix, checks
+every final row and durable reopen, and uses wave barriers to prevent unrelated
+epoch drift from requiring retries. Record staging and commit latency separately;
+barrier overlap is not evidence of parallel engine execution. This optional
+workload does not change default or CI benchmark selection.
 
 | Component / `:presubmit_tests` family | Problems covered |
 | --- | --- |
