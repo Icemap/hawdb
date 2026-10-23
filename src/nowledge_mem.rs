@@ -157,7 +157,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::mem::size_of;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard, RwLockReadGuard};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
 
 #[cfg(test)]
@@ -2847,6 +2847,12 @@ impl NowledgeMemEmbeddedStoreHandle {
         Ok((Self::new(store)?, report))
     }
 
+    /// Qualification counters for the actual graph/projection publication owner.
+    #[cfg(feature = "qualification")]
+    pub fn publication_lock_metrics(&self) -> crate::PublicationLockMetricsSnapshot {
+        self.inner.lock_metrics()
+    }
+
     pub fn runtime_governor_snapshot(&self) -> Result<RuntimeGovernorSnapshot> {
         Ok(self.read_store()?.runtime_governor_snapshot())
     }
@@ -4065,7 +4071,10 @@ impl NowledgeMemEmbeddedStoreHandle {
         store.graph.try_admit_runtime(request)
     }
 
-    fn read_store(&self) -> Result<RwLockReadGuard<'_, NowledgeMemEmbeddedStore>> {
+    fn read_store(
+        &self,
+    ) -> Result<crate::api::publication::DatabasePublicationReadGuard<'_, NowledgeMemEmbeddedStore>>
+    {
         self.inner.read().map_err(|_| {
             HawDBError::Execution("nowledge mem embedded store read lock poisoned".to_string())
         })

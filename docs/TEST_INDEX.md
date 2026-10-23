@@ -656,3 +656,30 @@ whole input before opening a transaction, including invalid scores and labels;
 it performs no graph reads or mutations. The old PageRank CRUD methods, helpers
 and response/request DTOs are removed from test builds as well as production.
 These runtime regressions remain CI-owned; local strict Clippy compiles them.
+
+
+## Mem adapter concurrency qualification
+
+The manual `mem_query_concurrency` Cargo/Bazel benchmark exercises the ordinary
+Mem handle with multiple report writers and point, report or streaming readers.
+It retains per-call intervals, acknowledgement observations, errors, actual
+runtime CPU/cgroup limits and residency, and verifies successful writes after
+reopen under default synchronous durability. The `qualification` feature adds
+actual publication-owner wait/hold histograms and process-wide Rust allocation
+requests. Instrumented timings are not ordinary release latency. See
+[`MEM_QUERY_CONCURRENCY.md`](MEM_QUERY_CONCURRENCY.md) for identical baseline
+porting, workload manifests, boundaries and missing acceptance evidence.
+
+The existing root general `api::publication::` family owns histogram boundary,
+completed-guard, failed-acquisition and unwind accounting tests. These are also
+compiled without qualification instrumentation in the minimal library build;
+only unit-test owners enable their counters automatically. No manual benchmark
+or additional fuzz job is added to CI.
+
+
+The native `process_memory_policy_contract` shared-reservation fixture refreshes
+its synthetic RSS sample after both persistent handles finish opening, before
+starting admission assertions. Slow Windows initialization must not accidentally
+turn the reservation-accounting test into sample-expiry coverage; the dedicated
+missing/unsupported/stale case retains its fail-closed assertions and zero-age
+sample. No production freshness limit changes.

@@ -472,3 +472,25 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace --all-features
 bazel test --test_output=errors //...
 ```
+
+
+### Publication measurement boundary
+
+Qualification builds expose fixed-memory counters for the actual
+`DatabasePublicationOwner` RwLock through the owner and Mem handle. Successful
+read/write acquisitions produce separate wait and hold histograms after their
+guards release the lock. Wait ends just after acquisition; hold ends just before
+unlock. Unlock and histogram update costs are excluded. Panicking callbacks
+still contribute their completed guard; failed/poisoned acquisitions do not.
+Busy try-write attempts are counted separately. Ordinary builds contain neither
+clock reads nor histogram storage/updates.
+
+Snapshots taken during traffic are non-atomic observations. Compare before and
+after bucket/count/total deltas only when all measured workers have joined;
+lifetime maximums cannot be subtracted to obtain a window maximum. Histogram
+percentiles are bounded intervals, not exact latency samples. This owner metric
+must not be replaced by concurrent sequencer phase timing. Qualification
+allocation counters cover Rust global allocator requests across all threads,
+not foreign heaps, allocator rounding or operation-specific ownership. Neither
+these diagnostics nor correctness assertions establish a performance gain;
+paired uninstrumented release workloads remain mandatory.

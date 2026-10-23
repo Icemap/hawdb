@@ -324,3 +324,7 @@ harness = false
 [[bench]]
 name = "composite_ordered_seek"
 harness = false
+
+[[bench]]
+name = "mem_query_concurrency"
+harness = false

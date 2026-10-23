@@ -217,6 +217,8 @@ pub use api::{
     RetainedQueryBatch, RetainedQueryCursor, RetainedQueryError, RetainedQueryOptions,
     RetainedQueryProfile, RetainedQueryStatus,
 };
+#[cfg(feature = "qualification")]
+pub use api::{PublicationLockDurationSnapshot, PublicationLockMetricsSnapshot};
 pub use api::{
     VectorIndexBuildError, VectorIndexBuildOptions, VectorIndexField, VectorIndexLanguageBudget,
     VectorIndexLanguageReport, VectorIndexReadError, VectorIndexReadTransaction,

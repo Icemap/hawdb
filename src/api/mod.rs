@@ -136,6 +136,8 @@ mod observability;
 mod plan_cache;
 pub(crate) mod publication;
 pub use publication::{DatabasePublicationOwner, DatabasePublicationState};
+#[cfg(feature = "qualification")]
+pub use publication::{PublicationLockDurationSnapshot, PublicationLockMetricsSnapshot};
 mod query_request;
 mod query_runtime;
 mod sql_runtime;
