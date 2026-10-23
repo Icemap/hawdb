@@ -107,7 +107,7 @@ mod range_io;
 mod resident_documents;
 mod resident_snapshot;
 use resident_documents::{DocumentView, ResidentDocuments};
-pub use resident_snapshot::SearchIndexReadSnapshot;
+pub use resident_snapshot::{SearchIndexReadLease, SearchIndexReadSnapshot};
 mod recall_validation;
 mod snapshot_writer;
 #[cfg(test)]
@@ -1448,6 +1448,8 @@ pub struct SearchProjectionDeltaReport {
 
 #[derive(Debug)]
 pub struct SearchIndex {
+    read_generation: Mutex<std::sync::Weak<resident_snapshot::ReadGeneration>>,
+    read_freshness: Option<Arc<SearchProjectionFreshness>>,
     documents: ResidentDocuments,
     vector_index_descriptor: Option<hawdb_core::VectorIndexDescriptor>,
     consumer_binding: Option<consumer::ConsumerBinding>,
@@ -1561,6 +1563,14 @@ impl SearchIndex {
             index.load_rabitq_projection()?;
         }
         index.capture_segment_payload_reader(publication)?;
+        for marker in [FULL_REINDEX_MARKER, METADATA_REPAIR_MARKER] {
+            let lines = index.read_marker_lines(marker)?;
+            index
+                .marker_lines
+                .get_mut()
+                .unwrap_or_else(|error| error.into_inner())
+                .insert(marker.into(), lines);
+        }
         index.retry_projection_cleanup_under_publication(
             SearchProjectionCleanupOptions::default(),
             publication,
@@ -1744,10 +1754,14 @@ impl SearchIndex {
             self.rabitq_build_options,
         )?
         .map(Arc::new);
-        *self
-            .rabitq_projection
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner()) = projection.clone();
+        // Captured generations have a fixed retained-capacity contract. A lazy
+        // query build remains operation-local instead of extending that owner.
+        if self.read_freshness.is_none() {
+            *self
+                .rabitq_projection
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner()) = projection.clone();
+        }
         Ok(projection)
     }
 
@@ -2035,12 +2049,23 @@ impl SearchIndex {
     }
 
     pub fn projection_freshness(&self) -> SearchProjectionFreshness {
+        if let Some(freshness) = &self.read_freshness {
+            return freshness.as_ref().clone();
+        }
         let full_reindex_reasons = self
             .read_marker_lines(FULL_REINDEX_MARKER)
             .unwrap_or_default();
         let metadata_repair_reasons = self
             .read_marker_lines(METADATA_REPAIR_MARKER)
             .unwrap_or_default();
+        self.freshness_with_reasons(full_reindex_reasons, metadata_repair_reasons)
+    }
+
+    fn freshness_with_reasons(
+        &self,
+        full_reindex_reasons: Vec<String>,
+        metadata_repair_reasons: Vec<String>,
+    ) -> SearchProjectionFreshness {
         let durable_source_graph_commit_epoch = *self
             .durable_source_graph_commit_epoch
             .lock()
@@ -4294,6 +4319,8 @@ impl SearchIndex {
 impl Default for SearchIndex {
     fn default() -> Self {
         Self {
+            read_generation: Mutex::default(),
+            read_freshness: None,
             documents: ResidentDocuments::default(),
             consumer_binding: None,
             consumer_binding_valid: true,

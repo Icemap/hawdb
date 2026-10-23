@@ -1851,7 +1851,16 @@ that owner with its graph read view under one publication mutex and retires
 replaced owners after unlocking. The App regression independently checks both
 old/current graph-projection pairs during actual maintenance publication and
 the final reader release. The search model does not itself model this host
-pairing or prove resident projection ownership.
+pairing. `HawDBResidentReadLease` separately models two readers, three publication
+generations and one retained-generation memory slot. Capture follows admission;
+the graph/projection pair is atomic, reads require shared funding, refusal drops
+pins, and the last source pin is released before refund. `Publish` remains enabled
+with old readers. Four manual unsafe-transition controls cover torn pairs,
+uncharged reads, queued pins and early refunds. Rust App snapshot tests exercise
+repeated writer publication and fresh reads during the resident callback; Search
+tests check actual counters, weak-owner release and frozen query-report freshness.
+The model abstracts one host governor and does not prove Rust buffer sizing,
+lazy-index build costs, filesystem semantics or general fairness.
 
 ## Derived Source Segment Publication
 

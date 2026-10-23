@@ -221,6 +221,19 @@ impl RegisteredArtifact {
 }
 
 impl FileSegmentRangeReader {
+    /// Capacity of this registry and its artifact metadata, excluding the
+    /// independently owned shared segment cache and project file controller.
+    pub fn retained_capacity_bytes(&self) -> usize {
+        self.artifacts
+            .values()
+            .fold(std::mem::size_of::<Self>(), |bytes, artifact| {
+                bytes
+                    .saturating_add(artifact.path.capacity())
+                    .saturating_add(std::mem::size_of::<RegisteredArtifact>())
+                    .saturating_add(2048)
+            })
+    }
+
     pub fn new() -> Self {
         Self::default()
     }

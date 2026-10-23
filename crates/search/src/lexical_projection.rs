@@ -526,6 +526,39 @@ pub(super) struct LexicalMiniDelta {
 }
 
 impl LexicalMiniDelta {
+    pub(super) fn retained_capacity_bytes(&self) -> usize {
+        let base_bytes = |base: &BaseDocumentTerms| {
+            base.terms
+                .iter()
+                .fold(std::mem::size_of::<BaseDocumentTerms>(), |bytes, term| {
+                    bytes
+                        .saturating_add(term.capacity())
+                        .saturating_add(crate::build_memory::MAP_ENTRY_BYTES)
+                })
+        };
+        let mut bytes = std::mem::size_of::<Self>();
+        for (id, document) in &self.upserts {
+            bytes = bytes
+                .saturating_add(id.capacity())
+                .saturating_add(crate::build_memory::MAP_ENTRY_BYTES);
+            for term in document.frequencies.keys() {
+                bytes = bytes
+                    .saturating_add(term.capacity())
+                    .saturating_add(crate::build_memory::MAP_ENTRY_BYTES);
+            }
+            if let Some(base) = &document.base {
+                bytes = bytes.saturating_add(base_bytes(base));
+            }
+        }
+        for (id, base) in &self.deletes {
+            bytes = bytes
+                .saturating_add(id.capacity())
+                .saturating_add(crate::build_memory::MAP_ENTRY_BYTES)
+                .saturating_add(base_bytes(base));
+        }
+        bytes
+    }
+
     pub(super) fn upsert(
         self: &mut Arc<Self>,
         document: &SearchDocument,
@@ -1089,6 +1122,27 @@ enum ManifestFile<'a> {
 }
 
 impl LexicalProjectionReader {
+    pub(super) fn retained_capacity_bytes(&self) -> usize {
+        self.manifest.blocks.iter().fold(
+            std::mem::size_of::<Self>()
+                .saturating_add(self.manifest.format.capacity())
+                .saturating_add(self.manifest.layout.capacity())
+                .saturating_add(self.manifest.artifact_file.capacity())
+                .saturating_add(
+                    self.manifest
+                        .blocks
+                        .capacity()
+                        .saturating_mul(std::mem::size_of::<BlockDescriptor>()),
+                )
+                .saturating_add(crate::build_memory::ACCOUNT_METADATA_BYTES),
+            |bytes, block| {
+                bytes
+                    .saturating_add(block.min_key.capacity())
+                    .saturating_add(block.max_key.capacity())
+            },
+        )
+    }
+
     pub(super) fn producer_references(&self) -> Option<ProducerReferences> {
         self.producer_references
     }

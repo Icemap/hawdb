@@ -257,6 +257,39 @@ pub struct ProjectionManifest {
 }
 
 impl ProjectionManifest {
+    /// Capacity retained by the manifest, excluding vector payloads.
+    pub fn retained_capacity_bytes(&self) -> usize {
+        let strings = [
+            &self.protocol,
+            &self.algorithm,
+            &self.transform,
+            &self.quantizer,
+            &self.calibration,
+        ];
+        strings
+            .iter()
+            .fold(std::mem::size_of::<Self>(), |bytes, value| {
+                bytes.saturating_add(value.capacity())
+            })
+            .saturating_add(
+                self.identity
+                    .embedding_model
+                    .as_ref()
+                    .map_or(0, String::capacity),
+            )
+            .saturating_add(
+                self.identity
+                    .embedding_version
+                    .as_ref()
+                    .map_or(0, String::capacity),
+            )
+            .saturating_add(
+                self.segments
+                    .capacity()
+                    .saturating_mul(std::mem::size_of::<SegmentDescriptor>()),
+            )
+    }
+
     pub(crate) fn new(
         config: &ValidatedBuildConfig,
         document_count: usize,
@@ -420,6 +453,42 @@ pub struct InMemoryProjection {
 }
 
 impl InMemoryProjection {
+    /// Allocated capacity, including partially filled quantized segments.
+    pub fn retained_capacity_bytes(&self) -> usize {
+        self.segments.iter().fold(
+            self.manifest
+                .retained_capacity_bytes()
+                .saturating_add(std::mem::size_of::<Self>())
+                .saturating_add(
+                    self.segments
+                        .capacity()
+                        .saturating_mul(std::mem::size_of::<QuantizedSegment>()),
+                ),
+            |bytes, segment| {
+                bytes
+                    .saturating_add(
+                        segment
+                            .ids
+                            .capacity()
+                            .saturating_mul(std::mem::size_of::<u64>()),
+                    )
+                    .saturating_add(
+                        segment
+                            .reconstruction_scales
+                            .capacity()
+                            .saturating_mul(std::mem::size_of::<f32>()),
+                    )
+                    .saturating_add(
+                        segment
+                            .reconstruction_offsets
+                            .capacity()
+                            .saturating_mul(std::mem::size_of::<f32>()),
+                    )
+                    .saturating_add(segment.codes.capacity())
+            },
+        )
+    }
+
     pub fn manifest(&self) -> &ProjectionManifest {
         &self.manifest
     }

@@ -97,7 +97,12 @@ the actual Mem maintenance entrypoint while a snapshot callback remains active.
 It checks the old graph/projection pair, the newer pair, generation advancement,
 release of the old reader after callback completion, and refunded admission.
 This covers `SearchOutOfCoreReader::refresh_shared` through its embedded host;
-resident projection lock release remains a separate implementation requirement.
+the resident fixture now applies three graph/projection updates while an old
+snapshot remains active and checks fresh/old pairs plus final refund. Resident
+report-observation tests cover ordinary and external text queries while a writer
+and a fresh reader advance. Search resident-generation units cover shared funding,
+capacity refusal/retry, last-owner release and frozen freshness in query reports.
+The existing Search feature matrix and root runtime lanes own these cases.
 The text-seed fixture also exercises the report entrypoint and EXPLAIN ANALYZE
 with the captured out-of-core external operator. Plain/analyzed explain rows
 have an explicit 1 MiB diagnostic cap and debit their delivered row/payload from
@@ -474,3 +479,13 @@ transition independently of query execution.
   scheduled registration. See [workload, results and limits](STRICT_APPEND_PREPARE_BENCHMARK.md).
   These are preparation timings without WAL synchronization, not committed
   throughput or durable p99 measurements.
+
+### Resident read leases
+
+`HawDBResidentReadLease` covers atomic graph/projection capture after execution
+admission, shared generation charges, refusal, release-before-refund and continued
+publication while readers retain old generations. The storage-model CI suite owns
+the positive model. Its manual-only `TornPair`, `UnchargedRead`, `PinnedWait` and
+`EarlyRefund` controls must each violate the intended invariant. Native snapshot
+and report tests above establish the host correspondence; the finite model does
+not establish allocator capacity bounds or throughput.

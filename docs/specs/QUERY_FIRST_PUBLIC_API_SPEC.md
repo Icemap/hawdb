@@ -193,9 +193,29 @@ marker or Consumer mutation entrypoints.
 `document_retained_capacity_bytes()` is a conservative bound for document
 buffers and page metadata, including allocated directory capacity after deletion.
 It is not an RSS measurement or the complete projection/query memory budget.
-Mem must additionally account retained projection owners and pair the generation
-with the graph publication after admission before removing its resident fallback.
-The standalone generation primitive alone does not satisfy that adapter gate.
+`retained_capacity_bytes()` additionally covers analyzer, descriptor, lexical
+metadata/delta and vector owners, including complete mapped payload lengths. It
+is computed once per captured generation outside the publication lock; this is
+a conservative capacity bound, not an allocator or RSS measurement.
+
+Mem bounded snapshots and read reports capture the graph/resident pair after
+execution admission, release the publication mutex, and then use
+`retain_with_permit` for a nonqueueing retained-memory reservation. A refused
+source is dropped before the caller can wait or retry. The generation's bounded
+weak cache shares funding for its current host governor; changing governors
+preserves existing leases and replaces only that cache. A lease drops its source
+before its memory token, and retains no execution slots. Generation reuse checks
+document pages, configuration, analyzer/index owners, local marker state and
+checkpoint freshness. Capture performs no filesystem reads. External edits to
+marker files are observed by the live diagnostic API or after reopening; a read
+generation and its query reports retain the locally captured freshness.
+
+Read generations preserve an already captured RaBitQ index. If an in-memory
+query lazily builds a missing index, that build remains operation-local and is
+not installed into the fixed-capacity generation. Repeated lazy-build cost still
+requires qualification; this change does not claim a latency improvement.
+Remaining mutation/generated-read and standalone search helper entrypoints must
+complete the same concurrency audit before the overall adapter gate is met.
 
 Admission and execution SHOULD reuse one internally prepared statement when its
 execution environment remains compatible. The prepared object MUST NOT retain
@@ -207,7 +227,7 @@ cancellation. Ordinary data commits alone do not invalidate read preparation.
 Mem report admission also includes the published host projection's I/O depth
 when the prepared plan executes text or vector seeds. This capture retains only
 capability metadata, not a source generation. A changed capability is revalidated
-after admission and before execution, including the resident fallback. Plain
+after admission and before snapshot execution. Plain
 EXPLAIN and graph-only reports do not acquire projection I/O allowances.
 
 Preparation memory MUST remain charged until the prepared AST and plan are

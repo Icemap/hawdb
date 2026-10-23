@@ -84,6 +84,10 @@ pub(crate) struct ResidentDocuments {
 }
 
 impl ResidentDocuments {
+    pub(crate) fn shares_storage_with(&self, other: &Self) -> bool {
+        self.pages.shares_storage_with(&other.pages)
+    }
+
     pub(crate) fn len(&self) -> usize {
         self.pages.len()
     }

@@ -2464,3 +2464,104 @@ fn database_instance_identity_tracks_the_exact_published_read_view() {
         }
     }
 }
+
+#[test]
+fn resident_snapshot_preserves_its_pair_while_writers_and_fresh_readers_advance() {
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    let handle = app_read_handle();
+    let budget = NowledgeMemReadSnapshotBudget {
+        max_rows: 16,
+        max_payload_bytes: 8192,
+    };
+    let read_pair = |snapshot: &mut super::NowledgeMemReadSnapshot<'_>| -> crate::Result<_> {
+        let output = snapshot.query_cypher(
+            "MATCH (m:Memory {id: $id}) RETURN m.title AS title",
+            &BTreeMap::from([("id".into(), Value::String("nearest".into()))]),
+            1,
+        )?;
+        let mut title = None;
+        snapshot.visit_search_projection(4096, |document| {
+            if document.id == "memory:nearest" {
+                title = Some(document.title.clone());
+            }
+            Ok(())
+        })?;
+        Ok((output.rows[0]["title"].clone(), title))
+    };
+    let writer_handle = handle.clone();
+    let (start, started) = mpsc::channel();
+    let (finished, done) = mpsc::channel();
+    let writer = std::thread::spawn(move || {
+        if started.recv().is_ok() {
+            let result = (|| {
+                for revision in 1..=3 {
+                    let title = format!("Revision {revision}");
+                    writer_handle.with_transaction(|transaction| {
+                        transaction.query_request(
+                            crate::QueryRequest::new(
+                                "MATCH (m:Memory {id: $id}) SET m.title = $title",
+                            )
+                            .with_params(&BTreeMap::from([
+                                ("id".into(), Value::String("nearest".into())),
+                                ("title".into(), Value::String(title.clone())),
+                            ])),
+                        )?;
+                        Ok(())
+                    })?;
+                    writer_handle.apply_search_projection_delta_and_checkpoint(
+                        crate::SearchProjectionDelta {
+                            upserts: vec![SearchProjectionRow {
+                                kind: SearchProjectionKind::Memory,
+                                external_id: "nearest".into(),
+                                title,
+                                body: "replacement projection".into(),
+                                embedding: Some(vec![1.0, 0.0]),
+                                source_id: None,
+                                metadata: BTreeMap::new(),
+                            }],
+                            ..Default::default()
+                        },
+                    )?;
+                }
+                Ok::<_, crate::HawDBError>(())
+            })();
+            let _ = finished.send(result);
+        }
+    });
+    let result = handle.with_bounded_read_snapshot(budget, |snapshot| {
+        let before = read_pair(snapshot)?;
+        start.send(()).unwrap();
+        done.recv_timeout(Duration::from_secs(10)).map_err(|_| {
+            crate::HawDBError::Execution("resident snapshot blocked writer progress".into())
+        })??;
+        let after = handle.with_bounded_read_snapshot(budget, read_pair)?;
+        assert_eq!(
+            before,
+            (
+                Value::String("Nearest memory".into()),
+                Some("nearest".into())
+            )
+        );
+        assert_eq!(
+            after,
+            (
+                Value::String("Revision 3".into()),
+                Some("Revision 3".into())
+            )
+        );
+        assert_eq!(read_pair(snapshot)?, before);
+        Ok(())
+    });
+    drop(start);
+    writer.join().unwrap();
+    result.unwrap();
+    assert_eq!(
+        handle
+            .runtime_governor_snapshot()
+            .unwrap()
+            .admitted_memory_bytes,
+        0
+    );
+}

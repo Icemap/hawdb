@@ -70,6 +70,8 @@ use hawdb_core::RuntimeTaskContext;
 mod concurrent_owner;
 mod incremental_search;
 mod read_execution;
+mod resident_read;
+use resident_read::ResidentProjectionRef;
 mod registered_search;
 use hawdb_optimizer::AdaptiveVectorBackendPolicy;
 use hawdb_qos::{
@@ -2065,7 +2067,7 @@ impl NowledgeMemSearchProjection {
 }
 
 struct SearchProjectionExternalReadOperator<'a> {
-    projection: Option<&'a NowledgeMemSearchProjection>,
+    projection: Option<ResidentProjectionRef<'a>>,
     out_of_core_projection: Option<&'a NowledgeMemOutOfCoreSearchProjection>,
     vector_seed_execution_count: usize,
 }
@@ -2092,7 +2094,7 @@ impl SearchProjectionExternalReadOperator<'_> {
             let default_task = RuntimeTaskContext::default();
             let task = request.resources.task_context.unwrap_or(&default_task);
             let scored = if complete {
-                projection.index().complete_text_seed_scores_with_context(
+                projection.complete_text_seed_scores_with_context(
                     request.query_text,
                     request.metadata_filters,
                     request.resources.result.max_rows,
@@ -2100,7 +2102,7 @@ impl SearchProjectionExternalReadOperator<'_> {
                     task,
                 )
             } else {
-                projection.index().text_seed_scores_with_context(
+                projection.text_seed_scores_with_context(
                     request.query_text,
                     request.metadata_filters,
                     request.resources.result.max_rows,
@@ -2116,7 +2118,7 @@ impl SearchProjectionExternalReadOperator<'_> {
             if complete {
                 for (id, score) in scored.scores() {
                     request.resources.checkpoint()?;
-                    let document = projection.index().document(id).ok_or_else(|| {
+                    let document = projection.document(id).ok_or_else(|| {
                         HawDBError::Storage(format!("text seed document {id} is missing"))
                     })?;
                     output.push(
@@ -2142,7 +2144,7 @@ impl SearchProjectionExternalReadOperator<'_> {
             });
             for (id, score) in ranked {
                 request.resources.checkpoint()?;
-                let document = projection.index().document(id).ok_or_else(|| {
+                let document = projection.document(id).ok_or_else(|| {
                     HawDBError::Storage(format!("text seed document {id} is missing"))
                 })?;
                 output.push(
@@ -2462,7 +2464,7 @@ struct PublishedCanonicalRead {
     view: Arc<crate::api::PublishedConcurrentRead>,
     governor: RuntimeGovernor,
     mode: NowledgeMemGraphMode,
-    resident_projection_present: bool,
+    resident_projection: Option<crate::search::SearchIndexReadSnapshot>,
     external_seed_io_slots: usize,
     out_of_core_projection: Option<NowledgeMemOutOfCoreSearchProjection>,
 }
@@ -2476,7 +2478,10 @@ impl PublishedCanonicalRead {
             )?),
             governor: store.graph.runtime_governor().clone(),
             mode: store.graph.mode,
-            resident_projection_present: store.search_projection.is_some(),
+            resident_projection: store
+                .search_projection
+                .as_ref()
+                .map(|projection| projection.index().read_snapshot()),
             external_seed_io_slots: store.external_seed_io_slots(),
             out_of_core_projection: store
                 .out_of_core_search_projection
@@ -2555,7 +2560,7 @@ impl<'a> NowledgeMemReadSnapshot<'a> {
         transaction: crate::DatabaseReadTransaction,
         instance_identity: crate::DatabaseInstanceIdentity,
         budget: NowledgeMemReadSnapshotBudget,
-        projection: Option<&'a NowledgeMemSearchProjection>,
+        projection: Option<ResidentProjectionRef<'a>>,
         out_of_core_projection: Option<&'a NowledgeMemOutOfCoreSearchProjection>,
         task_context: RuntimeTaskContext,
     ) -> Self {
@@ -2664,9 +2669,8 @@ impl<'a> NowledgeMemReadSnapshot<'a> {
     }
 
     /// Visits the complete current projection under this snapshot's retained pin.
-    /// Out-of-core visitors own an immutable generation and may overlap writers.
-    /// Resident visitors still retain the store read guard and must not reenter
-    /// the store or wait for an async source while retaining that guard.
+    /// Both resident and out-of-core visitors own an immutable generation and
+    /// may overlap writers without retaining the store read guard.
     ///
     /// Order is unspecified. A visitor prefix is not exhaustion evidence: only
     /// the successful returned report certifies completion. Retained copies are
@@ -2693,11 +2697,9 @@ impl<'a> NowledgeMemReadSnapshot<'a> {
             self.external.projection,
             self.external.out_of_core_projection,
         ) {
-            (Some(projection), None) => projection.index().visit_projection_documents(
-                budget,
-                &self.task_context,
-                &mut visitor,
-            )?,
+            (Some(projection), None) => {
+                projection.visit_projection_documents(budget, &self.task_context, &mut visitor)?
+            }
             (None, Some(projection)) => projection.reader().visit_projection_documents(
                 budget,
                 &self.task_context,
@@ -3187,50 +3189,26 @@ impl NowledgeMemEmbeddedStoreHandle {
         let permit = self.admit_typed_read(budget.max_payload_bytes)?;
         let task_context = permit.bind_task_context(task_context.clone());
         let _permit = permit;
-        let publication = {
+        let (view, identity, resident, projection) = {
             let current = self.lock_published_read()?;
             let current = current.as_ref().ok_or_else(|| {
                 HawDBError::StorageIntegrity("canonical read publication is unavailable".into())
             })?;
-            (!current.resident_projection_present).then(|| {
-                (
-                    Arc::clone(&current.view),
-                    current.instance_identity.clone(),
-                    current
-                        .out_of_core_projection
-                        .as_ref()
-                        .map(NowledgeMemOutOfCoreSearchProjection::read_snapshot),
-                )
-            })
+            (
+                Arc::clone(&current.view),
+                current.instance_identity.clone(),
+                current.resident_projection.clone(),
+                current
+                    .out_of_core_projection
+                    .as_ref()
+                    .map(NowledgeMemOutOfCoreSearchProjection::read_snapshot),
+            )
         };
-        if let Some((view, identity, projection)) = publication {
-            let configured_rows = view
-                .snapshot
-                .config()
-                .read_result_row_limit()
-                .unwrap_or(usize::MAX);
-            if budget.max_rows > configured_rows {
-                return Err(HawDBError::Execution(format!(
-                    "bounded read snapshot row budget {} exceeds configured limit {configured_rows}",
-                    budget.max_rows
-                )));
-            }
-            let transaction = view.begin_read_transaction_with_context(&task_context)?;
-            drop(view);
-            let mut snapshot = NowledgeMemReadSnapshot::new(
-                transaction,
-                identity,
-                budget,
-                None,
-                projection.as_ref(),
-                task_context,
-            );
-            return self.finish_canonical_read(operation(&mut snapshot));
-        }
-        let store = self.read_store()?;
-        let configured_rows = store
-            .graph
-            .database()
+        let resident = resident
+            .map(|snapshot| snapshot.retain_with_permit(&_permit))
+            .transpose()?;
+        let configured_rows = view
+            .snapshot
             .config()
             .read_result_row_limit()
             .unwrap_or(usize::MAX);
@@ -3240,19 +3218,19 @@ impl NowledgeMemEmbeddedStoreHandle {
                 budget.max_rows
             )));
         }
-        let transaction = store
-            .graph
-            .database()
-            .begin_read_transaction_with_context(&task_context)?;
+        let transaction = view.begin_read_transaction_with_context(&task_context)?;
+        drop(view);
         let mut snapshot = NowledgeMemReadSnapshot::new(
             transaction,
-            store.graph.database().instance_identity()?,
+            identity,
             budget,
-            store.search_projection.as_ref(),
-            store.out_of_core_search_projection.as_ref(),
+            resident
+                .as_ref()
+                .map(|lease| ResidentProjectionRef::Snapshot(lease.snapshot())),
+            projection.as_ref(),
             task_context,
         );
-        operation(&mut snapshot)
+        self.finish_canonical_read(operation(&mut snapshot))
     }
 
     pub fn hawdb_lightning_initial_import_apply_with_document_identities(
@@ -4995,7 +4973,7 @@ impl NowledgeMemEmbeddedStore {
             ..
         } = self;
         let mut external = SearchProjectionExternalReadOperator {
-            projection: search_projection.as_ref(),
+            projection: search_projection.as_ref().map(ResidentProjectionRef::Live),
             out_of_core_projection: out_of_core_search_projection.as_ref(),
             vector_seed_execution_count: 0,
         };
@@ -5021,7 +4999,7 @@ impl NowledgeMemEmbeddedStore {
             ..
         } = self;
         let mut external = SearchProjectionExternalReadOperator {
-            projection: search_projection.as_ref(),
+            projection: search_projection.as_ref().map(ResidentProjectionRef::Live),
             out_of_core_projection: out_of_core_search_projection.as_ref(),
             vector_seed_execution_count: 0,
         };
@@ -13628,7 +13606,7 @@ mod tests {
             (None, Some(&disk)),
         ] {
             let mut external = super::SearchProjectionExternalReadOperator {
-                projection,
+                projection: projection.map(super::ResidentProjectionRef::Live),
                 out_of_core_projection,
                 vector_seed_execution_count: 0,
             };
@@ -13824,7 +13802,7 @@ mod tests {
                 _ => unreachable!(),
             };
             let mut external = super::SearchProjectionExternalReadOperator {
-                projection: projection.as_ref(),
+                projection: projection.as_ref().map(super::ResidentProjectionRef::Live),
                 out_of_core_projection: out_of_core_projection.as_ref(),
                 vector_seed_execution_count: 0,
             };

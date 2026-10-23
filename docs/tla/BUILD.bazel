@@ -321,3 +321,16 @@ tla_test_suite(
     )
     for control in ["ReleaseMemory", "KeepCpu", "IgnoreFloor", "KeepQueuedMemory"]
 ]
+
+[
+    tla_check(
+        name = "HawDBResidentReadLease" + control + "_check",
+        module = "HawDBResidentReadLease.tla",
+        config = "mutants/HawDBResidentReadLease" + control + ".cfg",
+        expect = "invariant_violation",
+        tags = ["manual"],
+        timeout_seconds = 1800,
+        tlc_args = ["-cleanup", "-workers", "auto"],
+    )
+    for control in ["TornPair", "UnchargedRead", "PinnedWait", "EarlyRefund"]
+]

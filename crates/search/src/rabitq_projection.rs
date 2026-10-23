@@ -127,6 +127,32 @@ struct RaBitQDocumentIdMap {
 }
 
 impl RaBitQCandidateProjection {
+    pub(crate) fn retained_capacity_bytes(&self) -> usize {
+        let storage = match &self.storage {
+            RaBitQCandidateProjectionStorage::InMemory(value) => value.retained_capacity_bytes(),
+            RaBitQCandidateProjectionStorage::File(value) => value.retained_capacity_bytes(),
+        };
+        let strings = self
+            .ordinal_to_document_id
+            .iter()
+            .chain(self.document_to_ordinal.keys());
+        strings
+            .fold(
+                storage.saturating_add(std::mem::size_of::<Self>()),
+                |bytes, id| bytes.saturating_add(id.capacity()),
+            )
+            .saturating_add(
+                self.ordinal_to_document_id
+                    .capacity()
+                    .saturating_mul(std::mem::size_of::<String>()),
+            )
+            .saturating_add(
+                self.document_to_ordinal
+                    .len()
+                    .saturating_mul(crate::build_memory::MAP_ENTRY_BYTES),
+            )
+    }
+
     pub fn build_from_documents(
         documents: &BTreeMap<String, SearchDocument>,
         identity: ProjectionIdentity,

@@ -192,23 +192,30 @@ impl NowledgeMemEmbeddedStoreHandle {
                 {
                     return Err(source_changed());
                 }
-                (prepared.uses_read_snapshot() && !publication.resident_projection_present).then(
-                    || {
-                        (
-                            Arc::clone(&publication.view),
-                            publication.mode,
-                            publication
-                                .out_of_core_projection
-                                .as_ref()
-                                .map(|projection| projection.read_snapshot()),
-                        )
-                    },
-                )
+                prepared.uses_read_snapshot().then(|| {
+                    (
+                        Arc::clone(&publication.view),
+                        publication.mode,
+                        uses_external_seed
+                            .then(|| publication.resident_projection.clone())
+                            .flatten(),
+                        publication
+                            .out_of_core_projection
+                            .as_ref()
+                            .map(|projection| projection.read_snapshot()),
+                    )
+                })
             };
             let started = super::Instant::now();
-            let (mode, (output, trace)) = if let Some((view, mode, projection)) = snapshot {
+            let (mode, (output, trace)) = if let Some((view, mode, resident, projection)) = snapshot
+            {
+                let resident = resident
+                    .map(|snapshot| snapshot.retain_with_permit(&permit))
+                    .transpose()?;
                 let mut external = SearchProjectionExternalReadOperator {
-                    projection: None,
+                    projection: resident
+                        .as_ref()
+                        .map(|lease| super::ResidentProjectionRef::Snapshot(lease.snapshot())),
                     out_of_core_projection: projection.as_ref(),
                     vector_seed_execution_count: 0,
                 };
@@ -222,8 +229,7 @@ impl NowledgeMemEmbeddedStoreHandle {
                 );
                 (mode, self.finish_canonical_read(result)?)
             } else {
-                // Resident projection ownership and non-snapshot statements
-                // still use the canonical owner. Reuse the admitted template
+                // Non-snapshot statements still use the canonical owner. Reuse the admitted template
                 // and reject changes made while waiting for that owner.
                 let mut store = self.write_store()?;
                 let database = store.graph.database();
@@ -241,7 +247,9 @@ impl NowledgeMemEmbeddedStoreHandle {
                     ..
                 } = &mut *store;
                 let mut external = SearchProjectionExternalReadOperator {
-                    projection: search_projection.as_ref(),
+                    projection: search_projection
+                        .as_ref()
+                        .map(super::ResidentProjectionRef::Live),
                     out_of_core_projection: out_of_core_search_projection.as_ref(),
                     vector_seed_execution_count: 0,
                 };
@@ -425,57 +433,65 @@ mod tests {
 
     #[test]
     fn report_observation_allows_writer_commit_and_a_fresh_read() {
-        let handle = graph_only_handle();
-        let writer_handle = handle.clone();
-        let (start, started) = mpsc::channel();
-        let (finished, done) = mpsc::channel();
-        let writer = std::thread::spawn(move || {
-            if started.recv().is_ok() {
-                let result = (|| {
-                    writer_handle.with_transaction(|tx| tx.query(WRITE))?;
-                    let current = writer_handle.query_with_report(READ)?;
-                    Ok::<_, HawDBError>(
-                        current.output.rows[0]["title"] == Value::String("Updated thread".into()),
-                    )
-                })();
-                let _ = finished.send(result.unwrap_or(false));
-            }
-        });
-        let sink = Arc::new(ReportWriter {
-            armed: AtomicBool::new(true),
-            completed: AtomicBool::new(false),
-            start,
-            done: Mutex::new(done),
-        });
-        handle.set_telemetry_sink(Some(sink.clone())).unwrap();
-        let result = handle.query_with_report_options(
-            READ,
-            NowledgeMemQueryReportOptions {
-                capture_physical_plan: true,
-                ..Default::default()
-            },
-        );
-        handle.set_telemetry_sink(None).unwrap();
-        let completed = sink.completed.load(Ordering::SeqCst);
-        drop(sink);
-        writer.join().unwrap();
-        let result = result.unwrap();
-        assert!(
-            completed,
-            "report observation blocked writer or fresh reader"
-        );
-        assert_eq!(
-            result.output.rows[0]["title"],
-            Value::String("App thread".into())
-        );
-        assert!(result.report.physical_plan_captured);
-        assert_eq!(
-            handle
-                .runtime_governor_snapshot()
-                .unwrap()
-                .admitted_memory_bytes,
-            0
-        );
+        const TEXT: &str = "CALL text_search($text, topK := 2) YIELD id, score MATCH (m:Memory) RETURN m.title AS title";
+        for (handle, query, expected_title) in [
+            (graph_only_handle(), READ, "App thread"),
+            (app_read_handle(), READ, "App thread"),
+            (app_read_handle(), TEXT, "Nearest memory"),
+        ] {
+            let writer_handle = handle.clone();
+            let (start, started) = mpsc::channel();
+            let (finished, done) = mpsc::channel();
+            let writer = std::thread::spawn(move || {
+                if started.recv().is_ok() {
+                    let result = (|| {
+                        writer_handle.with_transaction(|tx| tx.query(WRITE))?;
+                        let current = writer_handle.query_with_report(READ)?;
+                        Ok::<_, HawDBError>(
+                            current.output.rows[0]["title"]
+                                == Value::String("Updated thread".into()),
+                        )
+                    })();
+                    let _ = finished.send(result.unwrap_or(false));
+                }
+            });
+            let sink = Arc::new(ReportWriter {
+                armed: AtomicBool::new(true),
+                completed: AtomicBool::new(false),
+                start,
+                done: Mutex::new(done),
+            });
+            handle.set_telemetry_sink(Some(sink.clone())).unwrap();
+            let result = handle.query_with_params_with_report_options(
+                query,
+                &BTreeMap::from([("text".into(), Value::String("App".into()))]),
+                NowledgeMemQueryReportOptions {
+                    capture_physical_plan: true,
+                    ..Default::default()
+                },
+            );
+            handle.set_telemetry_sink(None).unwrap();
+            let completed = sink.completed.load(Ordering::SeqCst);
+            drop(sink);
+            writer.join().unwrap();
+            let result = result.unwrap();
+            assert!(
+                completed,
+                "report observation blocked writer or fresh reader"
+            );
+            assert_eq!(
+                result.output.rows[0]["title"],
+                Value::String(expected_title.into())
+            );
+            assert!(result.report.physical_plan_captured);
+            assert_eq!(
+                handle
+                    .runtime_governor_snapshot()
+                    .unwrap()
+                    .admitted_memory_bytes,
+                0
+            );
+        }
     }
 
     #[test]
