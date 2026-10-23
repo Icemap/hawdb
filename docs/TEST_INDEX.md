@@ -14,6 +14,15 @@ reuses the snapshot after refusal. Existing scoring, access-control, EXPLAIN,
 and cancellation cases exercise the same compact collector. Mem bounded read
 snapshots use this collector and retain cumulative statement budgets.
 
+The executor `result_delivery::tests::borrowed` family checks native columnar
+payload pointer identity for immediate consumers, compact validated delivery
+across source retirement and segment boundaries, logical quota refusal before
+callbacks, cancellation/error/unwind release, schema rejection and nested-copy
+admission independent of source spare capacity. The executor unit owner runs
+these regressions in CI. Root `api::tests::query_execution` checks the public
+borrowed streaming entrypoint's compact views and zero-prefix budget refusal.
+These do not yet qualify a native scan-to-consumer production path.
+
 The `api::query_request::adapter_tests` family exercises shared Cypher and SQL
 requests across database, pinned-read, explicit-write, concurrent optimistic and
 pessimistic, and Embedded transaction paths. Cases include parameters, scoring,

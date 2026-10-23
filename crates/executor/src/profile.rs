@@ -91,6 +91,7 @@ impl QueryStoredValues {
 }
 
 mod owned_result;
+pub(crate) use owned_result::cloned_row_memory_bytes;
 
 /// One owned handle into a query's immutable row storage.
 #[derive(Clone)]
@@ -826,6 +827,7 @@ fn row_equals_map(row: QueryRowRef<'_>, other: &Row) -> bool {
 pub enum RowRef<'a> {
     Map(&'a Row),
     Columnar(ColumnarRowRef<'a>),
+    Compact(QueryRowRef<'a>),
 }
 
 impl<'a> RowRef<'a> {
@@ -833,6 +835,7 @@ impl<'a> RowRef<'a> {
         match self {
             Self::Map(row) => row.len(),
             Self::Columnar(_) => self.iter().count(),
+            Self::Compact(row) => row.len(),
         }
     }
 
@@ -844,6 +847,7 @@ impl<'a> RowRef<'a> {
         match self {
             Self::Map(row) => row.get(name).map(Value::as_ref),
             Self::Columnar(row) => row.get(name),
+            Self::Compact(row) => row.get(name).map(Value::as_ref),
         }
     }
 
@@ -854,6 +858,10 @@ impl<'a> RowRef<'a> {
                 .nth(index)
                 .map(|(name, value)| (name.as_str(), value.as_ref())),
             Self::Columnar(row) => row.column(index),
+            Self::Compact(row) => Some((
+                row.schema().columns().get(index)?.as_str(),
+                row.value(index)?.as_ref(),
+            )),
         }
     }
 
@@ -861,6 +869,7 @@ impl<'a> RowRef<'a> {
         match self {
             Self::Map(row) => RowRefIter::Map(row.iter()),
             Self::Columnar(row) => RowRefIter::Columnar { row, index: 0 },
+            Self::Compact(row) => RowRefIter::Compact { row, index: 0 },
         }
     }
 
@@ -883,10 +892,21 @@ impl<'a> From<ColumnarRowRef<'a>> for RowRef<'a> {
     }
 }
 
+impl<'a> From<QueryRowRef<'a>> for RowRef<'a> {
+    fn from(row: QueryRowRef<'a>) -> Self {
+        Self::Compact(row)
+    }
+}
+
+#[derive(Clone)]
 pub enum RowRefIter<'a> {
     Map(std::collections::btree_map::Iter<'a, String, Value>),
     Columnar {
         row: ColumnarRowRef<'a>,
+        index: usize,
+    },
+    Compact {
+        row: QueryRowRef<'a>,
         index: usize,
     },
 }
@@ -909,6 +929,11 @@ impl<'a> Iterator for RowRefIter<'a> {
                     return Some(column);
                 }
             },
+            Self::Compact { row, index } => {
+                let column = RowRef::Compact(*row).column(*index)?;
+                *index += 1;
+                Some(column)
+            }
         }
     }
 }

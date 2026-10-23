@@ -145,6 +145,21 @@ These request contracts do not by themselves establish execution outside outer
 locks or end-to-end borrowed result delivery. Those remain separate acceptance
 items in issue #1193.
 
+## Borrowed result delivery
+
+Borrowed consumers MUST receive views whose lifetime is bounded by the callback.
+Immediate delivery may borrow producer-owned storage only while its source
+reservation remains live. Bounded validated delivery MUST retain complete output
+until row and payload ceilings have passed; a terminal execution or budget error
+must not expose a successful prefix. Compact retained storage shares its schema
+and admits copied payloads before allocation. Callback error, cancellation and
+unwind MUST retire storage before releasing its result reservation.
+
+The common accumulator accepts native columnar views and exposes validated
+compact views through `RowRef::Compact`. The scalar binding path still constructs
+maps. Native producer integration and its allocation/performance evidence remain
+required; a borrowed callback signature alone does not establish zero copy.
+
 ## Preparation and admission ownership
 
 Admission and execution SHOULD reuse one internally prepared statement when its

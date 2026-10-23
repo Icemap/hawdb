@@ -499,7 +499,7 @@ impl<S: crate::executor::ExecutionStore> super::DatabaseReadTransaction<S> {
                 scoring: options.scoring,
                 access_control: options.access_control,
             },
-            consumer,
+            crate::executor::QueryStreamConsumer::Owned(consumer),
         )
     }
 }

@@ -79,6 +79,38 @@ are outside this collector's admission ledger, as are caller-created row maps
 and foreign representations. The collector bound must not be presented as a
 bound on those later accesses.
 
+## Borrowed delivery and validated retention
+
+`QueryOutputAccumulator::emit_borrowed` accepts a producer-owned `RowRef`.
+An immediate borrowed consumer sees that exact view: the accumulator does not
+allocate a row map, clone values, or retain the source. The producer remains
+responsible for the source buffer and its execution-memory reservation throughout
+the callback. Logical row/payload limits still apply before delivery.
+
+Validated bounded borrowed consumers retain values in the same accounted
+`QueryRowsBuilder` as owned results. Incoming maps transfer their values;
+borrowed inputs copy directly into admitted row segments. Schema columns are
+bound once, with duplicate and changed names rejected. No per-row map is needed
+for retention or callback delivery. `RowRef::Compact` exposes the resulting
+schema and values only during each callback. The source can retire before final
+delivery; the retained result allowance stays live through callback completion,
+cancellation, error and unwind. Payload owners retire before their reservations.
+
+Borrowed copies admit String/Binary/Vector logical lengths and List slot lengths
+before copying, recursively including nested values and the conservative map-node
+bound. This relies on the pinned std String/Vec clone implementation allocating
+logical lengths, rather than copying source spare capacity. Qualify these clone
+assumptions again when the pinned toolchain changes. Source memory is separate;
+a borrowed copy must neither charge source spare capacity as its own nor treat
+an unaccounted source as covered by the destination allowance.
+
+`DatabaseReadTransaction::query_with_params_streaming_ref` selects this consumer
+at the shared streaming execution boundary, retaining existing read-only checks,
+request limits and cancellation. The scalar/binding producer still constructs
+maps before that boundary. This change supplies the native borrowed input
+contract but does not establish a map-free scan-to-consumer path; connecting and
+qualifying native batch production remains part of issue #1193.
+
 ## Qualification scope
 
 The earlier heterogeneous witness on `47cb6523` retained 5,408 rows with a

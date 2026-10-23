@@ -93,9 +93,27 @@ pub(super) fn execute_profiled_consumer<S: ExecutionStore>(
     .map(|(streamed, _)| streamed)
 }
 
+pub(super) fn execute_profiled_borrowed_consumer<'consumer, S: ExecutionStore>(
+    request: ExecutionRequest<'_>,
+    resources: ExecutionResources<'_, S>,
+    delivery: StreamDelivery,
+    consumer: &'consumer mut hawdb_executor::result_delivery::BorrowedRowConsumer<'consumer>,
+) -> Result<ProfiledQueryStream> {
+    execute_profiled_output(
+        request,
+        resources,
+        OutputTarget::Borrowed(delivery, consumer),
+    )
+    .map(|(streamed, _)| streamed)
+}
+
 enum OutputTarget<'a> {
     Owned,
     Consumer(ConsumerMemoryMode, &'a mut dyn FnMut(Row) -> Result<()>),
+    Borrowed(
+        StreamDelivery,
+        &'a mut hawdb_executor::result_delivery::BorrowedRowConsumer<'a>,
+    ),
 }
 
 fn execute_profiled_output<S: ExecutionStore>(
@@ -127,6 +145,16 @@ fn execute_profiled_output<S: ExecutionStore>(
                 &memory_ledger,
                 budget_option,
                 output_memory,
+                consumer,
+            )?
+        }
+        OutputTarget::Borrowed(delivery, consumer) => {
+            QueryOutputAccumulator::new_borrowed_with_budget_option(
+                output_limits,
+                result_memory_budget,
+                &memory_ledger,
+                budget_option,
+                delivery,
                 consumer,
             )?
         }

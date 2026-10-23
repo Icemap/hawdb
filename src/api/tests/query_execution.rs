@@ -821,7 +821,7 @@ fn executor_owned_result_delivery_preserves_read_transaction_boundaries() {
 }
 
 #[test]
-fn read_transaction_exposes_borrowed_rows_to_immediate_consumers() {
+fn read_transaction_exposes_validated_compact_borrowed_rows() {
     let mut db = Database::new();
     db.query("CREATE (:Memory {id: 7, title: 'borrowed payload'})")
         .unwrap();
@@ -837,6 +837,7 @@ fn read_transaction_exposes_borrowed_rows_to_immediate_consumers() {
                 max_payload_bytes: Some(1024),
             },
             |row| {
+                assert!(matches!(row, crate::RowRef::Compact(_)));
                 observed.push((
                     row.get("id").and_then(crate::ValueRef::as_i64),
                     row.get("title")
@@ -850,6 +851,38 @@ fn read_transaction_exposes_borrowed_rows_to_immediate_consumers() {
 
     assert_eq!(report.output_rows, 1);
     assert_eq!(observed, vec![(Some(7), Some("borrowed payload".into()))]);
+}
+
+#[test]
+fn read_transaction_borrowed_stream_refuses_limits_without_delivering_a_prefix() {
+    let mut db = Database::new();
+    db.query("CREATE (:Memory {id: 1, title: 'first'})")
+        .unwrap();
+    db.query("CREATE (:Memory {id: 2, title: 'second'})")
+        .unwrap();
+    let mut tx = db.begin_read_transaction().unwrap();
+    let query = "MATCH (m:Memory) RETURN m.id AS id, m.title AS title ORDER BY id";
+    for options in [
+        QueryStreamOptions {
+            max_rows: Some(1),
+            max_payload_bytes: Some(1024),
+        },
+        QueryStreamOptions {
+            max_rows: Some(2),
+            max_payload_bytes: Some(19),
+        },
+    ] {
+        let mut calls = 0;
+        let error = tx
+            .query_with_params_streaming_ref(query, &BTreeMap::new(), options, |_| {
+                calls += 1;
+                Ok(())
+            })
+            .unwrap_err();
+        assert!(matches!(error, crate::HawDBError::ReadBudgetExceeded(_)));
+        assert_eq!(calls, 0);
+        assert_eq!(tx.query(query).unwrap().rows.len(), 2);
+    }
 }
 
 #[test]

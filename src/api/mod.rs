@@ -22470,7 +22470,7 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
                 scoring: None,
                 access_control: None,
             },
-            &mut consumer,
+            executor::QueryStreamConsumer::Owned(&mut consumer),
         )
     }
 
@@ -22478,10 +22478,10 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
     ///
     /// The view cannot outlive the consumer call. Hosts can inspect, serialize,
     /// or load values without an additional clone; hosts that retain a row
-    /// must call [`RowRef::to_owned_row`]. The scalar fallback currently
-    /// borrows an already materialized row, while the same callback contract
-    /// can receive direct columnar row views after that production path is
-    /// qualified end to end.
+    /// must call [`RowRef::to_owned_row`]. Bounded delivery validates the whole
+    /// result in compact, schema-aware storage before invoking the consumer.
+    /// The scalar producer still materializes a row before handing it to the
+    /// accumulator; native producer delivery is qualified separately.
     pub fn query_with_params_streaming_ref(
         &mut self,
         cypher_text: &str,
@@ -22489,9 +22489,22 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
         options: QueryStreamOptions,
         mut consumer: impl for<'row> FnMut(RowRef<'row>) -> Result<()>,
     ) -> Result<QueryStreamReport> {
-        self.query_with_params_streaming(cypher_text, parameters, options, |row| {
-            consumer(RowRef::from(&row))
-        })
+        self.store.ensure_usable()?;
+        let task_context = self.task_context.clone();
+        self.query_with_params_streaming_prepared_external_internal(
+            cypher_text,
+            query_runtime::parse_runtime_execution(cypher_text)?,
+            parameters,
+            options,
+            ReadStreamingExecutionContext {
+                task_context: task_context.as_ref(),
+                external: None,
+                delivery: executor::StreamDelivery::Validated,
+                scoring: None,
+                access_control: None,
+            },
+            executor::QueryStreamConsumer::Borrowed(&mut consumer),
+        )
     }
 
     pub fn query_with_params_streaming_context(
@@ -22515,7 +22528,7 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
                 scoring: None,
                 access_control: None,
             },
-            &mut consumer,
+            executor::QueryStreamConsumer::Owned(&mut consumer),
         )
     }
 
@@ -22567,7 +22580,7 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
                 scoring: execution.scoring,
                 access_control: execution.access_control,
             },
-            &mut consumer,
+            executor::QueryStreamConsumer::Owned(&mut consumer),
         )
     }
 
@@ -22578,7 +22591,7 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
         parameters: &BTreeMap<String, Value>,
         options: QueryStreamOptions,
         context: ReadStreamingExecutionContext<'_>,
-        consumer: &mut impl FnMut(Row) -> Result<()>,
+        consumer: executor::QueryStreamConsumer<'_>,
     ) -> Result<QueryStreamReport> {
         let _planning_memory = prepared.planning_memory.take();
         self.store.ensure_usable()?;
@@ -22623,7 +22636,7 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
                 "read transaction query must not be a mutation".to_string(),
             ));
         }
-        let streamed = executor::execute_with_request_consumer_with_delivery(
+        let streamed = executor::execute_with_request_stream(
             executor::ExecutionRequest::new(
                 &optimized.physical_plan,
                 parameters,
