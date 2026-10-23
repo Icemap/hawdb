@@ -489,3 +489,18 @@ the positive model. Its manual-only `TornPair`, `UnchargedRead`, `PinnedWait` an
 `EarlyRefund` controls must each violate the intended invariant. Native snapshot
 and report tests above establish the host correspondence; the finite model does
 not establish allocator capacity bounds or throughput.
+
+### Windows power-loss partitions
+
+The weekly Branch Power Loss lane runs each of the four automatic checkpoint cut
+families in a separate Windows job, plus a disjoint remainder. Linux/macOS retain
+the full suite. `scripts/branch-power-loss-shard.py` derives selected tests from
+Cargo's actual discovery and rejects missing/new automatic families, duplicates,
+empty partitions or an incomplete union. Each artifact records complete discovery,
+all partition membership and the selected test names. Recorder and configuration
+checks remain in every Windows job; all fault schedules, assertions, features,
+checked-profile settings, `--test-threads=1` isolation and 120-minute job ceilings
+are unchanged. This trades repeated build/setup cost for completing independent
+fault groups before the job ceiling. Source `83eab403` run 39959116101 stopped
+inside the automatic manifest case at 120 minutes; that is incomplete coverage,
+not a 120-minute fuzz campaign. Final-source runtime durations remain required.

@@ -258,7 +258,7 @@ jobs:
           if-no-files-found: error
 
   branch-power-loss:
-    name: Branch Power Loss (${{ matrix.os }})
+    name: Branch Power Loss (${{ matrix.os }}, ${{ matrix.shard }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
     strategy:
@@ -266,7 +266,21 @@ jobs:
       matrix:
         # Native execution checks the implementation under explicit barrier
         # assumptions; it does not certify Windows directory-flush semantics.
-        os: [ubuntu-24.04, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-24.04
+            shard: full
+          - os: macos-latest
+            shard: full
+          - os: windows-latest
+            shard: head
+          - os: windows-latest
+            shard: manifest
+          - os: windows-latest
+            shard: root
+          - os: windows-latest
+            shard: wal-sync
+          - os: windows-latest
+            shard: remaining
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -276,6 +290,8 @@ jobs:
 
       - name: Run branch power-loss qualification
         shell: bash
+        env:
+          POWER_LOSS_SHARD: ${{ matrix.shard }}
         run: |
           set -euo pipefail
           mkdir -p branch-power-loss-results
@@ -289,6 +305,14 @@ jobs:
           cargo test --locked -p hawdb --all-features --lib \
             api::tests::power_loss:: -- --list 2>&1 \
             | tee branch-power-loss-results/discovery.txt
+          python3 scripts/branch-power-loss-shard.py \
+            --discovery branch-power-loss-results/discovery.txt \
+            --shard "$POWER_LOSS_SHARD" --output-dir branch-power-loss-results
+          test_filter=$(cat branch-power-loss-results/test-filter.txt)
+          test_arguments=(--nocapture --test-threads=1)
+          while IFS= read -r argument; do
+            test_arguments+=("$argument")
+          done < branch-power-loss-results/test-arguments.txt
           set +e
           bash scripts/cargo-test-required.sh --locked -p hawdb-storage --all-features --lib \
             power_loss:: -- --nocapture --test-threads=1 2>&1 \
@@ -306,7 +330,7 @@ jobs:
             fi
           fi
           bash scripts/cargo-test-required.sh --locked -p hawdb --all-features --lib \
-            api::tests::power_loss:: -- --nocapture --test-threads=1 2>&1 \
+            "$test_filter" -- "${test_arguments[@]}" 2>&1 \
             | tee branch-power-loss-results/test-output.txt
           test_status=$?
           set -e
@@ -358,7 +382,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: branch-power-loss-${{ matrix.os }}-${{ github.sha }}
+          name: branch-power-loss-${{ matrix.os }}-${{ matrix.shard }}-${{ github.sha }}
           path: branch-power-loss-results
           if-no-files-found: error
 
