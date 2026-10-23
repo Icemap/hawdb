@@ -1843,6 +1843,16 @@ rejection and pin-aware reclamation. Five unsafe-transition controls and two
 reachability controls accompany the model. This does not enable mutation-run
 serving; see the [runtime guard and proof scope](SEARCH_MUTATION_PUBLICATION_PROOF.md).
 
+The Mem out-of-core read adapter retains a complete reader owner across a
+callback and replaces the shared reader on refresh. Its unchanged segment
+owners and native pins preserve the model's `PinnedClosureRetained` obligation;
+the adapter adds no durable selector transition. The Mem publication cache pairs
+that owner with its graph read view under one publication mutex and retires
+replaced owners after unlocking. The App regression independently checks both
+old/current graph-projection pairs during actual maintenance publication and
+the final reader release. The search model does not itself model this host
+pairing or prove resident projection ownership.
+
 ## Derived Source Segment Publication
 
 `HawDBSourceSegmentPublication.tla` models Source scan sidecars, including the

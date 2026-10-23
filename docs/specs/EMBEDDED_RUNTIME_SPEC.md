@@ -196,8 +196,14 @@ execution. Streaming callbacks may overlap commits and acquire newer reads,
 while their original result remains bound to its selected snapshot.
 
 `with_bounded_read_snapshot` additionally pins the configured search projection
-and retains the store read lock through the callback. Graph-only snapshots MUST
-report no projection presence or projection epochs and MUST reject external
+with its graph publication. Out-of-core snapshots own the complete immutable
+reader, including its manifest, visibility state, shared artifact handles and
+native pins; callbacks run after releasing the store and publication locks.
+Maintenance refresh installs a new reader and preserves existing readers. The
+publication cache retains one current projection owner and retires replaced
+owners after unlocking. The resident projection path still retains the store
+read lock until resident document/COW ownership is implemented.
+Graph-only snapshots MUST report no projection presence or projection epochs and MUST reject external
 vector reads, even when the live store has a projection. A host requiring
 projection consistency MUST use the projection-pinned entrypoint. Neither
 entrypoint transfers host business policy into the database.

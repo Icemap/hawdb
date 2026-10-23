@@ -1989,6 +1989,41 @@ impl SearchOutOfCoreReader {
     /// complete closure. Published artifacts must remain immutable while readers
     /// exist. On failure this reader retains its previously pinned generation.
     pub fn refresh(&mut self) -> Result<SearchOutOfCoreRefreshReport> {
+        let (closure, report) = self.prepare_refresh()?;
+        if let Some(closure) = closure {
+            self.manifest = closure.manifest;
+            self.segments = closure.segments;
+            self.visibility = closure.visibility;
+        }
+        Ok(report)
+    }
+
+    /// Publishes a refreshed reader without changing existing snapshot owners.
+    /// Unchanged content retains its native artifact pins and shared allocations;
+    /// no reader or document corpus is cloned on snapshot acquisition.
+    pub fn refresh_shared(reader: &mut Arc<Self>) -> Result<SearchOutOfCoreRefreshReport> {
+        let (closure, report) = reader.prepare_refresh()?;
+        if let Some(closure) = closure {
+            let next = Self {
+                root: reader.root.clone(),
+                _project_files: reader._project_files.clone(),
+                config: reader.config.clone(),
+                analyzer_lexicon: reader.analyzer_lexicon.clone(),
+                manifest: closure.manifest,
+                segments: closure.segments,
+                visibility: closure.visibility,
+                lexical_source_policy: reader.lexical_source_policy,
+                lexical_term_policy: reader.lexical_term_policy,
+                runtime_capabilities: reader.runtime_capabilities,
+            };
+            *reader = Arc::new(next);
+        }
+        Ok(report)
+    }
+
+    fn prepare_refresh(
+        &self,
+    ) -> Result<(Option<LoadedArtifactClosure>, SearchOutOfCoreRefreshReport)> {
         let bytes = read_bounded_file(
             &self.root.join(OUT_OF_CORE_MANIFEST_FILE),
             MAX_OUT_OF_CORE_MANIFEST_BYTES,
@@ -2005,14 +2040,17 @@ impl SearchOutOfCoreReader {
                     ));
                 }
             }
-            return Ok(SearchOutOfCoreRefreshReport {
-                generation: manifest.generation,
-                generation_changed: false,
-                validated_retractions: 0,
-                reused_retractions: self.visibility.retractions().count(),
-                opened_content_segments: 0,
-                reused_content_segments: self.segments.len(),
-            });
+            return Ok((
+                None,
+                SearchOutOfCoreRefreshReport {
+                    generation: manifest.generation,
+                    generation_changed: false,
+                    validated_retractions: 0,
+                    reused_retractions: self.visibility.retractions().count(),
+                    opened_content_segments: 0,
+                    reused_content_segments: self.segments.len(),
+                },
+            ));
         }
         if manifest.generation <= self.manifest.generation {
             return Err(HawDBError::Storage(
@@ -2029,10 +2067,7 @@ impl SearchOutOfCoreReader {
             Some(reuse::View::from_reader(self)),
         )?;
         let report = closure.refresh;
-        self.manifest = closure.manifest;
-        self.segments = closure.segments;
-        self.visibility = closure.visibility;
-        Ok(report)
+        Ok((Some(closure), report))
     }
 
     #[cfg(all(test, feature = "full-text-search"))]

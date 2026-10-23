@@ -54,6 +54,13 @@ Data-only commits remain reusable; schema and database-instance changes reject
 the old preparation before execution. Every case checks released admission
 memory. The root general unit owner and weekly runtime lane execute this family.
 
+The App snapshot family also exercises out-of-core generation replacement through
+the actual Mem maintenance entrypoint while a snapshot callback remains active.
+It checks the old graph/projection pair, the newer pair, generation advancement,
+release of the old reader after callback completion, and refunded admission.
+This covers `SearchOutOfCoreReader::refresh_shared` through its embedded host;
+resident projection lock release remains a separate implementation requirement.
+
 ## Execution lanes
 
 | Lane / entry point | Problems covered | Execution policy |

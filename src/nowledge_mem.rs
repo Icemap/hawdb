@@ -1713,7 +1713,7 @@ pub struct NowledgeMemSearchProjection {
 
 #[derive(Debug)]
 pub struct NowledgeMemOutOfCoreSearchProjection {
-    reader: SearchOutOfCoreReader,
+    reader: Arc<SearchOutOfCoreReader>,
     maintenance: Option<(PathBuf, NowledgeMemIncrementalSearchMaintenanceOptions)>,
 }
 
@@ -1743,14 +1743,14 @@ impl From<NowledgeMemOutOfCoreSearchCandidateOutput> for NowledgeMemSearchCandid
 impl NowledgeMemOutOfCoreSearchProjection {
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
         Ok(Self {
-            reader: SearchOutOfCoreReader::open(path)?,
+            reader: Arc::new(SearchOutOfCoreReader::open(path)?),
             maintenance: None,
         })
     }
 
     pub fn open_with_config(path: impl AsRef<Path>, config: SearchOutOfCoreConfig) -> Result<Self> {
         Ok(Self {
-            reader: SearchOutOfCoreReader::open_with_config(path, config)?,
+            reader: Arc::new(SearchOutOfCoreReader::open_with_config(path, config)?),
             maintenance: None,
         })
     }
@@ -1789,6 +1789,13 @@ impl NowledgeMemOutOfCoreSearchProjection {
 
     pub fn reader(&self) -> &SearchOutOfCoreReader {
         &self.reader
+    }
+
+    fn read_snapshot(&self) -> Self {
+        Self {
+            reader: Arc::clone(&self.reader),
+            maintenance: None,
+        }
     }
 
     pub fn freshness(&self) -> SearchProjectionFreshness {
@@ -2472,6 +2479,8 @@ struct PublishedCanonicalRead {
     view: Arc<crate::api::PublishedConcurrentRead>,
     governor: RuntimeGovernor,
     mode: NowledgeMemGraphMode,
+    resident_projection_present: bool,
+    out_of_core_projection: Option<NowledgeMemOutOfCoreSearchProjection>,
 }
 
 impl PublishedCanonicalRead {
@@ -2483,6 +2492,11 @@ impl PublishedCanonicalRead {
             )?),
             governor: store.graph.runtime_governor().clone(),
             mode: store.graph.mode,
+            resident_projection_present: store.search_projection.is_some(),
+            out_of_core_projection: store
+                .out_of_core_search_projection
+                .as_ref()
+                .map(NowledgeMemOutOfCoreSearchProjection::read_snapshot),
         })
     }
 }
@@ -2665,8 +2679,9 @@ impl<'a> NowledgeMemReadSnapshot<'a> {
     }
 
     /// Visits the complete current projection under this snapshot's retained pin.
-    /// The visitor runs synchronously under the store read guard. It must not
-    /// reenter the store or wait for an async source while retaining this guard.
+    /// Out-of-core visitors own an immutable generation and may overlap writers.
+    /// Resident visitors still retain the store read guard and must not reenter
+    /// the store or wait for an async source while retaining that guard.
     ///
     /// Order is unspecified. A visitor prefix is not exhaustion evidence: only
     /// the successful returned report certifies completion. Retained copies are
@@ -2676,8 +2691,7 @@ impl<'a> NowledgeMemReadSnapshot<'a> {
     /// Cypher/SQL reads charge `Value` payload estimates, including value overhead.
     /// These charges share the cumulative cap but differ by output representation.
     /// Out-of-core scans read all physical payloads twice and probe visible ID
-    /// routes during preflight. The read guard blocks writers throughout; lock
-    /// duration depends on physical bytes, inventory and storage throughput.
+    /// routes during preflight, without retaining the publication lock.
     /// Emit callbacks may precede final checksum validation, so a later error
     /// invalidates completion even after callbacks have run.
     pub fn visit_search_projection(
@@ -3186,6 +3200,46 @@ impl NowledgeMemEmbeddedStoreHandle {
         let permit = self.admit_typed_read(budget.max_payload_bytes)?;
         let task_context = permit.bind_task_context(task_context.clone());
         let _permit = permit;
+        let publication = {
+            let current = self.lock_published_read()?;
+            let current = current.as_ref().ok_or_else(|| {
+                HawDBError::StorageIntegrity("canonical read publication is unavailable".into())
+            })?;
+            (!current.resident_projection_present).then(|| {
+                (
+                    Arc::clone(&current.view),
+                    current.instance_identity.clone(),
+                    current
+                        .out_of_core_projection
+                        .as_ref()
+                        .map(NowledgeMemOutOfCoreSearchProjection::read_snapshot),
+                )
+            })
+        };
+        if let Some((view, identity, projection)) = publication {
+            let configured_rows = view
+                .snapshot
+                .config()
+                .read_result_row_limit()
+                .unwrap_or(usize::MAX);
+            if budget.max_rows > configured_rows {
+                return Err(HawDBError::Execution(format!(
+                    "bounded read snapshot row budget {} exceeds configured limit {configured_rows}",
+                    budget.max_rows
+                )));
+            }
+            let transaction = view.begin_read_transaction_with_context(&task_context)?;
+            drop(view);
+            let mut snapshot = NowledgeMemReadSnapshot::new(
+                transaction,
+                identity,
+                budget,
+                None,
+                projection.as_ref(),
+                task_context,
+            );
+            return self.finish_canonical_read(operation(&mut snapshot));
+        }
         let store = self.read_store()?;
         let configured_rows = store
             .graph
@@ -3871,10 +3925,21 @@ impl NowledgeMemEmbeddedStoreHandle {
     }
 
     fn admit_typed_read(&self, max_estimated_payload_bytes: usize) -> Result<RuntimePermit> {
-        let store = self.read_store()?;
-        let request =
-            typed_read_request(store.graph.database().config(), max_estimated_payload_bytes)?;
-        store.graph.try_admit_runtime(request)
+        let (governor, request) = {
+            let publication = self.lock_published_read()?;
+            let publication = publication.as_ref().ok_or_else(|| {
+                HawDBError::StorageIntegrity("canonical read publication is unavailable".into())
+            })?;
+            publication.view.snapshot.ensure_usable()?;
+            (
+                publication.governor.clone(),
+                typed_read_request(
+                    publication.view.snapshot.config(),
+                    max_estimated_payload_bytes,
+                )?,
+            )
+        };
+        try_admit_runtime(&governor, request)
     }
 
     fn lock_published_read(&self) -> Result<MutexGuard<'_, Option<PublishedCanonicalRead>>> {

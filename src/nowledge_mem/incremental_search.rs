@@ -84,7 +84,7 @@ impl NowledgeMemOutOfCoreSearchProjection {
             .with_max_document_tokens(options.build_options.lexical_max_document_tokens),
         )?;
         Ok(Self {
-            reader,
+            reader: Arc::new(reader),
             maintenance: Some((path.to_path_buf(), options)),
         })
     }
@@ -93,7 +93,7 @@ impl NowledgeMemOutOfCoreSearchProjection {
         self.maintenance.as_ref().ok_or_else(|| {
             HawDBError::Semantic("qualified out-of-core search is not a maintenance target".into())
         })?;
-        self.reader.refresh()
+        SearchOutOfCoreReader::refresh_shared(&mut self.reader)
     }
 }
 

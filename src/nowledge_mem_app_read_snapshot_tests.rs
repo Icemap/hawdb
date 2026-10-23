@@ -2205,6 +2205,119 @@ fn bounded_out_of_core_text_seed_filters_before_top_k() {
 }
 
 #[test]
+fn out_of_core_snapshot_allows_generation_publication_and_keeps_its_old_pair() {
+    use std::sync::{mpsc, Arc};
+    use std::time::Duration;
+
+    let root = SnapshotTestRoot::new();
+    let path = root.0.join("search");
+    let row = |title: &str| SearchProjectionRow {
+        kind: SearchProjectionKind::Memory,
+        external_id: "memory".into(),
+        title: title.into(),
+        body: "projection payload".into(),
+        embedding: None,
+        source_id: None,
+        metadata: BTreeMap::new(),
+    };
+    let mut writer =
+        crate::SearchOutOfCoreGenerationWriter::create(&path, Default::default()).unwrap();
+    writer.push(row("Before").into_document()).unwrap();
+    writer.finish().unwrap();
+    let mut database = Database::new_with_config(DatabaseConfig {
+        max_read_result_rows: Some(16),
+        max_read_result_payload_bytes: Some(16 * 1024),
+        ..Default::default()
+    });
+    database
+        .query("CREATE (:Memory {id: 'memory', title: 'Before'})")
+        .unwrap();
+    let graph = NowledgeMemGraph::from_database_with_runtime_governor(
+        database,
+        NowledgeMemGraphMode::WritableCutover,
+        snapshot_governor(),
+    );
+    let projection =
+        super::NowledgeMemOutOfCoreSearchProjection::open_incremental(&path, Default::default())
+            .unwrap();
+    let old_reader = Arc::downgrade(&projection.reader);
+    let handle =
+        NowledgeMemEmbeddedStoreHandle::new(NowledgeMemEmbeddedStore::new_with_out_of_core_search(
+            graph,
+            projection,
+            Default::default(),
+        ))
+        .unwrap();
+    let budget = NowledgeMemReadSnapshotBudget {
+        max_rows: 4,
+        max_payload_bytes: 8192,
+    };
+    let read_pair = |snapshot: &mut super::NowledgeMemReadSnapshot<'_>| -> crate::Result<_> {
+        let graph = snapshot.query_cypher(
+            "MATCH (m:Memory) RETURN m.title AS title",
+            &BTreeMap::new(),
+            1,
+        )?;
+        let mut titles = Vec::new();
+        let report = snapshot.visit_search_projection(4096, |document| {
+            titles.push(document.title.clone());
+            Ok(())
+        })?;
+        Ok((
+            graph.rows[0]["title"].clone(),
+            titles,
+            report.artifact_generation,
+        ))
+    };
+    let writer_handle = handle.clone();
+    let delta = crate::SearchProjectionDelta {
+        upserts: vec![row("After")],
+        ..Default::default()
+    };
+    let (start, started) = mpsc::channel();
+    let (finished, done) = mpsc::channel();
+    let writer = std::thread::spawn(move || {
+        if started.recv().is_ok() {
+            let result = (|| {
+                writer_handle.with_transaction(|tx| {
+                    tx.query("MATCH (m:Memory) SET m.title = 'After'")
+                        .map(|_| ())
+                })?;
+                writer_handle.apply_search_projection_delta_and_checkpoint(delta)
+            })();
+            let _ = finished.send(result);
+        }
+    });
+    let result = handle.with_bounded_read_snapshot(budget, |snapshot| {
+        let before = read_pair(snapshot)?;
+        start.send(()).unwrap();
+        done.recv_timeout(Duration::from_secs(10)).map_err(|_| {
+            crate::HawDBError::Execution("projection snapshot blocked publication".into())
+        })??;
+        let after = handle.with_bounded_read_snapshot(budget, read_pair)?;
+        assert_eq!(before.0, Value::String("Before".into()));
+        assert_eq!(before.1, vec!["Before"]);
+        assert_eq!(after.0, Value::String("After".into()));
+        assert_eq!(after.1, vec!["After"]);
+        assert_ne!(before.2, after.2);
+        assert_eq!(read_pair(snapshot)?, before);
+        assert!(old_reader.upgrade().is_some());
+        Ok(())
+    });
+    drop(start);
+    writer.join().unwrap();
+    result.unwrap();
+    assert!(old_reader.upgrade().is_none());
+    assert_eq!(
+        handle
+            .runtime_governor_snapshot()
+            .unwrap()
+            .admitted_memory_bytes,
+        0
+    );
+}
+
+#[test]
 fn database_instance_identity_survives_committed_handle_writes() {
     let handle = app_read_handle();
     let writer = handle.clone();
