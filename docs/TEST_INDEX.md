@@ -21,7 +21,9 @@ callbacks, cancellation/error/unwind release, schema rejection and nested-copy
 admission independent of source spare capacity. The executor unit owner runs
 these regressions in CI. Root `api::tests::query_execution` checks the public
 borrowed streaming entrypoint's compact views and zero-prefix budget refusal.
-These do not yet qualify a native scan-to-consumer production path.
+The weekly native runtime lane also selects these borrowed-result cases on
+Windows and macOS. These do not yet qualify a native scan-to-consumer production
+path.
 
 The `api::query_request::adapter_tests` family exercises shared Cypher and SQL
 requests across database, pinned-read, explicit-write, concurrent optimistic and
@@ -63,8 +65,12 @@ release the preparation view in both ordinary and report entrypoints.
 Data-only commits remain reusable; schema and database-instance changes reject
 the old preparation before execution. Every case checks released admission
 memory. Report cases also require one cache lookup per preparation and preserve
-physical-plan capture with rebound parameters. The root general unit owner and
-weekly runtime lane execute this family.
+physical-plan capture with rebound parameters. External text/vector seed reports
+admit the published projection's I/O depth without retaining its generation while
+waiting; graph-only reports and plain EXPLAIN do not reserve projection I/O.
+A projection I/O-depth change during admission rejects the old request and
+releases its preparation, execution memory and I/O reservations.
+The root general unit owner and weekly runtime lane execute this family.
 
 The App snapshot family also exercises out-of-core generation replacement through
 the actual Mem maintenance entrypoint while a snapshot callback remains active.

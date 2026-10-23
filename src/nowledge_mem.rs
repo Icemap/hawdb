@@ -2463,6 +2463,7 @@ struct PublishedCanonicalRead {
     governor: RuntimeGovernor,
     mode: NowledgeMemGraphMode,
     resident_projection_present: bool,
+    external_seed_io_slots: usize,
     out_of_core_projection: Option<NowledgeMemOutOfCoreSearchProjection>,
 }
 
@@ -2476,6 +2477,7 @@ impl PublishedCanonicalRead {
             governor: store.graph.runtime_governor().clone(),
             mode: store.graph.mode,
             resident_projection_present: store.search_projection.is_some(),
+            external_seed_io_slots: store.external_seed_io_slots(),
             out_of_core_projection: store
                 .out_of_core_search_projection
                 .as_ref()
@@ -5395,6 +5397,15 @@ impl NowledgeMemEmbeddedStore {
             (None, Some(projection)) => Some(projection.freshness()),
             _ => None,
         }
+    }
+
+    fn external_seed_io_slots(&self) -> usize {
+        self.search_projection
+            .as_ref()
+            .map_or(0, |projection| {
+                projection.index().range_read_config().io_depth.get()
+            })
+            .max(usize::from(self.out_of_core_search_projection.is_some()))
     }
 
     fn search_io_slots(&self) -> Result<usize> {

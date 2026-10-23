@@ -12,7 +12,7 @@ use crate::{
     Value,
 };
 use hawdb_core::RuntimeTaskContext;
-use hawdb_qos::{RuntimeGovernor, RuntimeWorkPriority};
+use hawdb_qos::{RuntimeGovernor, RuntimeWorkPriority, RuntimeWorkRequest};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
@@ -20,6 +20,28 @@ struct AdmissionSource {
     identity: crate::DatabaseInstanceIdentity,
     config: DatabaseConfig,
     governor: RuntimeGovernor,
+    external_seed_io_slots: usize,
+}
+
+impl AdmissionSource {
+    fn execution_request(
+        &self,
+        prepared: &PreparedRuntimeQuery,
+        result_budget: u64,
+    ) -> RuntimeWorkRequest {
+        let request = prepared
+            .admission()
+            .runtime_work_request_for_snapshot(result_budget, self.governor.snapshot())
+            .with_retained_memory_bytes(prepared.planning_memory_bytes());
+        if prepared.uses_external_seed() {
+            // The canonical graph plan cannot infer a host projection's physical
+            // I/O depth. Admit its published capability without pinning its data.
+            let slots = request.io_slots.max(self.external_seed_io_slots);
+            request.with_io_wave_slots(slots)
+        } else {
+            request
+        }
+    }
 }
 
 impl NowledgeMemEmbeddedStoreHandle {
@@ -31,6 +53,7 @@ impl NowledgeMemEmbeddedStoreHandle {
             identity: publication.instance_identity.clone(),
             config: publication.view.snapshot.config().clone(),
             governor: publication.governor.clone(),
+            external_seed_io_slots: publication.external_seed_io_slots,
         })
     }
 
@@ -153,12 +176,10 @@ impl NowledgeMemEmbeddedStoreHandle {
             let is_mutation = prepared.admission().is_mutation;
             let result_budget =
                 materialized_result_budget(&source.config, &source.governor, is_mutation)?;
+            let uses_external_seed = prepared.uses_external_seed();
             let permit = try_admit_runtime(
                 &source.governor,
-                prepared
-                    .admission()
-                    .runtime_work_request_for_snapshot(result_budget, source.governor.snapshot())
-                    .with_retained_memory_bytes(prepared.planning_memory_bytes()),
+                source.execution_request(&prepared, result_budget),
             )?;
             let context = permit.bind_task_context(task_context.clone());
             let snapshot = {
@@ -166,6 +187,8 @@ impl NowledgeMemEmbeddedStoreHandle {
                 let publication = publication.as_ref().ok_or_else(source_changed)?;
                 if publication.instance_identity != source.identity
                     || !publication.view.accepts_prepared(&prepared)
+                    || (uses_external_seed
+                        && publication.external_seed_io_slots != source.external_seed_io_slots)
                 {
                     return Err(source_changed());
                 }
@@ -206,6 +229,8 @@ impl NowledgeMemEmbeddedStoreHandle {
                 let database = store.graph.database();
                 if database.instance_identity()? != source.identity
                     || !database.accepts_prepared_query(&prepared)?
+                    || (uses_external_seed
+                        && store.external_seed_io_slots() != source.external_seed_io_slots)
                 {
                     return Err(source_changed());
                 }
@@ -354,6 +379,47 @@ mod tests {
                     Ordering::SeqCst,
                 );
             }
+        }
+    }
+
+    #[test]
+    fn report_admission_includes_only_executed_external_projection_io() {
+        let handle = app_read_handle();
+        {
+            let mut store = handle.write_store().unwrap();
+            let projection = store.search_projection.as_mut().unwrap();
+            let mut config = projection.index().range_read_config();
+            config.io_depth = std::num::NonZeroUsize::new(3).unwrap();
+            projection.set_range_read_config(config);
+        }
+        let source = handle.query_admission_source().unwrap();
+        assert_eq!(source.external_seed_io_slots, 3);
+        let parameters = BTreeMap::from([("text".into(), Value::String("App".into()))]);
+        let seed = "CALL text_search($text, topK := 1) YIELD id, score MATCH (m:Memory) RETURN m.id AS id, score";
+        for (query, expected) in [
+            (seed.to_owned(), 3),
+            (format!("EXPLAIN ANALYZE {seed}"), 3),
+            (format!("EXPLAIN {seed}"), 0),
+            (READ.to_owned(), 0),
+        ] {
+            let prepared = handle
+                .prepare_admitted_query(
+                    &source,
+                    &query,
+                    &parameters,
+                    &RuntimeTaskContext::default(),
+                )
+                .unwrap();
+            let request = source.execution_request(&prepared, 4096);
+            assert_eq!(request.io_slots, expected, "{query}");
+            if expected != 0 {
+                assert_eq!(
+                    request.io_reservation_scope,
+                    hawdb_qos::RuntimeIoReservationScope::Wave
+                );
+            }
+            drop(prepared);
+            assert_eq!(source.governor.snapshot().admitted_memory_bytes, 0);
         }
     }
 
@@ -534,6 +600,67 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn report_rejects_projection_io_changes_during_admission() {
+        let handle = app_read_handle();
+        let writer_handle = handle.clone();
+        let (start, started) = mpsc::channel();
+        let (finished, done) = mpsc::channel();
+        let writer = std::thread::spawn(move || {
+            if started.recv().is_ok() {
+                let result = writer_handle.write_store().map(|mut store| {
+                    let projection = store.search_projection.as_mut().unwrap();
+                    let mut config = projection.index().range_read_config();
+                    config.io_depth =
+                        std::num::NonZeroUsize::new(config.io_depth.get() + 1).unwrap();
+                    projection.set_range_read_config(config);
+                });
+                let _ = finished.send(result.is_ok());
+            }
+        });
+        let sink = Arc::new(AdmissionWriter {
+            armed: AtomicBool::new(false),
+            prior_view: Mutex::new(Weak::new()),
+            prior_released: AtomicBool::new(false),
+            start,
+            done: Mutex::new(done),
+        });
+        handle.set_telemetry_sink(Some(sink.clone())).unwrap();
+        *sink.prior_view.lock().unwrap() =
+            Arc::downgrade(&handle.lock_published_read().unwrap().as_ref().unwrap().view);
+        sink.armed.store(true, Ordering::SeqCst);
+        let result = handle.query_with_params_with_report(
+            "CALL text_search($text, topK := 1) YIELD id, score MATCH (m:Memory) RETURN m.id AS id, score",
+            &BTreeMap::from([("text".into(), Value::String("App".into()))]),
+        );
+        handle.set_telemetry_sink(None).unwrap();
+        let prior_released = sink.prior_released.load(Ordering::SeqCst);
+        drop(sink);
+        writer.join().unwrap();
+        assert!(
+            prior_released,
+            "projection reconfiguration was blocked by preparation"
+        );
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("read source changed during admission"));
+        assert_eq!(
+            handle
+                .runtime_governor_snapshot()
+                .unwrap()
+                .admitted_memory_bytes,
+            0
+        );
+        assert_eq!(
+            handle
+                .runtime_governor_snapshot()
+                .unwrap()
+                .active_foreground_io_slots,
+            0
+        );
     }
 
     #[derive(Clone, Copy, Debug)]

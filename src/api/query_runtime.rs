@@ -247,6 +247,20 @@ impl PreparedRuntimeQuery {
         self.parse_metrics.elapsed_nanos
     }
 
+    pub(crate) fn uses_external_seed(&self) -> bool {
+        let mut required = false;
+        if let Some(optimized) = &self.optimized {
+            hawdb_plan_cypher::visit_plan(&optimized.physical_plan, &mut |plan| {
+                required |= matches!(
+                    plan,
+                    hawdb_plan_cypher::PhysicalPlan::TextSeedScan { .. }
+                        | hawdb_plan_cypher::PhysicalPlan::VectorSeedScan { .. }
+                );
+            });
+        }
+        required
+    }
+
     pub(crate) fn uses_read_snapshot(&self) -> bool {
         if self.admission.is_mutation
             || self

@@ -169,6 +169,12 @@ revalidate branch identity, schema/execution compatibility, database configurati
 and system query settings; execution still applies request authorization and
 cancellation. Ordinary data commits alone do not invalidate read preparation.
 
+Mem report admission also includes the published host projection's I/O depth
+when the prepared plan executes text or vector seeds. This capture retains only
+capability metadata, not a source generation. A changed capability is revalidated
+after admission and before execution, including the resident fallback. Plain
+EXPLAIN and graph-only reports do not acquire projection I/O allowances.
+
 Preparation memory MUST remain charged until the prepared AST and plan are
 consumed or dropped. Transferring that reservation MUST release preparation's
 CPU, blocking-task and I/O slots without a memory release/reacquire gap. Execution
