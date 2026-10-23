@@ -88,7 +88,7 @@ fn search_helpers_preserve_their_pair_while_writers_and_fresh_helpers_advance() 
             let path = root.0.join("search");
             let mut writer =
                 crate::SearchOutOfCoreGenerationWriter::create(&path, Default::default()).unwrap();
-            for id in ["memory:nearest", "memory:farther"] {
+            for id in ["memory:farther", "memory:nearest"] {
                 writer
                     .push(resident.index().document(id).unwrap().clone())
                     .unwrap();
@@ -459,17 +459,11 @@ fn bounded_text_seed_snapshot_retains_its_projection_during_a_writer_update() {
     let handle = app_read_handle();
     let writer_handle = handle.clone();
     let (start_tx, start_rx) = std::sync::mpsc::channel();
-    let (attempt_tx, attempt_rx) = std::sync::mpsc::channel();
     let (done_tx, done_rx) = std::sync::mpsc::channel();
     let writer = std::thread::spawn(move || {
         if start_rx.recv().is_err() {
             return;
         }
-        let blocked = matches!(
-            writer_handle.inner.try_write(),
-            Err(std::sync::TryLockError::WouldBlock)
-        );
-        attempt_tx.send(blocked).unwrap();
         let result = (|| {
             let mut store = writer_handle.write_store()?;
             store
@@ -524,19 +518,15 @@ fn bounded_text_seed_snapshot_retains_its_projection_during_a_writer_update() {
             let before = read(snapshot)?;
             let epoch = snapshot.commit_epoch();
             start_tx.send(()).unwrap();
-            assert!(attempt_rx
+            done_rx
                 .recv_timeout(std::time::Duration::from_secs(5))
-                .unwrap());
+                .expect("the retained text snapshot blocked writer publication")?;
             assert_eq!(read(snapshot)?, before);
             assert_eq!(snapshot.commit_epoch(), epoch);
             Ok(epoch)
         },
     );
     drop(start_tx);
-    done_rx
-        .recv_timeout(std::time::Duration::from_secs(5))
-        .unwrap()
-        .unwrap();
     writer.join().unwrap();
     let epoch = result.unwrap();
     handle

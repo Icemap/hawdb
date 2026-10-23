@@ -103,6 +103,10 @@ report-observation tests cover ordinary and external text queries while a writer
 and a fresh reader advance. Search resident-generation units cover shared funding,
 capacity refusal/retry, last-owner release and frozen freshness in query reports.
 The existing Search feature matrix and root runtime lanes own these cases.
+The resident text-seed fixture requires the graph, SQL and projection writer to
+finish before the retained snapshot callback returns, then verifies its old
+results and epoch remain stable. Incremental out-of-core helper fixtures submit
+documents in the generation writer's required strictly increasing ID order.
 The text-seed fixture also exercises the report entrypoint and EXPLAIN ANALYZE
 with the captured out-of-core external operator. Plain/analyzed explain rows
 have an explicit 1 MiB diagnostic cap and debit their delivered row/payload from
