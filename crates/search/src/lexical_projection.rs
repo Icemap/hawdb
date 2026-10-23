@@ -1555,6 +1555,7 @@ impl LexicalProjectionReader {
     /// frame-header bound cannot reach the retained floor. Callers that report
     /// `matching_document_count` as a user-visible total (the text route) must
     /// pass `false`: skipping changes that count, not the retained window.
+    #[cfg(test)]
     pub(super) fn score_with_global_statistics_and_pruning(
         &self,
         query_terms: &BTreeSet<String>,
@@ -1615,6 +1616,27 @@ impl LexicalProjectionReader {
         &self,
         query_terms: &BTreeSet<T>,
         inputs: ScoringInputs<'_>,
+        allowed: impl FnMut(&str) -> Result<bool>,
+    ) -> Result<AccountedQueryReport> {
+        self.score_terms_with_filter(query_terms, inputs, false, allowed)
+    }
+
+    /// Internal predicates over a pinned view may reuse one result per document.
+    /// Arbitrary host callbacks must keep using `score_terms_accounted`.
+    pub(super) fn score_terms_with_stable_filter<T: Borrow<str> + Ord>(
+        &self,
+        query_terms: &BTreeSet<T>,
+        inputs: ScoringInputs<'_>,
+        allowed: impl FnMut(&str) -> Result<bool>,
+    ) -> Result<AccountedQueryReport> {
+        self.score_terms_with_filter(query_terms, inputs, true, allowed)
+    }
+
+    fn score_terms_with_filter<T: Borrow<str> + Ord>(
+        &self,
+        query_terms: &BTreeSet<T>,
+        inputs: ScoringInputs<'_>,
+        reuse_filter: bool,
         mut allowed: impl FnMut(&str) -> Result<bool>,
     ) -> Result<AccountedQueryReport> {
         let ScoringInputs {
@@ -1890,6 +1912,7 @@ impl LexicalProjectionReader {
                 global_statistics,
                 average_document_len,
                 &mut allowed,
+                reuse_filter,
                 &mut collector,
             )?;
         }
@@ -1952,6 +1975,17 @@ impl LexicalProjectionReader {
         block: &BlockDescriptor,
         task: Option<&RuntimeTaskContext>,
     ) -> Result<Vec<u8>> {
+        let mut bytes = Vec::new();
+        self.read_block_into(block, task, &mut bytes)?;
+        Ok(bytes)
+    }
+
+    fn read_block_into(
+        &self,
+        block: &BlockDescriptor,
+        task: Option<&RuntimeTaskContext>,
+        bytes: &mut Vec<u8>,
+    ) -> Result<()> {
         if let Some(task) = task {
             query_context::checkpoint(task)?;
         }
@@ -1967,20 +2001,20 @@ impl LexicalProjectionReader {
                 block.block_id
             ))
         })?;
-        let mut bytes = vec![0u8; length];
+        bytes.resize(length, 0);
         // File clones can share a cursor. Each read must carry its own offset
         // so concurrent posting streams cannot redirect one another's I/O.
-        hawdb_storage::io::read_exact_at(&self.file, &mut bytes, block.offset)?;
+        hawdb_storage::io::read_exact_at(&self.file, bytes, block.offset)?;
         if let Some(task) = task {
             query_context::checkpoint(task)?;
         }
-        if checksum(&bytes) != block.checksum {
+        if checksum(bytes) != block.checksum {
             return Err(HawDBError::Storage(format!(
                 "lexical block {} checksum mismatch",
                 block.block_id
             )));
         }
-        Ok(bytes)
+        Ok(())
     }
 }
 
@@ -1999,7 +2033,9 @@ struct TermPostingStream<'a> {
     context: Option<QueryContext<'a>>,
     blocks: Vec<&'a BlockDescriptor>,
     block_index: usize,
-    current: std::vec::IntoIter<QueryPosting>,
+    encoded: Vec<u8>,
+    current: Vec<QueryPosting>,
+    position: usize,
     peeked: Option<QueryPosting>,
     /// Frame-header bounds of the block whose postings are materialized next.
     bounds: Option<PostingBlockBounds>,
@@ -2025,7 +2061,9 @@ impl<'a> TermPostingStream<'a> {
             context,
             blocks,
             block_index: 0,
-            current: Vec::new().into_iter(),
+            encoded: Vec::new(),
+            current: Vec::new(),
+            position: 0,
             peeked: None,
             bounds: None,
             postings_visited: 0,
@@ -2050,6 +2088,12 @@ impl<'a> TermPostingStream<'a> {
         self.peeked.take()
     }
 
+    fn next_posting(&mut self) -> Option<QueryPosting> {
+        let posting = self.current.get(self.position).copied()?;
+        self.position += 1;
+        Some(posting)
+    }
+
     /// Upper bound of the block that will serve the next posting. Streaming
     /// without a bound must never prune, so the absent case stays unbounded.
     fn block_upper_bound(&self, idf: f64, average_document_len: f64) -> f64 {
@@ -2070,10 +2114,11 @@ impl<'a> TermPostingStream<'a> {
         }
         self.peeked = None;
         if self.bounds.is_some_and(|bounds| bounds.last < target) {
-            self.current = Vec::new().into_iter();
+            self.current.clear();
+            self.position = 0;
         }
         loop {
-            if let Some(posting) = self.current.next() {
+            if let Some(posting) = self.next_posting() {
                 if posting.ordinal >= target {
                     self.peeked = Some(posting);
                     return Ok(());
@@ -2093,7 +2138,7 @@ impl<'a> TermPostingStream<'a> {
     fn advance(&mut self) -> Result<Option<QueryPosting>> {
         loop {
             query_context::check(self.context)?;
-            if let Some(posting) = self.current.next() {
+            if let Some(posting) = self.next_posting() {
                 return Ok(Some(posting));
             }
             if !self.load_next_block_above(0)? {
@@ -2113,12 +2158,14 @@ impl<'a> TermPostingStream<'a> {
                 return Ok(false);
             };
             self.block_index = self.block_index.saturating_add(1);
-            let bytes = self
-                .projection
-                .read_block_with_task(block, self.context.map(|context| context.task))?;
-            self.bytes_read = self.bytes_read.saturating_add(bytes.len() as u64);
-            let Some(bounds) = term_block_bounds(
-                &bytes,
+            self.projection.read_block_into(
+                block,
+                self.context.map(|context| context.task),
+                &mut self.encoded,
+            )?;
+            self.bytes_read = self.bytes_read.saturating_add(self.encoded.len() as u64);
+            let Some(frames) = term_frames(
+                &self.encoded,
                 self.projection.manifest.generation,
                 block,
                 self.term,
@@ -2126,16 +2173,17 @@ impl<'a> TermPostingStream<'a> {
             else {
                 continue;
             };
+            let bounds = frames.bounds()?;
             if bounds.last < target {
                 self.blocks_skipped = self.blocks_skipped.saturating_add(1);
                 continue;
             }
-            let mut postings = Vec::new();
-            decode_posting_block_for_term(
-                &bytes,
-                self.projection.manifest.generation,
-                block,
-                self.term,
+            self.position = 0;
+            let decoded = decode_term_frames(
+                frames.payload,
+                frames.offset,
+                frames.document_frequency,
+                &mut self.current,
                 |entry| {
                     query_context::check(self.context)?;
                     if entry.ordinal >= self.projection.manifest.document_count {
@@ -2144,12 +2192,14 @@ impl<'a> TermPostingStream<'a> {
                         ));
                     }
                     self.postings_visited = self.postings_visited.saturating_add(1);
-                    postings.push(entry);
                     Ok(())
                 },
-            )?;
+            );
+            if let Err(error) = decoded {
+                self.current.clear();
+                return Err(error);
+            }
             self.bounds = Some(bounds);
-            self.current = postings.into_iter();
             return Ok(true);
         }
     }
@@ -2400,14 +2450,31 @@ fn score_document(
     global_statistics: Option<&LexicalCorpusStatistics>,
     average_document_len: f64,
     allowed: &mut impl FnMut(&str) -> Result<bool>,
+    reuse_filter: bool,
     collector: &mut ScoreCollector<'_>,
 ) -> Result<()> {
     let mut score = 0.0;
+    let overridden = global_statistics.is_none() && delta.overrides(document_id);
+    let mut eligibility = None;
     for (index, posting) in postings {
         validate_posting_length(posting, document_len)?;
-        if (global_statistics.is_some() || !delta.overrides(document_id))
-            && query_context::allowed(collector.context, document_id, allowed)?
-        {
+        if overridden {
+            continue;
+        }
+        let allowed = match eligibility {
+            Some(value) => {
+                query_context::check(collector.context)?;
+                value
+            }
+            None => {
+                let value = query_context::allowed(collector.context, document_id, allowed)?;
+                if reuse_filter {
+                    eligibility = Some(value);
+                }
+                value
+            }
+        };
+        if allowed {
             score += bm25_term_score(
                 stream_idf[*index],
                 posting.tf,
@@ -2431,12 +2498,30 @@ struct PostingBlockBounds {
 
 /// Reads the term's frame headers inside one posting block without decoding any
 /// posting payload. Returns `None` when the block does not cover the term.
+#[cfg(test)]
 fn term_block_bounds(
     bytes: &[u8],
     generation: u64,
     descriptor: &BlockDescriptor,
     term: &str,
 ) -> Result<Option<PostingBlockBounds>> {
+    term_frames(bytes, generation, descriptor, term)?
+        .map(|frames| frames.bounds())
+        .transpose()
+}
+
+struct TermFrames<'a> {
+    payload: &'a [u8],
+    offset: usize,
+    document_frequency: u32,
+}
+
+fn term_frames<'a>(
+    bytes: &'a [u8],
+    generation: u64,
+    descriptor: &BlockDescriptor,
+    term: &str,
+) -> Result<Option<TermFrames<'a>>> {
     let block = split_posting_block(bytes, generation, descriptor)?;
     if term < descriptor.min_key.as_str() || term > descriptor.max_key.as_str() {
         return Err(HawDBError::Storage(
@@ -2453,12 +2538,22 @@ fn term_block_bounds(
                 "lexical term dictionary count exceeds its block".to_string(),
             ));
         }
-        let mut position = offset;
+        Ok(Some(TermFrames {
+            payload: block.payload,
+            offset,
+            document_frequency,
+        }))
+    })
+}
+
+impl TermFrames<'_> {
+    fn bounds(&self) -> Result<PostingBlockBounds> {
+        let mut position = self.offset;
         let mut decoded = 0u32;
         let mut bounds: Option<PostingBlockBounds> = None;
-        while decoded < document_frequency {
+        while decoded < self.document_frequency {
             let frame =
-                posting_codec::parse_header(block.payload.get(position..).ok_or_else(|| {
+                posting_codec::parse_header(self.payload.get(position..).ok_or_else(|| {
                     HawDBError::Storage("lexical term offset exceeds payload".to_string())
                 })?)
                 .map_err(|error| {
@@ -2467,7 +2562,7 @@ fn term_block_bounds(
             let frame_count = u32::try_from(frame.count).map_err(|_| {
                 HawDBError::Storage("lexical posting frame count exceeds u32".to_string())
             })?;
-            if frame_count > document_frequency - decoded {
+            if frame_count > self.document_frequency - decoded {
                 return Err(HawDBError::Storage(
                     "lexical posting frames exceed the term document frequency".to_string(),
                 ));
@@ -2487,8 +2582,8 @@ fn term_block_bounds(
             })?;
             decoded = decoded.saturating_add(frame_count);
         }
-        Ok(bounds)
-    })
+        Ok(bounds.expect("term dictionary frequencies are nonzero"))
+    }
 }
 
 pub(super) struct LexicalProjectionWriter<'workspace> {
@@ -3253,8 +3348,12 @@ fn decode_posting_block(
                     "lexical term dictionary offsets are invalid".to_string(),
                 ));
             }
-            let next_offset =
-                decode_term_frames(block.payload, offset, document_frequency, |entry| {
+            let next_offset = decode_term_frames(
+                block.payload,
+                offset,
+                document_frequency,
+                &mut Vec::new(),
+                |entry| {
                     let posting = Posting {
                         term: Term::untracked(term.to_owned()),
                         ordinal: entry.ordinal,
@@ -3273,7 +3372,8 @@ fn decode_posting_block(
                     consumer(posting.clone())?;
                     previous = Some(posting);
                     Ok(())
-                })?;
+                },
+            )?;
             expected_offset = next_offset;
             decoded_count = decoded_count.saturating_add(document_frequency);
         }
@@ -3289,12 +3389,13 @@ fn decode_posting_block(
     })
 }
 
+#[cfg(test)]
 fn decode_posting_block_for_term(
     bytes: &[u8],
     generation: u64,
     descriptor: &BlockDescriptor,
     term: &str,
-    mut consumer: impl FnMut(posting_codec::Posting) -> Result<()>,
+    consumer: impl FnMut(posting_codec::Posting) -> Result<()>,
 ) -> Result<()> {
     let block = split_posting_block(bytes, generation, descriptor)?;
     if term < descriptor.min_key.as_str() || term > descriptor.max_key.as_str() {
@@ -3312,9 +3413,13 @@ fn decode_posting_block_for_term(
                 "lexical term dictionary count exceeds its block".to_string(),
             ));
         }
-        decode_term_frames(block.payload, offset, document_frequency, |entry| {
-            consumer(entry)
-        })?;
+        decode_term_frames(
+            block.payload,
+            offset,
+            document_frequency,
+            &mut Vec::new(),
+            consumer,
+        )?;
         Ok(())
     })
 }
@@ -3382,19 +3487,23 @@ fn decode_term_frames(
     payload: &[u8],
     offset: usize,
     document_frequency: u32,
+    output: &mut Vec<QueryPosting>,
     mut consumer: impl FnMut(posting_codec::Posting) -> Result<()>,
 ) -> Result<usize> {
+    output.clear();
     let mut position = offset;
     let mut decoded_count = 0u32;
     let mut previous = None;
     while decoded_count < document_frequency {
-        let (frame, length) =
-            posting_codec::decode_prefix(payload.get(position..).ok_or_else(|| {
+        let start = output.len();
+        let length = posting_codec::decode_prefix_into(
+            payload.get(position..).ok_or_else(|| {
                 HawDBError::Storage("lexical term offset exceeds payload".to_string())
-            })?)
-            .map_err(|error| {
-                HawDBError::Storage(format!("invalid lexical posting frame: {error}"))
-            })?;
+            })?,
+            output,
+        )
+        .map_err(|error| HawDBError::Storage(format!("invalid lexical posting frame: {error}")))?;
+        let frame = &output[start..];
         let frame_count = u32::try_from(frame.len()).map_err(|_| {
             HawDBError::Storage("lexical posting frame count exceeds u32".to_string())
         })?;
@@ -3403,7 +3512,7 @@ fn decode_term_frames(
                 "lexical posting frames exceed the term document frequency".to_string(),
             ));
         }
-        for entry in frame {
+        for &entry in frame {
             if previous.is_some_and(|previous| previous >= entry.ordinal) {
                 return Err(HawDBError::Storage(
                     "lexical posting frame is invalid or unordered".to_string(),

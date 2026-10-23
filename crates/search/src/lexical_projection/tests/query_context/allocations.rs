@@ -48,9 +48,11 @@ fn lexical_query_posting_allocations_grow_with_buffers_not_entries() {
         });
         assert_eq!(visited, count);
         eprintln!("posting entries={count}, blocks={blocks}, allocations={allocations}");
-        // Frame decoding and stream-buffer growth may allocate per block.
-        // Copying a term for every entry would exceed this buffer allowance.
-        assert!(allocations <= blocks * 16);
+        // These equal-sized blocks reuse one encoded and one decoded buffer.
+        assert!(
+            allocations <= 2,
+            "posting buffers must survive block transitions"
+        );
     }
 }
 

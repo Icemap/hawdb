@@ -444,14 +444,23 @@ fn text_seed_metadata_routes_sparse_overlapping_layers_by_exact_membership() {
             });
             let output = if complete {
                 current.complete_text_seed_scores_with_metadata_filters(
-                    "graph", &filters, 4, &account, &task,
+                    "graph storage",
+                    &filters,
+                    4,
+                    &account,
+                    &task,
                 )
             } else {
-                current
-                    .text_seed_scores_with_metadata_filters("graph", &filters, 4, &account, &task)
+                current.text_seed_scores_with_metadata_filters(
+                    "graph storage",
+                    &filters,
+                    4,
+                    &account,
+                    &task,
+                )
             }
             .unwrap();
-            let (mut expected, _) = expected_scores(&current, &documents, "graph", 4, None);
+            let (mut expected, _) = expected_scores(&current, &documents, "graph storage", 4, None);
             expected.retain(|id, _| {
                 space.is_none_or(|space| {
                     documents
