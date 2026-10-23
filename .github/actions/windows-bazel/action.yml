@@ -1,0 +1,54 @@
+name: Cached Windows Bazel
+description: Configure native Windows tools and restore independent Bazel caches
+inputs:
+  cache-scope:
+    description: Independent writer namespace for the native shard
+    required: true
+outputs:
+  disk-cache-key:
+    description: Immutable per-source disk cache key
+    value: ${{ steps.disk.outputs.cache-primary-key }}
+  disk-cache-hit:
+    description: Whether the exact disk cache was restored
+    value: ${{ steps.disk.outputs.cache-hit }}
+runs:
+  using: composite
+  steps:
+    - name: Install pinned Rust
+      uses: dtolnay/rust-toolchain@1.97.1
+    - name: Locate native Windows toolchain
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+        $installation = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+        if (-not $installation) { throw 'Native MSVC toolchain not found' }
+        $bash = Join-Path $env:ProgramFiles 'Git/bin/bash.exe'
+        if (-not (Test-Path $bash)) { throw 'Git Bash not found' }
+        "BAZEL_VC=$installation/VC" >> $env:GITHUB_ENV
+        "BAZEL_SH=$bash" >> $env:GITHUB_ENV
+        'MSYS2_ARG_CONV_EXCL=*' >> $env:GITHUB_ENV
+    - name: Restore Bazel disk cache
+      id: disk
+      uses: actions/cache/restore@v5
+      with:
+        path: D:/hawdb-bazel-disk
+        key: Windows-${{ runner.arch }}-hawdb-disk-v1-${{ inputs.cache-scope }}-${{ hashFiles('.bazelversion', '.bazelrc', 'MODULE.bazel', 'MODULE.bazel.lock', 'Cargo.lock', 'rust-toolchain.toml', 'windows_native_features.bzl') }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+        restore-keys: |
+          Windows-${{ runner.arch }}-hawdb-disk-v1-${{ inputs.cache-scope }}-${{ hashFiles('.bazelversion', '.bazelrc', 'MODULE.bazel', 'MODULE.bazel.lock', 'Cargo.lock', 'rust-toolchain.toml', 'windows_native_features.bzl') }}-${{ github.sha }}-
+          Windows-${{ runner.arch }}-hawdb-disk-v1-${{ inputs.cache-scope }}-${{ hashFiles('.bazelversion', '.bazelrc', 'MODULE.bazel', 'MODULE.bazel.lock', 'Cargo.lock', 'rust-toolchain.toml', 'windows_native_features.bzl') }}-
+          Windows-${{ runner.arch }}-hawdb-disk-v1-${{ inputs.cache-scope }}-
+          Windows-${{ runner.arch }}-hawdb-disk-v1-
+    - name: Configure Bazel and dependency caches
+      uses: bazel-contrib/setup-bazel@0.19.1
+      with:
+        bazelisk-version: 1.30.0
+        bazelisk-cache: true
+        repository-cache: true
+        external-cache: true
+        # Own disk restore/save separately: the setup action's disk key only
+        # hashes BUILD files and otherwise stops saving after an exact hit.
+        disk-cache: false
+        bazelrc: |
+          build --disk_cache=D:/hawdb-bazel-disk
+          build --experimental_disk_cache_gc_max_size=2G

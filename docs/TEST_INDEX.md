@@ -298,3 +298,12 @@ publication after registry-cache reload, and a scoped mapper that follows a
 relationship to an out-of-scope label whose post-E mutation must invalidate
 publication. Storage units check immutable reservation predecessors, missing
 registration policy, and direct history pruning without staging compaction.
+
+## Windows native contract ownership
+
+The native workflow runs seven independent Bazel shards and a separate strict
+Cargo Clippy job. The original `Windows native contracts` check requires every
+result to pass. See [Windows native CI](WINDOWS_NATIVE_CI.md) for the complete
+selection/profile/count matrix, cache policy, cold-build costs and local replay.
+The daily/manual abandonment lane remains separate and requires eight passing
+cases with the selected 1/2/4/8-thread setting. No fuzz campaign is added.
