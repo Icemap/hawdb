@@ -58,6 +58,26 @@ pub struct OutputLimits {
     pub max_payload_bytes: Option<usize>,
 }
 
+impl OutputLimits {
+    pub fn validate(&self, rows: usize, payload_bytes: usize) -> Result<()> {
+        if let Some(max_rows) = self.max_rows
+            && rows > max_rows
+        {
+            return Err(HawDBError::read_budget_exceeded(ReadBudgetResource::Rows, max_rows, format!(
+                "query returned more than {max_rows} rows, exceeding max_read_result_rows {max_rows}"
+            )));
+        }
+        if let Some(max_payload_bytes) = self.max_payload_bytes
+            && payload_bytes > max_payload_bytes
+        {
+            return Err(HawDBError::read_budget_exceeded(ReadBudgetResource::PayloadBytes, max_payload_bytes, format!(
+                "query payload would exceed max_payload_bytes {max_payload_bytes} (max_read_result_payload_bytes {max_payload_bytes}; next total {payload_bytes})"
+            )));
+        }
+        Ok(())
+    }
+}
+
 #[derive(Clone, Copy, Default)]
 pub struct OutputMetrics {
     pub rows: usize,
@@ -309,22 +329,15 @@ impl<'a> QueryOutputAccumulator<'a> {
     }
 
     fn validate_next_row(&self, row_payload_bytes: usize) -> Result<usize> {
-        if let Some(max_rows) = self.max_rows
-            && self.metrics.rows >= max_rows
-        {
-            return Err(HawDBError::read_budget_exceeded(ReadBudgetResource::Rows, max_rows, format!(
-                "read query returned more than {max_rows} rows, exceeding max_read_result_rows {max_rows}"
-            )));
-        }
-
         let next_payload_bytes = self.metrics.payload_bytes.saturating_add(row_payload_bytes);
-        if let Some(max_payload_bytes) = self.max_payload_bytes
-            && next_payload_bytes > max_payload_bytes
-        {
-            return Err(HawDBError::read_budget_exceeded(ReadBudgetResource::PayloadBytes, max_payload_bytes, format!(
-                "read query payload would exceed max_payload_bytes {max_payload_bytes} (max_read_result_payload_bytes {max_payload_bytes}; next total {next_payload_bytes})"
-            )));
+        let limits = OutputLimits {
+            max_rows: self.max_rows,
+            max_payload_bytes: self.max_payload_bytes,
+        };
+        if self.metrics.rows == usize::MAX {
+            return Err(HawDBError::Execution("query row count overflow".into()));
         }
+        limits.validate(self.metrics.rows + 1, next_payload_bytes)?;
         Ok(next_payload_bytes)
     }
 

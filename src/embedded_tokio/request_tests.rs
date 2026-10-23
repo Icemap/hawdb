@@ -339,3 +339,77 @@ fn owning_a_request_preserves_the_synchronous_contract() {
     });
     fixture.close();
 }
+
+#[test]
+fn admitted_cypher_returning_rejects_before_commit_and_refunds_memory() {
+    let fixture = Fixture::new();
+    let engine = &fixture.engine;
+    engine
+        .runtime()
+        .block_on(async {
+            const UPDATE: &str = "MATCH (p:Probe) SET p.score = $next RETURN p.score AS score";
+            for limits in [
+                QueryStreamOptions {
+                    max_rows: Some(0),
+                    max_payload_bytes: None,
+                },
+                QueryStreamOptions {
+                    max_rows: Some(1),
+                    max_payload_bytes: None,
+                },
+                QueryStreamOptions {
+                    max_rows: None,
+                    max_payload_bytes: Some(0),
+                },
+                QueryStreamOptions {
+                    max_rows: None,
+                    max_payload_bytes: Some(12),
+                },
+            ] {
+                let epoch =
+                    engine.with_embedded(|embedded| embedded.database().commit_epoch().unwrap());
+                let error = engine
+                    .query_request(
+                        OwnedQueryRequest::new(UPDATE)
+                            .with_params(BTreeMap::from([("next".into(), Value::Float(99.0))]))
+                            .with_output_limits(limits),
+                    )
+                    .await
+                    .unwrap_err();
+                assert!(
+                    matches!(
+                        error,
+                        HawDBTokioEmbeddedError::Task(TokioTaskError::Operation(
+                            HawDBError::ReadBudgetExceeded(_)
+                        ))
+                    ),
+                    "{error:?}"
+                );
+                assert_eq!(
+                    engine.with_embedded(|embedded| embedded.database().commit_epoch().unwrap()),
+                    epoch
+                );
+                let output = engine.query_request(request()).await.unwrap();
+                assert_eq!(output.rows[0]["score"], Value::Float(1.0));
+                assert_eq!(output.rows[1]["score"], Value::Float(9.0));
+                assert_eq!(engine.runtime_snapshot().admitted_memory_bytes, 0);
+            }
+            let output = engine
+                .query_request(
+                    OwnedQueryRequest::new(
+                        "MATCH (p:Probe) SET p.score = $next RETURN count(p) AS total",
+                    )
+                    .with_params(BTreeMap::from([("next".into(), Value::Float(99.0))]))
+                    .with_output_limits(QueryStreamOptions {
+                        max_rows: Some(1),
+                        max_payload_bytes: Some(13),
+                    }),
+                )
+                .await
+                .unwrap();
+            assert_eq!(output.rows[0]["total"], Value::Int(2));
+        })
+        .unwrap();
+    assert_eq!(engine.runtime_snapshot().admitted_memory_bytes, 0);
+    fixture.close();
+}

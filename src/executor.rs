@@ -97,6 +97,7 @@ pub(crate) use hawdb_executor::memory::{
     enforced_result_memory_budget_with_option, estimated_execution_memory,
     estimated_mutation_memory_bytes, max_external_read_parallelism,
 };
+pub(crate) use hawdb_executor::mutation::execute_mutation_with_store_output_limits;
 use hawdb_executor::pipeline::{runtime_checkpoint, BatchControl};
 use hawdb_executor::QueryMemoryLedger;
 #[cfg(test)]

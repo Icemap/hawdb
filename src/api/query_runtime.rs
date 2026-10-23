@@ -887,18 +887,32 @@ impl Database {
                 let mut mutation_limits = self.config.mutation_limits;
                 // Graph mutation payloads use MutationLimits, checked by the
                 // executor preflight and storage tracker before publication.
-                if let Some(limit) = output_limits.max_rows.and_then(NonZeroUsize::new) {
+                if !matches!(
+                    optimized.physical_plan,
+                    PhysicalPlan::SetNodePropertiesReturn { .. }
+                ) && let Some(limit) = output_limits.max_rows.and_then(NonZeroUsize::new)
+                {
                     mutation_limits.max_result_rows = mutation_limits.max_result_rows.min(limit);
                 }
                 (
                     {
                         let mut branch_runtime_access = self.runtime.get_mut()?;
                         let branch_runtime = &mut *branch_runtime_access;
-                        executor::execute_mutation_with_limits(
+                        executor::execute_mutation_with_store_output_limits(
                             &optimized.physical_plan,
                             &mut branch_runtime.catalog,
                             &mut branch_runtime.store,
                             mutation_limits,
+                            hawdb_executor::result_delivery::OutputLimits {
+                                max_rows: restrictive_query_limit(
+                                    self.config.read_result_row_limit(),
+                                    output_limits.max_rows,
+                                ),
+                                max_payload_bytes: restrictive_query_limit(
+                                    self.config.max_read_result_payload_bytes,
+                                    output_limits.max_payload_bytes,
+                                ),
+                            },
                             task_context,
                         )
                     }?

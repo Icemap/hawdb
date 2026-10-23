@@ -301,6 +301,253 @@ fn refused_sql_returning_never_publishes_or_stages_a_mutation() {
     }
 }
 
+fn graph_returning_fixture() -> Database {
+    let mut database = Database::new();
+    for id in [1, 2] {
+        database
+            .query_request(
+                QueryRequest::new("CREATE (:OutputProbe {id: $id, score: 0})").with_params(
+                    &std::collections::BTreeMap::from([("id".into(), Value::Int(id))]),
+                ),
+            )
+            .unwrap();
+    }
+    database
+}
+
+fn assert_graph_returning_is_atomic(
+    mut execute: impl for<'a> FnMut(QueryRequest<'a>) -> Result<QueryOutput>,
+) {
+    execute(QueryRequest::new("CREATE (:RetainedStatement {id: 1})")).unwrap();
+    let parameters = std::collections::BTreeMap::from([("delta".into(), Value::Int(1))]);
+    let project = "MATCH (p:OutputProbe) SET p.score = p.score + $delta RETURN p.score AS score";
+    let count = "MATCH (p:OutputProbe) SET p.score = p.score + $delta RETURN count(p) AS total";
+    for query in [project, count] {
+        let mut limits = vec![
+            (
+                QueryStreamOptions {
+                    max_rows: Some(0),
+                    max_payload_bytes: None,
+                },
+                ReadBudgetResource::Rows,
+                0,
+            ),
+            (
+                QueryStreamOptions {
+                    max_rows: None,
+                    max_payload_bytes: Some(0),
+                },
+                ReadBudgetResource::PayloadBytes,
+                0,
+            ),
+            (
+                QueryStreamOptions {
+                    max_rows: None,
+                    max_payload_bytes: Some(12),
+                },
+                ReadBudgetResource::PayloadBytes,
+                12,
+            ),
+        ];
+        if query == project {
+            limits.push((
+                QueryStreamOptions {
+                    max_rows: Some(1),
+                    max_payload_bytes: None,
+                },
+                ReadBudgetResource::Rows,
+                1,
+            ));
+        }
+        for (limits, resource, limit) in limits {
+            let error = execute(
+                QueryRequest::new(query)
+                    .with_params(&parameters)
+                    .with_output_limits(limits),
+            )
+            .unwrap_err();
+            assert!(
+                matches!(&error, HawDBError::ReadBudgetExceeded(cause)
+                if cause.resource == resource && cause.limit == limit),
+                "{query}: {error:?}"
+            );
+            let output = execute(QueryRequest::new(
+                "MATCH (p:OutputProbe) RETURN p.score AS score",
+            ))
+            .unwrap();
+            assert_eq!(output.rows.len(), 2);
+            assert!(
+                output.rows.iter().all(|row| row["score"] == Value::Int(0)),
+                "a refused RETURN changed the workspace"
+            );
+            assert_eq!(
+                execute(QueryRequest::new(
+                    "MATCH (p:RetainedStatement) RETURN p.id AS id"
+                ))
+                .unwrap()
+                .rows
+                .len(),
+                1
+            );
+        }
+    }
+    let empty = execute(QueryRequest::new("MATCH (p:OutputProbe) WHERE p.id = 3 SET p.score = p.score + $delta RETURN p.score AS score")
+        .with_params(&parameters).with_output_limits(QueryStreamOptions { max_rows: Some(0), max_payload_bytes: Some(0) })).unwrap();
+    assert!(empty.rows.is_empty());
+    let error = execute(QueryRequest::new("MATCH (p:OutputProbe) WHERE p.id = 3 SET p.score = p.score + $delta RETURN count(p) AS total")
+        .with_params(&parameters).with_output_limits(QueryStreamOptions { max_rows: Some(0), max_payload_bytes: None })).unwrap_err();
+    assert!(
+        matches!(error, HawDBError::ReadBudgetExceeded(ref cause) if cause.resource == ReadBudgetResource::Rows && cause.limit == 0)
+    );
+
+    // The returned aggregate has one row even though two nodes are updated.
+    let output = execute(
+        QueryRequest::new(count)
+            .with_params(&parameters)
+            .with_output_limits(QueryStreamOptions {
+                max_rows: Some(1),
+                max_payload_bytes: Some(13),
+            }),
+    )
+    .unwrap();
+    assert_eq!(output.rows.len(), 1);
+    assert_eq!(output.rows[0]["total"], Value::Int(2));
+    let output = execute(
+        QueryRequest::new(project)
+            .with_params(&parameters)
+            .with_output_limits(QueryStreamOptions {
+                max_rows: Some(2),
+                max_payload_bytes: Some(26),
+            }),
+    )
+    .unwrap();
+    assert_eq!(output.rows.len(), 2);
+    assert!(output.rows.iter().all(|row| row["score"] == Value::Int(2)));
+}
+
+#[test]
+fn cypher_returning_limits_reject_before_publication_or_statement_installation() {
+    let mut database = graph_returning_fixture();
+    assert_graph_returning_is_atomic(|request| {
+        let epoch = database.commit_epoch().unwrap();
+        let result = database.query_request(request);
+        if result.is_err() {
+            assert_eq!(database.commit_epoch().unwrap(), epoch);
+        }
+        result
+    });
+    let mut database = graph_returning_fixture();
+    let mut transaction = database.begin_transaction().unwrap();
+    assert_graph_returning_is_atomic(|request| transaction.query_request(request));
+    transaction.commit().unwrap();
+    assert_eq!(
+        database
+            .query("MATCH (p:RetainedStatement) RETURN p.id AS id")
+            .unwrap()
+            .rows
+            .len(),
+        1
+    );
+    let database = ConcurrentDatabase::new(graph_returning_fixture());
+    assert_graph_returning_is_atomic(|request| database.query_request(request));
+    for options in [
+        ConcurrentTransactionOptions::optimistic(),
+        ConcurrentTransactionOptions::default(),
+    ] {
+        let database = ConcurrentDatabase::new(graph_returning_fixture());
+        let mut transaction = database.begin_transaction(options).unwrap();
+        assert_graph_returning_is_atomic(|request| transaction.query_request(request));
+        transaction.commit().unwrap();
+        let output = database
+            .query("MATCH (p:OutputProbe) RETURN p.score AS score")
+            .unwrap();
+        assert_eq!(output.rows.len(), 2);
+        assert!(output.rows.iter().all(|row| row["score"] == Value::Int(2)));
+        assert_eq!(
+            database
+                .query("MATCH (p:RetainedStatement) RETURN p.id AS id")
+                .unwrap()
+                .rows
+                .len(),
+            1
+        );
+    }
+}
+
+#[test]
+fn embedded_cypher_returning_keeps_admission_and_transaction_limits() {
+    let path = std::env::temp_dir().join(format!(
+        "hawdb-returning-contract-{}",
+        hawdb_core::generate_uuidv7().unwrap()
+    ));
+    let mut embedded =
+        HawDBEmbedded::open_with_options(HawDBEmbeddedOpenOptions::new(&path)).unwrap();
+    *embedded.database_mut() = graph_returning_fixture();
+    assert_graph_returning_is_atomic(|request| {
+        embedded
+            .query_request_admitted(request)
+            .map_err(|error| match error {
+                crate::EmbeddedQueryError::Database(error) => error,
+                error => HawDBError::Execution(error.to_string()),
+            })
+    });
+    *embedded.database_mut() = graph_returning_fixture();
+    embedded.begin_transaction().unwrap();
+    assert_graph_returning_is_atomic(|request| embedded.transaction_query_request(request));
+    embedded.commit_transaction().unwrap();
+    drop(embedded);
+    std::fs::remove_dir_all(path).unwrap();
+}
+
+#[test]
+fn cypher_returning_refusal_remains_atomic_after_reopen() {
+    let path = std::env::temp_dir().join(format!(
+        "hawdb-returning-reopen-{}",
+        hawdb_core::generate_uuidv7().unwrap()
+    ));
+    {
+        let mut database = Database::open(&path).unwrap();
+        database
+            .query("CREATE (:OutputProbe {id: 1, score: 0})")
+            .unwrap();
+        database
+            .query("CREATE (:OutputProbe {id: 2, score: 0})")
+            .unwrap();
+        let mut transaction = database.begin_transaction().unwrap();
+        assert_graph_returning_is_atomic(|request| transaction.query_request(request));
+        transaction.commit().unwrap();
+        let epoch = database.commit_epoch().unwrap();
+        let error = database
+            .query_request(
+                QueryRequest::new("MATCH (p:OutputProbe) SET p.score = 99 RETURN p.score AS score")
+                    .with_output_limits(QueryStreamOptions {
+                        max_rows: None,
+                        max_payload_bytes: Some(0),
+                    }),
+            )
+            .unwrap_err();
+        assert!(matches!(error, HawDBError::ReadBudgetExceeded(_)));
+        assert_eq!(database.commit_epoch().unwrap(), epoch);
+    }
+    {
+        let mut database = Database::open(&path).unwrap();
+        let output = database
+            .query("MATCH (p:OutputProbe) RETURN p.score AS score")
+            .unwrap();
+        assert_eq!(output.rows.len(), 2);
+        assert!(output.rows.iter().all(|row| row["score"] == Value::Int(2)));
+        assert_eq!(
+            database
+                .query("MATCH (p:RetainedStatement) RETURN p.id AS id")
+                .unwrap()
+                .rows
+                .len(),
+            1
+        );
+    }
+    std::fs::remove_dir_all(path).unwrap();
+}
+
 #[test]
 fn request_context_cannot_replace_snapshot_or_transaction_cancellation() {
     for cancel_parent in [false, true] {

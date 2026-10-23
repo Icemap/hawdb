@@ -49,7 +49,19 @@ The `api::query_request::adapter_tests` family exercises shared Cypher and SQL
 requests across database, pinned-read, explicit-write, concurrent optimistic and
 pessimistic, and Embedded transaction paths. Cases include parameters, scoring,
 ACL availability, zero/output limits, parent/request cancellation, prepared-policy
-invalidation, and SQL RETURNING refusal before private staging or publication.
+invalidation, SQL RETURNING and Cypher SET RETURN refusal before private staging
+or publication. Cypher cases retain earlier successful statements through refused
+updates in both locking modes, enforce exact/zero row and payload limits, and
+distinguish aggregate result size from affected-node count and zero matches.
+Persistent coverage reopens a database after refused SET RETURN statements and
+checks that only successful transaction statements survived. The executor
+mutation-preflight owner independently proves output refusal precedes any storage
+write call.
+The production qualification fixture counts separate preparation/execution
+admissions. Its small mixed soak funds both phases and bounded stream buffers
+with 3 MiB, retains a raw dataset twice that size (768 nodes, 8 KiB payloads),
+and preserves the 32 KiB blocking-operator/64 KiB segment-cache limits, complete
+query counts, checkpoint advancement and final zero-admission assertions.
 `api::query_request::host::tests` also covers host-scorer delivery through the
 concurrent and transaction entry points. These remain root-unit regressions;
 the weekly platform runtime lane exercises the request families with ACL enabled
@@ -62,8 +74,9 @@ debiting failed owned results, and charges EXPLAIN's delivered report. These
 cases share the request family's root-unit and weekly platform owners.
 `embedded_tokio::request_tests` covers owned request attachments, ACL enabled
 and disabled, host-scorer invocation/disposal, streaming ceilings, cancellation,
-admitted SQL template reuse with rebound parameters, RETURNING rejection before
-commit, and refusal while an explicit Embedded transaction is open. The weekly
+admitted SQL template reuse with rebound parameters, SQL/Cypher RETURNING rejection
+before commit with unchanged epochs and refunded admission, and refusal while an
+explicit Embedded transaction is open. The weekly
 runtime lane runs the complete Tokio family with `tokio-runtime`, then these
 request cases with `tokio-runtime,acl`. Its saturated-admission case also proves
 SQL waits for capacity before parsing. Native CI owns execution; local strict

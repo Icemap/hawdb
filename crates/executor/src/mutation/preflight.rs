@@ -23,6 +23,7 @@ use crate::memory::DEFAULT_EXECUTION_BATCH_ROWS;
 use crate::observer::NoopExecutionObserver;
 use crate::pipeline::runtime_checkpoint;
 use crate::predicate::{label_ids_for_pattern, node_matches_label_pattern};
+use crate::result_delivery::OutputLimits;
 use crate::store::{GraphExecutionRead, GraphExecutionWrite, ScanControl};
 use crate::Row;
 use hawdb_core::{Catalog, HawDBError, Result, RuntimeTaskContext, Value};
@@ -42,6 +43,26 @@ pub fn execute_mutation_with_store(
     catalog: &mut Catalog,
     store: &mut dyn GraphExecutionWrite,
     limits: MutationLimits,
+    task_context: Option<&RuntimeTaskContext>,
+) -> Result<Vec<Row>> {
+    execute_mutation_with_store_output_limits(
+        plan,
+        catalog,
+        store,
+        limits,
+        OutputLimits::default(),
+        task_context,
+    )
+}
+
+/// Applies query output limits to explicit RETURN rows before committing.
+/// Storage mutation summaries remain governed by `MutationLimits`.
+pub fn execute_mutation_with_store_output_limits(
+    plan: &PhysicalPlan,
+    catalog: &mut Catalog,
+    store: &mut dyn GraphExecutionWrite,
+    limits: MutationLimits,
+    output_limits: OutputLimits,
     task_context: Option<&RuntimeTaskContext>,
 ) -> Result<Vec<Row>> {
     runtime_checkpoint(task_context)?;
@@ -78,6 +99,7 @@ pub fn execute_mutation_with_store(
             catalog,
             store,
             limits,
+            output_limits,
             task_context,
         );
     }
@@ -400,6 +422,7 @@ fn execute_set_node_properties_return_with_limits(
     catalog: &mut Catalog,
     store: &mut dyn GraphExecutionWrite,
     limits: MutationLimits,
+    output_limits: OutputLimits,
     task_context: Option<&RuntimeTaskContext>,
 ) -> Result<Vec<Row>> {
     let assignments = assignments
@@ -469,6 +492,7 @@ fn execute_set_node_properties_return_with_limits(
                 })
                 .collect::<Result<BTreeMap<_, _>>>()?;
             let next_payload = projected_payload_bytes.saturating_add(map_payload_bytes(&values));
+            output_limits.validate(projected_rows.len() + 1, next_payload)?;
             if next_payload > limits.max_result_payload_bytes.get() {
                 return Err(HawDBError::Execution(format!(
                     "mutation result payload would exceed max_mutation_result_payload_bytes {}",
@@ -485,6 +509,7 @@ fn execute_set_node_properties_return_with_limits(
         SetNodePropertiesReturnMode::Project(_) => projected_rows,
         SetNodePropertiesReturnMode::Count { name } => {
             let row = BTreeMap::from([(name.clone(), Value::Int(ids.len() as i64))]);
+            output_limits.validate(1, map_payload_bytes(&row))?;
             if map_payload_bytes(&row) > limits.max_result_payload_bytes.get() {
                 return Err(HawDBError::Execution(format!(
                     "mutation result payload would exceed max_mutation_result_payload_bytes {}",

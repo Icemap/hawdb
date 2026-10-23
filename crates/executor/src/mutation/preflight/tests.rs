@@ -627,6 +627,58 @@ fn preflight_generated_smoke() {
 }
 
 #[test]
+fn explicit_return_output_limits_precede_the_storage_write() {
+    for kind in [2, 3] {
+        for limits in [
+            OutputLimits {
+                max_rows: Some(0),
+                max_payload_bytes: None,
+            },
+            OutputLimits {
+                max_rows: None,
+                max_payload_bytes: Some(0),
+            },
+            OutputLimits {
+                max_rows: None,
+                max_payload_bytes: Some(12),
+            },
+        ] {
+            let (mut catalog, mut store) = fixture(3);
+            let error = execute_mutation_with_store_output_limits(
+                &plan(kind),
+                &mut catalog,
+                &mut store,
+                MutationLimits::default(),
+                limits,
+                None,
+            )
+            .unwrap_err();
+            assert!(
+                matches!(error, HawDBError::ReadBudgetExceeded(_)),
+                "{error:?}"
+            );
+            assert!(store.writes.is_empty(), "a refused output reached storage");
+        }
+        let (mut catalog, mut store) = fixture(3);
+        let row_count = if kind == 3 { 1 } else { 2 };
+        let output = execute_mutation_with_store_output_limits(
+            &plan(kind),
+            &mut catalog,
+            &mut store,
+            MutationLimits::default(),
+            OutputLimits {
+                max_rows: Some(row_count),
+                max_payload_bytes: Some(row_count * 13),
+            },
+            None,
+        )
+        .unwrap();
+        assert_eq!(output, expected_rows(kind, &[NodeId(0), NodeId(2)]));
+        assert_eq!(store.writes.len(), 1);
+    }
+}
+
+#[test]
 #[ignore = "local differential campaign"]
 fn mutation_preflight_differential_campaign() {
     let cases = campaign(256);

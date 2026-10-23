@@ -216,8 +216,8 @@ impl<'a> QueryRequest<'a> {
         self
     }
 
-    /// Restrict read output without relaxing database-level caps.
-    /// Mutations retain the database's separate mutation limits.
+    /// Restrict read and explicit SET RETURN output without relaxing database caps.
+    /// Mutation staging and storage summaries retain separate mutation limits.
     pub fn with_output_limits(mut self, limits: QueryStreamOptions) -> Self {
         self.output_limits = limits;
         self

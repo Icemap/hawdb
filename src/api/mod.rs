@@ -20783,9 +20783,20 @@ fn execute_graph_transaction_statement(
                 runtime.config.mutation_limits,
             )?;
             let rows = returned_rows.unwrap_or_default();
-            runtime.validate_result_rows(rows.len())?;
+            let output = QueryOutput { rows: rows.into() };
+            hawdb_executor::result_delivery::OutputLimits {
+                max_rows: restrictive_query_limit(
+                    runtime.read_result_row_limit(),
+                    execution.output_limits.max_rows,
+                ),
+                max_payload_bytes: restrictive_query_limit(
+                    runtime.config.max_read_result_payload_bytes,
+                    execution.output_limits.max_payload_bytes,
+                ),
+            }
+            .validate(output.rows.len(), output.rows.payload_bytes())?;
             Ok((
-                QueryOutput { rows: rows.into() },
+                output,
                 transaction.lock_footprint_since(&statement_savepoint)?,
             ))
         })();

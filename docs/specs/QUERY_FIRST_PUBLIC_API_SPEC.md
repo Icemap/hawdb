@@ -105,8 +105,13 @@ validation. Embedded explicit transactions use the same statement kernel.
 
 Request limits can tighten database limits but MUST NOT widen them. An explicit
 request `Some(0)` is a zero-row or zero-payload ceiling, not an unlimited sentinel.
-SQL mutation results MUST be validated before private state is installed or a
-commit is published. Cypher mutations continue to use `MutationLimits`.
+SQL mutation results and explicit Cypher `SET ... RETURN` results MUST be
+validated before private state is installed or a commit is published. A refused
+explicit transaction statement restores its savepoint without discarding earlier
+successful statements. `RETURN count(...)` is charged for its single output row,
+not its affected-node count; an empty projected result can satisfy a zero budget,
+whereas a zero-match count still returns one row. Cypher mutation staging and
+storage summaries continue to use the independent `MutationLimits` contract.
 
 A request context MUST NOT replace an enclosing snapshot or transaction
 context. Both cancellation tokens and the earlier deadline apply. CPU, executor,
