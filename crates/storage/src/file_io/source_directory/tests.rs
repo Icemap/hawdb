@@ -1033,7 +1033,7 @@ fn captured_wal_append_preserves_end_of_file_after_reads_and_name_replacement() 
 
 #[cfg(windows)]
 #[test]
-fn captured_wal_append_resize_refuses_at_the_original_descriptor_cap_and_retries() {
+fn captured_wal_append_rollback_preserves_original_descriptor_accounting_at_capacity() {
     let fixture = Fixture::new(3);
     let context = fixture.project.io_context();
     let path = fixture.root.join("wal.1.hawdb");
@@ -1045,10 +1045,15 @@ fn captured_wal_append_resize_refuses_at_the_original_descriptor_cap_and_retries
     let blocker = crate::file_io::File::open(&path).unwrap();
     file.write_all(b"-partial").unwrap();
     assert_eq!(fixture.project.metrics().open, 3);
-    assert!(file.rollback_wal_append(6, b"unused").is_err());
-    assert_eq!(fs::read(&path).unwrap(), b"prefix-partial");
+    // Recovery handles are exempt from the foreground capacity ceiling, but
+    // must remain charged to the original project until the native close.
+    file.rollback_wal_append(6, b"unused").unwrap();
+    assert_eq!(fs::read(&path).unwrap(), b"prefix");
     assert_eq!(fixture.project.metrics().open, 3);
+    assert_eq!(fixture.project.metrics().high_water, 4);
+    assert_eq!(fixture.project.metrics().budget_rejections, 0);
     drop(blocker);
+    file.write_all(b"-retry").unwrap();
     file.rollback_wal_append(6, b"unused").unwrap();
     assert_eq!(fs::read(&path).unwrap(), b"prefix");
     assert_eq!(fixture.project.metrics().open, 2);
