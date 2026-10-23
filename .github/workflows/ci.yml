@@ -10,6 +10,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+defaults:
+  run:
+    # Stop at the first failed native command on Windows as well as Unix.
+    shell: bash
+
 jobs:
   runtime-platform:
     name: Runtime Platform (${{ matrix.os }})

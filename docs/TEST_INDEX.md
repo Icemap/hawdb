@@ -213,6 +213,12 @@ vector_only, background_only, text_vector, text_background and vector_background
 | `hawdb_search_streamed_lifecycle_tests` and FTS profile variants | 32-MiB streamed bodies through projection update, replay, compaction/retraction and budget refusal | Five complete FTS feature profiles. Reuse the same feature-profile library; compilation is uniform across the repo. |
 | Allocation-specific integration targets | Identifier, descriptor, segment, analyzer and related allocation accounting | Uses the same repository profile; preserve measurement assumptions and compare allocation evidence after profile changes. |
 
+Weekly platform steps use Bash's fail-fast execution on every OS, including
+Windows, so an earlier failing native command cannot be hidden by a later
+successful test command. The explicit PowerShell artifact collector remains
+an override. A green legacy Windows job with failed tests in its log is not
+passing qualification evidence.
+
 Resident generation cases in the existing Search unit/feature matrix cover
 ordered COW ranges, writer progress with an old read view, body ownership after
 deletion, retained key/directory capacity, and old/new payload reads across
