@@ -57,6 +57,7 @@ impl WalAppendFile {
         &self.file
     }
 
+    /// Follow symlinks to compare the target object's identity with the held file.
     #[cfg(unix)]
     fn matches_native_path_in(
         &self,
