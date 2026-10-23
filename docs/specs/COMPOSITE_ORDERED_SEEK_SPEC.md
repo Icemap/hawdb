@@ -120,7 +120,11 @@ retains every sample, including a labelled initial warmup excluded from latency 
 admitted memory for first, middle and near-end pages in both directions. Its
 persistent fixture checkpoints and reopens without flushing device caches.
 Fixture writes use bounded 4,096-row transactions under the unchanged default WAL
-record ceiling; complete setup cost is recorded. Cache capacity, residency,
+record ceiling. The unique constraint validates the entire loaded fixture before
+index creation; an exact row-count preflight runs after reopen. Complete setup
+cost is recorded separately from reads. This avoids repeated incremental
+uniqueness scans during fixture loading without changing production validation
+or measuring write throughput. Cache capacity, residency,
 evictions and admission refusals accompany query memory reports. Timings from that
 mode are not device-cold results, and index bytes exclude canonical hydration and
 unrelated scan I/O. Preserve negative cases and separate

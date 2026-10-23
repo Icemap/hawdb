@@ -14,7 +14,6 @@ fn populate(db: &mut Database, rows: usize) -> hawdb::Result<()> {
     db.query("CREATE NODE TABLE Item")?;
     db.query("CREATE PROPERTY ON NODE TABLE Item(rank) TYPE INT NOT NULL")?;
     db.query("CREATE PROPERTY ON NODE TABLE Item(id) TYPE STRING NOT NULL")?;
-    db.query("CREATE CONSTRAINT ON :Item(id) ASSERT UNIQUE")?;
     let fixture = (0..rows)
         .map(|id| {
             Value::Map(BTreeMap::from([
@@ -35,6 +34,8 @@ fn populate(db: &mut Database, rows: usize) -> hawdb::Result<()> {
             &BTreeMap::from([("rows".into(), Value::List(batch.to_vec()))]),
         )?;
     }
+    // Validate the complete fixture once instead of repeating incremental uniqueness scans.
+    db.query("CREATE CONSTRAINT ON :Item(id) ASSERT UNIQUE")?;
     db.query("CREATE INDEX ON :Item(kind, rank, id)")?;
     Ok(())
 }
@@ -67,6 +68,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         drop(db);
         db = Database::open_with_config(&path, config)?;
     }
+    let total = db.query("MATCH (n:Item) RETURN count(n) AS total")?;
+    assert_eq!(total.rows[0].get("total"), Some(&Value::Int(rows as i64)));
     let setup_ns = started.elapsed().as_nanos();
     for descending in [false, true] {
         let (direction, op) = if descending {
