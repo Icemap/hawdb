@@ -95,3 +95,117 @@ impl Database {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{QueryOutput, QueryStreamOptions, SqlQueryRequest, Value};
+
+    // This trusted internal boundary already owns the syntax. An invalid
+    // diagnostic string makes any accidental parser fallback observable.
+    const DIAGNOSTIC_SQL: &str = "/* already prepared SQL */";
+
+    fn exercise_prepared_mutations(
+        mut execute: impl FnMut(&str, &[Value], QueryStreamOptions) -> Result<QueryOutput>,
+    ) {
+        let limits = QueryStreamOptions {
+            max_rows: Some(2),
+            max_payload_bytes: Some(4096),
+        };
+        execute(
+            "CREATE TABLE items (id BIGINT PRIMARY KEY, counter BIGINT NOT NULL DEFAULT 0)",
+            &[],
+            limits,
+        )
+        .unwrap();
+        let insert = "INSERT INTO items (id) VALUES ($1) RETURNING id";
+        let first = execute(insert, &[Value::Int(1)], limits).unwrap();
+        assert_eq!(first.rows.len(), 1);
+        assert_eq!(first.rows[0]["id"], Value::Int(1));
+        let zero = QueryStreamOptions {
+            max_rows: Some(0),
+            max_payload_bytes: Some(0),
+        };
+        assert!(matches!(
+            execute(insert, &[Value::Int(2)], zero),
+            Err(HawDBError::ReadBudgetExceeded(_))
+        ));
+        // Refusal must leave the key absent and retain the earlier statement.
+        execute("INSERT INTO items (id) VALUES ($1)", &[Value::Int(2)], zero).unwrap();
+        execute(
+            "UPDATE items SET counter = counter + $1 WHERE id = $2",
+            &[Value::Int(7), Value::Int(1)],
+            zero,
+        )
+        .unwrap();
+        execute("DELETE FROM items WHERE id = $1", &[Value::Int(2)], zero).unwrap();
+
+        execute(
+            "CREATE TABLE events (tenant TEXT NOT NULL, sequence BIGINT NOT NULL) \
+             WITH (storage_mode = 'strict_append', partition_key = 'tenant', order_key = 'sequence')",
+            &[], limits,
+        ).unwrap();
+        execute(
+            "INSERT INTO events (tenant, sequence) VALUES ($1, $2)",
+            &[Value::String("a".into()), Value::Int(1)],
+            limits,
+        )
+        .unwrap();
+    }
+
+    fn assert_published_mutations(database: &mut Database) {
+        let rows = database
+            .query_sql("SELECT id, counter FROM items ORDER BY id")
+            .unwrap()
+            .rows;
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0]["id"], Value::Int(1));
+        assert_eq!(rows[0]["counter"], Value::Int(7));
+        let events = database
+            .query_sql("SELECT sequence FROM events WHERE tenant = 'a' ORDER BY sequence LIMIT 2")
+            .unwrap();
+        assert_eq!(events.rows.len(), 1);
+        assert_eq!(events.rows[0]["sequence"], Value::Int(1));
+    }
+
+    #[test]
+    fn database_mutations_consume_prepared_syntax_and_preserve_refusal() {
+        let mut database = Database::new();
+        let cache = RelationalPlanTemplateCache::new(Some(0));
+        exercise_prepared_mutations(|sql, parameters, limits| {
+            database.query_sql_with_prepared_request(
+                SqlQueryRequest::new(DIAGNOSTIC_SQL)
+                    .with_params(parameters)
+                    .with_output_limits(limits),
+                cache.prepare(sql)?,
+            )
+        });
+        assert_published_mutations(&mut database);
+    }
+
+    #[test]
+    fn transaction_mutations_consume_prepared_syntax_and_preserve_refusal() {
+        let mut database = Database::new();
+        let cache = RelationalPlanTemplateCache::new(Some(0));
+        let mut transaction = database.begin_transaction().unwrap();
+        exercise_prepared_mutations(|sql, parameters, limits| {
+            super::super::execute_database_transaction_prepared_sql(
+                &transaction.runtime,
+                &mut transaction.state,
+                DIAGNOSTIC_SQL,
+                cache.prepare(sql)?,
+                parameters,
+                super::super::DatabaseTransactionSqlOptions {
+                    allow_system_schema_registry_write: false,
+                    allow_locking_select: false,
+                    task_context: None,
+                    output_limits: limits,
+                    join_planning: crate::RelationalJoinPlanningDirective::Auto,
+                },
+            )
+            .map(|result| result.output)
+        });
+        transaction.commit().unwrap();
+        assert_published_mutations(&mut database);
+    }
+}

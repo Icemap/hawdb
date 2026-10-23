@@ -897,7 +897,6 @@ impl ConcurrentDatabaseTransaction {
             .prepare(sql_text)?;
         if self.options.mode == ConcurrentTransactionMode::Pessimistic {
             let requests = sql_lock_requests(
-                sql_text,
                 &prepared,
                 parameters,
                 &self.state.relational_state,
@@ -1270,7 +1269,6 @@ impl Drop for ConcurrentDatabaseTransaction {
 }
 
 fn sql_lock_requests(
-    sql_text: &str,
     prepared: &crate::relational_sql::PreparedRelationalSql,
     parameters: &[Value],
     state: &RelationalState,
@@ -1354,18 +1352,29 @@ fn sql_lock_requests(
             Ok(select_lock_requests(select, parameters, state))
         }
         SqlStatement::Insert(_) => {
-            let transaction = crate::relational_sql::compile_relational_statement_sql(
-                sql_text, parameters, state,
-            )?;
-            Ok(insert_lock_requests(&transaction, state)
+            let compiled =
+                crate::relational_sql::compile_prepared_relational_statement_with_result(
+                    &prepared.template,
+                    parameters,
+                    state,
+                )?;
+            Ok(insert_lock_requests(&compiled.transaction, state)
                 .unwrap_or_else(|| vec![LockRequest::database(LockMode::Exclusive)]))
         }
         SqlStatement::Update(update) => {
-            crate::relational_sql::compile_relational_statement_sql(sql_text, parameters, state)?;
+            crate::relational_sql::compile_prepared_relational_statement_with_result(
+                &prepared.template,
+                parameters,
+                state,
+            )?;
             Ok(update_lock_requests(update, parameters, state))
         }
         SqlStatement::Delete(delete) => {
-            crate::relational_sql::compile_relational_statement_sql(sql_text, parameters, state)?;
+            crate::relational_sql::compile_prepared_relational_statement_with_result(
+                &prepared.template,
+                parameters,
+                state,
+            )?;
             Ok(delete_lock_requests(delete, parameters, state))
         }
         SqlStatement::CreateTable(_)
@@ -2085,14 +2094,9 @@ mod tests {
                            WHERE stream = 'alpha' ORDER BY sequence LIMIT 10";
         let cache = crate::relational_sql::RelationalPlanTemplateCache::new(Some(4));
         let prepared = cache.prepare(SQL).expect("prepare append explain analyze");
-        let requests = sql_lock_requests(
-            SQL,
-            &prepared,
-            &[],
-            &RelationalState::default(),
-            &append_state,
-        )
-        .expect("derive append explain analyze locks");
+        let requests =
+            sql_lock_requests(&prepared, &[], &RelationalState::default(), &append_state)
+                .expect("derive append explain analyze locks");
 
         assert_eq!(requests, vec![LockRequest::database(LockMode::Shared)]);
     }
@@ -2116,7 +2120,6 @@ mod tests {
         ] {
             let prepared = cache.prepare(sql).unwrap();
             let requests = sql_lock_requests(
-                sql,
                 &prepared,
                 &[],
                 &RelationalState::default(),

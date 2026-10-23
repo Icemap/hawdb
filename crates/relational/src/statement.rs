@@ -20,8 +20,9 @@ use crate::{
 use hawdb_core::{HawDBError, Result, Value};
 use hawdb_sql::{
     AlterTableAddColumnStatement, CreateIndexStatement, CreateTableStatement, ExprKind,
-    SqlArithmeticOperand, SqlAssignmentValue, SqlComparisonOp, SqlConflictAction, SqlPredicate,
-    SqlReferentialAction, SqlStatement, SqlTableConstraint, SqlTableStorage, SqlValue,
+    PreparedPostgresStatement, SqlArithmeticOperand, SqlAssignmentValue, SqlComparisonOp,
+    SqlConflictAction, SqlPredicate, SqlReferentialAction, SqlStatement, SqlTableConstraint,
+    SqlTableStorage, SqlValue,
 };
 use hawdb_storage::relational::{
     RelationalBigIntArithmeticOperator, RelationalBigIntOperand, RelationalColumnDefault,
@@ -60,6 +61,17 @@ pub fn compile_relational_statement_sql_with_result(
     state: &RelationalState,
 ) -> Result<CompiledRelationalStatement> {
     let prepared = hawdb_sql::prepare_postgres_sql(sql)?;
+    compile_prepared_relational_statement_with_result(&prepared, parameters, state)
+}
+
+/// Binds one schema-neutral template to the current execution state and parameters.
+/// The template remains borrowed; only the owned mutation data is materialized.
+#[doc(hidden)]
+pub fn compile_prepared_relational_statement_with_result(
+    prepared: &PreparedPostgresStatement,
+    parameters: &[Value],
+    state: &RelationalState,
+) -> Result<CompiledRelationalStatement> {
     if prepared.parameters.len() != parameters.len() {
         return Err(HawDBError::Semantic(format!(
             "PostgreSQL statement requires {} parameters, but {} parameters were supplied",
@@ -67,7 +79,7 @@ pub fn compile_relational_statement_sql_with_result(
             parameters.len()
         )));
     }
-    match prepared.statement {
+    match &prepared.statement {
         statement @ (SqlStatement::CreateTable(_)
         | SqlStatement::CreateIndex(_)
         | SqlStatement::AlterTableAddColumn(_)) => Ok(CompiledRelationalStatement {
@@ -81,7 +93,7 @@ pub fn compile_relational_statement_sql_with_result(
 }
 
 fn compile_relational_mutation(
-    statement: SqlStatement,
+    statement: &SqlStatement,
     parameters: &[Value],
     state: &RelationalState,
 ) -> Result<CompiledRelationalStatement> {
@@ -143,7 +155,7 @@ fn compile_relational_mutation(
             }
             let rows = insert
                 .rows
-                .into_iter()
+                .iter()
                 .map(|values| {
                     let mut row = schema
                         .columns
@@ -167,18 +179,18 @@ fn compile_relational_mutation(
                     Ok(RelationalRow::new(row))
                 })
                 .collect::<Result<Vec<_>>>()?;
-            if let Some(conflict) = insert.on_conflict {
-                let action = match conflict.action {
+            if let Some(conflict) = &insert.on_conflict {
+                let action = match &conflict.action {
                     SqlConflictAction::DoNothing => RelationalConflictAction::DoNothing,
                     SqlConflictAction::DoUpdate(assignments) => RelationalConflictAction::Update(
                         assignments
-                            .into_iter()
+                            .iter()
                             .map(|assignment| {
-                                let value = match assignment.value {
+                                let value = match &assignment.value {
                                     SqlAssignmentValue::Column(column)
                                         if column.qualifier.as_deref() == Some("excluded") =>
                                     {
-                                        RelationalUpsertValue::ExcludedColumn(column.name)
+                                        RelationalUpsertValue::ExcludedColumn(column.name.clone())
                                     }
                                     SqlAssignmentValue::Column(_) => {
                                         return Err(HawDBError::Semantic(
@@ -188,7 +200,7 @@ fn compile_relational_mutation(
                                     }
                                     SqlAssignmentValue::Value(value) => {
                                         RelationalUpsertValue::Value(bind_relational_value(
-                                            value, parameters,
+                                            value.clone(), parameters,
                                         )?)
                                     }
                                     SqlAssignmentValue::Arithmetic { .. } => {
@@ -199,7 +211,7 @@ fn compile_relational_mutation(
                                     }
                                 };
                                 Ok(RelationalUpsertAssignment {
-                                    column: assignment.column,
+                                    column: assignment.column.clone(),
                                     value,
                                 })
                             })
@@ -207,14 +219,14 @@ fn compile_relational_mutation(
                     ),
                 };
                 RelationalWrite::Upsert {
-                    table: insert.table.name,
+                    table: insert.table.name.clone(),
                     rows,
-                    conflict_columns: conflict.columns,
+                    conflict_columns: conflict.columns.clone(),
                     action,
                 }
             } else {
                 RelationalWrite::Insert {
-                    table: insert.table.name,
+                    table: insert.table.name.clone(),
                     rows,
                     mode: RelationalInsertMode::Error,
                 }
@@ -225,7 +237,7 @@ fn compile_relational_mutation(
             let schema = state.table_schema(&delete.table.name).ok_or_else(|| {
                 HawDBError::Semantic(format!("unknown relational table {}", delete.table.name))
             })?;
-            let selection = delete.selection.ok_or_else(|| {
+            let selection = delete.selection.as_ref().ok_or_else(|| {
                 HawDBError::Semantic(
                     "unbounded relational DELETE requires an explicit qualified workflow"
                         .to_string(),
@@ -247,7 +259,7 @@ fn compile_relational_mutation(
             let schema = state.table_schema(&update.table.name).ok_or_else(|| {
                 HawDBError::Semantic(format!("unknown relational table {}", update.table.name))
             })?;
-            let selection = update.selection.ok_or_else(|| {
+            let selection = update.selection.as_ref().ok_or_else(|| {
                 HawDBError::Semantic(
                     "unbounded relational UPDATE requires an explicit qualified workflow"
                         .to_string(),
@@ -255,7 +267,7 @@ fn compile_relational_mutation(
             })?;
             let assignments = update
                 .assignments
-                .into_iter()
+                .iter()
                 .map(|assignment| {
                     if schema.column_position(&assignment.column).is_none() {
                         return Err(HawDBError::Semantic(format!(
@@ -267,15 +279,15 @@ fn compile_relational_mutation(
                         .column_position(&assignment.column)
                         .expect("assignment column was validated")]
                     .scalar_type;
-                    let value = match assignment.value {
+                    let value = match &assignment.value {
                         SqlAssignmentValue::Column(column) => {
                             validate_mutation_column(
-                                &column,
+                                column,
                                 schema,
                                 update.alias.as_deref(),
                                 &update.table.name,
                             )?;
-                            RelationalUpdateValue::Column(column.name)
+                            RelationalUpdateValue::Column(column.name.clone())
                         }
                         SqlAssignmentValue::Value(value) => RelationalUpdateValue::Value(
                             bind_relational_value_as(value, parameters, target_type)?,
@@ -318,7 +330,7 @@ fn compile_relational_mutation(
                         }
                     };
                     Ok(RelationalUpdateAssignment {
-                        column: assignment.column,
+                        column: assignment.column.clone(),
                         value,
                     })
                 })
@@ -355,7 +367,7 @@ fn compile_relational_mutation(
 }
 
 fn compile_bigint_arithmetic_operand(
-    operand: SqlArithmeticOperand,
+    operand: &SqlArithmeticOperand,
     parameters: &[Value],
     schema: &RelationalTableSchema,
     alias: Option<&str>,
@@ -363,7 +375,7 @@ fn compile_bigint_arithmetic_operand(
 ) -> Result<RelationalBigIntOperand> {
     match operand {
         SqlArithmeticOperand::Column(column) => {
-            validate_mutation_column(&column, schema, alias, table)?;
+            validate_mutation_column(column, schema, alias, table)?;
             let position = schema.column_position(&column.name).ok_or_else(|| {
                 HawDBError::Semantic(format!(
                     "table {} has no column {}",
@@ -376,7 +388,7 @@ fn compile_bigint_arithmetic_operand(
                     column.name
                 )));
             }
-            Ok(RelationalBigIntOperand::Column(column.name))
+            Ok(RelationalBigIntOperand::Column(column.name.clone()))
         }
         SqlArithmeticOperand::Value(value) => {
             let value = bind_relational_value_as(value, parameters, RelationalScalarType::BigInt)?;
@@ -391,7 +403,7 @@ fn compile_bigint_arithmetic_operand(
 }
 
 fn compile_mutation_predicate(
-    predicate: SqlPredicate,
+    predicate: &SqlPredicate,
     parameters: &[Value],
     schema: &RelationalTableSchema,
     alias: Option<&str>,
@@ -399,14 +411,14 @@ fn compile_mutation_predicate(
 ) -> Result<RelationalPredicate> {
     let compile =
         |predicate| compile_mutation_predicate(predicate, parameters, schema, alias, table);
-    Ok(match predicate.kind {
+    Ok(match &predicate.kind {
         ExprKind::And(left, right) => {
-            RelationalPredicate::And(Box::new(compile(*left)?), Box::new(compile(*right)?))
+            RelationalPredicate::And(Box::new(compile(left)?), Box::new(compile(right)?))
         }
         ExprKind::Or(left, right) => {
-            RelationalPredicate::Or(Box::new(compile(*left)?), Box::new(compile(*right)?))
+            RelationalPredicate::Or(Box::new(compile(left)?), Box::new(compile(right)?))
         }
-        ExprKind::Not(predicate) => RelationalPredicate::Not(Box::new(compile(*predicate)?)),
+        ExprKind::Not(predicate) => RelationalPredicate::Not(Box::new(compile(predicate)?)),
         ExprKind::Compare { left, op, right } => {
             if right.as_column().is_some() {
                 return Err(HawDBError::Semantic(
@@ -414,16 +426,16 @@ fn compile_mutation_predicate(
                         .to_owned(),
                 ));
             }
-            let left = left.require_column()?.clone();
-            let right = mutation_value_expression(*right)?;
-            validate_mutation_column(&left, schema, alias, table)?;
+            let left = left.require_column()?;
+            let right = mutation_value_expression(right)?;
+            validate_mutation_column(left, schema, alias, table)?;
             let scalar_type = schema.columns[schema
                 .column_position(&left.name)
                 .expect("mutation column was validated")]
             .scalar_type;
             RelationalPredicate::Compare {
-                column: left.name,
-                op: compile_comparison_op(op),
+                column: left.name.clone(),
+                op: compile_comparison_op(*op),
                 value: bind_relational_value_as(right, parameters, scalar_type)?,
             }
         }
@@ -437,19 +449,19 @@ fn compile_mutation_predicate(
             values,
             negated,
         } => {
-            let left = left.require_column()?.clone();
-            validate_mutation_column(&left, schema, alias, table)?;
+            let left = left.require_column()?;
+            validate_mutation_column(left, schema, alias, table)?;
             let scalar_type = schema.columns[schema
                 .column_position(&left.name)
                 .expect("mutation column was validated")]
             .scalar_type;
             let mut predicates = values
-                .into_iter()
+                .iter()
                 .map(|value| {
                     let value = mutation_value_expression(value)?;
                     Ok(RelationalPredicate::Compare {
                         column: left.name.clone(),
-                        op: if negated {
+                        op: if *negated {
                             RelationalComparisonOp::NotEq
                         } else {
                             RelationalComparisonOp::Eq
@@ -463,7 +475,7 @@ fn compile_mutation_predicate(
                 HawDBError::Semantic("mutation IN list must not be empty".to_string())
             })?;
             predicates.fold(first, |left, right| {
-                if negated {
+                if *negated {
                     RelationalPredicate::And(Box::new(left), Box::new(right))
                 } else {
                     RelationalPredicate::Or(Box::new(left), Box::new(right))
@@ -474,23 +486,23 @@ fn compile_mutation_predicate(
             expression,
             negated,
         } => {
-            let column = expression.require_column()?.clone();
-            validate_mutation_column(&column, schema, alias, table)?;
+            let column = expression.require_column()?;
+            validate_mutation_column(column, schema, alias, table)?;
             RelationalPredicate::IsNull {
-                column: column.name,
-                negated,
+                column: column.name.clone(),
+                negated: *negated,
             }
         }
         _ => {
             return Err(HawDBError::Semantic(
                 "unsupported single-table mutation predicate".to_owned(),
-            ))
+            ));
         }
     })
 }
 
-fn mutation_value_expression(expression: hawdb_sql::Expr) -> Result<SqlValue> {
-    match expression.kind {
+fn mutation_value_expression(expression: &hawdb_sql::Expr) -> Result<&SqlValue> {
+    match &expression.kind {
         ExprKind::Value(value) => Ok(value),
         _ => Err(HawDBError::Semantic(
             "mutation predicate requires a literal or parameter".to_owned(),
@@ -534,7 +546,7 @@ fn compile_comparison_op(op: SqlComparisonOp) -> RelationalComparisonOp {
     }
 }
 
-fn compile_schema_statement(statement: SqlStatement) -> Result<Vec<RelationalWrite>> {
+fn compile_schema_statement(statement: &SqlStatement) -> Result<Vec<RelationalWrite>> {
     match statement {
         SqlStatement::CreateTable(create) => Ok(vec![RelationalWrite::CreateTable(
             compile_create_table(create)?,
@@ -547,7 +559,7 @@ fn compile_schema_statement(statement: SqlStatement) -> Result<Vec<RelationalWri
     }
 }
 
-fn compile_create_table(create: CreateTableStatement) -> Result<RelationalTableSchema> {
+fn compile_create_table(create: &CreateTableStatement) -> Result<RelationalTableSchema> {
     reject_non_public_schema(create.table.schema.as_deref())?;
     if !matches!(create.storage, SqlTableStorage::RowPage) {
         return Err(HawDBError::Semantic(
@@ -584,7 +596,7 @@ fn compile_create_table(create: CreateTableStatement) -> Result<RelationalTableS
             });
         }
     }
-    for constraint in create.constraints {
+    for constraint in &create.constraints {
         match constraint {
             SqlTableConstraint::PrimaryKey(columns) => {
                 if !primary_key.is_empty() {
@@ -592,14 +604,14 @@ fn compile_create_table(create: CreateTableStatement) -> Result<RelationalTableS
                         "table declares more than one primary key".to_string(),
                     ));
                 }
-                primary_key = columns;
+                primary_key = columns.clone();
             }
-            SqlTableConstraint::Unique(columns) => unique_constraints.push(columns),
+            SqlTableConstraint::Unique(columns) => unique_constraints.push(columns.clone()),
             SqlTableConstraint::ForeignKey { columns, reference } => {
                 foreign_keys.push(RelationalForeignKeySchema {
-                    columns,
-                    referenced_table: reference.table.name,
-                    referenced_columns: reference.columns,
+                    columns: columns.clone(),
+                    referenced_table: reference.table.name.clone(),
+                    referenced_columns: reference.columns.clone(),
                     on_delete: compile_delete_referential_action(reference.on_delete)?,
                     on_update: compile_update_referential_action(reference.on_update)?,
                 });
@@ -627,10 +639,10 @@ fn compile_create_table(create: CreateTableStatement) -> Result<RelationalTableS
     }
     let columns = create
         .columns
-        .into_iter()
+        .iter()
         .map(|column| {
             let is_primary_key = primary_key_columns.contains(&column.name);
-            let mut column = compile_column(column)?;
+            let mut column = compile_column(column.clone())?;
             if is_primary_key {
                 column.nullable = false;
             }
@@ -638,7 +650,7 @@ fn compile_create_table(create: CreateTableStatement) -> Result<RelationalTableS
         })
         .collect::<Result<_>>()?;
     Ok(RelationalTableSchema {
-        name: create.table.name,
+        name: create.table.name.clone(),
         columns,
         primary_key,
         unique_constraints,
@@ -658,11 +670,11 @@ fn materialize_column_default(column: &RelationalColumnSchema) -> Result<Relatio
 }
 
 fn bind_relational_value_as(
-    value: SqlValue,
+    value: &SqlValue,
     parameters: &[Value],
     scalar_type: RelationalScalarType,
 ) -> Result<RelationalValue> {
-    bind_relational_value(value, parameters)
+    bind_relational_value(value.clone(), parameters)
         .and_then(|value| coerce_relational_value(value, scalar_type))
 }
 
@@ -691,7 +703,7 @@ fn compile_update_referential_action(
     }
 }
 
-fn compile_create_index(create: CreateIndexStatement) -> Result<RelationalWrite> {
+fn compile_create_index(create: &CreateIndexStatement) -> Result<RelationalWrite> {
     reject_non_public_schema(create.table.schema.as_deref())?;
     if create.if_not_exists {
         return Err(HawDBError::Semantic(
@@ -699,20 +711,20 @@ fn compile_create_index(create: CreateIndexStatement) -> Result<RelationalWrite>
         ));
     }
     Ok(RelationalWrite::CreateIndex {
-        table: create.table.name,
+        table: create.table.name.clone(),
         index: RelationalIndexSchema {
-            name: create.name,
+            name: create.name.clone(),
             columns: create
                 .columns
-                .into_iter()
-                .map(|column| column.column.name)
+                .iter()
+                .map(|column| column.column.name.clone())
                 .collect(),
             unique: create.unique,
         },
     })
 }
 
-fn compile_add_column(alter: AlterTableAddColumnStatement) -> Result<Vec<RelationalWrite>> {
+fn compile_add_column(alter: &AlterTableAddColumnStatement) -> Result<Vec<RelationalWrite>> {
     reject_non_public_schema(alter.table.schema.as_deref())?;
     if alter.if_not_exists {
         return Err(HawDBError::Semantic(
@@ -727,8 +739,8 @@ fn compile_add_column(alter: AlterTableAddColumnStatement) -> Result<Vec<Relatio
         ));
     }
     Ok(vec![RelationalWrite::AddColumn {
-        table: alter.table.name,
-        column: compile_column(alter.column)?,
+        table: alter.table.name.clone(),
+        column: compile_column(alter.column.clone())?,
     }])
 }
 

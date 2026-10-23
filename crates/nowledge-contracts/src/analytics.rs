@@ -20,28 +20,6 @@ use super::graph_read::KnowledgeEntityRequest;
 use hawdb_core::Value;
 use std::collections::BTreeMap;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeCommunityAssignmentClearRequest {
-    pub labels: Vec<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeCommunityAssignmentClearRow {
-    pub labels: Vec<String>,
-    pub external_id: Option<String>,
-    pub node_id: u64,
-    pub cleared: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeCommunityAssignmentClearOutput {
-    pub graph_commit_epoch_before: u64,
-    pub graph_commit_epoch_after: u64,
-    pub rows: Vec<KnowledgeCommunityAssignmentClearRow>,
-    pub candidate_count: usize,
-    pub cleared_count: usize,
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct KnowledgeCommunityMembershipCreate {
     pub entity_id: String,
@@ -194,27 +172,6 @@ pub struct KnowledgeCommunityOutput {
     pub graph_commit_epoch: u64,
     pub row: Option<KnowledgeCommunityRow>,
     pub found: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeCommunityCleanupRequest {
-    pub detach: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeCommunityCleanupRow {
-    pub id: Option<String>,
-    pub node_id: u64,
-    pub deleted: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeCommunityCleanupOutput {
-    pub graph_commit_epoch_before: u64,
-    pub graph_commit_epoch_after: u64,
-    pub rows: Vec<KnowledgeCommunityCleanupRow>,
-    pub candidate_count: usize,
-    pub deleted_count: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

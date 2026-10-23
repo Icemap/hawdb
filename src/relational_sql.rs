@@ -13,11 +13,13 @@
 // limitations under the License.
 
 pub(crate) use hawdb_relational::{
-    bind_relational_value, compile_append_statement_sql, compile_prepared_append_explain_sql,
-    compile_prepared_append_select_sql, compile_relational_statement_sql,
-    compile_relational_statement_sql_with_result, format_append_explain, project_append_rows,
-    RelationalReturningProjection,
+    bind_relational_value, compile_prepared_append_explain_sql, compile_prepared_append_select_sql,
+    compile_prepared_append_statement_sql, compile_prepared_relational_statement_with_result,
+    format_append_explain, project_append_rows, RelationalReturningProjection,
 };
+
+#[cfg(test)]
+pub(crate) use hawdb_relational::compile_relational_statement_sql;
 
 #[cfg(test)]
 #[path = "relational_sql/query.rs"]

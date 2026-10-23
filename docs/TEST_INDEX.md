@@ -23,6 +23,13 @@ readiness crate tests its generic reducer with a small parameterized statement.
 These remain in their existing root/readiness CI owners; the weekly native
 runtime lane also selects the deletion and route-evidence families.
 
+`api::tests::{community_assignments,community_cleanup}` retain their seven
+scenarios through bounded ordinary Cypher: scoped and global NULL assignment,
+invalid syntax before WAL, preservation of other labels, detach/incident-edge
+deletion, empty no-op, one-batch durability and reopen. They use query rows and
+commit epochs instead of removed business response DTOs. Their existing root
+general unit owner remains unchanged.
+
 `api::dependency_read::tests` checks both Cypher and SQL source mappings under
 zero, undersized and sufficient result reservations, plus cancellation and
 failed-proof refusal. Consumer catch-up admits result memory separately from
@@ -33,6 +40,15 @@ Standalone staging/baseline fixtures explicitly reserve results too; a zero
 reservation remains a refusal. Request parity also checks explicit zero SQL
 payload limits. CI owns these regressions; the weekly native runtime lane
 explicitly selects the prepared-source reservation/cancellation case.
+
+`api::sql_runtime::tests` passes prepared SQL mutations through the database and
+transaction kernels with diagnostic-only text, detecting accidental parser
+fallback. DDL, INSERT/RETURNING, UPDATE, DELETE and Strict Append preserve bound
+parameters, output refusal, earlier transaction work and publication. Root
+general and the native runtime lane own these cases. The relational crate's
+prepared-mutation cases rebind current schemas/parameters and append routing;
+its existing manual statement compiler campaign reuses templates across inputs
+and compares independent typed writes. No new fuzz CI owner is introduced.
 
 The executor `result_delivery::tests::borrowed` family checks native columnar
 payload pointer identity for immediate consumers, compact validated delivery

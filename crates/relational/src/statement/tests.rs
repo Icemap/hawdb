@@ -20,7 +20,7 @@ fn relational_ddl_requires_exactly_one_primary_key_declaration() {
         "CREATE TABLE documents (id TEXT NOT NULL, payload TEXT NOT NULL)",
     )
     .expect("valid PostgreSQL syntax");
-    let error = compile_schema_statement(missing.statement)
+    let error = compile_schema_statement(&missing.statement)
         .expect_err("HawDB relational tables require a primary key");
     assert_eq!(
         error,
@@ -31,7 +31,7 @@ fn relational_ddl_requires_exactly_one_primary_key_declaration() {
         "CREATE TABLE documents (tenant_id TEXT PRIMARY KEY, id TEXT PRIMARY KEY)",
     )
     .expect("parser preserves duplicate declarations for semantic validation");
-    let error = compile_schema_statement(duplicate.statement)
+    let error = compile_schema_statement(&duplicate.statement)
         .expect_err("multiple primary-key declarations must be rejected");
     assert_eq!(
         error,
@@ -46,7 +46,7 @@ fn table_level_composite_primary_key_is_not_nullable() {
          PRIMARY KEY (tenant_id, id))",
     )
     .expect("valid composite primary key");
-    let writes = compile_schema_statement(prepared.statement).expect("compiled schema");
+    let writes = compile_schema_statement(&prepared.statement).expect("compiled schema");
     let [RelationalWrite::CreateTable(schema)] = writes.as_slice() else {
         panic!("expected one CREATE TABLE write");
     };
@@ -163,6 +163,12 @@ fn invalid_schema_and_mutation_shapes_keep_the_existing_errors() {
 
 fn campaign(cases: usize) {
     let state = state();
+    let insert =
+        hawdb_sql::prepare_postgres_sql("INSERT INTO items (body, id) VALUES ($1, $2)").unwrap();
+    let update =
+        hawdb_sql::prepare_postgres_sql("UPDATE items SET counter = counter + $1 WHERE id = $2")
+            .unwrap();
+    let delete = hawdb_sql::prepare_postgres_sql("DELETE FROM items WHERE id = $1").unwrap();
     let mut seed = 0x418_d01d_21a1_u64;
     for case in 0..cases {
         seed ^= seed << 13;
@@ -181,14 +187,14 @@ fn campaign(cases: usize) {
             RelationalValue::Null,
             RelationalValue::Bytea(payload.clone()),
         ]);
-        let actual = compile_relational_statement_sql(
-            "INSERT INTO items (body, id) VALUES ($1, $2)",
+        let actual = compile_prepared_relational_statement_with_result(
+            &insert,
             &[Value::Binary(payload), Value::Int(id)],
             &state,
         )
         .unwrap();
         assert_eq!(
-            actual.writes,
+            actual.transaction.writes,
             [RelationalWrite::Insert {
                 table: "items".into(),
                 rows: vec![expected_row],
@@ -201,14 +207,14 @@ fn campaign(cases: usize) {
             op: RelationalComparisonOp::Eq,
             value: RelationalValue::BigInt(id),
         };
-        let updated = compile_relational_statement_sql(
-            "UPDATE items SET counter = counter + $1 WHERE id = $2",
+        let updated = compile_prepared_relational_statement_with_result(
+            &update,
             &[Value::Int(delta), Value::Int(id)],
             &state,
         )
         .unwrap();
         assert_eq!(
-            updated.writes,
+            updated.transaction.writes,
             [RelationalWrite::UpdateWhere {
                 table: "items".into(),
                 assignments: vec![RelationalUpdateAssignment {
@@ -223,14 +229,11 @@ fn campaign(cases: usize) {
             }],
             "case {case}"
         );
-        let deleted = compile_relational_statement_sql(
-            "DELETE FROM items WHERE id = $1",
-            &[Value::Int(id)],
-            &state,
-        )
-        .unwrap();
+        let deleted =
+            compile_prepared_relational_statement_with_result(&delete, &[Value::Int(id)], &state)
+                .unwrap();
         assert_eq!(
-            deleted.writes,
+            deleted.transaction.writes,
             [RelationalWrite::DeleteWhere {
                 table: "items".into(),
                 predicate,
@@ -240,6 +243,56 @@ fn campaign(cases: usize) {
     }
     assert_eq!(state.materialized_row_count(), 0);
     println!("relational statement differential cases: {cases}");
+}
+
+#[test]
+fn prepared_mutations_bind_current_schema_parameters_and_returning() {
+    let state = state();
+    let prepared =
+        hawdb_sql::prepare_postgres_sql("INSERT INTO items (id) VALUES ($1) RETURNING id").unwrap();
+    let alter = compile_relational_statement_sql(
+        "ALTER TABLE items ADD COLUMN label TEXT DEFAULT 'new'",
+        &[],
+        &state,
+    )
+    .unwrap();
+    let extended = state
+        .stage_transaction(alter, Default::default(), Default::default())
+        .unwrap();
+    for (current, id, expected_columns) in [(&state, 1, 4), (&extended, 42, 5)] {
+        let compiled = compile_prepared_relational_statement_with_result(
+            &prepared,
+            &[Value::Int(id)],
+            current,
+        )
+        .unwrap();
+        let [RelationalWrite::Insert { rows, .. }] = compiled.transaction.writes.as_slice() else {
+            panic!("expected one INSERT");
+        };
+        assert_eq!(rows[0].values().len(), expected_columns);
+        assert_eq!(rows[0].values()[0], RelationalValue::BigInt(id));
+        if expected_columns == 5 {
+            assert_eq!(rows[0].values()[4], RelationalValue::Text("new".into()));
+        }
+        assert_eq!(compiled.returning.unwrap().columns, ["id"]);
+        assert_eq!(current.materialized_row_count(), 0);
+    }
+    assert!(compile_prepared_relational_statement_with_result(
+        &prepared,
+        &[Value::Int(1)],
+        &RelationalState::default(),
+    )
+    .unwrap_err()
+    .to_string()
+    .contains("unknown relational table items"));
+    for current in [&state, &RelationalState::default()] {
+        assert!(
+            compile_prepared_relational_statement_with_result(&prepared, &[], current)
+                .unwrap_err()
+                .to_string()
+                .contains("requires 1 parameters")
+        );
+    }
 }
 
 #[test]

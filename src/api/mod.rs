@@ -24,14 +24,14 @@ use crate::qos::{
     BackgroundWorkHint, BackgroundWorkPlan, LocalQosPolicy, LocalQosScheduler, LocalQosState,
     QosAdmission, WorkClass, WorkRequest,
 };
+#[cfg(test)]
+use crate::schema::GraphStatistics;
 use crate::schema::{Catalog, SchemaObjectState};
 #[cfg(test)]
 use crate::schema::{
     CompositeIndexDescriptor, ConstraintDescriptor, IndexDescriptor, PropertyDescriptor,
     TableDescriptor,
 };
-#[cfg(test)]
-use crate::schema::{GraphStatistics, LabelId};
 use crate::search::{
     projection_row_from_node_with_graph_metadata, search_metadata_predicate_pushdown,
     AdaptiveVectorSearchOptions, CompressedVectorSearchMode, MetadataRepairOptions,
@@ -5147,13 +5147,6 @@ impl Database {
         transfer_knowledge_memory_label_edges_for(self, request)
     }
 
-    pub fn clear_knowledge_community_assignments(
-        &mut self,
-        request: &KnowledgeCommunityAssignmentClearRequest,
-    ) -> Result<KnowledgeCommunityAssignmentClearOutput> {
-        clear_knowledge_community_assignments_for(self, request)
-    }
-
     pub fn create_knowledge_community_memberships_batch(
         &mut self,
         request: &KnowledgeCommunityMembershipCreateBatchRequest,
@@ -5166,13 +5159,6 @@ impl Database {
         request: &KnowledgeCommunityLifecycleBatchRequest,
     ) -> Result<KnowledgeCommunityLifecycleBatchOutput> {
         update_knowledge_communities_batch_for(self, request)
-    }
-
-    pub fn delete_knowledge_communities(
-        &mut self,
-        request: &KnowledgeCommunityCleanupRequest,
-    ) -> Result<KnowledgeCommunityCleanupOutput> {
-        delete_knowledge_communities_for(self, request)
     }
 
     pub fn stamp_knowledge_graph_meta_batch(
@@ -14541,119 +14527,6 @@ pub(super) fn validate_non_empty_external_ids(external_ids: &[String], message: 
 
 
 
-pub(super) fn clear_knowledge_community_assignments_for(
-    db: &mut Database,
-    request: &KnowledgeCommunityAssignmentClearRequest,
-) -> Result<KnowledgeCommunityAssignmentClearOutput> {
-    db.ensure_writable()?;
-    for label in &request.labels {
-        validate_cypher_identifier(label.as_str(), "node label")?;
-    }
-
-    let graph_commit_epoch_before = db.runtime.get().unwrap().store.commit_epoch();
-    let mut rows = Vec::new();
-    let mut candidate_count = 0;
-    let mut cleared_count = 0;
-    let mut eligible_updates = Vec::new();
-    let mut seen_node_ids = BTreeSet::new();
-
-    if request.labels.is_empty() {
-        collect_knowledge_community_assignment_clears(
-            db,
-            None,
-            &mut seen_node_ids,
-            &mut rows,
-            &mut eligible_updates,
-            &mut candidate_count,
-            &mut cleared_count,
-        )?;
-    } else {
-        for label in &request.labels {
-            let Some(label_id) = db.runtime.get().unwrap().catalog.label_id(label.as_str()) else {
-                continue;
-            };
-            collect_knowledge_community_assignment_clears(
-                db,
-                Some(label_id),
-                &mut seen_node_ids,
-                &mut rows,
-                &mut eligible_updates,
-                &mut candidate_count,
-                &mut cleared_count,
-            )?;
-        }
-    }
-
-    if eligible_updates.is_empty() {
-        return Ok(KnowledgeCommunityAssignmentClearOutput {
-            graph_commit_epoch_before,
-            graph_commit_epoch_after: graph_commit_epoch_before,
-            rows,
-            candidate_count,
-            cleared_count: 0,
-        });
-    }
-
-    let mut tx = db.begin_transaction()?;
-    for node_id in &eligible_updates {
-        let (cypher, parameters) = community_assignment_clear_statement(*node_id);
-        tx.query_with_params(cypher.as_str(), &parameters)?;
-    }
-    tx.commit()?;
-
-    Ok(KnowledgeCommunityAssignmentClearOutput {
-        graph_commit_epoch_before,
-        graph_commit_epoch_after: db.runtime.get().unwrap().store.commit_epoch(),
-        rows,
-        candidate_count,
-        cleared_count,
-    })
-}
-
-pub(super) fn collect_knowledge_community_assignment_clears(
-    db: &Database,
-    label_id: Option<LabelId>,
-    seen_node_ids: &mut BTreeSet<NodeId>,
-    rows: &mut Vec<KnowledgeCommunityAssignmentClearRow>,
-    eligible_updates: &mut Vec<NodeId>,
-    candidate_count: &mut usize,
-    cleared_count: &mut usize,
-) -> Result<()> {
-    db.runtime.get().unwrap().store.visit_nodes_owned(label_id, |node| {
-        if !seen_node_ids.insert(node.id) {
-            return crate::store::GraphScanControl::Continue;
-        }
-        if node
-            .properties
-            .get("community_id")
-            .is_none_or(|value| value == &Value::Null)
-        {
-            return crate::store::GraphScanControl::Continue;
-        }
-        *candidate_count += 1;
-        *cleared_count += 1;
-        eligible_updates.push(node.id);
-        rows.push(KnowledgeCommunityAssignmentClearRow {
-            labels: node_label_names(&db.runtime.get().unwrap().catalog, &node),
-            external_id: node_external_id(&node),
-            node_id: node.id.0,
-            cleared: true,
-        });
-        crate::store::GraphScanControl::Continue
-    })?;
-    Ok(())
-}
-
-pub(super) fn community_assignment_clear_statement(node_id: NodeId) -> (String, BTreeMap<String, Value>) {
-    (
-        "MATCH (n) WHERE id(n) = $node_id SET n.community_id = $community_id".to_string(),
-        BTreeMap::from([
-            ("node_id".to_string(), Value::Int(node_id.0 as i64)),
-            ("community_id".to_string(), Value::Null),
-        ]),
-    )
-}
-
 pub(super) fn create_knowledge_community_memberships_batch_for(
     db: &mut Database,
     request: &KnowledgeCommunityMembershipCreateBatchRequest,
@@ -15158,74 +15031,6 @@ pub(super) fn knowledge_community_summary_update_statement(
         parameters.insert(parameter_name, value.clone());
     }
     (cypher, parameters)
-}
-
-pub(super) fn delete_knowledge_communities_for(
-    db: &mut Database,
-    request: &KnowledgeCommunityCleanupRequest,
-) -> Result<KnowledgeCommunityCleanupOutput> {
-    db.ensure_writable()?;
-    let graph_commit_epoch_before = db.runtime.get().unwrap().store.commit_epoch();
-    let Some(label_id) = db.runtime.get().unwrap().catalog.label_id("Community") else {
-        return Ok(KnowledgeCommunityCleanupOutput {
-            graph_commit_epoch_before,
-            graph_commit_epoch_after: graph_commit_epoch_before,
-            rows: Vec::new(),
-            candidate_count: 0,
-            deleted_count: 0,
-        });
-    };
-
-    let mut rows = Vec::new();
-    db.runtime.get().unwrap().store.visit_nodes_owned(Some(label_id), |node| {
-        rows.push(KnowledgeCommunityCleanupRow {
-            id: node_external_id(&node),
-            node_id: node.id.0,
-            deleted: true,
-        });
-        crate::store::GraphScanControl::Continue
-    })?;
-    rows.sort_by_key(|row| row.node_id);
-
-    if rows.is_empty() {
-        return Ok(KnowledgeCommunityCleanupOutput {
-            graph_commit_epoch_before,
-            graph_commit_epoch_after: graph_commit_epoch_before,
-            rows,
-            candidate_count: 0,
-            deleted_count: 0,
-        });
-    }
-
-    let mut tx = db.begin_transaction()?;
-    for row in &rows {
-        let (cypher, parameters) =
-            knowledge_community_cleanup_statement(NodeId(row.node_id), request.detach)?;
-        tx.query_with_params(cypher.as_str(), &parameters)?;
-    }
-    tx.commit()?;
-    let deleted_count = rows.len();
-
-    Ok(KnowledgeCommunityCleanupOutput {
-        graph_commit_epoch_before,
-        graph_commit_epoch_after: db.runtime.get().unwrap().store.commit_epoch(),
-        candidate_count: rows.len(),
-        rows,
-        deleted_count,
-    })
-}
-
-pub(super) fn knowledge_community_cleanup_statement(
-    node_id: NodeId,
-    detach: bool,
-) -> Result<(String, BTreeMap<String, Value>)> {
-    let node_id = i64::try_from(node_id.0)
-        .map_err(|_| HawDBError::Semantic("node id does not fit Cypher integer".to_string()))?;
-    let verb = if detach { "DETACH DELETE" } else { "DELETE" };
-    Ok((
-        format!("MATCH (c:Community) WHERE id(c) = $node_id {verb} c"),
-        BTreeMap::from([("node_id".to_string(), Value::Int(node_id))]),
-    ))
 }
 
 pub(super) fn delete_knowledge_graph_meta_for(
@@ -21123,8 +20928,8 @@ pub(super) fn execute_database_transaction_prepared_sql(
             .expect("database transaction must own a graph workspace")
             .store(),
     )?;
-    if let Some(transaction) = crate::relational_sql::compile_append_statement_sql(
-        sql_text,
+    if let Some(transaction) = crate::relational_sql::compile_prepared_append_statement_sql(
+        &prepared.template,
         parameters,
         &state.append_state,
     )? {
@@ -21169,8 +20974,8 @@ pub(super) fn execute_database_transaction_prepared_sql(
             create.table.name
         )));
     }
-    let compiled = crate::relational_sql::compile_relational_statement_sql_with_result(
-        sql_text,
+    let compiled = crate::relational_sql::compile_prepared_relational_statement_with_result(
+        &prepared.template,
         parameters,
         &state.relational_state,
     )?;

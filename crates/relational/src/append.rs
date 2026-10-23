@@ -55,6 +55,16 @@ pub fn compile_append_statement_sql(
     state: &AppendState,
 ) -> Result<Option<AppendTransaction>> {
     let prepared = hawdb_sql::prepare_postgres_sql(sql)?;
+    compile_prepared_append_statement_sql(&prepared, parameters, state)
+}
+
+/// Binds strict append work without reparsing or taking ownership of its template.
+#[doc(hidden)]
+pub fn compile_prepared_append_statement_sql(
+    prepared: &PreparedPostgresStatement,
+    parameters: &[Value],
+    state: &AppendState,
+) -> Result<Option<AppendTransaction>> {
     if prepared.parameters.len() != parameters.len() {
         return Err(HawDBError::Semantic(format!(
             "PostgreSQL statement requires {} parameters, but {} parameters were supplied",
@@ -62,7 +72,7 @@ pub fn compile_append_statement_sql(
             parameters.len()
         )));
     }
-    match prepared.statement {
+    match &prepared.statement {
         SqlStatement::CreateTable(create)
             if matches!(create.storage, SqlTableStorage::StrictAppend { .. }) =>
         {
@@ -90,20 +100,20 @@ pub fn compile_append_statement_sql(
                 .expect("append table existence was checked");
             let write = match schema.order_mode {
                 AppendOrderMode::CallerProvided => AppendWrite::Append {
-                    table: insert.table.name,
+                    table: insert.table.name.clone(),
                     rows: compile_insert_rows(
                         &insert.columns,
-                        insert.rows,
+                        &insert.rows,
                         parameters,
                         &schema.name,
                         &schema.columns,
                     )?,
                 },
                 AppendOrderMode::CommitSequence => AppendWrite::AppendGenerated {
-                    table: insert.table.name,
+                    table: insert.table.name.clone(),
                     rows: compile_generated_insert_rows(
                         &insert.columns,
-                        insert.rows,
+                        &insert.rows,
                         parameters,
                         schema,
                     )?,
@@ -131,7 +141,7 @@ pub fn compile_append_statement_sql(
     }
 }
 
-fn compile_append_table(create: CreateTableStatement) -> Result<AppendTableSchema> {
+fn compile_append_table(create: &CreateTableStatement) -> Result<AppendTableSchema> {
     reject_non_public_schema(create.table.schema.as_deref())?;
     if create.if_not_exists {
         return Err(HawDBError::Semantic(
@@ -142,7 +152,7 @@ fn compile_append_table(create: CreateTableStatement) -> Result<AppendTableSchem
         partition_key,
         order_key,
         generated_order,
-    } = create.storage
+    } = &create.storage
     else {
         return Err(HawDBError::Semantic(
             "strict append compiler requires strict_append storage".to_string(),
@@ -166,14 +176,15 @@ fn compile_append_table(create: CreateTableStatement) -> Result<AppendTableSchem
         ));
     }
     Ok(AppendTableSchema {
-        name: create.table.name,
+        name: create.table.name.clone(),
         columns: create
             .columns
-            .into_iter()
+            .iter()
+            .cloned()
             .map(compile_column)
             .collect::<Result<_>>()?,
-        partition_key,
-        order_key,
+        partition_key: partition_key.clone(),
+        order_key: order_key.clone(),
         order_mode: match generated_order {
             SqlGeneratedOrder::CallerProvided => AppendOrderMode::CallerProvided,
             SqlGeneratedOrder::CommitSequence => AppendOrderMode::CommitSequence,
@@ -183,7 +194,7 @@ fn compile_append_table(create: CreateTableStatement) -> Result<AppendTableSchem
 
 fn compile_insert_rows(
     insert_columns: &[String],
-    input_rows: Vec<Vec<SqlValue>>,
+    input_rows: &[Vec<SqlValue>],
     parameters: &[Value],
     table_name: &str,
     columns: &[RelationalColumnSchema],
@@ -194,7 +205,7 @@ fn compile_insert_rows(
 
 fn compile_generated_insert_rows(
     insert_columns: &[String],
-    input_rows: Vec<Vec<SqlValue>>,
+    input_rows: &[Vec<SqlValue>],
     parameters: &[Value],
     schema: &AppendTableSchema,
 ) -> Result<Vec<AppendGeneratedRow>> {
@@ -227,7 +238,7 @@ fn compile_generated_insert_rows(
 
 fn compile_insert_values(
     insert_columns: &[String],
-    input_rows: Vec<Vec<SqlValue>>,
+    input_rows: &[Vec<SqlValue>],
     parameters: &[Value],
     table_name: &str,
     columns: &[RelationalColumnSchema],
@@ -249,7 +260,7 @@ fn compile_insert_values(
         positions.push(position);
     }
     input_rows
-        .into_iter()
+        .iter()
         .map(|values| {
             if values.len() != insert_columns.len() {
                 return Err(HawDBError::Semantic(format!(
@@ -272,11 +283,12 @@ fn compile_insert_values(
             for ((position, value), column_name) in
                 positions.iter().zip(values).zip(insert_columns.iter())
             {
-                row[*position] = bind_relational_value(value, parameters).map_err(|error| {
-                    HawDBError::Semantic(format!(
-                        "failed to bind INSERT column {column_name}: {error}"
-                    ))
-                })?;
+                row[*position] =
+                    bind_relational_value(value.clone(), parameters).map_err(|error| {
+                        HawDBError::Semantic(format!(
+                            "failed to bind INSERT column {column_name}: {error}"
+                        ))
+                    })?;
             }
             Ok(row)
         })

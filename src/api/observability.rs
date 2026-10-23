@@ -19,8 +19,8 @@ use super::{
 use crate::error::{HawDBError, Result};
 use crate::executor;
 use crate::relational_sql::{
-    compile_append_statement_sql, compile_prepared_append_explain_sql,
-    compile_prepared_append_select_sql, compile_relational_statement_sql_with_result,
+    compile_prepared_append_explain_sql, compile_prepared_append_select_sql,
+    compile_prepared_append_statement_sql, compile_prepared_relational_statement_with_result,
     format_append_explain, project_append_rows,
 };
 use crate::sql::{
@@ -442,11 +442,16 @@ impl Database {
             max_rows,
             max_payload_bytes,
         } = request.effective_output_limits(&self.config);
-        // Lifecycle/catalog statements need only project metadata. Parse them
-        // before touching the selected runtime's data or plan caches.
-        if let SqlStatement::Branch(statement) = crate::sql::parse_postgres_sql(sql_text)? {
+        // Lifecycle/catalog statements need only project metadata. Preparing a
+        // template must not open the selected runtime or pin its source.
+        let prepared = match self.runtime.peek() {
+            Some(runtime) => runtime.relational_plan_template_cache.prepare(sql_text)?,
+            None => crate::relational_sql::RelationalPlanTemplateCache::new(Some(0))
+                .prepare(sql_text)?,
+        };
+        if let SqlStatement::Branch(statement) = prepared.statement() {
             let result =
-                self.execute_branch_sql(&statement, parameters, max_rows, max_payload_bytes);
+                self.execute_branch_sql(statement, parameters, max_rows, max_payload_bytes);
             self.record_statement_execution(
                 "sql",
                 sql_text,
@@ -458,11 +463,6 @@ impl Database {
             return result;
         }
         self.runtime.get()?.store.ensure_usable()?;
-        let prepared = self
-            .runtime
-            .get()?
-            .relational_plan_template_cache
-            .prepare(sql_text)?;
         self.query_sql_with_prepared_request_inner(
             request.with_output_limits(QueryStreamOptions {
                 max_rows,
@@ -723,8 +723,8 @@ impl Database {
 
             super::query_runtime::query_runtime_checkpoint(task_context)?;
             self.ensure_writable()?;
-            let transaction = compile_append_statement_sql(
-                sql_text,
+            let transaction = compile_prepared_append_statement_sql(
+                &prepared.template,
                 parameters,
                 self.runtime.get()?.store.append_state(),
             )?;
@@ -773,8 +773,8 @@ impl Database {
                     create.table.name
                 )));
             }
-            let compiled = compile_relational_statement_sql_with_result(
-                sql_text,
+            let compiled = compile_prepared_relational_statement_with_result(
+                &prepared.template,
                 parameters,
                 self.runtime.get()?.store.relational_state(),
             )?;

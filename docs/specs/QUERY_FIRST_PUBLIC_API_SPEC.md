@@ -342,6 +342,17 @@ After a retryable refusal, Tokio reparses through the originally captured
 template cache under the execution reservation and still checks that original
 identity before execution. SQL mutation RETURNING limits apply before commit.
 
+Database and transaction execution borrow this parsed template in the RowPage
+and Strict Append mutation compilers. Concurrent lock planning uses the same
+AST when validating RowPage mutations. Compilers MUST bind the current schema
+and parameters on each invocation; neither bound
+rows nor volatile defaults belong in the template cache. Routing to Strict
+Append MUST use the execution state's table schema. This removes parser
+fallbacks without caching a schema-bound mutation or changing transaction locks.
+Ordinary database dispatch also uses the same template to recognize branch
+statements without opening an unloaded data runtime. Input/dependency admission
+continues to enforce its syntax depth and resource limits separately.
+
 This transition is modeled by
 [`HawDBPreparedAdmission`](../tla/PREPARED_ADMISSION_PROOF.md). It does not introduce
 a public prepared-statement API or a persistent snapshot cache.
@@ -366,7 +377,10 @@ predicates, incident-edge deletion and WAL recovery. PageRank score update and
 clear regressions use bounded parameterized Cypher in explicit transactions,
 with host-only input normalization and no business CRUD facade or DTOs. They
 retain duplicate/missing-ID behavior, projected-entity protection, one-batch WAL
-and reopen checks. Remaining legacy business
+and reopen checks. Community assignment clearing and cleanup also use ordinary
+bounded Cypher, preserving scoped matches, NULL semantics, incident edges,
+no-op epochs and one-batch WAL/reopen coverage without business adapters or DTOs.
+Remaining legacy business
 adapters still require migration; this removal does not complete issue #1193.
 
 ## Stable typed boundaries

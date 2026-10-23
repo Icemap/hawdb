@@ -91,6 +91,7 @@ jobs:
       - name: Test prepared source admission and private query fixtures
         run: |
           bash scripts/cargo-test-required.sh --locked -p hawdb --lib api::dependency_read::tests::prepared_source_queries_preserve_task_result_limits_and_cancellation
+          bash scripts/cargo-test-required.sh --locked -p hawdb --lib api::sql_runtime::tests::
           bash scripts/cargo-test-required.sh --locked -p hawdb --lib api::tests::knowledge_entity_deletes::
           bash scripts/cargo-test-required.sh --locked -p hawdb --lib graph_route_evidence::
           bash scripts/cargo-test-required.sh --locked -p hawdb-readiness --lib graph_route_catalog::tests::

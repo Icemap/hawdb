@@ -47,8 +47,9 @@ pub mod locator;
 
 pub use append::{
     compile_append_explain_sql, compile_append_select_sql, compile_append_statement_sql,
-    compile_prepared_append_explain_sql, compile_prepared_append_select_sql, format_append_explain,
-    project_append_rows, AppendExplainPlan, AppendSelectPlan,
+    compile_prepared_append_explain_sql, compile_prepared_append_select_sql,
+    compile_prepared_append_statement_sql, format_append_explain, project_append_rows,
+    AppendExplainPlan, AppendSelectPlan,
 };
 pub use system_schema::{SystemSchemaMigration, SystemSchemaRegistry, SystemSchemaUpgradeReport};
 
@@ -62,8 +63,9 @@ pub use read_profile::{
 // These are internal ownership seams. Hosts continue to use the embedded facade.
 #[doc(hidden)]
 pub use statement::{
-    compile_relational_statement_sql, compile_relational_statement_sql_with_result,
-    CompiledRelationalStatement, RelationalReturningProjection,
+    compile_prepared_relational_statement_with_result, compile_relational_statement_sql,
+    compile_relational_statement_sql_with_result, CompiledRelationalStatement,
+    RelationalReturningProjection,
 };
 
 #[doc(hidden)]
@@ -346,6 +348,51 @@ mod tests {
             "SELECT tenant, sequence FROM events WHERE tenant = 'a' HAVING FALSE ORDER BY sequence LIMIT 10",
             &[], &state, 100,
         ).is_err());
+    }
+
+    #[test]
+    fn prepared_append_mutations_rebind_parameters_and_table_routing() {
+        use hawdb_storage::append_table::{AppendTransaction, AppendWrite};
+        use hawdb_storage::relational::RelationalRow;
+
+        let state = append_state();
+        let prepared = hawdb_sql::prepare_postgres_sql(
+            "INSERT INTO events (tenant, sequence) VALUES ($1, $2)",
+        )
+        .unwrap();
+        for (tenant, sequence) in [("a", 1), ("b", 42)] {
+            let parameters = [Value::String(tenant.into()), Value::Int(sequence)];
+            let compiled = compile_prepared_append_statement_sql(&prepared, &parameters, &state)
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                compiled,
+                AppendTransaction {
+                    writes: vec![AppendWrite::Append {
+                        table: "events".into(),
+                        rows: vec![RelationalRow::new(vec![
+                            RelationalValue::Text(tenant.into()),
+                            RelationalValue::BigInt(sequence),
+                        ])],
+                    }],
+                }
+            );
+            assert!(compile_prepared_append_statement_sql(
+                &prepared,
+                &parameters,
+                &AppendState::default(),
+            )
+            .unwrap()
+            .is_none());
+        }
+        for current in [&state, &AppendState::default()] {
+            assert!(
+                compile_prepared_append_statement_sql(&prepared, &[], current)
+                    .unwrap_err()
+                    .to_string()
+                    .contains("requires 2 parameters")
+            );
+        }
     }
 
     #[test]
