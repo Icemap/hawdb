@@ -185,9 +185,9 @@ pub use query_request::{
     OwnedSqlQueryRequest, QueryRequest, ReadSnapshotBudget, ReadSnapshotUsage, ScoringRequest,
     SqlQueryRequest,
 };
-pub(crate) use query_runtime::PreparedRuntimeQuery;
 #[cfg(feature = "tokio-runtime")]
 pub(crate) use query_runtime::RuntimePlanningSnapshot;
+pub(crate) use query_runtime::{runtime_result_memory_budget, PreparedRuntimeQuery};
 pub use types::*;
 
 const DEFAULT_SEARCH_PROJECTION_CHANGE_LOG_MAX_ENTRIES: usize = 4096;
@@ -971,6 +971,7 @@ impl std::ops::Deref for ReadPlanCache {
 #[derive(Debug)]
 pub struct DatabaseReadTransaction<S: crate::executor::ExecutionStore = GraphStore> {
     session_config: SessionConfig,
+    system_variables: QuerySystemVariables,
     catalog: Catalog,
     store: S,
     published_read_view: PublishedReadView,
@@ -1018,6 +1019,7 @@ impl DatabaseReadSnapshot {
         let source = &self.0;
         Ok(DatabaseReadTransaction {
             session_config: source.session_config,
+            system_variables: source.system_variables.clone(),
             catalog: source.catalog.clone(),
             store: source.store.snapshot_for_read(),
             published_read_view: source.published_read_view,
@@ -1645,7 +1647,7 @@ impl Database {
                         .to_string(),
                 ));
             }
-            query_work_request_for_statement(&QuerySystemVariables::default(), &statement)?;
+            query_work_request_for_statement(&self.system_variables, &statement)?;
             let optimized = self.optimized_query_plan_for_request(
                 cypher_text,
                 &statement,
@@ -1879,6 +1881,7 @@ impl Database {
             let (published_read_view, pin) = Self::pin_runtime_read_view(&runtime);
             DatabaseReadTransaction {
                 session_config: SessionConfig::default(),
+                system_variables: self.system_variables.clone(),
                 catalog: runtime.catalog.clone(),
                 store: runtime.store.snapshot_for_read(),
                 published_read_view,
@@ -22520,7 +22523,7 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
                 "SET system variable is not allowed inside a read transaction".to_string(),
             ));
         }
-        query_work_request_for_statement(&QuerySystemVariables::default(), &statement)?;
+        query_work_request_for_statement(&self.system_variables, &statement)?;
         let optimized = match prepared_optimized {
             Some(optimized) => optimized,
             _ => self.optimized_query_plan_for_request(
@@ -22713,7 +22716,7 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
                 "SET system variable is not allowed inside a read transaction".to_string(),
             ));
         }
-        query_work_request_for_statement(&QuerySystemVariables::default(), &statement)?;
+        query_work_request_for_statement(&self.system_variables, &statement)?;
         let optimized = match prepared_optimized {
             Some(optimized) => optimized,
             _ => self.optimized_query_plan_for_request(
@@ -22768,7 +22771,7 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
         let task_context = options.task_context;
         query_runtime::query_runtime_checkpoint(task_context)?;
         let work_request =
-            query_work_request_for_statement(&QuerySystemVariables::default(), &explain.statement)?;
+            query_work_request_for_statement(&self.system_variables, &explain.statement)?;
         let optimized = self.optimized_query_plan_for_request(
             cypher_text,
             &explain.statement,
@@ -22778,17 +22781,12 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
             options.scoring,
         )?;
         let inner_statement_kind = statement_kind(statement_body(&explain.statement));
-        if executor::is_mutation_plan(&optimized.physical_plan)? {
-            if explain.analyze {
+        if explain.analyze {
+            if executor::requires_write_access(&optimized.physical_plan) {
                 return Err(HawDBError::Execution(
                     "EXPLAIN ANALYZE only supports read queries".to_string(),
                 ));
             }
-            return Err(HawDBError::Execution(
-                "read transaction query must not be a mutation".to_string(),
-            ));
-        }
-        if explain.analyze {
             let profiled = executor::execute_with_request(
                 executor::ExecutionRequest::new(
                     &optimized.physical_plan,
@@ -23267,14 +23265,8 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
     ) -> Result<ExplainOutput> {
         self.store.ensure_usable()?;
         let statement = cypher::parse(cypher_text)?;
-        let work_request =
-            query_work_request_for_statement(&QuerySystemVariables::default(), &statement)?;
+        let work_request = query_work_request_for_statement(&self.system_variables, &statement)?;
         let optimized = self.optimized_explain_query_plan(cypher_text, &statement, parameters)?;
-        if executor::is_mutation_plan(&optimized.physical_plan)? {
-            return Err(HawDBError::Execution(
-                "read transaction query must not be a mutation".to_string(),
-            ));
-        }
         Ok(ExplainOutput {
             physical_plan: optimized.physical_plan,
             trace: optimized.trace,
@@ -23366,7 +23358,7 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
         scoring: Option<BoundScoringRequest<'_>>,
     ) -> Result<OptimizedQueryPlan> {
         let optimizer_search =
-            query_statement_variables_for_statement(&QuerySystemVariables::default(), statement)?
+            query_statement_variables_for_statement(&self.system_variables, statement)?
                 .optimizer_search;
         let cache_mode = if optimizer_search != OptimizerSearchDirective::Auto {
             PlanCacheMode::Bypass(PlanCacheBypassReason::OptimizerDirective)

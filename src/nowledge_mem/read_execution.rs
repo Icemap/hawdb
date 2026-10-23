@@ -131,7 +131,7 @@ impl NowledgeMemEmbeddedStoreHandle {
                 prepared
                     .admission()
                     .runtime_work_request_for_snapshot(
-                        u64::try_from(limits.max_payload_bytes.unwrap()).unwrap_or(u64::MAX),
+                        result_memory_budget(&source.config, governor),
                         governor.snapshot(),
                     )
                     .with_retained_memory_bytes(prepared.planning_memory_bytes()),
@@ -335,6 +335,10 @@ pub(super) fn admitted_result_bytes(
     Ok(admitted)
 }
 
+pub(super) fn result_memory_budget(config: &DatabaseConfig, governor: &RuntimeGovernor) -> u64 {
+    crate::api::runtime_result_memory_budget(config, governor.snapshot().limits.result_budget_bytes)
+}
+
 fn source_changed() -> HawDBError {
     HawDBError::Execution("read source changed during admission; retry the query".into())
 }
@@ -343,6 +347,11 @@ fn source_changed() -> HawDBError {
 mod tests {
     use super::*;
     use crate::nowledge_mem::app_read_snapshot_tests::app_read_handle;
+    use crate::{
+        GraphRagGeneratedQuery, GraphRagQueryBinding, GraphRagQueryDraft, GraphRagQueryPattern,
+        GraphRagQueryPredicate, GraphRagQueryPredicateOperator, GraphRagQueryProjection,
+        GraphRagSchemaContext, GraphRagSchemaContextOptions,
+    };
     use hawdb_qos::{RuntimeTelemetryEvent, RuntimeTelemetryEventKind, RuntimeWorkKind};
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::{mpsc, Mutex, Weak};
@@ -362,6 +371,209 @@ mod tests {
         let handle = app_read_handle();
         handle.write_store().unwrap().search_projection = None;
         handle
+    }
+
+    fn generated_thread_query(context: &GraphRagSchemaContext) -> GraphRagGeneratedQuery {
+        context
+            .generate_query(&GraphRagQueryDraft {
+                schema_fingerprint: context.fingerprint,
+                pattern: GraphRagQueryPattern::Node {
+                    label: "Thread".into(),
+                },
+                predicates: vec![GraphRagQueryPredicate {
+                    binding: GraphRagQueryBinding::Source,
+                    property: "id".into(),
+                    operator: GraphRagQueryPredicateOperator::Eq,
+                    parameter: Some("id".into()),
+                }],
+                projections: vec![GraphRagQueryProjection {
+                    binding: GraphRagQueryBinding::Source,
+                    property: "title".into(),
+                    alias: "title".into(),
+                }],
+                limit: 1,
+            })
+            .unwrap()
+    }
+
+    #[test]
+    fn schema_and_generated_reads_use_the_published_view_while_the_owner_is_held() {
+        let handle = graph_only_handle();
+        let context = handle
+            .graph_rag_schema_context(GraphRagSchemaContextOptions::default())
+            .unwrap();
+        let query = generated_thread_query(&context);
+        let parameters = BTreeMap::from([("id".into(), Value::String("thread-1".into()))]);
+        let reader_handle = handle.clone();
+        let reader_query = query.clone();
+        let reader_parameters = parameters.clone();
+        let (finished, done) = mpsc::channel();
+        let mut owner = handle.write_store().unwrap();
+        owner.graph.database_mut().query(WRITE).unwrap();
+        let reader = std::thread::spawn(move || {
+            let result = (|| {
+                let schema = reader_handle
+                    .graph_rag_schema_context(GraphRagSchemaContextOptions::default())?;
+                let output = reader_handle.read_generated_graph_rag(
+                    &reader_query,
+                    &reader_parameters,
+                    &options(),
+                )?;
+                Ok::<_, HawDBError>((schema, output))
+            })();
+            let _ = finished.send(result);
+        });
+        let result = done.recv_timeout(Duration::from_secs(5));
+        drop(owner);
+        reader.join().unwrap();
+        let (schema, output) = result
+            .expect("metadata/generated read waited for the owner")
+            .unwrap();
+        assert_eq!(schema, context);
+        assert_eq!(
+            output.output.rows[0]["title"],
+            Value::String("App thread".into())
+        );
+        let fresh = handle
+            .graph_rag_schema_context(GraphRagSchemaContextOptions::default())
+            .unwrap();
+        assert!(fresh.computed_at_commit_epoch > context.computed_at_commit_epoch);
+        assert!(handle
+            .read_generated_graph_rag(&query, &parameters, &options())
+            .unwrap_err()
+            .to_string()
+            .contains("GraphRAG schema context is stale"));
+        assert_eq!(
+            handle
+                .runtime_governor_snapshot()
+                .unwrap()
+                .admitted_memory_bytes,
+            0
+        );
+    }
+
+    #[test]
+    fn generated_reads_reuse_preparation_and_preserve_parameter_and_output_limits() {
+        let handle = graph_only_handle();
+        let query = generated_thread_query(
+            &handle
+                .graph_rag_schema_context(GraphRagSchemaContextOptions::default())
+                .unwrap(),
+        );
+        let parameters = BTreeMap::from([("id".into(), Value::String("thread-1".into()))]);
+        let stats = || {
+            handle
+                .read_store()
+                .unwrap()
+                .graph
+                .database()
+                .plan_cache_stats()
+                .unwrap()
+        };
+        let before = stats();
+        let output = handle
+            .read_generated_graph_rag(&query, &parameters, &options())
+            .unwrap();
+        assert_eq!(
+            output.output.rows[0]["title"],
+            Value::String("App thread".into())
+        );
+        let after = stats();
+        assert_eq!(after.misses, before.misses + 1);
+        assert_eq!(after.hits, before.hits);
+        let missing = BTreeMap::from([("id".into(), Value::String("missing".into()))]);
+        assert!(handle
+            .read_generated_graph_rag(&query, &missing, &options())
+            .unwrap()
+            .output
+            .rows
+            .is_empty());
+        let rebound = stats();
+        assert_eq!(rebound.misses, after.misses);
+        assert_eq!(rebound.hits, after.hits + 1);
+        let direct = handle
+            .read_store()
+            .unwrap()
+            .graph
+            .read_generated_graph_rag(&query, &parameters, &options())
+            .unwrap();
+        assert_eq!(direct.output, output.output);
+        let after_direct = stats();
+        assert_eq!(after_direct.misses, rebound.misses);
+        assert_eq!(after_direct.hits, rebound.hits + 1);
+        for limits in [
+            NowledgeMemReadOptions {
+                max_rows: Some(0),
+                ..options()
+            },
+            NowledgeMemReadOptions {
+                max_estimated_payload_bytes: Some(0),
+                ..options()
+            },
+        ] {
+            assert!(handle
+                .read_generated_graph_rag(&query, &parameters, &limits)
+                .is_err());
+            assert!(handle
+                .read_store()
+                .unwrap()
+                .graph
+                .read_generated_graph_rag(&query, &parameters, &limits)
+                .is_err());
+        }
+        let wrong_type = BTreeMap::from([("id".into(), Value::Int(1))]);
+        assert!(handle
+            .read_generated_graph_rag(&query, &wrong_type, &options())
+            .is_err());
+        assert!(handle
+            .read_generated_graph_rag(&query, &BTreeMap::new(), &options())
+            .is_err());
+        assert_eq!(
+            handle
+                .runtime_governor_snapshot()
+                .unwrap()
+                .admitted_memory_bytes,
+            0
+        );
+    }
+
+    #[test]
+    fn logical_payload_limits_do_not_replace_caller_result_memory_limits() {
+        let handle = graph_only_handle();
+        let limits = NowledgeMemReadOptions {
+            max_rows: Some(1),
+            max_estimated_payload_bytes: Some(512),
+        };
+        let output = handle.read_query(READ, &limits).unwrap();
+        assert_eq!(
+            output.output.rows[0]["title"],
+            Value::String("App thread".into())
+        );
+        assert!(output.report.output_payload_bytes <= 512);
+        let context = RuntimeTaskContext::default()
+            .with_memory_reservation(hawdb_core::RuntimeMemoryReservation::new(1 << 20, 4));
+        let mut delivered = false;
+        let error = handle
+            .read_query_with_params_streaming_context(
+                READ,
+                &BTreeMap::new(),
+                &limits,
+                &context,
+                |_| {
+                    delivered = true;
+                    Ok(())
+                },
+            )
+            .unwrap_err();
+        assert!(!delivered);
+        assert!(matches!(error, HawDBError::ResourceBudgetExceeded(cause) if cause.budget == 4));
+        assert_eq!(
+            handle
+                .runtime_governor_snapshot()
+                .unwrap()
+                .admitted_memory_bytes,
+            0
+        );
     }
 
     #[derive(Debug)]
@@ -441,13 +653,36 @@ mod tests {
     fn report_observation_allows_writer_commit_and_a_fresh_read() {
         const TEXT: &str = "CALL text_search($text, topK := 2) YIELD id, score MATCH (m:Memory) RETURN m.title AS title";
         for (handle, query, statement_kind, expected_title) in [
-            (graph_only_handle(), READ, "match_return", "App thread"),
-            (app_read_handle(), READ, "match_return", "App thread"),
+            (
+                graph_only_handle(),
+                READ,
+                "match_return",
+                Some("App thread"),
+            ),
+            (app_read_handle(), READ, "match_return", Some("App thread")),
             (
                 app_read_handle(),
                 TEXT,
                 "text_graph_search",
-                "Nearest memory",
+                Some("Nearest memory"),
+            ),
+            (
+                graph_only_handle(),
+                "EXPLAIN MATCH (t:Thread) RETURN t.title AS title",
+                "explain",
+                None,
+            ),
+            (
+                graph_only_handle(),
+                "EXPLAIN MATCH (t:Thread) SET t.title = 'Not executed'",
+                "explain",
+                None,
+            ),
+            (
+                graph_only_handle(),
+                "EXPLAIN CREATE NODE TABLE Planned",
+                "explain",
+                None,
             ),
         ] {
             let writer_handle = handle.clone();
@@ -495,11 +730,17 @@ mod tests {
                 completed,
                 "report observation failed writer or fresh reader for {query}: {failure:?}"
             );
-            assert_eq!(
-                result.output.rows[0]["title"],
-                Value::String(expected_title.into())
-            );
-            assert!(result.report.physical_plan_captured);
+            if let Some(expected_title) = expected_title {
+                assert_eq!(
+                    result.output.rows[0]["title"],
+                    Value::String(expected_title.into())
+                );
+                assert!(result.report.physical_plan_captured);
+            } else {
+                assert!(
+                    matches!(&result.output.rows[0]["plan"], Value::String(plan) if !plan.is_empty())
+                );
+            }
             assert_eq!(
                 handle
                     .runtime_governor_snapshot()
@@ -764,19 +1005,37 @@ mod tests {
         Instance,
     }
 
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    enum ReadEntryPoint {
+        Ordinary,
+        Report,
+        Generated,
+    }
+
     #[test]
     fn admission_releases_the_preparation_view_and_validates_the_current_source() {
-        for report in [false, true] {
+        for entry in [
+            ReadEntryPoint::Ordinary,
+            ReadEntryPoint::Report,
+            ReadEntryPoint::Generated,
+        ] {
             for change in [
                 AdmissionChange::Data,
                 AdmissionChange::Schema,
                 AdmissionChange::Instance,
             ] {
-                let handle = if report {
-                    graph_only_handle()
-                } else {
+                let handle = if entry == ReadEntryPoint::Ordinary {
                     app_read_handle()
+                } else {
+                    graph_only_handle()
                 };
+                let generated = (entry == ReadEntryPoint::Generated).then(|| {
+                    generated_thread_query(
+                        &handle
+                            .graph_rag_schema_context(GraphRagSchemaContextOptions::default())
+                            .unwrap(),
+                    )
+                });
                 let writer_handle = handle.clone();
                 let (start, started) = mpsc::channel();
                 let (finished, done) = mpsc::channel();
@@ -812,12 +1071,20 @@ mod tests {
                 *sink.prior_view.lock().unwrap() =
                     Arc::downgrade(&handle.lock_published_read().unwrap().as_ref().unwrap().view);
                 sink.armed.store(true, Ordering::SeqCst);
-                let result = if report {
-                    handle.query_with_report(READ).map(|result| result.output)
-                } else {
-                    handle
+                let result = match entry {
+                    ReadEntryPoint::Report => {
+                        handle.query_with_report(READ).map(|result| result.output)
+                    }
+                    ReadEntryPoint::Ordinary => handle
                         .read_query(READ, &options())
-                        .map(|result| result.output)
+                        .map(|result| result.output),
+                    ReadEntryPoint::Generated => handle
+                        .read_generated_graph_rag(
+                            generated.as_ref().unwrap(),
+                            &BTreeMap::from([("id".into(), Value::String("thread-1".into()))]),
+                            &options(),
+                        )
+                        .map(|result| result.output),
                 };
                 handle.set_telemetry_sink(None).unwrap();
                 let prior_released = sink.prior_released.load(Ordering::SeqCst);
@@ -825,9 +1092,13 @@ mod tests {
                 writer.join().unwrap();
                 assert!(
                     prior_released,
-                    "preparation retained its publication: {change:?}"
+                    "preparation retained its publication: {entry:?} {change:?}"
                 );
                 match change {
+                    AdmissionChange::Data if entry == ReadEntryPoint::Generated => assert!(result
+                        .unwrap_err()
+                        .to_string()
+                        .contains("GraphRAG schema context is stale")),
                     AdmissionChange::Data => assert_eq!(
                         result.unwrap().rows[0]["title"],
                         Value::String("Updated thread".into()),

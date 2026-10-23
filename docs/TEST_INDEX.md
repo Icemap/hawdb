@@ -91,6 +91,19 @@ waiting; graph-only reports and plain EXPLAIN do not reserve projection I/O.
 A projection I/O-depth change during admission rejects the old request and
 releases its preparation, execution memory and I/O reservations.
 The root general unit owner and weekly runtime lane execute this family.
+The family also checks schema guidance and generated queries against the last
+published view while a direct writer holds the owner. Generated reads use one
+preparation lookup, retain parameter/row/payload checks, and reject a stale
+generated context after an ordinary data commit during admission. Plain EXPLAIN
+observation covers read, DML and DDL plans while a writer and fresh reader finish.
+`api::query_runtime::tests` checks that plain EXPLAIN never executes write plans,
+ANALYZE rejects DML/DDL, zero diagnostic budgets fail, and direct/forked read
+snapshots retain captured query settings with statement-local overrides. These
+tests use the existing root general and weekly runtime owners and features.
+Small logical-payload cases preserve successful bounded reads and typed payload
+refusals while separately testing a stricter caller result-memory reservation and
+zero delivery on refusal. Governor counters include both preparation and execution
+admissions, with complete release after each statement.
 
 The App snapshot family also exercises out-of-core generation replacement through
 the actual Mem maintenance entrypoint while a snapshot callback remains active.
@@ -522,7 +535,9 @@ not a 120-minute fuzz campaign. Final-source runtime durations remain required.
 exercise actual selector output under simulated Windows default CRLF translation,
 then interpret LF-delimited arguments as Bash does. Control files explicitly use
 LF so filters and `--exact`/`--skip` reach libtest unchanged. The test also rejects
-duplicate, missing, unexpected and empty discovery. Candidate `92681f67` exposed
+duplicate, missing, unexpected and empty discovery. It locates the selector through
+Bazel runfiles when the test launcher is renamed, preserving direct Python usage.
+Candidate `92681f67` exposed
 this transport bug before the selected qualification cases could start; those
 failed jobs are not recovery-test results.
 Manual dispatch with `scope=power-loss` runs the same complete power-loss

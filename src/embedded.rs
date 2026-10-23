@@ -600,12 +600,10 @@ impl HawDBEmbedded {
     }
 
     pub(crate) fn admitted_result_budget_bytes(&self) -> u64 {
-        let governor_budget = self.runtime_governor.snapshot().limits.result_budget_bytes;
-        self.database
-            .config()
-            .max_read_result_payload_bytes
-            .map(|bytes| u64::try_from(bytes).unwrap_or(u64::MAX))
-            .map_or(governor_budget, |bytes| bytes.min(governor_budget))
+        crate::api::runtime_result_memory_budget(
+            self.database.config(),
+            self.runtime_governor.snapshot().limits.result_budget_bytes,
+        )
     }
 
     fn check_admitted_query_context(

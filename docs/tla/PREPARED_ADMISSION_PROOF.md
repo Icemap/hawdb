@@ -58,6 +58,17 @@ callbacks and reject schema/instance changes; the model does not prove host
 callback reentrancy or resident allocation sizes. `HawDBResidentReadLease` checks
 the additional paired-capture/shared-funding/drop-order protocol.
 
+Generated graph reads now use the same transfer/admission transitions. Their
+additional exact-context-epoch and parameter checks run against the execution
+snapshot before consuming the prepared plan. Native regressions distinguish a
+reusable ordinary data plan from a stale generated context, check one preparation
+lookup and refusal refunds, and allow metadata/generated reads while the direct
+write owner remains held. Plain EXPLAIN uses the same read publication without
+executing write plans; ANALYZE rejects write access. Captured query settings and
+diagnostic budgets are native query contracts, not additional model states.
+Schema guidance is metadata construction on a detached snapshot and does not
+claim a prepared-query admission transition.
+
 Standalone Mem search/hydration/retrieval helpers use the same resident lease
 protocol: admission retains scalar/configuration metadata, `Capture` selects
 the current pair, and funding happens after unlocking. They do not prepare a

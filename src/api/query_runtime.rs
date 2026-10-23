@@ -205,6 +205,15 @@ pub(super) fn parse_runtime_execution(cypher_text: &str) -> Result<PreparedRunti
     })
 }
 
+pub(crate) fn runtime_result_memory_budget(config: &DatabaseConfig, governor_budget: u64) -> u64 {
+    // Per-statement logical payload limits cannot fund compact schema/value
+    // containers. Admission keeps the host ceiling; output checks stay separate.
+    config
+        .max_read_result_payload_bytes
+        .map(|bytes| u64::try_from(bytes).unwrap_or(u64::MAX))
+        .map_or(governor_budget, |bytes| bytes.min(governor_budget))
+}
+
 #[cfg_attr(not(feature = "tokio-runtime"), allow(dead_code))]
 impl PreparedRuntimeQuery {
     fn is_compatible(
@@ -262,21 +271,11 @@ impl PreparedRuntimeQuery {
     }
 
     pub(crate) fn uses_read_snapshot(&self) -> bool {
-        if self.admission.is_mutation
-            || self
+        !self.admission.is_mutation
+            && !self
                 .optimized
                 .as_ref()
                 .is_some_and(|optimized| executor::requires_write_access(&optimized.physical_plan))
-        {
-            return false;
-        }
-        // A plain EXPLAIN may contain a mutation plan without executing it. Snapshot
-        // execution rejects that plan as a write, so keep this metadata-only path on
-        // the existing exclusive executor until it has a dedicated read API.
-        !matches!(
-            super::statement_body(&self.statement),
-            cypher::Statement::Explain(explain) if !explain.analyze
-        )
     }
 
     pub(super) fn into_execution<R: hawdb_storage::graph_engine::GraphReadEngine>(
@@ -417,11 +416,7 @@ impl Database {
 }
 
 impl DatabaseReadSnapshot {
-    pub(super) fn accepts_prepared(
-        &self,
-        prepared: &PreparedRuntimeQuery,
-        system_variables: &QuerySystemVariables,
-    ) -> bool {
+    pub(super) fn accepts_prepared(&self, prepared: &PreparedRuntimeQuery) -> bool {
         let source = &self.0;
         prepared.is_compatible(
             source
@@ -429,7 +424,7 @@ impl DatabaseReadSnapshot {
                 .as_ref()
                 .map(|current| current.info.id),
             &source.config,
-            system_variables,
+            &source.system_variables,
             &source.catalog,
             &source.store,
         )
@@ -438,7 +433,6 @@ impl DatabaseReadSnapshot {
     pub(super) fn prepare_runtime_request(
         &self,
         request: QueryRequest<'_>,
-        system_variables: &QuerySystemVariables,
         plan_cache: &SharedState<PlanCache>,
     ) -> Result<PreparedRuntimeQuery> {
         let source = &self.0;
@@ -451,7 +445,7 @@ impl DatabaseReadSnapshot {
             store: &source.store,
             optimizer: &source.optimizer,
             config: &source.config,
-            system_variables,
+            system_variables: &source.system_variables,
         }
         .prepare(
             request.cypher.to_string(),
@@ -1069,6 +1063,122 @@ pub(super) fn query_runtime_checkpoint(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn plain_explain_uses_a_read_snapshot_without_executing_writes() {
+        let mut db = Database::new();
+        db.query("CREATE (:Memory {id: 'existing'})").unwrap();
+        let before = db.graph_rag_schema_context(Default::default()).unwrap();
+        let publication = crate::api::PublishedConcurrentRead::capture(&db).unwrap();
+        for statement in [
+            "CREATE (:Memory {id: 'planned'})",
+            "CREATE NODE TABLE Planned",
+        ] {
+            let query = format!("EXPLAIN {statement}");
+            let request = QueryRequest::new(&query);
+            let prepared = publication.prepare(request).unwrap();
+            assert!(prepared.uses_read_snapshot());
+            assert!(!prepared.admission().is_mutation);
+            assert_eq!(prepared.admission().required_io_slots, 0);
+            let mut read = publication
+                .begin_read_transaction_with_context(&Default::default())
+                .unwrap();
+            let output = read
+                .query_prepared_request(prepared, request)
+                .unwrap()
+                .output;
+            assert_eq!(output.rows.len(), 1);
+            assert!(matches!(&output.rows[0]["plan"], Value::String(plan) if !plan.is_empty()));
+            assert!(executor::requires_write_access(
+                &read.explain_query(statement).unwrap().physical_plan
+            ));
+            let analyze = format!("EXPLAIN ANALYZE {statement}");
+            assert!(!publication
+                .prepare(QueryRequest::new(&analyze))
+                .unwrap()
+                .uses_read_snapshot());
+            assert!(read
+                .query(&analyze)
+                .unwrap_err()
+                .to_string()
+                .contains("EXPLAIN ANALYZE only supports read queries"));
+            for limits in [
+                QueryStreamOptions {
+                    max_rows: Some(0),
+                    max_payload_bytes: None,
+                },
+                QueryStreamOptions {
+                    max_rows: Some(1),
+                    max_payload_bytes: Some(0),
+                },
+            ] {
+                assert!(read
+                    .query_request(request.with_output_limits(limits))
+                    .is_err());
+            }
+            assert_eq!(read.graph_rag_schema_context(Default::default()), before);
+        }
+        assert_eq!(
+            db.graph_rag_schema_context(Default::default()).unwrap(),
+            before
+        );
+        assert_eq!(
+            db.query("MATCH (m:Memory) RETURN m.id AS id")
+                .unwrap()
+                .rows
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn snapshot_explain_preserves_captured_query_settings_and_statement_overrides() {
+        let mut db = Database::new();
+        db.query("CREATE (:Memory {id: 'existing'})").unwrap();
+        db.query("SET system.work_priority = 'background'").unwrap();
+        db.query("SET system.work_class = 'import'").unwrap();
+        db.query("SET system.estimated_operations = 8").unwrap();
+        let direct = db.begin_read_transaction().unwrap();
+        let publication = crate::api::PublishedConcurrentRead::capture(&db).unwrap();
+        db.query("SET system.work_priority = 'foreground'").unwrap();
+        db.query("SET system.work_class = 'query'").unwrap();
+        db.query("SET system.estimated_operations = 1").unwrap();
+        let fork = publication
+            .begin_read_transaction_with_context(&Default::default())
+            .unwrap();
+        for mut read in [direct, fork] {
+            let query = "MATCH (m:Memory) RETURN m.id AS id";
+            let expected = WorkRequest::background(WorkClass::Import, 8);
+            assert_eq!(read.explain_query(query).unwrap().work_request, expected);
+            let output = read.query(&format!("EXPLAIN {query}")).unwrap();
+            let Value::Map(work) = &output.rows[0]["work_request"] else {
+                panic!("missing work request");
+            };
+            assert_eq!(work["priority"], Value::String("background".into()));
+            assert_eq!(work["class"], Value::String("import".into()));
+            assert_eq!(work["estimated_operations"], Value::Int(8));
+            let hinted = read
+                .explain_query(
+                    "CYPHER system.work_priority = 'foreground' system.estimated_operations = 3 \
+                 system.optimizer_search = 'direct_fallback' MATCH (m:Memory) RETURN m.id AS id",
+                )
+                .unwrap();
+            assert_eq!(
+                hinted.work_request,
+                WorkRequest::foreground(WorkClass::Import, 3)
+            );
+            assert_eq!(hinted.trace.search_mode.as_str(), "direct_fallback");
+            assert_eq!(read.explain_query(query).unwrap().work_request, expected);
+        }
+        assert_eq!(
+            db.begin_read_transaction()
+                .unwrap()
+                .explain_query("MATCH (m:Memory) RETURN m.id AS id")
+                .unwrap()
+                .work_request,
+            WorkRequest::foreground(WorkClass::Query, 1)
+        );
+    }
 
     #[test]
     fn planning_cache_invalidation_does_not_reuse_an_in_flight_generation() {

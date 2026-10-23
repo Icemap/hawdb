@@ -224,7 +224,30 @@ graph through the existing pipeline and intersects its memory/result ceilings
 with the admitted context. Search uses the admitted vector execution context.
 Hydration retains its explicit document and payload limits.
 
-Remaining mutation/generated-read and qualification/diagnostic entrypoints must
+Generated graph reads use the same admitted preparation and enforce output
+limits during execution. They additionally validate the generated context's exact
+graph epoch and parameter contract against the captured read transaction. An
+ordinary data commit can preserve a prepared plan while invalidating its generated
+context; that attempt MUST fail as stale. Schema guidance retains its metadata
+options and constructs statistics from a detached published graph snapshot.
+
+Plain EXPLAIN uses an immutable read view, including when it describes a write
+plan. It MUST NOT execute that plan. EXPLAIN ANALYZE continues to reject every
+plan requiring write access, including DDL. Read snapshots and their forks retain
+the captured system query settings; per-statement hints apply relative to those
+settings without mutating them. Explain output keeps its row/payload limits and
+cumulative accounting.
+
+Mem per-statement payload limits do not replace the physical result reservation.
+Ordinary/generated reads use the same host result-capacity selection as Embedded
+and Tokio, while execution checks the smaller logical payload limit. The host
+ceiling is still bounded by database configuration and the governor; compact
+container overhead may exhaust that ceiling before the logical output limit.
+A caller's stricter physical reservation MUST remain effective after binding
+the admitted task. This separation does not claim smaller reservations or a
+concurrency improvement from admission alone.
+
+Remaining mutation and qualification/diagnostic entrypoints must
 complete the concurrency audit before the overall adapter gate is met.
 
 Admission and execution SHOULD reuse one internally prepared statement when its

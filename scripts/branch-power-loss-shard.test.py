@@ -6,14 +6,20 @@
 
 import importlib.util
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
 
-SPEC = importlib.util.spec_from_file_location(
-    "power_loss_shard", Path(__file__).with_name("branch-power-loss-shard.py")
-)
+SCRIPT = Path(__file__).with_name("branch-power-loss-shard.py")
+if not SCRIPT.exists():
+    SCRIPT = (
+        Path(os.environ["TEST_SRCDIR"])
+        / os.environ["TEST_WORKSPACE"]
+        / "scripts/branch-power-loss-shard.py"
+    )
+SPEC = importlib.util.spec_from_file_location("power_loss_shard", SCRIPT)
 SHARD = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(SHARD)
 

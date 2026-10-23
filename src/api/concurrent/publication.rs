@@ -14,7 +14,7 @@
 
 use super::super::{
     observability::StatementRecorder, Database, DatabaseReadSnapshot, DatabaseReadTransaction,
-    PlanCache, PreparedRuntimeQuery, QuerySystemVariables, SharedState,
+    PlanCache, PreparedRuntimeQuery, SharedState,
 };
 #[cfg(test)]
 use crate::Value;
@@ -24,7 +24,6 @@ use std::sync::Arc;
 pub(crate) struct PublishedConcurrentRead {
     pub(crate) snapshot: DatabaseReadSnapshot,
     pub(super) recorder: StatementRecorder,
-    system_variables: QuerySystemVariables,
     plan_cache: Arc<SharedState<PlanCache>>,
 }
 
@@ -40,7 +39,6 @@ impl PublishedConcurrentRead {
         Ok(Self {
             snapshot: database.read_snapshot_without_observations()?,
             recorder: database.statement_recorder(),
-            system_variables: database.system_variables.clone(),
             plan_cache: Arc::clone(&runtime.plan_cache),
         })
     }
@@ -86,13 +84,12 @@ impl PublishedConcurrentRead {
     }
 
     pub(crate) fn accepts_prepared(&self, prepared: &PreparedRuntimeQuery) -> bool {
-        self.snapshot
-            .accepts_prepared(prepared, &self.system_variables)
+        self.snapshot.accepts_prepared(prepared)
     }
 
     pub(crate) fn prepare(&self, request: crate::QueryRequest<'_>) -> Result<PreparedRuntimeQuery> {
         self.snapshot
-            .prepare_runtime_request(request, &self.system_variables, &self.plan_cache)
+            .prepare_runtime_request(request, &self.plan_cache)
     }
 
     pub(crate) fn query_prepared_with_trace(

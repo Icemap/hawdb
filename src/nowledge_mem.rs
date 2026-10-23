@@ -1509,7 +1509,7 @@ impl NowledgeMemGraph {
         &self,
         cypher: &str,
         parameters: &BTreeMap<String, Value>,
-        result_budget_bytes: usize,
+        result_memory_bytes: u64,
     ) -> Result<(RuntimePermit, crate::api::PreparedRuntimeQuery)> {
         let prepared = self.prepare_admitted_query(cypher, parameters)?;
         let admission = prepared.admission();
@@ -1521,7 +1521,7 @@ impl NowledgeMemGraph {
         self.try_admit_runtime(
             admission
                 .runtime_work_request_for_snapshot(
-                    u64::try_from(result_budget_bytes).unwrap_or(u64::MAX),
+                    result_memory_bytes,
                     self.runtime_governor.snapshot(),
                 )
                 .with_retained_memory_bytes(prepared.planning_memory_bytes()),
@@ -1621,8 +1621,11 @@ impl NowledgeMemGraph {
     ) -> Result<QueryStreamReport> {
         self.check_runtime_context(task_context)?;
         let max_payload_bytes = self.admitted_streaming_result_bytes(options)?;
-        let (permit, prepared) =
-            self.admit_streaming_query(cypher, parameters, max_payload_bytes)?;
+        let (permit, prepared) = self.admit_streaming_query(
+            cypher,
+            parameters,
+            read_execution::result_memory_budget(self.db.config(), &self.runtime_governor),
+        )?;
         let execution_task_context = permit.bind_task_context(task_context.clone());
         let result = self
             .db
@@ -1651,8 +1654,11 @@ impl NowledgeMemGraph {
         options: &NowledgeMemReadOptions,
     ) -> Result<NowledgeMemReadOutput> {
         let max_payload_bytes = self.admitted_streaming_result_bytes(options)?;
-        let (permit, prepared) =
-            self.admit_streaming_query(cypher, parameters, max_payload_bytes)?;
+        let (permit, prepared) = self.admit_streaming_query(
+            cypher,
+            parameters,
+            read_execution::result_memory_budget(self.db.config(), &self.runtime_governor),
+        )?;
         let task_context = permit.bind_task_context(RuntimeTaskContext::default());
         let bounded = self
             .db
@@ -1684,10 +1690,24 @@ impl NowledgeMemGraph {
         parameters: &BTreeMap<String, Value>,
         options: &NowledgeMemReadOptions,
     ) -> Result<NowledgeMemReadOutput> {
-        let bounded = self
-            .db
-            .begin_read_transaction()?
-            .query_generated_graph_rag_bounded_profile(query, parameters, options.max_rows)?;
+        let max_payload_bytes = self.admitted_streaming_result_bytes(options)?;
+        let (permit, prepared) = self.admit_streaming_query(
+            query.cypher(),
+            parameters,
+            read_execution::result_memory_budget(self.db.config(), &self.runtime_governor),
+        )?;
+        let context = permit.bind_task_context(RuntimeTaskContext::default());
+        let mut read = self.db.begin_read_transaction_with_context(&context)?;
+        read.validate_generated_graph_rag(query, parameters)?;
+        let bounded = read.query_prepared_with_params_profiled_context(
+            prepared,
+            parameters,
+            QueryStreamOptions {
+                max_rows: options.max_rows,
+                max_payload_bytes: Some(max_payload_bytes),
+            },
+            &context,
+        )?;
         bounded_nowledge_mem_read_output(self.mode, bounded, options)
     }
 }
@@ -3354,7 +3374,20 @@ impl NowledgeMemEmbeddedStoreHandle {
         &self,
         options: GraphRagSchemaContextOptions,
     ) -> Result<GraphRagSchemaContext> {
-        self.read_store()?.graph_rag_schema_context(options)
+        let view = {
+            let publication = self.lock_published_read()?;
+            let publication = publication.as_ref().ok_or_else(|| {
+                HawDBError::Execution("embedded schema source is unavailable".into())
+            })?;
+            Arc::clone(&publication.view)
+        };
+        // Schema guidance is metadata, not an executable query. Preserve its
+        // existing options while constructing statistics outside publication.
+        let read = view
+            .snapshot
+            .begin_read_transaction(&RuntimeTaskContext::default())?;
+        drop(view);
+        self.finish_canonical_read(Ok(read.graph_rag_schema_context(options)))
     }
 
     pub fn read_generated_graph_rag(
@@ -3363,8 +3396,19 @@ impl NowledgeMemEmbeddedStoreHandle {
         parameters: &BTreeMap<String, Value>,
         options: &NowledgeMemReadOptions,
     ) -> Result<NowledgeMemReadOutput> {
-        self.read_store()?
-            .read_generated_graph_rag(query, parameters, options)
+        self.with_admitted_graph_read(
+            query.cypher(),
+            parameters,
+            options,
+            &RuntimeTaskContext::default(),
+            |read, prepared, limits, context, mode| {
+                read.validate_generated_graph_rag(query, parameters)?;
+                let bounded = read.query_prepared_with_params_profiled_context(
+                    prepared, parameters, limits, context,
+                )?;
+                bounded_nowledge_mem_read_output(mode, bounded, options)
+            },
+        )
     }
 }
 impl NowledgeMemEmbeddedStoreHandle {
@@ -3467,7 +3511,7 @@ impl NowledgeMemEmbeddedStoreHandle {
         let (permit, prepared) = store.graph.admit_streaming_query(
             &statement.cypher,
             &statement.parameters,
-            limits.max_output_payload_bytes,
+            u64::try_from(limits.max_output_payload_bytes).unwrap_or(u64::MAX),
         )?;
         let task_context = permit.bind_task_context(RuntimeTaskContext::default());
         store
@@ -7161,8 +7205,9 @@ mod tests {
 
         assert_eq!(read.output.rows.len(), 1);
         let snapshot = graph.runtime_governor_snapshot();
-        assert_eq!(snapshot.admissions, 2);
-        assert_eq!(snapshot.completions, 2);
+        // Each statement admits preparation and execution separately.
+        assert_eq!(snapshot.admissions, 4);
+        assert_eq!(snapshot.completions, 4);
         assert_eq!(snapshot.active_foreground_tasks, 0);
         assert_eq!(snapshot.active_cpu_slots, 0);
         assert_eq!(snapshot.admitted_memory_bytes, 0);
