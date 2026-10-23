@@ -1806,6 +1806,12 @@ fn mixed_numeric_index_ranges_match_reference_after_checkpoint() {
         let query = "MATCH (n:Memory) WHERE n.kind = 'note' AND n.rank > 0 AND n.rank < 10 RETURN n.id AS id ORDER BY id";
         let original = db.query(query).unwrap().rows;
         assert_eq!(original.len(), 1);
+        assert_mixed_numeric_ranges(&mut db);
+        db.checkpoint().unwrap();
+        assert_mixed_numeric_ranges(&mut db);
+        drop(db);
+        let mut db = Database::open_with_config(&path, config.clone()).unwrap();
+        // Bind a fresh persistent plan instead of requiring a resident cost choice.
         let plan = db.explain_query(query).unwrap().physical_plan.explain(0);
         assert!(
             plan.contains(if composite {
@@ -1815,8 +1821,6 @@ fn mixed_numeric_index_ranges_match_reference_after_checkpoint() {
             }),
             "{plan}"
         );
-        assert_mixed_numeric_ranges(&mut db);
-        db.checkpoint().unwrap();
         assert_mixed_numeric_ranges(&mut db);
         let mut retained = db.begin_read_transaction().unwrap();
         for statement in [
