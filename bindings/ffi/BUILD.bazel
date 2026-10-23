@@ -1,5 +1,7 @@
 load("@rules_rust//rust:defs.bzl", "rust_shared_library", "rust_static_library", "rust_test")
 
+load(":runtime_library.bzl", "rust_runtime_library")
+
 package(default_visibility = ["//visibility:public"])
 
 exports_files(["include/hawdb_ffi.h"])
@@ -27,6 +29,11 @@ rust_shared_library(
     edition = "2024",
     version = "0.14.0",
     deps = _FFI_DEPS,
+)
+
+rust_runtime_library(
+    name = "hawdb_ffi_runtime",
+    library = ":hawdb_ffi",
 )
 
 rust_static_library(

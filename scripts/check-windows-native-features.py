@@ -98,3 +98,30 @@ for name, initial, relevant in [
         if set(profiles[name][package]) != expected[package]:
             raise SystemExit(f"feature forwarding differs for {name}/{package}")
 print("PASS | native Cargo feature forwarding and default/minimal boundaries match")
+
+# The optional dependency has an independent Bazel lock; do not let its exact
+# spec pin drift when Cargo or Dependabot updates the workspace resolution.
+root_lock = tomllib.loads((root / "Cargo.lock").read_text())
+telemetry_lock = tomllib.loads((root / "crates/telemetry/Cargo.Bazel.lock").read_text())
+resolved = [package for package in root_lock["package"] if package["name"] == "opentelemetry"]
+standalone = [package for package in telemetry_lock["package"] if package["name"] == "opentelemetry"]
+if len(resolved) != 1 or len(standalone) != 1:
+    raise SystemExit("optional telemetry resolution must be unambiguous in both Cargo lockfiles")
+for key in ("version", "source", "checksum"):
+    if resolved[0].get(key) != standalone[0].get(key):
+        raise SystemExit(f"optional telemetry Bazel lock differs from Cargo.lock: {key}")
+specs = []
+for node in ast.walk(ast.parse((root / "MODULE.bazel").read_text())):
+    if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+        continue
+    if not isinstance(node.func.value, ast.Name) or node.func.value.id != "crate" or node.func.attr != "spec":
+        continue
+    if not any(keyword.arg == "package" and isinstance(keyword.value, ast.Constant)
+               and keyword.value.value == "opentelemetry" for keyword in node.keywords):
+        continue
+    keywords = {keyword.arg: ast.literal_eval(keyword.value) for keyword in node.keywords}
+    if "telemetry_crates" in keywords.get("repositories", []):
+        specs.append(keywords)
+if len(specs) != 1 or specs[0].get("version") != "=" + resolved[0]["version"]:
+    raise SystemExit("optional telemetry Bazel spec must exactly pin the Cargo.lock version")
+print("PASS | optional telemetry Bazel spec and lock match Cargo.lock")

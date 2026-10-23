@@ -16,7 +16,7 @@ all shard results and Clippy, rejecting failure, cancellation and skipped work.
 | consumers | reclamation; stationary creation; stationary recovery; registered Consumer integration | facade all; one thread; creation exactly one case |
 | identities | facade/executor/Cypher `identity_898_`; facade `_1043_` | facade default / component default; one thread |
 | snapshots | portable, branch-open and unit-view identity | both facade default and minimal; exactly 1/2/3 cases respectively; original default threads |
-| bindings | FFI retained; retained node; retained Arrow; complete Go tests | bindings / facade default / facade all; original default threads; Go cache disabled |
+| bindings | FFI retained; retained node; retained Arrow; complete Go tests | bindings / facade default / facade all; original default threads; Go cache disabled; runtime-only FFI runfile |
 | independent Clippy | workspace, all targets, all features | unchanged pinned native Cargo toolchain |
 | daily/manual abandonment | complete branch abandonment power-loss family | facade all; exactly eight cases; repository/default four or explicit 1/2/4/8 threads |
 
@@ -33,7 +33,8 @@ libraries. It changes feature cfgs, never optimization or assertion settings.
 The default `bazel` profile preserves existing targets. The optional telemetry
 crate is explicitly resolved and linked only for the opentelemetry feature;
 feature cfg parity alone does not prove optional dependency linkage. The Python 3.11+
-manifest audit rejects feature inventory and forwarding drift, including root
+manifest audit rejects optional telemetry spec/lock version drift as well as
+feature inventory and forwarding drift, including root
 default/minimal selections, Search defaults and storage dev dependencies.
 
 ## Cache layout and costs
@@ -75,3 +76,13 @@ The helper regression uses a fake Bazel executable to verify native failure,
 zero tests, missing BEP, exact-count mismatch and invalid thread selection.
 It does not qualify Windows storage or compiler behavior. Actual Windows
 runtime evidence belongs to the corresponding Actions shard at the final SHA.
+
+## Go runtime artifact
+
+The Go test's `HAWDB_LIBRARY` runfile points to `hawdb_ffi_runtime`, a projection
+of the existing shared library's canonical output. The original FFI target can
+expose both `hawdb_ffi.dll` and `hawdb_ffi.dll.lib` on Windows; single-file path
+expansion must select the runtime DLL through the projection rather than
+passing two locations to the loader. The underlying link target and compiler
+profile remain unchanged. Unix resolves the equivalent dylib/so output and
+retains transitive runtime runfiles.

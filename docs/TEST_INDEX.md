@@ -339,3 +339,20 @@ cases with the selected 1/2/4/8-thread setting. No fuzz campaign is added.
   self-expiry under CPU contention. Parent exit closes the pipe; the ordinary
   finite test deadline remains the outer bound. Native Cargo/Windows ownership
   lanes retain the same exclusion assertion.
+
+## Native Go shared-library runfiles
+
+`//bindings/go:hawdb_go_tests` resolves the single runtime file exposed by
+`//bindings/ffi:hawdb_ffi_runtime`. The projection reuses the existing Rust
+cdylib output and preserves its runtime runfiles; it creates no compilation or
+copy action. The original `//bindings/ffi:hawdb_ffi` still provides the complete
+linker outputs, including the Windows `.dll.lib` import library. Passing that
+multi-file target to `rlocationpath` fails Windows analysis before Go executes.
+Existing Go TestMain resolves the path through the runfiles API (including
+Windows manifests) and actual bindings tests exercise dynamic loading on all
+three native CI platforms. Windows uses the bindings feature profile and fresh
+Go test results; the Unix native binding jobs retain their existing profile.
+
+The native feature inventory audit also requires the independent telemetry
+Bazel spec and lock to match the workspace Cargo.lock package version, source
+and checksum. Update them together when upgrading the optional dependency.
