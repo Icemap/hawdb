@@ -3925,6 +3925,19 @@ pub(crate) fn decode_standalone_value(encoded: &[u8]) -> Result<Value, Canonical
     Ok(value)
 }
 
+pub(crate) fn standalone_value_allocation_bytes(
+    encoded: &[u8],
+) -> Result<usize, CanonicalSegmentError> {
+    let mut cursor = SliceCursor::new(encoded);
+    let bytes = encoded_value_allocation_bytes(&mut cursor, 0, None)?;
+    if !cursor.is_empty() {
+        return Err(CanonicalSegmentError::Corrupt(
+            "standalone canonical allocation preflight has trailing bytes".into(),
+        ));
+    }
+    Ok(bytes)
+}
+
 // Residual-row wire schema (§3.5.1 field-tagged varint discipline). The row
 // is `repeated field 1 (LEN): property`; each property envelope carries the
 // interned key id plus exactly one length-delimited value field whose body

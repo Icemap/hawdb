@@ -162,6 +162,85 @@ fn scan_from(
 }
 
 #[test]
+fn reverse_bound_scan_seeks_without_visiting_the_preceding_prefix() {
+    let directory = TestDirectory::new("reverse-bound");
+    let output = build(directory.path());
+    let reader = open_reader(directory.path(), 128 * 1024);
+    let oracle = (0u64..10)
+        .flat_map(|group| (0u64..100).map(move |item| (group, item)))
+        .collect::<Vec<_>>();
+    for bound in [
+        (0, 0),
+        (0, 2),
+        (7, 0),
+        (7, 37),
+        (7, 100),
+        (9, 99),
+        (u64::MAX, u64::MAX),
+    ] {
+        let mut key = bound.0.to_be_bytes().to_vec();
+        key.extend_from_slice(&bound.1.to_be_bytes());
+        let expected = oracle
+            .iter()
+            .rev()
+            .copied()
+            .filter(|entry| *entry <= bound)
+            .take(3)
+            .collect::<Vec<_>>();
+        let mut actual = Vec::new();
+        let (report, control) = reader
+            .scan_through(&key, limits(), |key, value| {
+                let group = u64::from_be_bytes(key[..8].try_into().unwrap());
+                let item = u64::from_be_bytes(key[8..].try_into().unwrap());
+                assert_eq!(item, u64::from_le_bytes(value.try_into().unwrap()));
+                actual.push((group, item));
+                Ok(if actual.len() == 3 {
+                    GraphDescriptorTreeScanControl::Stop
+                } else {
+                    GraphDescriptorTreeScanControl::Continue
+                })
+            })
+            .unwrap();
+        assert_eq!(actual, expected, "{bound:?}");
+        assert_eq!(report.descriptors_emitted as usize, expected.len());
+        assert_eq!(
+            control == GraphDescriptorTreeScanControl::Stop,
+            expected.len() == 3
+        );
+        assert!(
+            report.pages_visited <= 3 * (u64::from(output.root.height) + 1),
+            "{report:?}"
+        );
+    }
+    let (report, control) = reader
+        .scan_through(&[0], limits(), |_, _| {
+            panic!("bound precedes the first key")
+        })
+        .unwrap();
+    assert_eq!(report.pages_visited, 0);
+    assert_eq!(control, GraphDescriptorTreeScanControl::Continue);
+    let mut refused = limits();
+    refused.max_descriptors = NonZeroU64::new(1).unwrap();
+    let error = reader
+        .scan_through(&[255; 16], refused, |_, _| {
+            Ok(GraphDescriptorTreeScanControl::Continue)
+        })
+        .unwrap_err();
+    assert!(error.to_string().contains("exceeding limit"));
+    assert!(!reader.is_poisoned());
+    let error = reader
+        .scan_through(&[255; 16], limits(), |_, _| {
+            Err(admission("caller refused reverse delivery"))
+        })
+        .unwrap_err();
+    assert!(error
+        .to_string()
+        .contains("caller refused reverse delivery"));
+    assert!(!reader.is_poisoned());
+    assert_eq!(scan_from(&reader, 7, 37, 1).unwrap().0, vec![(7, 37)]);
+}
+
+#[test]
 fn prefix_scan_is_bounded_ordered_and_cacheable() {
     let directory = TestDirectory::new("prefix");
     let output = build(directory.path());
@@ -233,6 +312,22 @@ fn warm_page_views_reuse_integrity_proof_and_seek_without_full_leaf_walks() {
     );
     assert!(cache.resident_bytes <= cache.capacity_bytes);
     assert_eq!(cache.pinned_bytes, 0);
+
+    crate::cache::PAGE_INTEGRITY_CHECKS.set(0);
+    let mut upper = 7u64.to_be_bytes().to_vec();
+    upper.extend_from_slice(&999u64.to_be_bytes());
+    let mut reverse = Vec::new();
+    let (report, control) = reader
+        .scan_through(&upper, limits(), |_, value| {
+            reverse.push(u64::from_le_bytes(value.try_into().unwrap()));
+            Ok(GraphDescriptorTreeScanControl::Stop)
+        })
+        .unwrap();
+    assert_eq!(reverse, vec![999]);
+    assert_eq!(control, GraphDescriptorTreeScanControl::Stop);
+    assert!(report.leaf_entries_examined <= 11);
+    assert_eq!(report.storage_bytes_read, 0);
+    assert_eq!(crate::cache::PAGE_INTEGRITY_CHECKS.get(), 0);
 
     reader
         .deep_visit(|_, _| Ok(GraphDescriptorTreeScanControl::Continue))

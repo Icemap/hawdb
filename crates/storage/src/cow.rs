@@ -509,12 +509,12 @@ impl<K: Ord, V> CowSegmentedMap<K, V> {
         })
     }
 
-    /// Borrow a key interval without scanning unrelated immutable segments.
+    /// Borrow a bidirectional key interval without scanning unrelated segments.
     pub(crate) fn range<'a>(
         &'a self,
         first: &'a K,
         last: &'a K,
-    ) -> impl Iterator<Item = (&'a K, &'a V)> {
+    ) -> impl DoubleEndedIterator<Item = (&'a K, &'a V)> {
         assert!(first <= last, "invalid segmented-map key interval");
         let start = self.segments.partition_point(|segment| {
             segment.last_key_value().is_some_and(|(key, _)| key < first)
@@ -829,6 +829,7 @@ mod segmented_range_tests {
             );
         }
         for (first, last) in [
+            (0, u64::MAX),
             (0, 0),
             (1, 1),
             (3, 3),
@@ -848,6 +849,13 @@ mod segmented_range_tests {
                 .collect();
             assert_eq!(actual, expected);
             assert_eq!(
+                map.range(&first, &last)
+                    .rev()
+                    .map(|(key, value)| (*key, *value))
+                    .collect::<Vec<_>>(),
+                expected.iter().rev().copied().collect::<Vec<_>>()
+            );
+            assert_eq!(
                 snapshot
                     .range(&first, &last)
                     .map(|(key, value)| (*key, *value))
@@ -857,9 +865,34 @@ mod segmented_range_tests {
                     .map(|(key, value)| (*key, *value))
                     .collect::<Vec<_>>()
             );
+            assert_eq!(
+                snapshot
+                    .range(&first, &last)
+                    .rev()
+                    .map(|(key, value)| (*key, *value))
+                    .collect::<Vec<_>>(),
+                previous
+                    .range(first..=last)
+                    .rev()
+                    .map(|(key, value)| (*key, *value))
+                    .collect::<Vec<_>>()
+            );
+            let mut alternating = map.range(&first, &last);
+            let mut reference = oracle.range(first..=last);
+            loop {
+                assert_eq!(alternating.next(), reference.next());
+                let actual = alternating.next_back();
+                let expected = reference.next_back();
+                assert_eq!(actual, expected);
+                if actual.is_none() {
+                    assert_eq!(alternating.next(), None);
+                    break;
+                }
+            }
         }
         let empty = CowSegmentedMap::<NodeId, NodeId>::default();
         assert_eq!(empty.range(&NodeId(0), &NodeId(u64::MAX)).count(), 0);
+        assert_eq!(empty.range(&NodeId(0), &NodeId(u64::MAX)).rev().count(), 0);
     }
 }
 

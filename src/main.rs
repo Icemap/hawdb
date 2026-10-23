@@ -2785,6 +2785,13 @@ fn scan_pruning_strategy_json(strategy: &hawdb::store::ScanPruningStrategy) -> s
                 "properties": properties,
             })
         }
+        hawdb::store::ScanPruningStrategy::CompositePropertyOrdered {
+            properties,
+            descending,
+            continuation,
+        } => {
+            serde_json::json!({"kind": "composite_property_ordered", "properties": properties, "descending": descending, "continuation": continuation})
+        }
         hawdb::store::ScanPruningStrategy::PropertyRange { property } => {
             serde_json::json!({"kind": "property_range", "property": property})
         }

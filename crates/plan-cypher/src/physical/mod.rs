@@ -88,6 +88,16 @@ pub struct CompositeRangeSeek {
     pub upper: Option<(Value, bool)>,
 }
 
+/// Ordered traversal of complete non-NULL keys, after an exclusive suffix tuple.
+/// Canonical-query planning must prove complete key coverage and comparator compatibility.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CompositeOrderedSeek {
+    pub index_properties: Vec<String>,
+    pub equality_prefix: Vec<(String, Value)>,
+    pub after: Option<Vec<Value>>,
+    pub descending: bool,
+}
+
 /// Candidate source used by a fused scalar node projection.
 ///
 /// Keeping the access path beside the required-property set lets storage
@@ -108,6 +118,9 @@ pub enum NodeProjectionAccess {
     },
     CompositeRange {
         seek: CompositeRangeSeek,
+    },
+    CompositeOrdered {
+        seek: CompositeOrderedSeek,
     },
     PropertyRange {
         property: String,
@@ -132,6 +145,7 @@ impl NodeProjectionAccess {
             Self::PropertyUnion { .. } => "property_union",
             Self::CompositeEquality { .. } => "composite_equality",
             Self::CompositeRange { .. } => "composite_range",
+            Self::CompositeOrdered { .. } => "composite_ordered",
             Self::PropertyRange { .. } => "property_range",
             Self::FullText { .. } => "full_text",
         }
@@ -146,6 +160,7 @@ impl NodeProjectionAccess {
             Self::PropertyUnion { .. } => "IndexNodeUnionSeek",
             Self::CompositeEquality { .. } => "IndexNodeCompositeSeek",
             Self::CompositeRange { .. } => "IndexNodeCompositeRangeSeek",
+            Self::CompositeOrdered { .. } => "IndexNodeCompositeOrderedSeek",
             Self::PropertyRange { .. } => "IndexNodeRangeSeek",
             Self::FullText { .. } => "IndexNodeTextSeek",
         }

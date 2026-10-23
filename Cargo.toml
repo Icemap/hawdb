@@ -313,3 +313,7 @@ harness = false
 [[bench]]
 name = "grouped_evidence_native"
 harness = false
+
+[[bench]]
+name = "composite_ordered_seek"
+harness = false

@@ -24,6 +24,8 @@ use hawdb_core::ids::{
 };
 #[path = "graph_read/admission.rs"]
 mod admission;
+#[path = "graph_read/ordered_composite.rs"]
+mod ordered_composite;
 #[path = "graph_read/resident_pruning.rs"]
 mod resident_pruning;
 use admission::{AdmittedProjection, ProjectionAdmission, UnaccountedReadAllocation};
@@ -705,6 +707,14 @@ impl GraphStore {
                 ),
             hawdb_plan_cypher::NodeProjectionAccess::CompositeRange { seek } => self
                 .visit_projected_nodes_by_composite_range_with_admission(
+                    label_id,
+                    seek,
+                    required_properties,
+                    admission,
+                    consumer,
+                ),
+            hawdb_plan_cypher::NodeProjectionAccess::CompositeOrdered { seek } => self
+                .visit_projected_nodes_by_composite_order_with_admission(
                     label_id,
                     seek,
                     required_properties,

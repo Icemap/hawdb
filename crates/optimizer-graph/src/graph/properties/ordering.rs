@@ -91,6 +91,36 @@ pub(super) fn selected_ordering(plan: &PhysicalPlan, catalog: &OptimizerCatalog)
                 })
                 .collect()
         }
+        PhysicalPlan::NodeProjectionScanExec {
+            variable,
+            label,
+            access: NodeProjectionAccess::CompositeOrdered { seek },
+            items,
+            ..
+        } if seek.equality_prefix.len().checked_add(2) == Some(seek.index_properties.len())
+            && catalog
+                .ordered_composite_indexes
+                .contains_key(&(label.clone(), seek.index_properties.clone()))
+            && unique_projection_names(items) =>
+        {
+            let mut ordering = Vec::new();
+            for property in &seek.index_properties[seek.equality_prefix.len()..] {
+                let key = if items.is_empty() {
+                    SortKey::Property { variable: variable.clone(), property: property.clone() }
+                } else if let Some(item) = items.iter().find(|item| matches!(&item.expression, ProjectionExpression::Property { variable: source, property: key } if source == variable && key == property)) {
+                    SortKey::Column(item.name.clone())
+                } else { break; };
+                ordering.push(SortItem {
+                    key,
+                    direction: if seek.descending {
+                        SortDirection::Desc
+                    } else {
+                        SortDirection::Asc
+                    },
+                });
+            }
+            ordering
+        }
         PhysicalPlan::FilterExec { input, .. } | PhysicalPlan::LimitExec { input, .. } => {
             selected_ordering(input, catalog)
         }

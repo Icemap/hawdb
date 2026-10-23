@@ -37,6 +37,7 @@ pub trait GraphReadAllocation {
 pub struct GraphReadAllocator<'a, T = Box<dyn GraphReadAllocation>> {
     admit: &'a mut dyn FnMut(usize) -> hawdb_core::Result<T>,
     work: GraphReadWork<'a>,
+    control: Option<&'a hawdb_core::RuntimeTaskContext>,
 }
 
 impl<'a, T> GraphReadAllocator<'a, T> {
@@ -47,6 +48,7 @@ impl<'a, T> GraphReadAllocator<'a, T> {
         Self {
             admit,
             work: GraphReadWork(task_context.filter(|task| task.has_work_limit())),
+            control: task_context,
         }
     }
 
@@ -58,10 +60,19 @@ impl<'a, T> GraphReadAllocator<'a, T> {
         self.work
     }
 
+    pub(crate) fn checkpoint(&self) -> hawdb_core::Result<()> {
+        self.control.map_or(Ok(()), |task| {
+            task.checkpoint().map_err(|reason| {
+                hawdb_core::HawDBError::Execution(format!("runtime task stopped: {reason}"))
+            })
+        })
+    }
+
     pub(crate) fn reborrow(&mut self) -> GraphReadAllocator<'_, T> {
         GraphReadAllocator {
             admit: self.admit,
             work: self.work,
+            control: self.control,
         }
     }
 }

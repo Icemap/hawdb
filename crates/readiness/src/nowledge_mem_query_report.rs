@@ -484,6 +484,13 @@ fn scan_pruning_strategy_json(strategy: &ScanPruningStrategy) -> serde_json::Val
         ScanPruningStrategy::CompositePropertyRange { properties } => {
             serde_json::json!({"kind": "composite_property_range", "properties": properties})
         }
+        ScanPruningStrategy::CompositePropertyOrdered {
+            properties,
+            descending,
+            continuation,
+        } => {
+            serde_json::json!({"kind": "composite_property_ordered", "properties": properties, "descending": descending, "continuation": continuation})
+        }
         ScanPruningStrategy::PropertyRange { property } => {
             serde_json::json!({"kind": "property_range", "property": property})
         }

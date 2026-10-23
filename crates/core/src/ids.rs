@@ -151,7 +151,9 @@ pub fn property_container_allocation_bytes(count: usize) -> usize {
         .saturating_add(count.saturating_mul(2).max(4).saturating_mul(pair_bytes))
 }
 
-fn projected_value_allocation_bytes(value: &Value) -> usize {
+/// Conservative ownership bound shared by projected records and copied index keys.
+#[doc(hidden)]
+pub fn projected_value_allocation_bytes(value: &Value) -> usize {
     std::mem::size_of::<Value>().saturating_add(match value {
         Value::String(value) => value.len(),
         Value::Binary(value) => value.len(),

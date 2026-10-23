@@ -1,0 +1,264 @@
+// Copyright 2026 Nowledge
+// SPDX-License-Identifier: Apache-2.0
+
+use super::*;
+
+fn populate(db: &mut Database, nullable: bool, indexed: bool) {
+    db.query("CREATE NODE TABLE Item").unwrap();
+    for (property, kind) in [("rank", "INT"), ("id", "STRING")] {
+        db.query(&format!(
+            "CREATE PROPERTY ON NODE TABLE Item({property}) TYPE {kind}{}",
+            if nullable { "" } else { " NOT NULL" }
+        ))
+        .unwrap();
+    }
+    db.query("CREATE CONSTRAINT ON :Item(id) ASSERT UNIQUE")
+        .unwrap();
+    for id in 0..96 {
+        db.query(&format!(
+            "CREATE (:Item {{kind: '{}', rank: {}, id: 'item-{id:04}'}})",
+            if id % 5 == 0 { "archive" } else { "note" },
+            id / 4
+        ))
+        .unwrap();
+    }
+    if indexed {
+        db.query("CREATE INDEX ON :Item(kind, rank, id)").unwrap();
+    }
+}
+
+fn queries(descending: bool, size: usize) -> (String, String, String) {
+    let (direction, op) = if descending {
+        ("DESC", "<")
+    } else {
+        ("ASC", ">")
+    };
+    let suffix = format!(
+        "RETURN n.rank AS rank, n.id AS id ORDER BY rank {direction}, id {direction} LIMIT {size}"
+    );
+    (
+        format!("MATCH (n:Item) WHERE n.kind = $kind {suffix}"),
+        format!("MATCH (n:Item) WHERE n.kind = $kind AND (n.rank {op} $rank OR (n.rank = $rank AND n.id {op} $id)) {suffix}"),
+        format!("MATCH (n:Item) WHERE coalesce(n.kind, '') = $kind RETURN n.rank AS rank, n.id AS id ORDER BY coalesce(rank, 0) {direction}, coalesce(id, '') {direction}"),
+    )
+}
+
+fn assert_pages(
+    mut query: impl FnMut(&str, &BTreeMap<String, Value>) -> crate::Result<QueryOutput>,
+) {
+    for descending in [false, true] {
+        for kind in ["note", "archive", "absent"] {
+            for size in [1, 7, 32] {
+                let (first, next, reference) = queries(descending, size);
+                let mut params = BTreeMap::from([("kind".into(), Value::String(kind.into()))]);
+                let expected = query(&reference, &params).unwrap().rows.into_rows();
+                let mut actual = Vec::new();
+                loop {
+                    let rows = query(if actual.is_empty() { &first } else { &next }, &params)
+                        .unwrap()
+                        .rows
+                        .into_rows();
+                    if rows.is_empty() {
+                        break;
+                    }
+                    let last = rows.last().unwrap();
+                    params.insert("rank".into(), last["rank"].clone());
+                    params.insert("id".into(), last["id"].clone());
+                    actual.extend(rows);
+                    assert!(
+                        actual.len() <= expected.len(),
+                        "duplicate or non-advancing page"
+                    );
+                }
+                assert_eq!(
+                    actual, expected,
+                    "descending={descending} kind={kind} size={size}"
+                );
+            }
+        }
+    }
+}
+
+fn assert_native_plan(db: &mut Database) {
+    for descending in [false, true] {
+        let (first, next, _) = queries(descending, 7);
+        let params = BTreeMap::from([
+            ("kind".into(), Value::String("note".into())),
+            ("rank".into(), Value::Int(12)),
+            ("id".into(), Value::String("item-0048".into())),
+        ]);
+        for query in [&first, &next] {
+            let plan = db
+                .explain_query_with_params(query, &params)
+                .unwrap()
+                .physical_plan
+                .explain(0);
+            assert!(plan.contains("IndexNodeCompositeOrderedSeek"), "{plan}");
+            assert!(
+                !plan.contains("SortExec") && !plan.contains("TopNExec"),
+                "{plan}"
+            );
+            if query == &next {
+                assert!(plan.contains("after: Some"), "{plan}");
+            }
+        }
+    }
+}
+
+#[test]
+fn ordered_composite_query_pages_preserve_pinned_checkpoint_delta_and_reopen() {
+    let path = unique_test_dir("ordered_composite_query");
+    let config = DatabaseConfig {
+        storage_residency_mode: hawdb_storage::config::StorageResidencyMode::OutOfCore,
+        ..Default::default()
+    };
+    let mut db = Database::open_with_config(&path, config.clone()).unwrap();
+    populate(&mut db, false, true);
+    assert_native_plan(&mut db);
+    assert_pages(|query, params| db.query_with_params(query, params));
+    db.checkpoint().unwrap();
+    assert_native_plan(&mut db);
+    let mut pinned = db.begin_read_transaction().unwrap();
+    db.query("MATCH (n:Item) WHERE n.id = 'item-0001' SET n.rank = 40")
+        .unwrap();
+    db.query("MATCH (n:Item) WHERE n.id = 'item-0094' SET n.rank = -1")
+        .unwrap();
+    db.query("MATCH (n:Item) WHERE n.id = 'item-0011' SET n.kind = 'archive'")
+        .unwrap();
+    db.query("MATCH (n:Item) WHERE n.id = 'item-0012' DELETE n")
+        .unwrap();
+    db.query("CREATE (:Item {kind: 'note', rank: 12, id: 'new-item'})")
+        .unwrap();
+    assert_pages(|query, params| pinned.query_with_params(query, params));
+    assert_native_plan(&mut db);
+    assert_pages(|query, params| db.query_with_params(query, params));
+    db.checkpoint().unwrap();
+    assert_pages(|query, params| pinned.query_with_params(query, params));
+    drop(pinned);
+    drop(db);
+    let mut db = Database::open_with_config(&path, config).unwrap();
+    assert_native_plan(&mut db);
+    assert_pages(|query, params| db.query_with_params(query, params));
+    drop(db);
+    std::fs::remove_dir_all(path).unwrap();
+}
+
+#[test]
+fn ordered_composite_nullable_sparse_keys_keep_complete_sort() {
+    let mut db = Database::new();
+    populate(&mut db, true, true);
+    db.query("CREATE (:Item {kind: 'note', rank: -1})").unwrap();
+    db.query("CREATE (:Item {kind: 'note', id: 'no-rank'})")
+        .unwrap();
+    let (query, _, oracle) = queries(false, 200);
+    let params = BTreeMap::from([("kind".into(), Value::String("note".into()))]);
+    let plan = db
+        .explain_query_with_params(&query, &params)
+        .unwrap()
+        .physical_plan
+        .explain(0);
+    assert!(!plan.contains("IndexNodeCompositeOrderedSeek"), "{plan}");
+    assert!(
+        plan.contains("SortExec") || plan.contains("TopNExec"),
+        "{plan}"
+    );
+    // Use the same NULL ordering as the canonical query, while preventing index inference.
+    let oracle = oracle
+        .replace("coalesce(rank, 0)", "rank")
+        .replace("coalesce(id, '')", "id");
+    assert_eq!(
+        db.query_with_params(&query, &params).unwrap().rows,
+        db.query_with_params(&oracle, &params).unwrap().rows
+    );
+}
+
+#[test]
+fn ordered_composite_cache_types_and_runtime_projection_capability_are_fenced() {
+    let path = unique_test_dir("ordered_composite_cache");
+    let config = DatabaseConfig {
+        storage_residency_mode: hawdb_storage::config::StorageResidencyMode::OutOfCore,
+        ..Default::default()
+    };
+    let mut db = Database::open_with_config(&path, config).unwrap();
+    populate(&mut db, false, false);
+    db.checkpoint().unwrap();
+    db.query("CREATE INDEX ON :Item(kind, rank, id)").unwrap();
+    let (first, next, _) = queries(false, 7);
+    let mut params = BTreeMap::from([
+        ("kind".into(), Value::String("note".into())),
+        ("rank".into(), Value::Int(12)),
+        ("id".into(), Value::String("item-0048".into())),
+    ]);
+    let plan = db
+        .explain_query_with_params(&first, &params)
+        .unwrap()
+        .physical_plan
+        .explain(0);
+    assert!(!plan.contains("IndexNodeCompositeOrderedSeek"), "{plan}");
+    db.checkpoint().unwrap();
+    assert_native_plan(&mut db);
+    for rank in [Value::Int(12), Value::Float(12.5), Value::Int(8)] {
+        params.insert("rank".into(), rank.clone());
+        let plan = db
+            .explain_query_with_params(&next, &params)
+            .unwrap()
+            .physical_plan
+            .explain(0);
+        assert_eq!(
+            plan.contains("IndexNodeCompositeOrderedSeek"),
+            matches!(rank, Value::Int(_)),
+            "{plan}"
+        );
+        let oracle = next.replace("ORDER BY rank", "ORDER BY coalesce(rank, 0)");
+        assert_eq!(
+            db.query_with_params(&next, &params).unwrap().rows,
+            db.query_with_params(&oracle, &params).unwrap().rows
+        );
+    }
+    drop(db);
+    std::fs::remove_dir_all(path).unwrap();
+}
+
+#[test]
+fn ordered_composite_query_preserves_consumer_error_and_retry() {
+    let mut db = Database::new();
+    populate(&mut db, false, true);
+    let (query, _, _) = queries(false, 7);
+    let params = BTreeMap::from([("kind".into(), Value::String("note".into()))]);
+    let mut snapshot = db.begin_read_transaction().unwrap();
+    let expected = crate::HawDBError::Execution("ordered composite consumer refused".into());
+    let mut calls = 0;
+    let error = snapshot
+        .query_request_streaming(
+            crate::QueryRequest::new(&query).with_params(&params),
+            |_| {
+                calls += 1;
+                Err(expected.clone())
+            },
+        )
+        .unwrap_err();
+    assert_eq!(calls, 1);
+    assert_eq!(error, expected);
+    let mut rows = Vec::new();
+    let report = snapshot
+        .query_request_streaming(
+            crate::QueryRequest::new(&query).with_params(&params),
+            |row| {
+                rows.push(row);
+                Ok(())
+            },
+        )
+        .unwrap();
+    assert_eq!(rows.len(), 7);
+    assert_eq!(
+        report
+            .execution_profile
+            .pipeline_memory_report
+            .query_memory_completion_bytes,
+        0
+    );
+    assert!(report
+        .execution_profile
+        .blocking_operator_memory_reports
+        .is_empty());
+}

@@ -3354,6 +3354,18 @@ impl hawdb_storage::graph_engine::GraphReadEngine for GraphStore {
                 })
     }
 
+    fn supports_ordered_node_composite(&self, label: LabelId, properties: &[String]) -> bool {
+        self.canonical_base.is_none()
+            || self
+                .persistent_property_projection
+                .as_ref()
+                .is_some_and(|projection| {
+                    projection
+                        .manifest()
+                        .supports_composite_equality(label, properties)
+                })
+    }
+
     fn storage_recovery_report(&self) -> hawdb_storage::projection::StorageRecoveryReport {
         GraphStore::storage_recovery_report(self)
     }

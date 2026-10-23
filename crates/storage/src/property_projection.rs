@@ -47,6 +47,9 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
+mod ordered;
+pub(crate) use ordered::CompositeOrder;
+
 const ARTIFACT_HEADER: &[u8; 16] = b"HAWDBPROPINDEX01";
 const BLOCK_HEADER: &[u8; 8] = b"SKNIDX01";
 const RUN_HEADER: &[u8; 8] = b"SKNIDXR1";

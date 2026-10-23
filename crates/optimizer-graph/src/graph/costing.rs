@@ -124,6 +124,16 @@ fn projected_access_cost(
             node_index_seek_work(rows, predicates.len().max(1) as u64)
         }
         NodeProjectionAccess::CompositeRange { seek } => composite_range_cost(seek, label, catalog),
+        NodeProjectionAccess::CompositeOrdered { seek } => {
+            let distinct = seek
+                .equality_prefix
+                .iter()
+                .fold(1u64, |count, (property, _)| {
+                    count.saturating_mul(catalog.distinct_count(label, property).max(1))
+                });
+            let rows = catalog.label_count(label).div_ceil(distinct).max(1);
+            node_index_seek_work(rows, seek.equality_prefix.len() as u64)
+        }
         NodeProjectionAccess::PropertyRange {
             property,
             lower,
