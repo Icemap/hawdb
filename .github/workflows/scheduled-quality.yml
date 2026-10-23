@@ -11,7 +11,7 @@ on:
         type: boolean
         default: false
       run_writer_gate:
-        description: Run only the original strict 40-pair concurrent writer gate
+        description: Run only the fixed 40-pair reader/writer qualification
         required: false
         type: boolean
         default: false
@@ -20,6 +20,26 @@ on:
         required: false
         type: string
         default: "a703cc0f18f549918c73f454cda521edb4f0fb13"
+      writer_include_captured_wal:
+        description: Also measure a separate fixed cohort with captured WAL ownership restored by reopen
+        required: false
+        type: boolean
+        default: false
+      writer_concurrency_matrix:
+        description: Include multiple writers/readers using physical cores, affinity and cgroup CPU limits
+        required: false
+        type: boolean
+        default: true
+      writer_counts:
+        description: Optional comma-separated writer counts overriding the automatic CPU bound
+        required: false
+        type: string
+        default: ""
+      reader_counts:
+        description: Optional comma-separated reader counts; otherwise use 0, W and 2W
+        required: false
+        type: string
+        default: ""
       soak_node_count:
         description: Synthetic nodes in the mixed runtime soak
         required: false
@@ -200,7 +220,7 @@ jobs:
 
   strict-writer-gate:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_writer_gate }}
-    name: Strict Single-Stream Writer Qualification
+    name: Concurrent Reader and Writer Qualification
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
@@ -210,13 +230,41 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.97.1
 
+      - name: Install separate syscall tracing tool
+        if: ${{ inputs.writer_include_captured_wal }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v strace >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y strace
+          fi
+
       - name: Build both revisions and measure the fixed protocol
         shell: bash
         env:
           WRITER_BASELINE_REVISION: ${{ inputs.writer_baseline_revision }}
+          WRITER_INCLUDE_CAPTURED_WAL: ${{ inputs.writer_include_captured_wal }}
+          WRITER_CONCURRENCY_MATRIX: ${{ inputs.writer_concurrency_matrix }}
+          WRITER_COUNTS: ${{ inputs.writer_counts }}
+          READER_COUNTS: ${{ inputs.reader_counts }}
         run: |
           set -euo pipefail
+          options=()
+          if [[ "$WRITER_INCLUDE_CAPTURED_WAL" == "true" ]]; then
+            options+=(--include-captured-wal)
+          fi
+          if [[ "$WRITER_CONCURRENCY_MATRIX" == "true" ]]; then
+            options+=(--concurrency-matrix)
+          fi
+          if [[ -n "$WRITER_COUNTS" ]]; then
+            options+=(--writer-counts "$WRITER_COUNTS")
+          fi
+          if [[ -n "$READER_COUNTS" ]]; then
+            options+=(--reader-counts "$READER_COUNTS")
+          fi
           python3 scripts/run-concurrent-writer-gate.py \
+            "${options[@]}" \
             --baseline-revision "$WRITER_BASELINE_REVISION" \
             --work "$RUNNER_TEMP/writer-gate" \
             --fixture-parent "$RUNNER_TEMP/writer-fixtures" \

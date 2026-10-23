@@ -1,0 +1,9 @@
+{
+  "background_dependency_fetch": {
+    "command": "cargo fetch --locked --manifest-path /tmp/hawdb-867-generation-reclamation/Cargo.toml",
+    "purpose": "Warm existing isolated Bazel Cargo cache after the default 600-second splice timeout",
+    "outcome": "completed successfully; no Bazel configuration changes",
+    "overlap": "overlapped early one-writer pairs; no local builds or tests were run during timing",
+    "interpretation": "Shared-host and background dependency-download I/O are limitations; retain all samples and do not represent this as exclusive-machine qualification"
+  }
+}

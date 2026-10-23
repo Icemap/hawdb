@@ -803,11 +803,7 @@ fn composite_range_projection_uses_a_contiguous_equality_prefix() {
             }),
         }),
     };
-    let index_properties = vec![
-        "space_id".to_string(),
-        "created_at".to_string(),
-        "stable_id".to_string(),
-    ];
+    let index_properties = vec!["space_id".to_string(), "created_at".to_string()];
     let catalog = OptimizerCatalog::new(
         OptimizerCatalogIndexes::new(
             [],

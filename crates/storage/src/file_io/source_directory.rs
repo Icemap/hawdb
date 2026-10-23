@@ -282,7 +282,16 @@ impl SourceDirectory {
             // files. The fresh capture uses the same counted descriptor domain.
             Ok(self.same_directory(&Self::capture(path, &self.operation_context())?))
         }
-        #[cfg(not(windows))]
+        #[cfg(unix)]
+        {
+            // Capture already pinned the identity with the original handle.
+            // Only the namespace can change; retain fresh, counted path lookup.
+            Ok(self.identity.0
+                == crate::native_file_identity::of_metadata(
+                    &self.operation_context().metadata(path)?,
+                ))
+        }
+        #[cfg(not(any(unix, windows)))]
         self.root.matches_native_path(path)
     }
 

@@ -2148,9 +2148,10 @@ impl GraphStore {
         if let (Some(reader), Some(projection)) = (
             self.canonical_base.as_ref(),
             self.persistent_property_projection.as_ref(),
-        ) && projection
-            .manifest()
-            .supports_composite_equality(label_id, &seek.index_properties)
+        ) && composite_range_requires_full_key(seek)
+            && projection
+                .manifest()
+                .supports_composite_equality(label_id, &seek.index_properties)
         {
             let equality_values = seek
                 .equality_prefix
@@ -2241,7 +2242,7 @@ impl GraphStore {
             .canonical_base
             .as_ref()
             .zip(self.persistent_property_projection.as_ref())
-            .filter(|_| !bounded_work)
+            .filter(|_| !bounded_work && composite_range_requires_full_key(seek))
             .filter(|(_, projection)| {
                 projection
                     .manifest()
@@ -4669,6 +4670,12 @@ impl GraphStore {
             AdjacencyDirection::Incoming => self.incoming.get(&(node_id, rel_type)),
         }
     }
+}
+
+fn composite_range_requires_full_key(seek: &hawdb_plan_cypher::CompositeRangeSeek) -> bool {
+    // Missing suffix properties are absent from the projection, but may still
+    // satisfy a prefix range. Keep those requests on a complete fallback.
+    seek.equality_prefix.len().checked_add(1) == Some(seek.index_properties.len())
 }
 
 fn validate_composite_range_seek(seek: &hawdb_plan_cypher::CompositeRangeSeek) -> Result<()> {

@@ -34,6 +34,52 @@ use hawdb_storage::{
 use std::io::Write;
 use std::sync::Arc;
 
+/// Keep the identity cache with the exact WAL descriptor it describes. Rotation
+/// replaces both together, and cloned checkpoint sources retain the same pair.
+/// Ordinary files and WAL read cursors do not pay for an append-only cache.
+#[derive(Debug)]
+pub(in crate::store) struct WalAppendFile {
+    file: File,
+    #[cfg(unix)]
+    identity: std::sync::OnceLock<crate::native_file_identity::NativeIdentity>,
+}
+
+impl WalAppendFile {
+    pub(in crate::store) fn new(file: File) -> Self {
+        Self {
+            file,
+            #[cfg(unix)]
+            identity: std::sync::OnceLock::new(),
+        }
+    }
+
+    pub(in crate::store) fn file(&self) -> &File {
+        &self.file
+    }
+
+    /// Follow symlinks to compare the target object's identity with the held file.
+    #[cfg(unix)]
+    fn matches_native_path_in(
+        &self,
+        path: &std::path::Path,
+        context: &crate::file_descriptors::FileOpenContext,
+    ) -> std::io::Result<bool> {
+        let identity = self.file.with_native(|native| {
+            if let Some(identity) = self.identity.get() {
+                return Ok(*identity);
+            }
+            let identity = crate::native_file_identity::of_file(native)?;
+            // Concurrent first checks see the same pinned descriptor. Failed
+            // observations are never cached; recorder I/O guards still run.
+            let _ = self.identity.set(identity);
+            Ok(identity)
+        })?;
+        // Only the held identity is stable. Always admit and observe the named
+        // file again through the original operation's descriptor domain.
+        Ok(identity == crate::native_file_identity::of_metadata(&context.metadata(path)?))
+    }
+}
+
 impl DurableStore {
     pub(in crate::store) fn begin_wal_sync_group(&mut self) -> Result<bool> {
         if self.durability != DurabilityPolicy::SyncOnEveryWrite {
@@ -72,7 +118,7 @@ impl DurableStore {
             )
         })?;
         self.require_captured_wal_append(file)?;
-        file.sync_data()?;
+        file.file().sync_data()?;
         if group.requires_parent_sync() || !self.wal_namespace_known_durable {
             #[cfg(test)]
             crate::store::read_dependencies::source_sync_failpoint(
@@ -170,7 +216,7 @@ impl DurableStore {
                     });
                 }
                 let write_result: Result<()> = (|| {
-                    let mut writer = file.as_ref();
+                    let mut writer = file.file();
                     if self.wal_bytes == 0 {
                         writer.write_all(&header_bytes)?;
                     }
@@ -206,7 +252,7 @@ impl DurableStore {
                     Ok(())
                 })();
                 let append_result = match write_result {
-                    Err(error) => match self.rollback_failed_wal_write(file.as_ref()) {
+                    Err(error) => match self.rollback_failed_wal_write(file.file()) {
                         Ok(()) => {
                             // A group may still need this handle to acknowledge
                             // earlier entries even when no later write retries.
@@ -307,15 +353,15 @@ impl DurableStore {
                     "captured WAL append handle was lost".into(),
                 ));
             }
-            Arc::new(
+            Arc::new(WalAppendFile::new(
                 OpenOptions::new()
                     .descriptor_kind(crate::file_descriptors::DescriptorKind::MutableWal)
                     .append(true)
                     .open(&self.wal_path)?,
-            )
+            ))
         };
         self.require_captured_wal_append(&file)?;
-        if file.metadata()?.len() != self.wal_bytes
+        if file.file().metadata()?.len() != self.wal_bytes
             || (self.wal_append_owner.is_none()
                 && fs::metadata(&self.wal_path)?.len() != self.wal_bytes)
         {
@@ -328,7 +374,7 @@ impl DurableStore {
             crate::store::read_dependencies::source_sync_failpoint(
                 crate::store::read_dependencies::SourceSyncFailure::Wal,
             )?;
-            file.sync_data()?;
+            file.file().sync_data()?;
             // Relaxed creation can leave the WAL name unsynchronized even
             // though the complete transaction was flushed to the OS.
             if !self.wal_namespace_known_durable {
@@ -498,12 +544,23 @@ impl DurableStore {
             .map_err(Into::into)
     }
 
-    fn require_captured_wal_append(&self, file: &File) -> Result<()> {
+    fn require_captured_wal_append(&self, file: &WalAppendFile) -> Result<()> {
         if let Some(owner) = &self.wal_append_owner {
             let parent = self.wal_path.parent().ok_or_else(|| {
                 HawDBError::StorageIntegrity("captured WAL has no directory".into())
             })?;
-            if !owner.owns_directory(parent)? || !file.matches_native_path(&self.wal_path)? {
+            let matches = owner.owns_directory(parent)? && {
+                #[cfg(unix)]
+                {
+                    file.matches_native_path_in(
+                        &self.wal_path,
+                        &owner.captured_directory().operation_context(),
+                    )?
+                }
+                #[cfg(not(unix))]
+                file.file().matches_native_path(&self.wal_path)?
+            };
+            if !matches {
                 return Err(HawDBError::StorageIntegrity(
                     "captured active WAL writer was replaced".into(),
                 ));
@@ -523,7 +580,7 @@ impl DurableStore {
         }
     }
 
-    fn take_wal_append(&mut self) -> Result<(Arc<File>, bool)> {
+    fn take_wal_append(&mut self) -> Result<(Arc<WalAppendFile>, bool)> {
         if let Some(file) = &self.wal_append_file {
             self.require_captured_wal_append(file)?;
         } else if self.wal_append_owner.is_some() {
@@ -560,15 +617,15 @@ impl DurableStore {
         {
             self.wal_append_open_count = self.wal_append_open_count.saturating_add(1);
         }
-        Ok((Arc::new(file), created))
+        Ok((Arc::new(WalAppendFile::new(file)), created))
     }
 
-    fn finish_wal_append(&mut self, file: &File, created: bool) -> Result<u64> {
+    fn finish_wal_append(&mut self, file: &WalAppendFile, created: bool) -> Result<u64> {
         #[cfg(any(test, feature = "test-support"))]
         if crate::store::WAL_APPEND_FAILURE.take() == Some(crate::store::WalAppendFailure::Sync) {
             return Err(std::io::Error::other("injected WAL sync failure").into());
         }
-        let mut writer = file;
+        let mut writer = file.file();
         writer.flush()?;
         self.require_captured_wal_append(file)?;
         if let Some(group) = &mut self.wal_sync_group {
@@ -580,7 +637,7 @@ impl DurableStore {
         let mut fsync_micros = 0;
         if self.durability == DurabilityPolicy::SyncOnEveryWrite {
             let started = std::time::Instant::now();
-            file.sync_data()?;
+            file.file().sync_data()?;
             if created || !self.wal_namespace_known_durable {
                 #[cfg(test)]
                 crate::store::read_dependencies::source_sync_failpoint(
@@ -630,6 +687,46 @@ mod tests {
             "hawdb-held-wal-rollback-{}",
             hawdb_core::generate_uuidv7().unwrap()
         ))
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn captured_wal_identity_cache_observes_namespace_replacement_and_rotation() {
+        let root = path();
+        let files = crate::file_descriptors::ProjectFileDescriptors::acquire(&root, 16).unwrap();
+        let context = files.io_context();
+        let wal = root.join("active.wal");
+        let moved = root.join("old.wal");
+        let alias = root.join("alias.wal");
+        std::fs::write(&wal, b"original").unwrap();
+        std::os::unix::fs::symlink(&wal, &alias).unwrap();
+        let original = Arc::new(WalAppendFile::new(File::open(&wal).unwrap()));
+        let pinned = Arc::clone(&original);
+        assert!(original.matches_native_path_in(&alias, &context).unwrap());
+        std::fs::rename(&wal, &moved).unwrap();
+        std::fs::write(&wal, b"original").unwrap();
+        assert!(!pinned.matches_native_path_in(&alias, &context).unwrap());
+        assert!(pinned.matches_native_path_in(&moved, &context).unwrap());
+        let rotated = WalAppendFile::new(File::open(&wal).unwrap());
+        assert!(rotated.matches_native_path_in(&wal, &context).unwrap());
+        assert!(!rotated.matches_native_path_in(&moved, &context).unwrap());
+        std::fs::remove_file(&alias).unwrap();
+        std::os::unix::fs::symlink(&moved, &alias).unwrap();
+        assert!(pinned.matches_native_path_in(&alias, &context).unwrap());
+        std::fs::remove_file(&moved).unwrap();
+        assert_eq!(
+            pinned
+                .matches_native_path_in(&alias, &context)
+                .unwrap_err()
+                .kind(),
+            std::io::ErrorKind::NotFound
+        );
+        std::fs::write(&moved, b"original").unwrap();
+        assert!(!pinned.matches_native_path_in(&alias, &context).unwrap());
+        drop((original, pinned, rotated));
+        assert_eq!(files.metrics().open, 0);
+        assert_eq!(files.metrics().reserved, 0);
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

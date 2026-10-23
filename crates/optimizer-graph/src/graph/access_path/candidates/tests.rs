@@ -360,3 +360,63 @@ fn candidate_fingerprint_differential_campaign() {
     }
     println!("Candidate ranking differential: 768 cases, {candidate_count} candidates");
 }
+
+#[test]
+fn composite_range_candidates_require_every_index_property() {
+    for (properties, equalities, selected) in [
+        (vec!["kind", "rank", "id"], vec!["kind"], false),
+        (vec!["kind", "rank"], vec!["kind"], true),
+        (vec!["kind", "bucket", "rank"], vec!["kind", "bucket"], true),
+    ] {
+        let catalog = OptimizerCatalog::new(
+            OptimizerCatalogIndexes::new(
+                [],
+                [(
+                    "Node".into(),
+                    properties.iter().map(|name| (*name).into()).collect(),
+                )],
+                [],
+                [],
+            ),
+            OptimizerCatalogStatistics::new(
+                [("Node".into(), 4096)],
+                [],
+                [],
+                [],
+                [],
+                ["kind", "bucket", "rank", "id"].map(|name| (("Node".into(), name.into()), 16)),
+                [(
+                    ("Node".into(), "rank".into()),
+                    (0..64).map(Value::Int).collect(),
+                )],
+            ),
+        );
+        let mut predicates = equalities
+            .iter()
+            .map(|property| Predicate::PropertyEq {
+                variable: "n".into(),
+                property: (*property).into(),
+                value: Value::Int(7),
+            })
+            .collect::<Vec<_>>();
+        predicates.push(Predicate::PropertyCompare {
+            variable: "n".into(),
+            property: "rank".into(),
+            op: hawdb_plan_cypher::ComparisonOp::Gte,
+            value: Value::Int(10),
+        });
+        predicates.push(Predicate::PropertyCompare {
+            variable: "n".into(),
+            property: "rank".into(),
+            op: hawdb_plan_cypher::ComparisonOp::Lte,
+            value: Value::Int(20),
+        });
+        let full = Predicate::And(predicates.clone());
+        assert_eq!(
+            composite_range_index_seek_candidate(&predicates, &full, "n", "Node", &catalog)
+                .is_some(),
+            selected,
+            "{properties:?} {equalities:?}"
+        );
+    }
+}

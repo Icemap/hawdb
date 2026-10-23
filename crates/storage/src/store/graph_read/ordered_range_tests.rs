@@ -279,3 +279,221 @@ fn ordered_range_missing_projection_is_not_an_ordering_capability() {
     drop(store);
     std::fs::remove_dir_all(path).unwrap();
 }
+
+const COMPOSITE_COVERAGE_INDEXES: &[&[&str]] = &[
+    &["kind", "rank", "id"],
+    &["kind", "bucket", "rank", "id"],
+    &["kind", "rank"],
+    &["kind", "bucket", "rank"],
+];
+
+fn assert_composite_coverage(store: &GraphStore, catalog: &Catalog) {
+    let label = catalog.label_id("Item").unwrap();
+    let properties = ["kind", "bucket", "rank", "id"]
+        .map(String::from)
+        .into_iter()
+        .collect();
+    for (index, keys) in COMPOSITE_COVERAGE_INDEXES.iter().enumerate() {
+        for (lower_inclusive, upper_inclusive) in
+            [(true, true), (true, false), (false, true), (false, false)]
+        {
+            let mut equality_prefix = vec![("kind".into(), Value::String("note".into()))];
+            if keys.contains(&"bucket") {
+                equality_prefix.push(("bucket".into(), Value::String("primary".into())));
+            }
+            let seek = hawdb_plan_cypher::CompositeRangeSeek {
+                index_properties: keys.iter().map(|key| (*key).into()).collect(),
+                equality_prefix,
+                range_property: "rank".into(),
+                lower: Some((Value::Int(2), lower_inclusive)),
+                upper: Some((Value::Int(6), upper_inclusive)),
+            };
+            let mut expected = BTreeSet::new();
+            store
+                .visit_nodes_owned(Some(label), |node| {
+                    if node_matches_composite_range(&node, &seek) {
+                        expected.insert(node.id);
+                    }
+                    GraphScanControl::Continue
+                })
+                .unwrap();
+            assert!(!expected.is_empty());
+            let class = PersistentGraphIndexClass::NodeCompositeEquality;
+            let before = store
+                .graph_index_read_metrics
+                .snapshot()
+                .operation_count(class);
+            let mut actual = BTreeSet::new();
+            store
+                .visit_nodes_by_composite_range_owned(label, &seek, |node| {
+                    assert!(actual.insert(node.id));
+                    GraphScanControl::Continue
+                })
+                .unwrap();
+            assert_eq!(actual, expected, "owned {seek:?}");
+            let after = store
+                .graph_index_read_metrics
+                .snapshot()
+                .operation_count(class);
+            assert_eq!(
+                after > before,
+                store.canonical_base.is_some() && index >= 2,
+                "index work {seek:?}"
+            );
+            let access =
+                hawdb_plan_cypher::NodeProjectionAccess::CompositeRange { seek: seek.clone() };
+            let mut projected = BTreeSet::new();
+            store
+                .visit_projected_nodes_by_access_owned(label, &access, &properties, |node| {
+                    assert!(projected.insert(node.id));
+                    GraphScanControl::Continue
+                })
+                .unwrap();
+            assert_eq!(projected, expected, "admitted {seek:?}");
+            let mut stopped = 0;
+            assert_eq!(
+                store
+                    .visit_nodes_by_composite_range_owned(label, &seek, |node| {
+                        assert!(expected.contains(&node.id));
+                        stopped += 1;
+                        GraphScanControl::Stop
+                    })
+                    .unwrap(),
+                GraphScanControl::Stop
+            );
+            assert_eq!(stopped, 1);
+            let mut deny = |_: usize| -> Result<Box<dyn GraphReadAllocation>> {
+                Err(HawDBError::Execution("composite admission refused".into()))
+            };
+            let error = store
+                .visit_projected_nodes_by_access_admitted(
+                    label,
+                    &access,
+                    &properties,
+                    &mut crate::read_view::GraphReadAllocator::new(&mut deny, None),
+                    &mut |_| panic!("admission refusal must precede delivery"),
+                )
+                .unwrap_err();
+            assert!(
+                matches!(error, HawDBError::Execution(message) if message == "composite admission refused")
+            );
+        }
+    }
+}
+
+#[test]
+fn sparse_composite_ranges_preserve_owned_and_admitted_domains() {
+    let path = unique_test_dir("sparse-composite-coverage");
+    let config = WalReplayConfig {
+        residency_mode: StorageResidencyMode::OutOfCore,
+        ..Default::default()
+    };
+    let mut catalog = Catalog::default();
+    let mut store = GraphStore::open_with_durability_and_replay_config(
+        &path,
+        &mut catalog,
+        DurabilityPolicy::default(),
+        config,
+    )
+    .unwrap();
+    for keys in COMPOSITE_COVERAGE_INDEXES {
+        store
+            .create_composite_property_index(
+                &mut catalog,
+                "Item",
+                &keys.iter().map(|key| (*key).into()).collect::<Vec<_>>(),
+            )
+            .unwrap();
+    }
+    for rank in 0..8 {
+        store
+            .create_node(
+                &mut catalog,
+                "Item",
+                BTreeMap::from([
+                    ("kind".into(), Value::String("note".into())),
+                    ("bucket".into(), Value::String("primary".into())),
+                    ("rank".into(), Value::Int(rank)),
+                    ("id".into(), Value::Int(rank)),
+                ]),
+            )
+            .unwrap();
+    }
+    for (rank, suffix) in [(4, None), (5, Some(Value::Null))] {
+        let mut values = BTreeMap::from([
+            ("kind".into(), Value::String("note".into())),
+            ("bucket".into(), Value::String("primary".into())),
+            ("rank".into(), Value::Int(rank)),
+        ]);
+        if let Some(value) = suffix {
+            values.insert("id".into(), value);
+        }
+        store.create_node(&mut catalog, "Item", values).unwrap();
+    }
+    store
+        .create_node(
+            &mut catalog,
+            "Item",
+            BTreeMap::from([
+                ("kind".into(), Value::String("note".into())),
+                ("rank".into(), Value::Int(4)),
+                ("id".into(), Value::Int(99)),
+            ]),
+        )
+        .unwrap();
+    assert_composite_coverage(&store, &catalog);
+    store.checkpoint(&catalog).unwrap();
+    assert_composite_coverage(&store, &catalog);
+    let retained = store.snapshot();
+    store
+        .set_node_property(
+            &mut catalog,
+            "Item",
+            Some(&PropertyFilter::Eq {
+                property: "rank".into(),
+                value: Value::Int(3),
+            }),
+            "id",
+            Value::Null,
+        )
+        .unwrap();
+    store
+        .delete_nodes(
+            &mut catalog,
+            "Item",
+            Some(&PropertyFilter::Eq {
+                property: "id".into(),
+                value: Value::Int(2),
+            }),
+            false,
+        )
+        .unwrap();
+    store
+        .create_node(
+            &mut catalog,
+            "Item",
+            BTreeMap::from([
+                ("kind".into(), Value::String("note".into())),
+                ("bucket".into(), Value::String("primary".into())),
+                ("rank".into(), Value::Int(4)),
+            ]),
+        )
+        .unwrap();
+    assert_composite_coverage(&store, &catalog);
+    assert_composite_coverage(&retained, &catalog);
+    drop(retained);
+    drop(store);
+    let mut catalog = Catalog::default();
+    let mut store = GraphStore::open_with_durability_and_replay_config(
+        &path,
+        &mut catalog,
+        DurabilityPolicy::default(),
+        config,
+    )
+    .unwrap();
+    assert_composite_coverage(&store, &catalog);
+    store.checkpoint(&catalog).unwrap();
+    assert_composite_coverage(&store, &catalog);
+    drop(store);
+    std::fs::remove_dir_all(path).unwrap();
+}

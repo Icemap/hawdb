@@ -39,6 +39,7 @@ fn relative_read_and_delete_keep_captured_root_after_namespace_replacement() {
     fs::create_dir(&original).unwrap();
     fs::write(original.join("artifact.1.hawdb"), b"captured source").unwrap();
     let source = fixture.capture(&original);
+    assert!(source.matches_namespace(&original).unwrap());
     fs::rename(&original, &moved).unwrap();
     fs::create_dir(&original).unwrap();
     fs::write(original.join("artifact.1.hawdb"), b"foreign source").unwrap();
@@ -48,6 +49,8 @@ fn relative_read_and_delete_keep_captured_root_after_namespace_replacement() {
     assert_eq!(source.identity(), same.identity());
     assert_ne!(source.identity(), replacement.identity());
     assert!(!source.same_directory(&replacement));
+    assert!(!source.matches_namespace(&original).unwrap());
+    assert!(source.matches_namespace(&moved).unwrap());
     // This open occurs after replacement and starts cold; no cached file can
     // accidentally make an ordinary pathname-based implementation pass.
     let mut child = source
@@ -66,6 +69,39 @@ fn relative_read_and_delete_keep_captured_root_after_namespace_replacement() {
         b"foreign source"
     );
     drop((source, same, replacement));
+    assert_eq!(fixture.project.metrics().open, 0);
+}
+
+#[cfg(unix)]
+#[test]
+fn namespace_fences_keep_original_admission_and_observe_symlink_retargeting() {
+    let fixture = Fixture::new(2);
+    let original = fixture.root.join("source");
+    let replacement = fixture.root.join("replacement");
+    let alias = fixture.root.join("alias");
+    fs::create_dir(&original).unwrap();
+    fs::create_dir(&replacement).unwrap();
+    std::os::unix::fs::symlink(&original, &alias).unwrap();
+    let source = fixture.capture(&original);
+    assert!(source.matches_namespace(&alias).unwrap());
+    let baseline = fixture.project.metrics();
+    let occupied_path = fixture.root.join("occupied");
+    fs::write(&occupied_path, b"held descriptor").unwrap();
+    let occupied = File::open(occupied_path).unwrap();
+    // A cached held identity cannot bypass admission of the fresh lookup.
+    let error = source.matches_namespace(&alias).unwrap_err();
+    assert!(hawdb_core::error::file_descriptor_error(&error).is_some());
+    fs::remove_file(&alias).unwrap();
+    std::os::unix::fs::symlink(&replacement, &alias).unwrap();
+    drop(occupied);
+    assert!(!source.matches_namespace(&alias).unwrap());
+    fs::remove_file(&alias).unwrap();
+    assert_eq!(
+        source.matches_namespace(&alias).unwrap_err().kind(),
+        io::ErrorKind::NotFound
+    );
+    drop(source);
+    assert_eq!(fixture.project.metrics().reserved, baseline.reserved);
     assert_eq!(fixture.project.metrics().open, 0);
 }
 
