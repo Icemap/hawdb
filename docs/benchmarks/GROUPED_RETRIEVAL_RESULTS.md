@@ -6,9 +6,12 @@ manifest `a28e8140ca41cc7e6d085edde696fa2fe9d4aaa5dba32a0548eba250a34cd698`.
 The [receipt](../../benches/grouped_evidence/results/2026-10-22-a28e8140.json)
 contains every source hash, executable hash, fixture command, raw sample,
 work/admission report and whole-process CPU/RSS reading. Documentation and this
-receipt were added after the measured source freeze; benchmark/runtime code is
-identical. These local results do not attest final-head remote CI or production
-acceptance.
+receipt were added after the measured source freeze. Later integration adopts
+the upstream unused-namespace cleanup (#1179) and repairs dependent workspace
+lock files. The measured lexical/grouping implementation and bench sources are
+unchanged; these numbers describe the frozen source above, not a fresh timing
+of every later delivery commit. They do not attest final-head remote CI or
+production acceptance.
 
 Every case discards one warmup per path and alternates path order over seven
 samples. Tables show medians in milliseconds. Ratios divide grouped time by
