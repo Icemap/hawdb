@@ -796,7 +796,12 @@ rust_test(
     rust_test(
         name = "hawdb_mvcc_staging_session" + suffix + "_tests",
         crate_root = "tests/mvcc_staging_session.rs",
-        srcs = ["tests/mvcc_staging_session.rs", "tests/support/projection_coverage.rs", "tests/support/registered_consumer_coverage.rs"],
+        srcs = [
+            "tests/mvcc_staging_session.rs",
+            "tests/support/embedded_consumer_coverage.rs",
+            "tests/support/projection_coverage.rs",
+            "tests/support/registered_consumer_coverage.rs",
+        ],
         edition = "2024",
         deps = [library, "//crates/storage:hawdb_storage"],
     )

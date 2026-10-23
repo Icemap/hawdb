@@ -1,0 +1,22 @@
+{
+  "command": [
+    "/home/hawkingrei/devel/nowledge/skein/target/consumer-publication-867-release/release/deps/consumer_publication-5503591cd7b813ef",
+    "--mode",
+    "scoped-blocking",
+    "--writers",
+    "4",
+    "--documents",
+    "512",
+    "--payload",
+    "1024",
+    "--writes",
+    "4096",
+    "--quiet-samples",
+    "32",
+    "--root",
+    "/home/hawkingrei/devel/nowledge/skein/target/consumer-progress-232-fixtures/consumer-publication-443107-0-13"
+  ],
+  "returncode": 101,
+  "stdout": "",
+  "stderr": "\nthread '<unnamed>' (446859) panicked at benches/consumer_publication.rs:149:35:\nunexpected publication failure: search projection consumer requires rebuild: RetentionLimitExceeded { resume_floor_commit_epoch: 6 }\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\nthread 'main' (446847) panicked at benches/consumer_publication.rs:250:53:\ncalled `Result::unwrap()` on an `Err` value: Any { .. }\n"
+}

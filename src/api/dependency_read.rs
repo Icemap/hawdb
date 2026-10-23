@@ -46,6 +46,7 @@ mod graph_match;
 mod projection_feed;
 pub use full_source::{
     PreparedProjectionFullSource, ProjectionFullSourceItem, ProjectionFullSourceLimits,
+    ProjectionSourceScope,
 };
 pub use projection_feed::{
     PreparedProjectionFeed, ProjectionFeedError, ProjectionFeedItem, ProjectionFeedLimits,

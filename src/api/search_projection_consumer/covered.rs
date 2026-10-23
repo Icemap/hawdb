@@ -110,11 +110,12 @@ impl Base {
 }
 
 /// Bounded invisible C..E work over this registration's exact selected base.
-/// Source writers may continue between steps; the conservative full-source
-/// coverage proof rejects activation after any post-E source commit.
+/// Source writers may continue between steps. The default full-database scope
+/// rejects all post-E commits; declared domains retain only relevant invalidations.
 pub struct ProjectionConsumerStagingSession<'consumer> {
     session: ProjectionStagingSession<'consumer>,
     base: Base,
+    scope: crate::ProjectionSourceScope,
 }
 impl<'consumer> ProjectionConsumerStagingSession<'consumer> {
     pub fn source_epoch(&self) -> u64 {
@@ -131,14 +132,28 @@ impl<'consumer> ProjectionConsumerStagingSession<'consumer> {
     /// The fixed full-source mapper is the trusted projection definition. Keep
     /// its version bound to the stable Consumer ID through final publication.
     pub fn verify_complete_source(
+        mut self,
+        config: ProjectionCoverageConfig,
+        mapper: ProjectionBaselineMappingFunction,
+    ) -> CatchUpResult<ProjectionConsumerCoverageSession<'consumer>> {
+        let scope = std::mem::take(&mut self.scope);
+        self.verify_complete_source_in(config, mapper, scope)
+    }
+
+    /// Bind exhaustive verification to the projection's declared source domain.
+    /// Writes outside that domain may advance while this candidate is prepared.
+    pub fn verify_complete_source_in(
         self,
         config: ProjectionCoverageConfig,
         mapper: ProjectionBaselineMappingFunction,
+        scope: crate::ProjectionSourceScope,
     ) -> CatchUpResult<ProjectionConsumerCoverageSession<'consumer>> {
         let _descriptor_operation = self.base.descriptor_operation()?;
         let operations = self.session.sorting_report().input_operations;
         Ok(ProjectionConsumerCoverageSession {
-            session: self.session.verify_complete_source(config, mapper)?,
+            session: self
+                .session
+                .verify_complete_source_in(config, mapper, scope)?,
             base: self.base,
             operations,
         })
@@ -194,6 +209,11 @@ impl ProjectionCoveredConsumerUpdate {
     }
 }
 
+mod preparation;
+pub use preparation::{
+    ProjectionConsumerPreparation, ProjectionConsumerPublication, ProjectionPreparedConsumerUpdate,
+};
+
 impl Database {
     /// Begin source-coherent catch-up for one persistent Consumer. Every step
     /// remains private until complete independent E verification and native
@@ -208,6 +228,29 @@ impl Database {
         config: ProjectionConsumerCatchUpConfig,
         mapper: ProjectionMappingFunction,
     ) -> CatchUpResult<ProjectionConsumerStagingSession<'consumer>> {
+        self.begin_search_projection_consumer_catch_up_in(
+            consumer,
+            config,
+            mapper,
+            crate::ProjectionSourceScope::Database,
+        )
+    }
+
+    /// Declare enumeration domains before delta hydration so tracked queries
+    /// can use their proven label/table scopes instead of unrelated physical IDs.
+    pub fn begin_search_projection_consumer_catch_up_in<'consumer>(
+        &mut self,
+        consumer: &'consumer SearchProjectionConsumer,
+        config: ProjectionConsumerCatchUpConfig,
+        mapper: ProjectionMappingFunction,
+        scope: crate::ProjectionSourceScope,
+    ) -> CatchUpResult<ProjectionConsumerStagingSession<'consumer>> {
+        let scope_bytes = scope.retained_bytes();
+        if scope_bytes > config.reads.dependency_bytes.get() {
+            return Err(
+                ProjectionFeedError::BudgetExceeded(crate::ProjectionFeedResource::Bytes).into(),
+            );
+        }
         let _descriptor_operation = self.internal_descriptor_operation()?;
         if consumer.search_index()?.vector_index_descriptor().is_some() {
             return Err(HawDBError::Semantic(
@@ -233,8 +276,9 @@ impl Database {
             task: config.task,
             build: Default::default(),
         };
-        let source =
+        let mut source =
             self.begin_prepared_projection_feed(config.after_epoch, config.reads, config.feed)?;
+        source.record_source_scope(&scope)?;
         config.build.source_graph_commit_epoch = Some(source.source_epoch());
         let permit = self.consumer_publication_permit()?;
         let pin = consumer.pin(&permit)?;
@@ -248,12 +292,17 @@ impl Database {
         let bytes = std::mem::size_of::<ProjectionConsumerStagingSession<'_>>()
             .max(std::mem::size_of::<ProjectionConsumerCoverageSession<'_>>())
             .max(std::mem::size_of::<ProjectionCoveredConsumerUpdate>())
+            .max(std::mem::size_of::<ProjectionConsumerPreparation<'_>>())
+            .max(std::mem::size_of::<ProjectionPreparedConsumerUpdate<'_>>())
+            .max(std::mem::size_of::<ProjectionConsumerPublication>())
             + receipt.binding.consumer_id.len()
-            + receipt.sha256.len();
+            + receipt.sha256.len()
+            + scope_bytes;
         let memory = stage.reserve_session_metadata(bytes)?;
         let session = ProjectionStagingSession::from_source(source, stage, config, mapper)?;
         Ok(ProjectionConsumerStagingSession {
             session,
+            scope,
             base: Base {
                 receipt,
                 _pin: pin,
@@ -263,198 +312,4 @@ impl Database {
             },
         })
     }
-
-    /// Build and publish the already compared E contents through the stationary
-    /// Consumer protocol, then acknowledge its durable native receipt. Final
-    /// artifact construction is a blocking full-generation build. A lost reply
-    /// uses `resolve_search_projection_consumer_publication` or verified reopen;
-    /// it must not be treated as rollback or revalidated against a later E.
-    pub fn publish_search_projection_consumer_covered_update(
-        &mut self,
-        consumer: &mut SearchProjectionConsumer,
-        covered: ProjectionCoveredConsumerUpdate,
-        durability: ProjectionSourceDurability,
-    ) -> CatchUpResult<SearchProjectionConsumerCatchUpReport> {
-        self.publish_covered_consumer_with_limits(
-            consumer,
-            covered,
-            durability,
-            RegisteredConsumerLimits::default(),
-        )
-    }
-
-    pub(super) fn publish_covered_consumer_with_limits(
-        &mut self,
-        consumer: &mut SearchProjectionConsumer,
-        covered: ProjectionCoveredConsumerUpdate,
-        durability: ProjectionSourceDurability,
-        limits: RegisteredConsumerLimits,
-    ) -> CatchUpResult<SearchProjectionConsumerCatchUpReport> {
-        let _descriptor_operation = self.internal_descriptor_operation()?;
-        let root = self.consumer_writable_root()?;
-        self.reload_consumer_registry_if_unavailable()?;
-        self.validate_consumer_receipt(consumer)?;
-        let current = consumer.projection().receipt();
-        if current != covered.base.receipt {
-            return Err(HawDBError::TransactionConflict {
-                read_epoch: covered.base.receipt.source_epoch,
-                committed_epoch: current.source_epoch,
-                key: "registered Consumer base or binding changed".into(),
-            }
-            .into());
-        }
-        let epoch = covered.source_epoch();
-        self.validate_prepared_projection_source(&covered.dependencies, epoch, durability)?;
-        // Task refusal before birth/intent leaves both selector and registry intact.
-        covered
-            .base
-            .task
-            .checkpoint()
-            .map_err(ProjectionConsumerCatchUpError::Stopped)?;
-        publication_failpoint(PublicationStage::BeforeCheckpoint)?;
-        if epoch == current.source_epoch {
-            return self.covered_consumer_report(consumer, epoch, epoch, 0, 0);
-        }
-        // Idle compared records retain no execution slot. Re-admit and settle
-        // deterministic resident/reader refusals before reserving a birth.
-        let permit = self.consumer_publication_permit()?;
-        let documents = covered.documents.admit_publication(
-            Arc::clone(&permit),
-            covered.base.task.clone(),
-            limits,
-        )?;
-        let recovery_memory = permit
-            .reserve_retained_memory(
-                hawdb_storage::consumer_allocation::CONSUMER_SELECTION_MEMORY_BOUND,
-            )
-            .map_err(|error| hawdb_core::ResourceBudgetError {
-                resource: hawdb_core::ResourceBudgetKind::MemoryBytes,
-                scope: hawdb_core::ResourceBudgetScope::SharedPool,
-                owner: "covered Consumer recovery metadata".into(),
-                memory_class: None,
-                requested: error.requested,
-                used: 0,
-                budget: error.available,
-                budget_option: "RuntimeGovernor.available_retained_memory_bytes",
-                message: error.to_string(),
-            })
-            .map_err(HawDBError::from)?;
-        let allocation = self
-            .runtime
-            .get()?
-            .store
-            .reserve_search_consumer_update(consumer.projection().stationary_receipt()?)?;
-        let birth = consumer.projection().prepare_successor_birth(allocation)?;
-        let locator = consumer.projection().registered_locator()?.to_owned();
-        let preparation = documents.prepare_registered(
-            birth,
-            RegisteredConsumerPreparation {
-                locator: &locator,
-                epoch,
-                permit: Arc::clone(&permit),
-                task: covered.base.task.clone(),
-                limits,
-                recovery_memory,
-                previous: Some(consumer.projection()),
-            },
-        );
-        let mut prepared = match preparation {
-            Ok(prepared) => prepared,
-            Err(error) => return Err(retain_failed_owner(consumer, *error)),
-        };
-        let selection = (|| -> CatchUpResult<_> {
-            publication_failpoint(PublicationStage::AfterCheckpoint)?;
-            self.validate_prepared_projection_source(&covered.dependencies, epoch, durability)?;
-            let runtime = self.runtime.get()?;
-            runtime.store.verify_search_consumer_candidate_source(
-                prepared.reservation_binding()?,
-                epoch,
-                prepared.report().metadata_reference,
-            )?;
-            let mut attempt = prepared.admit_selection(Arc::clone(&permit), covered.base.task)?;
-            publication_failpoint(PublicationStage::BeforeSelector)?;
-            let pending = attempt.select()?;
-            drop(runtime);
-            publication_failpoint(PublicationStage::AfterSelector)?;
-            let receipt = pending.finish()?;
-            publication_failpoint(PublicationStage::AfterSelectorBarrier)?;
-            Ok(receipt)
-        })();
-        let selected = match selection {
-            Ok(receipt) => receipt,
-            Err(error) => {
-                if let Err(retention) = consumer
-                    .projection_mut()
-                    .retain_pending_publication(prepared)
-                {
-                    return Err(ProjectionConsumerCatchUpError::RecoveryRetention {
-                        failure: Box::new(error),
-                        retention,
-                    });
-                }
-                return Err(error);
-            }
-        };
-        match prepared.complete(selected) {
-            Ok(projection) => *consumer.projection_mut() = projection,
-            Err(error) => return Err(retain_failed_owner(consumer, *error)),
-        }
-        let receipt = consumer.projection().receipt();
-        self.acknowledge_consumer_checkpoint(consumer.id(), &receipt)?;
-        self.publish_consumer_registry(&root)?;
-        self.runtime
-            .get_mut()?
-            .projection_consumers
-            .verified
-            .insert(consumer.id().as_str().into(), State::Active);
-        self.covered_consumer_report(
-            consumer,
-            current.source_epoch,
-            receipt.source_epoch,
-            1,
-            covered.operations,
-        )
-    }
-
-    fn covered_consumer_report(
-        &self,
-        consumer: &SearchProjectionConsumer,
-        start: u64,
-        end: u64,
-        publications: usize,
-        operations: usize,
-    ) -> CatchUpResult<SearchProjectionConsumerCatchUpReport> {
-        Ok(SearchProjectionConsumerCatchUpReport {
-            catch_up: SearchProjectionCatchUpReport {
-                graph_commit_epoch: end,
-                start_applied_epoch: Some(start),
-                start_durable_epoch: Some(start),
-                end_applied_epoch: Some(end),
-                end_durable_epoch: Some(end),
-                applied_batch_count: publications,
-                applied_operation_count: operations,
-                complete: true,
-            },
-            consumer: self.search_projection_consumer_status(consumer.id())?,
-        })
-    }
-}
-
-fn retain_failed_owner(
-    consumer: &mut SearchProjectionConsumer,
-    error: RegisteredConsumerError,
-) -> ProjectionConsumerCatchUpError {
-    let (error, recovery) = error.into_parts();
-    let failure = ProjectionConsumerCatchUpError::from(error);
-    if let Some(recovery) = recovery
-        && let Err(retention) = consumer
-            .projection_mut()
-            .retain_failed_preparation(recovery)
-    {
-        return ProjectionConsumerCatchUpError::RecoveryRetention {
-            failure: Box::new(failure),
-            retention,
-        };
-    }
-    failure
 }

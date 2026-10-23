@@ -23,7 +23,7 @@ pub(crate) const LEDGER_FILE: &str = "consumer-allocations.hawdb";
 const MAX_BYTES: usize = 1024 * 1024;
 const MAX_PENDING: usize = 256;
 const GENERATION_DIRECTORY_PREFIX: &str = "hawdb-generation-";
-const HEADER: &[u8] = b"HAWDB_CONSUMER_ALLOCATIONS_V2\n";
+const HEADER: &[u8] = b"HAWDB_CONSUMER_ALLOCATIONS_V3\n";
 
 mod native_birth;
 pub use native_birth::PendingConsumerGeneration;
@@ -64,6 +64,8 @@ struct Reservation {
     target_incarnation: u64,
     generation: u64,
     operation: u64,
+    // The reservation CAS is immutable across detached construction and retry.
+    previous_operation: Option<u64>,
     registration_uuid: String,
     projection_uuid: String,
     checkpoint_uuid: String,
@@ -163,6 +165,38 @@ impl PublicationIntent {
     fn pending(&self) -> bool {
         !self.receipt_complete && !self.not_selected
     }
+}
+
+impl Reservation {
+    fn unresolved(&self) -> bool {
+        self.publication_intent.as_ref().map_or_else(
+            || !matches!(self.native_birth, NativeBirth::Retired { .. }),
+            PublicationIntent::pending,
+        )
+    }
+}
+
+fn require_reserved_predecessor(ledger: &Ledger, row: &Reservation) -> Result<()> {
+    let active = ledger
+        .selected
+        .iter()
+        .find(|root| root.matches_consumer(row));
+    if active.map(|root| root.operation) != row.previous_operation
+        || (row.previous_operation.is_some()
+            && row.lease.is_some()
+            && !ledger.policies.iter().any(|policy| {
+                policy.key()
+                    == (
+                        row.branch_id.as_str(),
+                        row.database_uuid.as_str(),
+                        row.consumer_id.as_str(),
+                    )
+                    && policy.registration_uuid == row.registration_uuid
+            }))
+    {
+        return Err(HawDBError::ProjectionBusy);
+    }
+    Ok(())
 }
 
 // Completed predecessor receipts do not authorize deletion of their physical
@@ -330,6 +364,9 @@ impl ConsumerAllocationSource {
             {
                 return Err(invalid("candidate seal differs from durable reservation"));
             }
+            // Read the authoritative registration under the owner immediately
+            // before selection; pending publication can hide the cache entry.
+            require_reserved_predecessor(&ledger, row)?;
             Ok(())
         })
     }
@@ -432,13 +469,11 @@ impl ConsumerAllocationSource {
             {
                 return Err(HawDBError::ProjectionBusy);
             }
-            if ledger.pending.iter().any(|row| {
-                receipt.selected.matches_consumer(row)
-                    && row
-                        .publication_intent
-                        .as_ref()
-                        .is_some_and(PublicationIntent::pending)
-            }) {
+            if ledger
+                .pending
+                .iter()
+                .any(|row| receipt.selected.matches_consumer(row) && row.unresolved())
+            {
                 return Err(HawDBError::ProjectionBusy);
             }
             let policy = ledger
@@ -475,10 +510,9 @@ impl ConsumerAllocationSource {
                 row.branch_id == branch
                     && row.database_uuid == database
                     && row.consumer_id == consumer
-                    && row
-                        .publication_intent
-                        .as_ref()
-                        .is_some_and(PublicationIntent::pending)
+                    && row.unresolved()
+                    && (row.previous_operation.is_some()
+                        || row.native_birth != NativeBirth::Reserved)
             }) {
                 return Err(HawDBError::ProjectionBusy);
             }
@@ -613,6 +647,7 @@ pub struct ReservedConsumerAllocation {
     incarnation: TargetIncarnation,
     generation: ImmutableGeneration,
     operation: OperationIdentity,
+    previous_operation: Option<u64>,
     registration: Uuid,
     projection: Uuid,
     checkpoint: Uuid,
@@ -732,6 +767,16 @@ fn validate(ledger: &Ledger) -> Result<()> {
         {
             return Err(invalid("invalid reservation identities"));
         }
+        if match row.previous_operation {
+            Some(operation) => {
+                !operation.is_multiple_of(3)
+                    || operation < row.target_incarnation.saturating_add(2)
+                    || operation >= row.operation
+            }
+            None => row.target_incarnation != row.operation - 2,
+        } {
+            return Err(invalid("invalid reserved predecessor"));
+        }
         let branch =
             BranchId::parse(&row.branch_id).map_err(|_| invalid("invalid source branch"))?;
         if branch.as_uuid().to_string() != row.branch_id {
@@ -824,7 +869,12 @@ fn validate(ledger: &Ledger) -> Result<()> {
                 return Err(invalid("publication intent lost its previous root"));
             }
             if let Some(previous) = &intent.previous {
-                if !previous.matches_consumer(row) {
+                if !previous.matches_consumer(row)
+                    || previous.registration_uuid != row.registration_uuid
+                    || previous.projection_uuid != row.projection_uuid
+                    || previous.target_incarnation != row.target_incarnation
+                    || previous.target_locator != row.target_locator
+                {
                     return Err(invalid("publication intent has a foreign previous root"));
                 }
                 if previous.operation >= next.operation
@@ -833,6 +883,11 @@ fn validate(ledger: &Ledger) -> Result<()> {
                     return Err(invalid("publication intent regresses its previous root"));
                 }
                 validate_selected_root(project, ledger.high_water, previous)?;
+            }
+            if intent.previous.as_ref().map(|root| root.operation) != row.previous_operation {
+                return Err(invalid(
+                    "publication intent differs from reserved predecessor",
+                ));
             }
             if ledger.pending[..index].iter().any(|candidate| {
                 candidate.branch_id == row.branch_id
@@ -867,6 +922,14 @@ fn validate(ledger: &Ledger) -> Result<()> {
         }
         if previous_consumer.is_some_and(|previous| selected.consumer_key() <= previous) {
             return Err(invalid("selected consumers are not unique and ordered"));
+        }
+        if row.lease.is_some()
+            && !ledger.policies.iter().any(|policy| {
+                policy.key() == selected.consumer_key()
+                    && policy.registration_uuid == selected.registration_uuid
+            })
+        {
+            return Err(invalid("selected registration lost its lease policy"));
         }
         previous_consumer = Some(selected.consumer_key());
     }
@@ -1122,10 +1185,8 @@ pub(crate) fn reserve(
             row.branch_id == key.0
                 && row.database_uuid == key.1
                 && row.consumer_id == consumer
-                && row
-                    .publication_intent
-                    .as_ref()
-                    .is_some_and(PublicationIntent::pending)
+                && row.unresolved()
+                && row.native_birth != NativeBirth::Reserved
         }) {
             return Err(HawDBError::ProjectionBusy);
         }
@@ -1139,6 +1200,7 @@ pub(crate) fn reserve(
                 && row.native_birth == NativeBirth::Reserved
                 && row.candidate_seal.is_none()
                 && row.publication_intent.is_none()
+                && row.previous_operation == previous.map(|receipt| receipt.selected.operation)
                 && previous.is_none_or(|receipt| row.operation > receipt.selected.operation)
                 && (previous.is_some() || row.target_incarnation == row.operation - 2)
                 && row.registration_uuid
@@ -1197,6 +1259,7 @@ pub(crate) fn reserve(
                 .map_or(operation - 2, |receipt| receipt.selected.target_incarnation),
             generation: operation - 1,
             operation,
+            previous_operation: previous.map(|receipt| receipt.selected.operation),
             registration_uuid: registration.to_string(),
             projection_uuid: projection.to_string(),
             checkpoint_uuid: checkpoint.to_string(),
@@ -1221,6 +1284,7 @@ pub(crate) fn reserve(
         ),
         generation: ImmutableGeneration(operation - 1),
         operation: OperationIdentity(operation),
+        previous_operation: reservation.previous_operation,
         registration: Uuid::parse_str(&reservation.registration_uuid)
             .expect("validated registration"),
         projection: Uuid::parse_str(&reservation.projection_uuid).expect("validated projection"),
@@ -1268,8 +1332,7 @@ fn generation_name_for(
 mod tests {
     use super::*;
 
-    #[test]
-    fn selected_next_cannot_hide_a_foreign_previous_root() {
+    fn selected_fixture() -> Ledger {
         let uuid = |byte| Uuid::from_bytes([byte; 16]).to_string();
         let project = BranchId::new(Uuid::from_bytes([1; 16])).unwrap();
         let branch = BranchId::new(Uuid::from_bytes([2; 16])).unwrap();
@@ -1281,6 +1344,7 @@ mod tests {
             target_incarnation: 1,
             generation: 2,
             operation: 3,
+            previous_operation: None,
             registration_uuid: uuid(4),
             projection_uuid: uuid(5),
             checkpoint_uuid: uuid(6),
@@ -1297,26 +1361,102 @@ mod tests {
             publication_intent: None,
         };
         let next = SelectedRoot::from_candidate(&row).unwrap();
-        let mut foreign_previous = next.clone();
-        foreign_previous.branch_id = uuid(9);
         row.publication_intent = Some(PublicationIntent {
             unregistered: false,
-            previous: Some(foreign_previous),
-            receipt_complete: false,
+            previous: None,
+            receipt_complete: true,
             not_selected: false,
         });
-        let ledger = Ledger {
+        Ledger {
             project_id: project.as_uuid().to_string(),
             main_branch_id: branch.as_uuid().to_string(),
             high_water: 3,
             pending: vec![row],
             selected: vec![next],
             policies: Vec::new(),
-        };
+        }
+    }
+
+    #[test]
+    fn selected_next_cannot_hide_a_foreign_previous_root() {
+        let mut ledger = selected_fixture();
+        let mut foreign_previous = ledger.selected[0].clone();
+        foreign_previous.branch_id = Uuid::from_bytes([9; 16]).to_string();
+        ledger.pending[0]
+            .publication_intent
+            .as_mut()
+            .unwrap()
+            .previous = Some(foreign_previous);
         assert!(validate(&ledger)
             .unwrap_err()
             .to_string()
             .contains("foreign previous root"));
+    }
+    #[test]
+    fn detached_intent_keeps_the_reserved_predecessor_and_registration() {
+        let mut ledger = selected_fixture();
+        validate(&ledger).unwrap();
+        let previous = ledger.selected[0].clone();
+        let mut update = ledger.pending[0].clone();
+        update.operation = 6;
+        update.generation = 5;
+        update.previous_operation = Some(previous.operation);
+        update.native_birth = NativeBirth::Recorded {
+            generation_name: generation_name_for(
+                BranchId::parse(&ledger.project_id).unwrap(),
+                1,
+                5,
+                6,
+            ),
+            parent_locator: "parent".into(),
+        };
+        update.publication_intent = None;
+        require_reserved_predecessor(&ledger, &update).unwrap();
+        ledger.high_water = 6;
+        ledger.pending.push(update.clone());
+        validate(&ledger).unwrap();
+        ledger.selected.clear();
+        assert!(matches!(
+            require_reserved_predecessor(&ledger, &update),
+            Err(HawDBError::ProjectionBusy)
+        ));
+        ledger
+            .selected
+            .push(SelectedRoot::from_candidate(&update).unwrap());
+        assert!(matches!(
+            require_reserved_predecessor(&ledger, &update),
+            Err(HawDBError::ProjectionBusy)
+        ));
+        ledger.pending[1].publication_intent = Some(PublicationIntent {
+            previous: None,
+            receipt_complete: false,
+            unregistered: false,
+            not_selected: false,
+        });
+        assert!(validate(&ledger)
+            .unwrap_err()
+            .to_string()
+            .contains("reserved predecessor"));
+        ledger.pending[1]
+            .publication_intent
+            .as_mut()
+            .unwrap()
+            .previous = Some(previous.clone());
+        validate(&ledger).unwrap();
+        ledger.selected = vec![previous];
+        update.lease = Some(ConsumerLeasePolicy {
+            max_idle_commits: 100,
+            expires_at_commit_epoch: 100,
+        });
+        assert!(matches!(
+            require_reserved_predecessor(&ledger, &update),
+            Err(HawDBError::ProjectionBusy)
+        ));
+        ledger.pending[0].lease = update.lease;
+        assert!(validate(&ledger)
+            .unwrap_err()
+            .to_string()
+            .contains("lease policy"));
     }
 }
 

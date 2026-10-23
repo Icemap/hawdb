@@ -12,7 +12,7 @@ mod retirement;
 use retirement::RetirementStep;
 
 const BIRTH_FILE: &str = "consumer-birth.hawdb";
-const BIRTH_HEADER: &[u8] = b"HAWDB_CONSUMER_BIRTH_V1\n";
+const BIRTH_HEADER: &[u8] = b"HAWDB_CONSUMER_BIRTH_V2\n";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Phase {
@@ -168,6 +168,7 @@ impl ReservedConsumerAllocation {
 
     pub(super) fn require_row(&self, row: &Reservation) -> Result<()> {
         if row.operation != self.operation.0
+            || row.previous_operation != self.previous_operation
             || row.target_incarnation != self.incarnation.0
             || row.generation != self.generation.0
             || row.branch_id != self.source_branch.as_uuid().to_string()
@@ -333,7 +334,9 @@ pub(super) fn marker_file_name() -> &'static str {
 }
 
 impl PendingConsumerGeneration {
-    fn complete_birth_intent(&mut self) -> Result<()> {
+    /// Persist the exclusive native-attempt claim before releasing the source
+    /// owner. Errors retain this token for resolution of the original effect.
+    pub fn complete_birth_intent(&mut self) -> Result<()> {
         if self.phase == Phase::Intent {
             self.allocation
                 .as_ref()
@@ -580,6 +583,7 @@ impl PendingConsumerGeneration {
                 if row.publication_intent.is_some() {
                     return Err(invalid("publication intent already exists"));
                 }
+                require_reserved_predecessor(&ledger, row)?;
                 let previous = ledger
                     .selected
                     .iter()

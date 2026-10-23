@@ -68,6 +68,7 @@ use crate::{
 };
 use hawdb_core::RuntimeTaskContext;
 mod incremental_search;
+mod registered_search;
 use hawdb_optimizer::AdaptiveVectorBackendPolicy;
 use hawdb_qos::{
     IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeGovernorSnapshot,
@@ -102,6 +103,9 @@ pub use hawdb_readiness::slow_query::{
 };
 pub use hawdb_readiness::{NowledgeMemReadinessAreaMap, NowledgeMemReadinessAreaSummary};
 pub use incremental_search::NowledgeMemIncrementalSearchMaintenanceOptions;
+pub use registered_search::{
+    NowledgeMemPreparedConsumerUpdate, NowledgeMemSearchProjectionConsumer,
+};
 
 #[cfg(test)]
 mod slow_query_facade_tests {
@@ -3677,8 +3681,12 @@ impl NowledgeMemEmbeddedStoreHandle {
             )
     }
 
-    /// Runs bounded unified projection catch-up through the embedded library
-    /// handle and invokes the host hydrator for every selected batch.
+    /// Runs legacy unified catch-up and invokes the host hydrator per batch.
+    /// The selected interval must reach the pinned source epoch; a shorter
+    /// prefix is refused before publication. For bounded resumable private work,
+    /// use `open_or_create_search_projection_consumer` and `begin_catch_up`.
+    /// This compatibility rule applies to both full-residency and incremental
+    /// maintenance modes; increasing limits is not a bounded-progress protocol.
     pub fn catch_up_search_projection_with_batch_hydrator<F>(
         &self,
         max_change_operations_per_batch: usize,

@@ -77,7 +77,7 @@ fn allocation_profile(rows: usize, age: usize) {
         reader.node(NodeId(0)).unwrap().properties["value"],
         Value::Int(0)
     );
-    assert_eq!(pins.oldest_epoch(), Some(base_epoch));
+    assert_eq!(pins.oldest_epoch(), Some(base_epoch + 1));
     // Closing the producer cannot retire snapshots or their history charges.
     drop(live);
     assert_eq!(counter.retained_history_bytes(), retained_payload);
@@ -231,4 +231,68 @@ fn restored_savepoint_preserves_conflicts_after_delete_reinsert_and_pruning() {
     live.checkpoint(&catalog).unwrap();
     assert_eq!(live.version_snapshot_pins.oldest_epoch(), None);
     assert_eq!(live.version_index.retained_history_bytes(), 0);
+}
+
+#[test]
+fn long_read_releases_unrelated_history_and_stale_write_upgrade_fails_closed() {
+    let mut catalog = Catalog::default();
+    let mut live = GraphStore::default();
+    live.create_node(
+        &mut catalog,
+        "Memory",
+        BTreeMap::from([
+            ("id".into(), Value::Int(0)),
+            ("value".into(), Value::Int(0)),
+        ]),
+    )
+    .unwrap();
+    let reader = live.snapshot_for_read();
+    let descendant = reader.snapshot_for_read();
+    let baseline = reader.commit_epoch();
+    assert!(live.version_snapshot_pins.oldest_epoch().is_none());
+    for value in 1..=64 {
+        live.create_node(
+            &mut catalog,
+            "Unrelated",
+            BTreeMap::from([("id".into(), Value::Int(value))]),
+        )
+        .unwrap();
+        live.reclaim_version_history();
+        assert!(live.version_index.is_empty());
+        assert_eq!(live.version_index.retained_history_bytes(), 0);
+        assert_eq!(reader.node_count_for_label(None), 1);
+    }
+    drop(reader);
+    assert_eq!(descendant.commit_epoch(), baseline);
+    assert_eq!(
+        descendant.node(NodeId(0)).unwrap().properties["value"],
+        Value::Int(0)
+    );
+    // The read root can create a workspace, but cannot revive already discarded
+    // conflict evidence by registering its old epoch after reclamation.
+    let mut stale = descendant.begin_mutation_transaction(&catalog);
+    stale
+        .stage_mutation_with_limits(update(0, 99), MutationLimits::default())
+        .unwrap();
+    let before = live.commit_epoch();
+    let error = live
+        .commit_mutation_transaction_and_relational(
+            &mut catalog,
+            stale,
+            RelationalTransaction::default(),
+            MutationLimits::default(),
+        )
+        .unwrap_err();
+    assert!(error.is_retryable_transaction_conflict());
+    assert_eq!(live.commit_epoch(), before);
+    assert_eq!(
+        live.node(NodeId(0)).unwrap().properties["value"],
+        Value::Int(0)
+    );
+    live.commit_mutations(&mut catalog, vec![update(0, 1)])
+        .unwrap();
+    assert_eq!(
+        descendant.node(NodeId(0)).unwrap().properties["value"],
+        Value::Int(0)
+    );
 }

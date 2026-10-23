@@ -1,0 +1,7 @@
+{
+  "baseline": "a703cc0f18f549918c73f454cda521edb4f0fb13",
+  "candidate": "55e6b3873c61b520635d6fe2b55f76a6de1c988d",
+  "harness_sha256": "cdc3a46dfd993918794ea7c269db23090952c5b000ca335ff6b73f2e80575a9f",
+  "order": "build baseline, build candidate, then all timing; no concurrent builds",
+  "comparison": "whole versions; identical harness, effective Cargo config and pinned toolchain; separate lockfiles and target directories"
+}

@@ -2033,8 +2033,9 @@ impl GraphStore {
         read_barrier: bool,
     ) -> Result<VersionIndex> {
         // The commit's exclusive store borrow excludes fresh canonical captures.
-        // Other sources retain their inherited pin while registering descendants,
-        // so a later registration cannot introduce an older protection floor.
+        // Writable sources retain their inherited protection while registering
+        // descendants. Late upgrades from unregistered read sources are fenced
+        // by the baseline's history floor if their required stamps were retired.
         let baseline = self
             .version_snapshot_pins
             .oldest_epoch()
@@ -2063,6 +2064,13 @@ impl GraphStore {
 
     fn validate_version_writes(&self, writes: &VersionWriteSet, read_epoch: u64) -> Result<()> {
         if let Some(conflict) = self.version_index.first_conflict(writes, read_epoch) {
+            if self.version_index.history_reclaimed_after(read_epoch) {
+                return Err(HawDBError::TransactionConflict {
+                    read_epoch,
+                    committed_epoch: conflict.committed_epoch,
+                    key: "reclaimed_history".into(),
+                });
+            }
             return Err(transaction_conflict_error(read_epoch, conflict));
         }
         for key in [VersionKey::Database, VersionKey::Schema] {

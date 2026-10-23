@@ -1,0 +1,39 @@
+{
+  "schema": "concurrent-writer-strict-gate-v1",
+  "created_utc": "2026-10-22T11:58:43.165799+00:00",
+  "baseline_revision": "a703cc0f18f549918c73f454cda521edb4f0fb13",
+  "candidate_head": "a6803c3ab372f8f75e6bd8317bfec9786192bea1",
+  "candidate_status": " M benches/concurrent_writers.rs\n M benches/consumer_publication.rs\n M benches/consumer_publication/workload.rs\n M crates/search/src/consumer/registered/recovery.rs\n M crates/storage/src/store.rs\n M crates/storage/src/store/graph_checkpoint.rs\n M crates/storage/src/store/projection_full_source.rs\n M crates/storage/src/store/snapshot_retention_tests.rs\n M crates/storage/src/version.rs\n M docs/MVCC_SNAPSHOT_RETENTION_QUALIFICATION.md\n M docs/TEST_INDEX.md\n M scripts/measure-consumer-publication.py\n M src/api/dependency_read.rs\n M src/api/dependency_read/full_source.rs\n M src/api/dependency_read/projection_feed.rs\n M src/api/dependency_read/staging_session/coverage.rs\n M src/api/mod.rs\n M src/api/search_projection_consumer/covered.rs\n M src/api/search_projection_consumer/mod.rs\n M src/lib.rs\n M src/nowledge_mem.rs\n M tests/support/registered_consumer_coverage.rs\n?? docs/CONSUMER_PROGRESS_AND_RETENTION.md\n?? scripts/measure-concurrent-writer-gate.py\n?? src/api/search_projection_consumer/covered/\n?? src/nowledge_mem/registered_search.rs\n?? tests/support/embedded_consumer_coverage.rs\n",
+  "candidate_source_manifest_sha256": "84c022a3086d142bb0d1480ff8e599fea63bedb1b15e0fb43961a04780a6f54f",
+  "candidate_diff_sha256": "3366a5a04684327d795a2707bb9cb1e1c390d03f69ed2a13c5a9c042560ec073",
+  "harness_sha256": "cdc3a46dfd993918794ea7c269db23090952c5b000ca335ff6b73f2e80575a9f",
+  "binary_sha256": {
+    "baseline": "0903434ec5ffda83eeea07dd70e09ac4cdc2e086c5a180e4995dcc59abd447c2",
+    "candidate": "0012d0a32c060b19d7270e81e7c3b2ded81b9141282d7172954da52a31b8c216"
+  },
+  "binary_paths": {
+    "baseline": "/home/hawkingrei/devel/nowledge/skein/target/consumer-publication-232-baseline-a703/release/deps/concurrent_writers-9fa33a4001b9e894",
+    "candidate": "/home/hawkingrei/devel/nowledge/skein/target/consumer-publication-867-release/release/deps/concurrent_writers-481996fd3a6ae183"
+  },
+  "cargo_lock_sha256": {
+    "baseline": "70b29b5fa5552b3657e8fcf49a1f2f49b9d0a1b7aaec2210e6f46bfbb69bc575",
+    "candidate": "e8a0a6973a09671602038b8aa2ed2b2fc280186a1e67f6367772911be2af6d1f"
+  },
+  "effective_cargo_config_sha256": "06c7ca26d39223bd90a6412acd8609c380ce2d1650a72b70c90171656ca89819",
+  "build_profile": "bench; opt-level=3, codegen-units=1, thin LTO, strip=none; both builds invoked from candidate repository",
+  "toolchain": "Rust 1.97.1",
+  "default_features": true,
+  "baseline_overlay": "identical writer harness and Cargo benchmark registration only",
+  "measured_pairs": 40,
+  "warm_up_pairs": 1,
+  "interval_ranks_one_based": [
+    12,
+    29
+  ],
+  "primary_endpoints": "commit p50/p95 for non-serialized API in memory, durable ungrouped, durable grouped",
+  "pass_rule": "all six unrounded upper ratio endpoints <= 1.0; no adaptive stopping or sample removal",
+  "order": "baseline first for even pairs, candidate first for odd pairs; alternate --round 0/1",
+  "platform": "Linux-7.1.10-zen1-1-zen-x86_64-with-glibc2.44",
+  "filesystem": "Filesystem     Type  1K-blocks      Used Available Use% Mounted on\n/dev/nvme0n1p2 btrfs 967433600 464257844 494421164  49% /home\n",
+  "limitations": "shared host; no exclusive machine, affinity, cache flush, or power-loss claim; median-ratio intervals assume independent pairs from continuous distributions"
+}

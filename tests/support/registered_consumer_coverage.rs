@@ -650,3 +650,283 @@ fn registered_consumer_empty_interval_is_complete_and_keeps_registration() {
     );
     assert_eq!(consumer.search_index().unwrap().document_count(), 2);
 }
+
+fn scoped_consumer_covered(
+    session: ProjectionConsumerStagingSession<'_>,
+) -> ProjectionCoveredConsumerUpdate {
+    let mut coverage = session
+        .verify_complete_source_in(
+            caps(),
+            full_e,
+            hawdb::ProjectionSourceScope::Domains {
+                node_labels: vec!["Memory".into()],
+                relational_tables: vec!["records".into()],
+            },
+        )
+        .unwrap();
+    for _ in 0..10000 {
+        if coverage.advance(one(), sort()).unwrap() == ProjectionCoverageStep::Complete {
+            return coverage.finish().unwrap();
+        }
+    }
+    panic!("scoped coverage did not complete");
+}
+
+#[test]
+fn registered_consumer_scoped_detached_preparation_advances_with_real_writers() {
+    use std::sync::{mpsc, Arc};
+    use std::time::Duration;
+    for cold in [false, true] {
+        let (root, mut db, mut consumer) = setup_consumer(cold);
+        db.query("CREATE (:Unrelated {value:0})").unwrap();
+        let owner = Arc::new(DatabasePublicationOwner::new(db));
+        let (send, receive) = mpsc::channel();
+        let (done, completed) = mpsc::channel();
+        let writer_owner = Arc::clone(&owner);
+        let writer = std::thread::spawn(move || {
+            for value in receive {
+                let epoch = writer_owner
+                    .with_write(|db| {
+                        db.query_sql_with_params(
+                            "INSERT INTO unrelated (id) VALUES ($1)",
+                            &[Value::String(format!("writer-{value}"))],
+                        )?;
+                        db.query_with_params(
+                            "MATCH (n:Unrelated) SET n.value=$value",
+                            &BTreeMap::from([("value".into(), Value::Int(value))]),
+                        )?;
+                        db.commit_epoch()
+                    })
+                    .unwrap();
+                done.send(epoch).unwrap();
+            }
+        });
+        let mut previous = consumer.projection().receipt().source_epoch;
+        for round in 1..=4 {
+            owner
+                .with_write(|db| {
+                    db.query_with_params(
+                        "MATCH (n:Memory) SET n.value=$value",
+                        &BTreeMap::from([("value".into(), Value::Int(round))]),
+                    )?;
+                    Ok(())
+                })
+                .unwrap();
+            let session = owner
+                .with_write(|db| Ok(scoped_consumer_stage(db, &consumer)))
+                .unwrap();
+            let e = session.source_epoch();
+            send.send(round * 3).unwrap();
+            assert!(completed.recv_timeout(Duration::from_secs(30)).unwrap() > e);
+            let covered = scoped_consumer_covered(session);
+            let preparation = owner
+                .with_write(|db| {
+                    Ok(db.prepare_search_projection_consumer_covered_update(
+                        &mut consumer,
+                        covered,
+                        ProjectionSourceDurability::RequireKnownDurable,
+                    ))
+                })
+                .unwrap()
+                .unwrap();
+            // The reserved construction token holds no database guard. A real
+            // writer must commit before construction is allowed to resume.
+            send.send(round * 3 + 1).unwrap();
+            assert!(completed.recv_timeout(Duration::from_secs(30)).unwrap() > e);
+            let prepared = preparation.prepare();
+            send.send(round * 3 + 2).unwrap();
+            assert!(completed.recv_timeout(Duration::from_secs(30)).unwrap() > e);
+            let published = owner
+                .with_write(
+                    |db| Ok(db.publish_search_projection_consumer_prepared_update(prepared)),
+                )
+                .unwrap()
+                .unwrap();
+            assert_eq!(published.report().catch_up.end_durable_epoch, Some(e));
+            assert!(e > previous);
+            previous = e;
+            drop(published);
+            assert_eq!(
+                consumer
+                    .search_index()
+                    .unwrap()
+                    .document("memory:a")
+                    .unwrap()
+                    .content,
+                round.to_string()
+            );
+            owner
+                .with_write(|db| {
+                    let report = db
+                        .cleanup_search_projection_consumer(&consumer, &Default::default())
+                        .unwrap();
+                    assert_eq!(report.failed_generations, 0);
+                    Ok(())
+                })
+                .unwrap();
+        }
+        drop(send);
+        writer.join().unwrap();
+        let receipt = consumer.projection().receipt();
+        drop(consumer);
+        drop(owner);
+        let mut db = Database::open(root.0.join("graph")).unwrap();
+        let reopened = db
+            .open_search_projection_consumer(
+                &SearchProjectionConsumerId::new("graph-and-sql-v1").unwrap(),
+                root.0.join("consumer"),
+            )
+            .unwrap();
+        assert_eq!(reopened.projection().receipt(), receipt);
+    }
+}
+
+#[test]
+fn registered_consumer_scoped_prepared_source_conflict_and_drop_remain_retryable() {
+    for mutation in [
+        None,
+        Some("MATCH (n:Memory) SET n.value=9"),
+        Some("CREATE (:Memory {id:'b',value:3})"),
+        Some("MATCH (n:Memory) DETACH DELETE n"),
+    ] {
+        let (_root, mut db, mut consumer) = setup_consumer(false);
+        let before = consumer.projection().receipt();
+        db.query("MATCH (n:Memory) SET n.value=2").unwrap();
+        let covered = scoped_consumer_covered(scoped_consumer_stage(&mut db, &consumer));
+        let prepared = db
+            .prepare_search_projection_consumer_covered_update(
+                &mut consumer,
+                covered,
+                ProjectionSourceDurability::RequireKnownDurable,
+            )
+            .unwrap()
+            .prepare();
+        if let Some(mutation) = mutation {
+            db.query(mutation).unwrap();
+            assert!(matches!(
+                db.publish_search_projection_consumer_prepared_update(prepared),
+                Err(ProjectionConsumerCatchUpError::Publication(
+                    ProjectionPublicationError::Dependency(_)
+                ))
+            ));
+        } else {
+            drop(prepared);
+        }
+        assert_eq!(consumer.projection().receipt(), before);
+        db.resolve_search_projection_consumer_publication(&mut consumer)
+            .unwrap();
+        receipt_unchanged(&db, &consumer, &before);
+        let covered = scoped_consumer_covered(scoped_consumer_stage(&mut db, &consumer));
+        let prepared = db
+            .prepare_search_projection_consumer_covered_update(
+                &mut consumer,
+                covered,
+                ProjectionSourceDurability::RequireKnownDurable,
+            )
+            .unwrap()
+            .prepare();
+        drop(
+            db.publish_search_projection_consumer_prepared_update(prepared)
+                .unwrap(),
+        );
+        assert_eq!(
+            consumer.projection().receipt().source_epoch,
+            db.commit_epoch().unwrap()
+        );
+    }
+}
+
+fn scoped_consumer_stage<'a>(
+    db: &mut Database,
+    consumer: &'a SearchProjectionConsumer,
+) -> ProjectionConsumerStagingSession<'a> {
+    let mut session = db
+        .begin_search_projection_consumer_catch_up_in(
+            consumer,
+            consumer_config(),
+            delta_e,
+            hawdb::ProjectionSourceScope::Domains {
+                node_labels: vec!["Memory".into()],
+                relational_tables: vec!["records".into()],
+            },
+        )
+        .unwrap();
+    for _ in 0..10000 {
+        if session.advance(one(), sort()).unwrap() == ProjectionStagingSessionStep::Complete {
+            return session;
+        }
+    }
+    panic!("scoped staging did not complete");
+}
+
+#[test]
+fn registered_consumer_reserved_drop_retains_native_custody_until_resolution() {
+    let (_root, mut db, mut consumer) = setup_consumer(false);
+    let before = consumer.projection().receipt();
+    db.query("MATCH (n:Memory) SET n.value=2").unwrap();
+    let covered = scoped_consumer_covered(scoped_consumer_stage(&mut db, &consumer));
+    let reserved = db
+        .prepare_search_projection_consumer_covered_update(
+            &mut consumer,
+            covered,
+            ProjectionSourceDurability::RequireKnownDurable,
+        )
+        .unwrap();
+    drop(reserved);
+    assert_eq!(consumer.projection().receipt(), before);
+    db.resolve_search_projection_consumer_publication(&mut consumer)
+        .unwrap();
+    receipt_unchanged(&db, &consumer, &before);
+    let covered = scoped_consumer_covered(scoped_consumer_stage(&mut db, &consumer));
+    let prepared = db
+        .prepare_search_projection_consumer_covered_update(
+            &mut consumer,
+            covered,
+            ProjectionSourceDurability::RequireKnownDurable,
+        )
+        .unwrap()
+        .prepare();
+    drop(
+        db.publish_search_projection_consumer_prepared_update(prepared)
+            .unwrap(),
+    );
+}
+
+#[test]
+fn registered_consumer_scoped_prepared_sql_schema_and_source_fences() {
+    for statement in [
+        "UPDATE records SET body='changed' WHERE id='a'",
+        "CREATE TABLE new_table (id TEXT PRIMARY KEY)",
+        "foreign source",
+    ] {
+        let (_root, mut db, mut consumer) = setup_consumer(false);
+        let before = consumer.projection().receipt();
+        db.query("MATCH (n:Memory) SET n.value=2").unwrap();
+        let covered = scoped_consumer_covered(scoped_consumer_stage(&mut db, &consumer));
+        let prepared = db
+            .prepare_search_projection_consumer_covered_update(
+                &mut consumer,
+                covered,
+                ProjectionSourceDurability::RequireKnownDurable,
+            )
+            .unwrap()
+            .prepare();
+        let result = if statement == "foreign source" {
+            let (_other_root, mut other, _other_consumer) = setup_consumer(false);
+            other.publish_search_projection_consumer_prepared_update(prepared)
+        } else {
+            db.query_sql(statement).unwrap();
+            db.publish_search_projection_consumer_prepared_update(prepared)
+        };
+        assert!(matches!(
+            result,
+            Err(ProjectionConsumerCatchUpError::Publication(_))
+        ));
+        db.resolve_search_projection_consumer_publication(&mut consumer)
+            .unwrap();
+        receipt_unchanged(&db, &consumer, &before);
+    }
+}
+
+#[path = "embedded_consumer_coverage.rs"]
+mod embedded;

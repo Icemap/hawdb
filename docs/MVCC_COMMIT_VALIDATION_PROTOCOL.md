@@ -29,7 +29,7 @@ path below now has separate per-key validation evidence.
 | Rebase selection | `commit_with_result` enables it for pessimistic transactions and the narrowly checked conflict-noop-only optimistic transaction shape. |
 | Publication and group sync | `src/api/concurrent/coordinator.rs` serializes commit tasks and retains the database mutex through the shared durability barrier. |
 | Writer snapshot lifetime | `DatabaseTransactionState` owns a `ReaderPin` from snapshot capture through private execution and queued commit; rollback/drop releases it and first-statement refresh replaces it. |
-| Version reclamation | Every `GraphStore::snapshot` registers an epoch in a shared storage registry. Successful durable checkpoint publication, in-memory checkpoint and version-budget pressure call `reclaim_version_history`, retaining stamps at or after the oldest snapshot epoch. |
+| Version reclamation | `GraphStore::snapshot` registers writable/savepoint history protection; `snapshot_for_read` retains data without registering a history watermark. Checkpoint and version-budget reclamation retain stamps at or after the oldest protected epoch. A monotonic `history_floor` rejects stale read-to-write upgrades after history is discarded. |
 | Recovery baseline helper | `VersionIndex::from_live_keys_at_epoch` exists but is not wired into open or replay. The current index starts empty on a new store handle. |
 
 Default transactions retain SI. Explicit `TransactionIsolation::Serializable`
@@ -147,8 +147,10 @@ outside it. Low-level `VersionIndex::apply` and `from_live_keys_at_epoch` are
 unmanaged construction/test primitives, not admission APIs; the bound is enforced
 by `GraphStore`'s serialized commit path. The latter constructor has no current
 production callers. Reopen resets process-local conflict history as before.
-Long-lived pins can reject index growth; callers must release old snapshots
-and checkpoint before retrying. There is no automatic transaction cancellation.
+Long-lived writable/savepoint/dependency pins can reject index growth; callers
+must release those protections and checkpoint before retrying. Ordinary read
+snapshots retain data separately and no longer block conflict-history reclamation.
+There is no automatic transaction cancellation.
 The 64 MiB default is a fixed admission policy, not a measured global memory
 requirement or an allocator guarantee.
 
@@ -272,10 +274,14 @@ This gives the following conditional safety argument:
 4. A deletion stamp at epoch `d` cannot safely be discarded while a transaction
    with `E < d` can still commit against that identity. The helper retains it
    when `d >= oldest_reader_epoch` and removes it only when strictly older.
-   This argument requires the watermark to include **all** storage snapshots,
-   including sources from which a writer could be created later. The shared
-   storage snapshot registry now supplies that watermark; upper-layer physical
-   generation pins remain a separate mechanism.
+   The watermark includes all writable workspaces, savepoints and active read
+   dependency collectors. Ordinary read snapshots are excluded: reclamation
+   records a monotonic `history_floor`, and a later nonempty writer with
+   `E < history_floor` is rejected even if its keys now have absent stamps.
+   Registering an old descendant after pruning cannot recover lost evidence.
+   Current-epoch compaction similarly sets the floor to its capture epoch.
+   Physical generation pins remain independent. See the updated
+   [read-history argument](tla/MVCC_VALIDATION_PROOF.md#ordinary-read-data-without-conflict-history-protection).
 
 These are deductive arguments about the validation rule under stated
 assumptions, not a machine-checked refinement proof of the Rust implementation.

@@ -110,13 +110,24 @@ command completes all 98 fuzz targets (92 executed, six cache hits, zero skipped
 or failed). The standalone MVCC campaign completes 5,738 cases in 30,004 ms after
 a 7m40s build. Compressed logs and the MVCC report are in `validation/`.
 
-Native Linux/macOS, Prow build/crates/analytics/crash/supply-chain pass. The first
+Native Linux/macOS/Windows, Prow build/crates/analytics/crash/supply-chain pass. The first
 root job reports 67/68 passing targets and one 300.1-second timeout in
 `hawdb_mvcc_joined_reads_tests`: seven of its eight cases complete, while
 `joined_reads_cover_absent_filtered_deleted_parents_and_off_page_children`
 does not finish before the existing limit. No assertion failure appears in the
 complete retained log. That is an unresolved runtime qualification failure;
 a passing local fuzz campaign does not replace it. Its timeout, cases, assertions
-and execution configuration are unchanged. Windows remains pending at this
-report's cutoff. Consult the current PR checks and their tested SHA for later
-results; these receipts qualify only the identified source.
+and execution configuration are unchanged. Consult the current PR checks and
+their tested SHA for later results; these receipts qualify only the identified
+source.
+
+## Integration after measurement
+
+Main `0f27ccb18a9cec229e4f653f49b97421faf2de08` subsequently integrated #1177.
+The four benchmark/workflow conflicts were resolved from main's canonical files
+with only the captured-WAL extensions reapplied; no duplicate driver or altered
+threshold was introduced. The WAL fence also documents its existing symlink
+target-identity semantics. The comparison above predates this integration and
+does not qualify the merged source against the newer main. Keep its receipts
+unchanged, report subsequent CI by SHA, and retain Draft status while the strict
+gate and runtime qualification remain unresolved.
