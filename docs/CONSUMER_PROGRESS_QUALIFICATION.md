@@ -4,7 +4,10 @@ The implementation is available for review in
 [#1177](https://github.com/nowledge-co/hawdb/pull/1177). The original strict
 single-stream writer gate **has not passed**. The independent CI measurement
 found persistent-write regressions; implementation and correctness evidence do
-not close #232, #1136, their sub-issues, or #1171's platform acceptance.
+not close #232, #1136 or their sub-issues. #1171's platform acceptance was
+recorded separately by the final-head Windows native contracts run
+([39815273863](https://github.com/nowledge-co/hawdb/actions/runs/39815273863)),
+and #1171 is closed.
 
 ## Original-baseline writer gate
 
