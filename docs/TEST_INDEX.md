@@ -91,6 +91,15 @@ The weekly native runtime lane also runs this family and
 publication-failure, unwind, admission and old-generation assertions after Mem
 switches to the concurrent transaction kernel.
 
+`api::concurrent::graph_preparation_tests` compares actual planner bypass counts
+with pessimistic execution/replay counters. One statement prepares once even when
+new locks require two executions; the next statement rebinds its parameters and
+uses the staged schema. Refused output restores the statement without dropping
+earlier writes or their locks. This is owned by the root general unit suite and
+the macOS/Windows runtime lane. Existing request, lock and serializability
+families continue to cover the shared execution kernel; preparation counts are
+not latency or allocation measurements.
+
 `nowledge_mem::read_execution::tests` covers ordinary owned/streaming and report
 reads from published views: streaming and report-observation callbacks must allow
 a writer and fresh reader to finish, and execution-admission telemetry must
@@ -110,7 +119,10 @@ preparation lookup, retain parameter/row/payload checks, and reject a stale
 generated context after an ordinary data commit during admission. Plain EXPLAIN
 observation covers read, DML and DDL plans while a writer and fresh reader finish.
 Generated parameter rejection uses an explicitly typed `Thread.id` property; an
-undeclared `Any` property correctly accepts integers. EXPLAIN observation uses a
+undeclared `Any` property correctly accepts integers. Both admitted generated-read
+entrypoints reject invalid parameters before preparation and leave the plan-cache
+counters unchanged; snapshot epoch validation still occurs at execution.
+EXPLAIN observation uses a
 separate 64 KiB host result budget for retained plan/schema metadata; ordinary
 App reads keep 16 KiB. Failed observations surface the original query error
 after releasing the waiting writer, without panicking inside telemetry.

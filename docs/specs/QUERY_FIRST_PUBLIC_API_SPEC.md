@@ -103,6 +103,16 @@ explicit transaction entry points MUST preserve the same request attachments;
 concurrent transactions MUST retain their existing locking and read-dependency
 validation. Embedded explicit transactions use the same statement kernel.
 
+Within one explicit concurrent graph statement, initial execution and replay
+after pessimistic lock acquisition MUST borrow the same parsed/optimized
+preparation and bound request. Restoring the statement savepoint preserves its
+schema, and the existing epoch fence MUST remain in force before replay. The
+preparation ends with the statement; the next statement binds its own parameters
+and prepares against the current private workspace, including staged schema.
+The enclosing transaction admission remains held during lock acquisition. This
+statement-local reuse does not itself transfer autocommit admission preparation
+or change autocommit publication locking.
+
 Request limits can tighten database limits but MUST NOT widen them. An explicit
 request `Some(0)` is a zero-row or zero-payload ceiling, not an unlimited sentinel.
 SQL mutation results and explicit Cypher `SET ... RETURN` results MUST be
@@ -230,8 +240,10 @@ with the admitted context. Search uses the admitted vector execution context.
 Hydration retains its explicit document and payload limits.
 
 Generated graph reads use the same admitted preparation and enforce output
-limits during execution. They additionally validate the generated context's exact
-graph epoch and parameter contract against the captured read transaction. An
+limits during execution. Missing, unexpected and wrongly typed parameters MUST
+be rejected before preparation or admission. They additionally validate the
+generated context's exact graph epoch and parameter contract against the captured
+read transaction. An
 ordinary data commit can preserve a prepared plan while invalidating its generated
 context; that attempt MUST fail as stale. Schema guidance retains its metadata
 options and constructs statistics from a detached published graph snapshot.

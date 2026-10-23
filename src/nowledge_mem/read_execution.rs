@@ -530,10 +530,19 @@ mod tests {
                 .read_generated_graph_rag(&query, &parameters, &limits)
                 .is_err());
         }
+        let before_invalid = stats();
+        let before_invalid_admissions = handle.runtime_governor_snapshot().unwrap().admissions;
         let wrong_type = BTreeMap::from([("id".into(), Value::Int(1))]);
         for (parameters, message) in [
             (wrong_type, "GraphRAG query parameter id must be string"),
             (BTreeMap::new(), "missing GraphRAG query parameter: id"),
+            (
+                BTreeMap::from([
+                    ("id".into(), Value::String("thread-1".into())),
+                    ("extra".into(), Value::Int(1)),
+                ]),
+                "unexpected GraphRAG query parameter: extra",
+            ),
         ] {
             let error = handle
                 .read_generated_graph_rag(&query, &parameters, &options())
@@ -546,6 +555,11 @@ mod tests {
                 .read_generated_graph_rag(&query, &parameters, &options())
                 .unwrap_err();
             assert!(error.to_string().contains(message), "{error}");
+            assert_eq!(stats(), before_invalid);
+            assert_eq!(
+                handle.runtime_governor_snapshot().unwrap().admissions,
+                before_invalid_admissions
+            );
         }
         assert_eq!(
             handle

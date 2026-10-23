@@ -15,6 +15,8 @@
 use crate::sql::{Expr, ExprKind};
 mod coordinator;
 #[cfg(test)]
+mod graph_preparation_tests;
+#[cfg(test)]
 mod key_range_tests;
 mod metrics;
 mod owner;
@@ -31,9 +33,9 @@ use super::transaction_locks::{
     DEFAULT_LOCK_ESCALATION_ENTRIES_PER_TABLE,
 };
 use super::{
-    commit_database_transaction_state, execute_concurrent_graph_transaction_request,
-    execute_database_transaction_prepared_sql, Database, DatabaseConfig, DatabaseReadTransaction,
-    DatabaseTransactionRuntime, DatabaseTransactionSqlOptions, DatabaseTransactionState,
+    commit_database_transaction_state, execute_database_transaction_prepared_sql, Database,
+    DatabaseConfig, DatabaseReadTransaction, DatabaseTransactionRuntime,
+    DatabaseTransactionSqlOptions, DatabaseTransactionState, PreparedGraphTransactionRequest,
     QueryOutput, StatementExecutionContext, TransactionCommitResult,
 };
 use crate::error::{HawDBError, Result};
@@ -717,12 +719,17 @@ impl ConcurrentDatabaseTransaction {
             .then(|| self.inner.locks.savepoint(self.transaction_id))
             .transpose()?;
         self.inner.commits.metrics.graph_execution();
-        let execution = execute_concurrent_graph_transaction_request(
-            &self.runtime,
-            &mut self.state,
-            request,
+        let task = super::query_request::bind_request_context(
             self.task_context.as_ref(),
-        );
+            request.task_context,
+        )?;
+        let request = super::QueryRequest {
+            task_context: task.as_ref(),
+            ..request
+        };
+        let prepared =
+            PreparedGraphTransactionRequest::prepare(&self.runtime, &mut self.state, request)?;
+        let execution = prepared.execute(&self.runtime, &mut self.state);
         let outcome = match execution {
             Ok(outcome) => outcome,
             Err(error) => {
@@ -777,12 +784,10 @@ impl ConcurrentDatabaseTransaction {
             self.state.restore_graph_statement(graph_savepoint);
             self.acquire_graph_statement_locks(&requests, lock_savepoint.clone())?;
             self.inner.commits.metrics.graph_replay();
-            let replayed = execute_concurrent_graph_transaction_request(
-                &self.runtime,
-                &mut self.state,
-                request,
-                self.task_context.as_ref(),
-            );
+            // Restoring the statement savepoint preserves the preparation's
+            // schema and parameters. The epoch fence prevents a new snapshot
+            // from being substituted under the already-derived lock set.
+            let replayed = prepared.execute(&self.runtime, &mut self.state);
             let replayed = match replayed {
                 Ok(replayed) => replayed,
                 Err(error) => {

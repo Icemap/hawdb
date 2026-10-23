@@ -20430,25 +20430,21 @@ struct GraphTransactionStatementOptions<'a> {
     read_dependencies: Option<&'a mut transaction_read_dependencies::TransactionReadDependencies>,
 }
 
-fn execute_graph_transaction_statement(
+fn prepare_graph_transaction_plan(
     runtime: &DatabaseTransactionRuntime,
-    transaction: &mut GraphMutationTransaction,
+    transaction: &GraphMutationTransaction,
     system_variables: &QuerySystemVariables,
     cypher_text: &str,
     statement: &cypher::Statement,
     parameters: &BTreeMap<String, Value>,
-    options: GraphTransactionStatementOptions<'_>,
-) -> Result<GraphTransactionStatementOutcome> {
-    let GraphTransactionStatementOptions {
-        execution,
-        read_dependencies,
-    } = options;
+    execution: query_runtime::QueryExecutionOptions<'_>,
+) -> Result<OptimizedQueryPlan> {
     let task_context = execution.task_context;
     query_runtime::query_runtime_checkpoint(task_context)?;
     query_work_request_for_statement(system_variables, statement)?;
     let optimizer_search =
         query_statement_variables_for_statement(system_variables, statement)?.optimizer_search;
-    let optimized = optimized_query_plan_for(
+    optimized_query_plan_for(
         cypher_text,
         statement,
         parameters,
@@ -20465,7 +20461,51 @@ fn execute_graph_transaction_statement(
             optimizer_search,
             scoring: execution.scoring,
         },
+    )
+}
+
+fn execute_graph_transaction_statement(
+    runtime: &DatabaseTransactionRuntime,
+    transaction: &mut GraphMutationTransaction,
+    system_variables: &QuerySystemVariables,
+    cypher_text: &str,
+    statement: &cypher::Statement,
+    parameters: &BTreeMap<String, Value>,
+    options: GraphTransactionStatementOptions<'_>,
+) -> Result<GraphTransactionStatementOutcome> {
+    let optimized = prepare_graph_transaction_plan(
+        runtime,
+        transaction,
+        system_variables,
+        cypher_text,
+        statement,
+        parameters,
+        options.execution,
     )?;
+    execute_graph_transaction_plan(
+        runtime,
+        transaction,
+        statement,
+        &optimized,
+        parameters,
+        options,
+    )
+}
+
+fn execute_graph_transaction_plan(
+    runtime: &DatabaseTransactionRuntime,
+    transaction: &mut GraphMutationTransaction,
+    statement: &cypher::Statement,
+    optimized: &OptimizedQueryPlan,
+    parameters: &BTreeMap<String, Value>,
+    options: GraphTransactionStatementOptions<'_>,
+) -> Result<GraphTransactionStatementOutcome> {
+    let GraphTransactionStatementOptions {
+        execution,
+        read_dependencies,
+    } = options;
+    let task_context = execution.task_context;
+    query_runtime::query_runtime_checkpoint(task_context)?;
 
     if let Some(dependencies) = read_dependencies {
         dependencies.collect_cypher(
@@ -20602,6 +20642,83 @@ fn execute_graph_transaction_statement(
     })
 }
 
+/// One statement-local preparation. Its borrowed request keeps parameters,
+/// authorization, scoring and the combined task context identical during replay.
+/// The transaction's admission remains held while locks are acquired.
+pub(super) struct PreparedGraphTransactionRequest<'a> {
+    request: QueryRequest<'a>,
+    statement: cypher::Statement,
+    optimized: OptimizedQueryPlan,
+}
+
+impl<'a> PreparedGraphTransactionRequest<'a> {
+    pub(super) fn prepare(
+        runtime: &DatabaseTransactionRuntime,
+        state: &mut DatabaseTransactionState,
+        request: QueryRequest<'a>,
+    ) -> Result<Self> {
+        query_runtime::query_runtime_checkpoint(request.task_context)?;
+        let empty = BTreeMap::new();
+        let parameters = request.parameters.unwrap_or(&empty);
+        if let Some(dependencies) = &mut state.read_dependencies {
+            dependencies.admit_cypher(request.cypher, parameters)?;
+        }
+        let statement = cypher::parse(request.cypher)?;
+        let body = statement_body(&statement);
+        if matches!(body, cypher::Statement::SetSystemVariable(_)) {
+            reject_system_variable_parameters(parameters)?;
+            return Err(HawDBError::Execution(
+                "SET system variable is not allowed inside a transaction".to_string(),
+            ));
+        }
+        if matches!(body, cypher::Statement::Explain(_)) {
+            return Err(HawDBError::Execution(
+                "EXPLAIN is not allowed inside a transaction".to_string(),
+            ));
+        }
+        let transaction = state
+            .graph_transaction
+            .as_ref()
+            .expect("database transaction must own a graph workspace");
+        let optimized = prepare_graph_transaction_plan(
+            runtime,
+            transaction,
+            &runtime.system_variables,
+            request.cypher,
+            &statement,
+            parameters,
+            query_runtime::QueryExecutionOptions::for_request(request, None),
+        )?;
+        Ok(Self {
+            request,
+            statement,
+            optimized,
+        })
+    }
+
+    pub(super) fn execute(
+        &self,
+        runtime: &DatabaseTransactionRuntime,
+        state: &mut DatabaseTransactionState,
+    ) -> Result<GraphTransactionStatementOutcome> {
+        let transaction = state
+            .graph_transaction
+            .as_mut()
+            .expect("database transaction must own a graph workspace");
+        execute_graph_transaction_plan(
+            runtime,
+            transaction,
+            &self.statement,
+            &self.optimized,
+            self.request.parameters.unwrap_or(&BTreeMap::new()),
+            GraphTransactionStatementOptions {
+                execution: query_runtime::QueryExecutionOptions::for_request(self.request, None),
+                read_dependencies: state.read_dependencies.as_mut(),
+            },
+        )
+    }
+}
+
 pub(crate) fn execute_concurrent_graph_transaction_request(
     runtime: &DatabaseTransactionRuntime,
     state: &mut DatabaseTransactionState,
@@ -20609,49 +20726,11 @@ pub(crate) fn execute_concurrent_graph_transaction_request(
     parent_context: Option<&hawdb_core::RuntimeTaskContext>,
 ) -> Result<GraphTransactionStatementOutcome> {
     let task = query_request::bind_request_context(parent_context, request.task_context)?;
-    let task_context = task.as_ref();
     let request = QueryRequest {
-        task_context,
+        task_context: task.as_ref(),
         ..request
     };
-    let execution = query_runtime::QueryExecutionOptions::for_request(request, None);
-    let cypher_text = request.cypher;
-    let empty = BTreeMap::new();
-    let parameters = request.parameters.unwrap_or(&empty);
-    query_runtime::query_runtime_checkpoint(task_context)?;
-    if let Some(dependencies) = &mut state.read_dependencies {
-        query_runtime::query_runtime_checkpoint(task_context)?;
-        dependencies.admit_cypher(cypher_text, parameters)?;
-    }
-    let statement = cypher::parse(cypher_text)?;
-    let body = statement_body(&statement);
-    if matches!(body, cypher::Statement::SetSystemVariable(_)) {
-        reject_system_variable_parameters(parameters)?;
-        return Err(HawDBError::Execution(
-            "SET system variable is not allowed inside a transaction".to_string(),
-        ));
-    }
-    if matches!(body, cypher::Statement::Explain(_)) {
-        return Err(HawDBError::Execution(
-            "EXPLAIN is not allowed inside a transaction".to_string(),
-        ));
-    }
-    let transaction = state
-        .graph_transaction
-        .as_mut()
-        .expect("database transaction must own a graph workspace");
-    execute_graph_transaction_statement(
-        runtime,
-        transaction,
-        &runtime.system_variables,
-        cypher_text,
-        &statement,
-        parameters,
-        GraphTransactionStatementOptions {
-            execution,
-            read_dependencies: state.read_dependencies.as_mut(),
-        },
-    )
+    PreparedGraphTransactionRequest::prepare(runtime, state, request)?.execute(runtime, state)
 }
 
 pub(crate) fn execute_database_transaction_sql_request(

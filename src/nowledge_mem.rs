@@ -1690,6 +1690,9 @@ impl NowledgeMemGraph {
         parameters: &BTreeMap<String, Value>,
         options: &NowledgeMemReadOptions,
     ) -> Result<NowledgeMemReadOutput> {
+        query
+            .validate_parameters(parameters)
+            .map_err(|error| HawDBError::Semantic(error.to_string()))?;
         let max_payload_bytes = self.admitted_streaming_result_bytes(options)?;
         let (permit, prepared) = self.admit_streaming_query(
             query.cypher(),
@@ -3396,6 +3399,9 @@ impl NowledgeMemEmbeddedStoreHandle {
         parameters: &BTreeMap<String, Value>,
         options: &NowledgeMemReadOptions,
     ) -> Result<NowledgeMemReadOutput> {
+        query
+            .validate_parameters(parameters)
+            .map_err(|error| HawDBError::Semantic(error.to_string()))?;
         self.with_admitted_graph_read(
             query.cypher(),
             parameters,
