@@ -88,3 +88,86 @@ history seeks compare exact encoded key prefixes without decoding another
 logical key; hybrid head reads decode directly from a stack buffer; scan
 results reuse their already owned payload buffers. Native scans collect at
 most 32 rows before releasing leaf guards, with explicit total-work bounds.
+
+
+## Follow-up: reduce commit installation overhead
+
+The follow-up removes temporary heap allocations for encoded Bf-Tree keys and
+values. Hybrid installation borrows its previous value from existing immutable
+retry receipts instead of reading/cache-promoting the Bf-Tree head. Committed
+batches are indexed directly by epoch; operation IDs map to that epoch, and
+latest-key entries retain the batch entry position. The latest-key ledger adds
+one machine word per key, without duplicating value payloads. Updating an
+existing ledger entry no longer clones and discards its key. Recovery and commit
+share the same receipt-recording function. WAL bytes, synchronization policy,
+resource limits and durable-before-install/publication ordering are unchanged.
+
+Paired raw observations: [retained history](measurements/submit-history.json)
+and [small](measurements/submit-small.json). Baseline: `ea27cf35e` plus identical
+benchmark-only phase instrumentation. Both saved binaries use the same global
+release profile; SHA-256 identifiers are in the reports. Five repetitions
+reverse before/after order on odd repetitions and rotate all three layouts,
+with fresh processes/journals. No compilation or other tests were started
+concurrently with measurement; the host was not reserved. Tables are medians
+of five per-process percentiles. The initial three-run observations above are
+preserved rather than replaced.
+
+To reproduce each observation with saved baseline and optimized executables:
+
+```console
+/path/to/baseline bench-one /tmp/before-hybrid-0.journal hybrid 512 24
+/path/to/optimized bench-one /tmp/after-hybrid-0.journal hybrid 512 24
+```
+
+Repeat for `versioned`, `hybrid`, `cow`; reverse executable order in odd
+repetitions and rotate layouts. Use `16 2` for small observations. Normal
+`bench` also reports the new phases. `prepare_and_sync` covers validation,
+encoding, journal append and synchronization up to Durable; `index_install`
+covers Durable to Published. Full commit still includes write-set construction,
+receipt bookkeeping and instrumentation. Phase percentiles cannot be added.
+
+| Retained history operation | Before p50 / p95 / p99 us | After p50 / p95 / p99 us |
+| --- | ---: | ---: |
+| Hybrid full commit | 3965.416 / 4311.375 / 6929.125 | 3939.334 / 4325.667 / 5187.584 |
+| Hybrid prepare and sync | 3817.583 / 4182.792 / 6811.875 | 3780.500 / 4181.750 / 4983.292 |
+| Hybrid index installation | 115.667 / 269.458 / 528.542 | 101.666 / 248.750 / 375.875 |
+| Hybrid old point read | 0.750 / 2.750 / 9.292 | 0.708 / 3.167 / 9.791 |
+| Hybrid current point read | 0.292 / 0.417 / 0.708 | 0.250 / 0.458 / 0.791 |
+| Hybrid current scan | 85.959 / 114.958 / 159.042 | 81.250 / 104.458 / 150.125 |
+| Hybrid old scan | 246.292 / 299.500 / 345.334 | 220.958 / 287.458 / 296.084 |
+| Versioned full commit control | 3938.708 / 4315.292 / 4931.167 | 3926.250 / 4314.708 / 5130.375 |
+| COW full commit control | 3987.333 / 4298.916 / 7949.000 | 3962.834 / 4324.500 / 6158.500 |
+
+The targeted index-installation p99 is about 29% lower (529 -> 376 us), with
+p95 about 7.7% lower and p50 about 12% lower. Full commit p99 is 6.929 ->
+5.188 ms in this observation, while p95 is approximately unchanged. The
+optimized Hybrid versus optimized versioned p99 gap is about 1.1% here. These
+are observations, **not proof of a stable end-to-end improvement or of meeting
+a 1.1% regression ceiling**: synchronization dominates and the original 4%
+difference did not reproduce consistently. An earlier intermediate-code run
+also had noisier full-commit tails despite lower installation work. Do not
+select favorable repetitions or weaken durability to manufacture a result.
+
+Old point-read p50 improves slightly, but its retained-history p95/p99 are
+higher by about 15%/5%; no long-history tail improvement is established.
+Hybrid current/old scan p95 remain lower in this observation. The COW component
+continues to scan faster; this is not an end-to-end HawDB speedup claim.
+
+Hybrid resident/observed peak MiB: 14.422 -> 14.484; median reopen ms: 12.928 -> 10.975.
+
+Versioned resident/observed peak MiB: 14.312 -> 14.406; median reopen ms: 5.284 -> 5.168.
+
+Cow resident/observed peak MiB: 9.281 -> 9.297; median reopen ms: 17.392 -> 14.540.
+
+Every retained-history journal remains 1,466,756 bytes.
+
+| Small Hybrid operation | Before p95 / p99 us | After p95 / p99 us |
+| --- | ---: | ---: |
+| Full commit (two samples/run) | 4045.667 / 4045.667 | 3875.208 / 3875.208 |
+| Index installation | 30.125 / 30.125 | 23.708 / 23.708 |
+| Old point read | 0.292 / 0.333 | 0.250 / 0.292 |
+
+Small old point p99 improves about 12%; index-installation maximum improves
+about 21%. Tiny samples and sub-microsecond timer granularity remain limits.
+Concurrent group commit and storage/platform durability-policy changes remain
+outside this follow-up.

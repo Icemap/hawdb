@@ -81,7 +81,8 @@ seed batches contain at most 128 keys and update batches contain at most 64.
 Every returned key/value and scan order is checked against the generated data.
 It runs three repetitions with rotated layout order in fresh child processes.
 It reports per-operation p50/p95/p99, total measured time, synchronous batch
-commit latency (including write-set construction), reopen time, journal size,
+commit latency (including write-set construction), prepare/sync and index
+installation phase latencies, reopen time, journal size,
 and process resident/peak memory where available. Point reads have 4096 samples
 per snapshot; scans have only 32, so scan p99 is a sample maximum rather than a
 stable production tail estimate. Reads are warmed once; journals use the local
@@ -108,3 +109,11 @@ layout mismatch, uncertain outcomes/unwind, torn/corrupt/trailing input, and
 actual subprocess exits after durability, first-key installation and publication.
 The ignored `crash_child` is an internal subprocess entry point invoked by its
 parent regression; it is not an omitted manual acceptance case.
+
+Hybrid update installation reuses immutable mutation payloads already retained
+for exact retries. Committed batches are indexed directly by epoch, and the latest-key ledger
+stores the entry position alongside that epoch; it does not maintain another value cache. Encoded
+keys and values use bounded stack buffers. The receipt regression checks sparse
+updates, non-monotonic operation IDs, old retries after reopen, deletion and
+reinsertion while earlier snapshots remain readable. Version upgrades must
+relock this workspace's Cargo.lock along with the other tracked lockfiles.

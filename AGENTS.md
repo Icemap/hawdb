@@ -188,6 +188,9 @@
 
 ## Bf-Tree MVCC experiment
 
+- Repository version bumps must also relock `experiments/bftree-mvcc/Cargo.lock`
+  so its local `hawdb-*` path package versions stay current.
+
 - `experiments/bftree-mvcc/` is an independent, binary-only, unpublished workspace.
   Keep it and `bf-tree` out of production dependencies and library archives.
 - Run its focused tests and strict Clippy manually when changing it; do not add

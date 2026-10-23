@@ -513,3 +513,47 @@ fn oversized_journal_is_refused_without_modifying_evidence() {
     ));
     assert_eq!(std::fs::metadata(&path).unwrap().len(), MAX_JOURNAL + 1);
 }
+
+#[test]
+fn recovered_receipts_preserve_sparse_updates_deletes_and_old_retries() {
+    for layout in LAYOUTS {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("journal");
+        let store = Store::open_layout(&path, layout).unwrap();
+        let mut seed = store.begin_write().unwrap();
+        for (key, value) in [(b"a", b"A"), (b"b", b"B"), (b"c", b"C")] {
+            seed.put(key, value).unwrap();
+        }
+        seed.commit(99).unwrap();
+        let mut sparse = store.begin_write().unwrap();
+        sparse.put(b"b", b"B1").unwrap();
+        sparse.commit(7).unwrap();
+        drop(store);
+        let store = Store::open_layout(&path, layout).unwrap();
+        let old = store.begin_read().unwrap();
+        let mut retry = store.begin_write().unwrap();
+        for (key, value) in [(b"a", b"A"), (b"b", b"B"), (b"c", b"C")] {
+            retry.put(key, value).unwrap();
+        }
+        assert_eq!(retry.commit(99).unwrap(), 1);
+        let mut update = store.begin_write().unwrap();
+        update.delete(b"b").unwrap();
+        update.put(b"c", b"C2").unwrap();
+        update.commit(8).unwrap();
+        let deleted = store.begin_read().unwrap();
+        let mut reinsert = store.begin_write().unwrap();
+        reinsert.put(b"b", b"B3").unwrap();
+        reinsert.commit(2).unwrap();
+        assert_eq!(old.get(b"b").unwrap(), Some(b"B1".to_vec()));
+        assert_eq!(old.get(b"c").unwrap(), Some(b"C".to_vec()));
+        assert_eq!(deleted.get(b"b").unwrap(), None);
+        assert_eq!(
+            store.begin_read().unwrap().scan(b"a", b"d").unwrap(),
+            vec![
+                (b"a".to_vec(), b"A".to_vec()),
+                (b"b".to_vec(), b"B3".to_vec()),
+                (b"c".to_vec(), b"C2".to_vec()),
+            ]
+        );
+    }
+}

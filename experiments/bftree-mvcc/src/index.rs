@@ -66,24 +66,42 @@ pub enum View {
     },
     Cow(CowMap),
 }
+pub struct Previous<'a> {
+    pub epoch: u64,
+    pub value: &'a Option<Vec<u8>>,
+}
 pub enum Prepared {
     Bf,
     Cow(CowMap),
 }
 
-fn prefix(key: &[u8], namespace: u8) -> Vec<u8> {
-    let mut bytes = Vec::with_capacity(key.len() * 2 + 10);
-    bytes.push(namespace);
-    for &b in key {
-        bytes.extend_from_slice(&[1, b]);
-    }
-    bytes.push(0);
-    bytes
+struct EncodedKey {
+    bytes: [u8; MAX_KEY * 2 + 10],
+    len: usize,
 }
-fn version_key(key: &[u8], epoch: u64) -> Vec<u8> {
-    let mut bytes = prefix(key, 1);
-    bytes.extend_from_slice(&(!epoch).to_be_bytes());
-    bytes
+impl std::ops::Deref for EncodedKey {
+    type Target = [u8];
+    fn deref(&self) -> &[u8] {
+        &self.bytes[..self.len]
+    }
+}
+fn prefix(key: &[u8], namespace: u8) -> EncodedKey {
+    let mut encoded = EncodedKey {
+        bytes: [0; MAX_KEY * 2 + 10],
+        len: key.len() * 2 + 2,
+    };
+    encoded.bytes[0] = namespace;
+    for (i, &b) in key.iter().enumerate() {
+        encoded.bytes[1 + i * 2] = 1;
+        encoded.bytes[2 + i * 2] = b;
+    }
+    encoded
+}
+fn version_key(key: &[u8], epoch: u64) -> EncodedKey {
+    let mut encoded = prefix(key, 1);
+    encoded.bytes[encoded.len..encoded.len + 8].copy_from_slice(&(!epoch).to_be_bytes());
+    encoded.len += 8;
+    encoded
 }
 fn decode_key(bytes: &[u8], versioned: bool) -> Result<(Vec<u8>, u64)> {
     let mut key = Vec::new();
@@ -117,14 +135,26 @@ fn decode_key(bytes: &[u8], versioned: bool) -> Result<(Vec<u8>, u64)> {
     };
     Ok((key, epoch))
 }
-fn encode_value(value: &Option<Vec<u8>>) -> Vec<u8> {
+fn encode_value<'a>(
+    value: &Option<Vec<u8>>,
+    epoch: Option<u64>,
+    out: &'a mut [u8; MAX_VALUE + 9],
+) -> &'a [u8] {
+    let offset = if let Some(epoch) = epoch {
+        out[..8].copy_from_slice(&epoch.to_be_bytes());
+        8
+    } else {
+        0
+    };
     match value {
-        None => vec![0],
-        Some(v) => {
-            let mut out = Vec::with_capacity(v.len() + 1);
-            out.push(1);
-            out.extend_from_slice(v);
-            out
+        None => {
+            out[offset] = 0;
+            &out[..offset + 1]
+        }
+        Some(value) => {
+            out[offset] = 1;
+            out[offset + 1..offset + 1 + value.len()].copy_from_slice(value);
+            &out[..offset + 1 + value.len()]
         }
     }
 }
@@ -151,14 +181,6 @@ fn insert(tree: &BfTree, key: &[u8], value: &[u8]) -> Result<()> {
     match tree.insert(key, value) {
         LeafInsertResult::Success => Ok(()),
         LeafInsertResult::InvalidKV(reason) => Err(Error::Index(reason)),
-    }
-}
-fn read_raw(tree: &BfTree, key: &[u8]) -> Result<Option<Vec<u8>>> {
-    let mut buffer = [0; MAX_VALUE + 32];
-    match tree.read(key, &mut buffer) {
-        LeafReadResult::Found(n) => Ok(Some(buffer[..n as usize].to_vec())),
-        LeafReadResult::NotFound => Ok(None),
-        other => Err(Error::Index(format!("Bf-Tree read failed: {other:?}"))),
     }
 }
 fn history_get(tree: &BfTree, key: &[u8], epoch: u64) -> Result<Option<Vec<u8>>> {
@@ -226,15 +248,17 @@ impl Index {
             }
         })
     }
-    pub fn prepare(
+    pub fn prepare<'a>(
         &self,
         batch: &Batch,
+        mut previous: impl FnMut(&[u8]) -> Result<Option<Previous<'a>>>,
         mut installed: impl FnMut(usize) -> Result<()>,
     ) -> Result<Prepared> {
         let mut cow = match self {
             Self::Cow(state) => Some(state.lock().map_err(|_| Error::NeedsRecovery)?.clone()),
             _ => None,
         };
+        let mut encoded_value = [0; MAX_VALUE + 9];
         for (i, change) in batch.writes.iter().enumerate() {
             match self {
                 Self::Bf {
@@ -243,23 +267,25 @@ impl Index {
                 } => insert(
                     tree,
                     &version_key(&change.key, batch.epoch),
-                    &encode_value(&change.value),
+                    encode_value(&change.value, None, &mut encoded_value),
                 )?,
                 Self::Bf { tree, .. } => {
                     let head = prefix(&change.key, 2);
-                    if let Some(previous) = read_raw(tree, &head)? {
-                        let epoch = u64::from_be_bytes(
-                            previous
-                                .get(..8)
-                                .ok_or(Error::Invalid("short head"))?
-                                .try_into()
-                                .map_err(|_| Error::Invalid("short head"))?,
-                        );
-                        insert(tree, &version_key(&change.key, epoch), &previous[8..])?;
+                    // The coordinator already retains exact immutable mutation
+                    // receipts for retries. Borrow the previous value rather than
+                    // reading and cache-promoting the head again on every update.
+                    if let Some(previous) = previous(&change.key)? {
+                        insert(
+                            tree,
+                            &version_key(&change.key, previous.epoch),
+                            encode_value(previous.value, None, &mut encoded_value),
+                        )?;
                     }
-                    let mut value = batch.epoch.to_be_bytes().to_vec();
-                    value.extend_from_slice(&encode_value(&change.value));
-                    insert(tree, &head, &value)?;
+                    insert(
+                        tree,
+                        &head,
+                        encode_value(&change.value, Some(batch.epoch), &mut encoded_value),
+                    )?;
                 }
                 Self::Cow(_) => {
                     let state = cow.as_mut().expect("COW candidate");
@@ -356,7 +382,7 @@ impl View {
         };
         let hybrid = *layout == Layout::Hybrid;
         let namespace = if hybrid { 2 } else { 1 };
-        let mut resume = prefix(start, namespace);
+        let mut resume = prefix(start, namespace).to_vec();
         let upper = prefix(end, namespace);
         let mut result: Rows = Vec::new();
         let mut seen = None;

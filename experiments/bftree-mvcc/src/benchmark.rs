@@ -1,4 +1,4 @@
-use crate::adapter::{Error, Result, Store, MAX_SCAN_RECORDS, MAX_SCAN_ROWS, MAX_WRITES};
+use crate::adapter::{Error, Result, Stage, Store, MAX_SCAN_RECORDS, MAX_SCAN_ROWS, MAX_WRITES};
 use crate::index::Layout;
 use hawdb_qos::ProcessMemorySnapshot;
 use serde::Serialize;
@@ -38,6 +38,8 @@ struct Report {
     working_index: &'static str,
     durability: &'static str,
     commit_batches: Latency,
+    prepare_and_sync: Latency,
+    index_install: Latency,
     current_get: Latency,
     old_get: Latency,
     current_full_scan: Latency,
@@ -82,6 +84,8 @@ pub fn one(path: &Path, layout: Layout, keys: usize, rounds: usize) -> Result<()
     }
     let old = store.begin_read()?;
     let mut commits = Vec::new();
+    let mut prepare_and_sync = Vec::new();
+    let mut index_install = Vec::new();
     for round in 1..=rounds {
         for start in (0..keys).step_by(64) {
             let began = Instant::now();
@@ -89,7 +93,21 @@ pub fn one(path: &Path, layout: Layout, keys: usize, rounds: usize) -> Result<()
             for n in start..(start + 64).min(keys) {
                 tx.put(&key(n), &value(round, n))?;
             }
-            tx.commit(operation)?;
+            let commit_start = Instant::now();
+            let mut durable = None;
+            tx.commit_with_hook(operation, |stage| {
+                match stage {
+                    Stage::Durable => {
+                        prepare_and_sync.push(nanos(commit_start));
+                        durable = Some(Instant::now());
+                    }
+                    Stage::Published => {
+                        index_install.push(nanos(durable.expect("durable boundary")))
+                    }
+                    Stage::Installed(_) => {}
+                }
+                Ok(())
+            })?;
             operation += 1;
             commits.push(nanos(began));
         }
@@ -156,6 +174,8 @@ pub fn one(path: &Path, layout: Layout, keys: usize, rounds: usize) -> Result<()
         working_index: "memory; journal on native filesystem",
         durability: "sync_all per complete transaction batch",
         commit_batches: Latency::from(commits),
+        prepare_and_sync: Latency::from(prepare_and_sync),
+        index_install: Latency::from(index_install),
         current_get: Latency::from(current_get),
         old_get: Latency::from(old_get),
         current_full_scan: Latency::from(current_scan),

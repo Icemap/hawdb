@@ -1,4 +1,4 @@
-use crate::index::{Index, Layout, Rows, View};
+use crate::index::{Index, Layout, Previous, Rows, View};
 use hawdb_storage::wal::frame::{
     decode_binary_wal_header, encode_binary_wal_header, frame_binary_wal_record,
     BinaryWalReadEvent, BinaryWalReader, WAL_BINARY_FILE_HEADER_BYTES,
@@ -140,12 +140,59 @@ impl Batch {
     }
 }
 
+struct Latest {
+    epoch: u64,
+    position: usize,
+}
 struct Journal {
     file: File,
     len: u64,
-    latest: BTreeMap<Vec<u8>, u64>,
+    latest: BTreeMap<Vec<u8>, Latest>,
     // Bounded by MAX_JOURNAL; exact payload equality avoids hash-based replay ambiguity.
-    receipts: BTreeMap<u64, Batch>,
+    receipts: BTreeMap<u64, u64>,
+    commits: Vec<Batch>,
+}
+impl Journal {
+    fn previous(&self, key: &[u8]) -> Result<Option<Previous<'_>>> {
+        let Some(latest) = self.latest.get(key) else {
+            return Ok(None);
+        };
+        let change = self
+            .batch(latest.epoch)?
+            .writes
+            .get(latest.position)
+            .filter(|change| change.key == key)
+            .ok_or(Error::Invalid("missing latest commit receipt"))?;
+        Ok(Some(Previous {
+            epoch: latest.epoch,
+            value: &change.value,
+        }))
+    }
+    fn batch(&self, epoch: u64) -> Result<&Batch> {
+        let index = usize::try_from(epoch)
+            .ok()
+            .and_then(|n| n.checked_sub(1))
+            .ok_or(Error::Invalid("invalid receipt epoch"))?;
+        self.commits
+            .get(index)
+            .filter(|batch| batch.epoch == epoch)
+            .ok_or(Error::Invalid("missing commit receipt"))
+    }
+    fn record(&mut self, batch: Batch) {
+        for (position, change) in batch.writes.iter().enumerate() {
+            let latest = Latest {
+                epoch: batch.epoch,
+                position,
+            };
+            if let Some(entry) = self.latest.get_mut(change.key.as_slice()) {
+                *entry = latest;
+            } else {
+                self.latest.insert(change.key.clone(), latest);
+            }
+        }
+        self.receipts.insert(batch.operation, batch.epoch);
+        self.commits.push(batch);
+    }
 }
 struct Inner {
     index: Index,
@@ -232,6 +279,7 @@ impl Store {
             len,
             latest: BTreeMap::new(),
             receipts: BTreeMap::new(),
+            commits: Vec::new(),
         };
         let reader = journal.file.try_clone()?;
         let mut reader = BinaryWalReader::new(reader, generation, Some(MAX_BATCH));
@@ -254,12 +302,10 @@ impl Store {
                             "non-contiguous epoch or duplicate operation",
                         ));
                     }
-                    let candidate = index.prepare(&batch, |_| Ok(()))?;
+                    let candidate =
+                        index.prepare(&batch, |key| journal.previous(key), |_| Ok(()))?;
                     index.publish(candidate, batch.epoch, &published)?;
-                    for m in &batch.writes {
-                        journal.latest.insert(m.key.clone(), batch.epoch);
-                    }
-                    journal.receipts.insert(batch.operation, batch);
+                    journal.record(batch);
                     valid_end = end_offset;
                 }
                 BinaryWalReadEvent::Eof => break,
@@ -378,7 +424,8 @@ impl WriteTxn {
         if writes.is_empty() {
             return Err(Error::Invalid("empty write transaction"));
         }
-        if let Some(previous) = journal.receipts.get(&operation) {
+        if let Some(&previous_epoch) = journal.receipts.get(&operation) {
+            let previous = journal.batch(previous_epoch)?;
             return if previous.writes == writes {
                 Ok(previous.epoch)
             } else {
@@ -389,7 +436,7 @@ impl WriteTxn {
             if journal
                 .latest
                 .get(&change.key)
-                .is_some_and(|epoch| *epoch > self.read.epoch)
+                .is_some_and(|latest| latest.epoch > self.read.epoch)
             {
                 return Err(Error::Conflict(change.key.clone()));
             }
@@ -428,17 +475,18 @@ impl WriteTxn {
             journal.file.write_all(&frame)?;
             journal.file.sync_all()?;
             hook(Stage::Durable)?;
-            let candidate = inner.index.prepare(&batch, |n| hook(Stage::Installed(n)))?;
+            let candidate = inner.index.prepare(
+                &batch,
+                |key| journal.previous(key),
+                |n| hook(Stage::Installed(n)),
+            )?;
             inner.index.publish(candidate, epoch, &inner.published)?;
             hook(Stage::Published)?;
             Ok(())
         })();
         outcome.map_err(|error| Error::CommitUncertain(error.to_string()))?;
         journal.len = new_len;
-        for change in &batch.writes {
-            journal.latest.insert(change.key.clone(), epoch);
-        }
-        journal.receipts.insert(operation, batch);
+        journal.record(batch);
         uncertain.armed = false;
         Ok(epoch)
     }
