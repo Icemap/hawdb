@@ -108,9 +108,18 @@ fn assert_new_read_does_not_wait_for_writer(language: ReadLanguage) {
     database.set_telemetry_sink(Some(sink.clone()));
     let db = database.into_concurrent();
     let before = db.published_read_view().unwrap();
+    // Cypher observation now runs after commit and outside the owner. Pause
+    // private execution explicitly to test a reader before publication.
+    let cypher_gate = matches!(language, ReadLanguage::Cypher).then(|| {
+        db.pause_next_autocommit_mutation(crate::api::AutocommitMutationPhase::BeforeExecution)
+    });
     let writer_db = db.clone();
     let writer = std::thread::spawn(move || language.execute(&writer_db, write_query));
-    let writer_ready = writer_events.recv_timeout(Duration::from_secs(5));
+    let writer_ready = if let Some((ready, _)) = &cypher_gate {
+        ready.recv_timeout(Duration::from_secs(5))
+    } else {
+        writer_events.recv_timeout(Duration::from_secs(5))
+    };
 
     let (read_completed, read_results) = mpsc::channel();
     let reader_db = db.clone();
@@ -125,11 +134,14 @@ fn assert_new_read_does_not_wait_for_writer(language: ReadLanguage) {
         let _ = read_completed.send(result);
     });
     let completed_while_writer_paused = read_results.recv_timeout(Duration::from_secs(5));
+    if let Some((_, resume)) = cypher_gate {
+        let _ = resume.send(());
+    }
     release_autocommit_reads(&writer_release);
     reader.join().unwrap();
     let writer_result = writer.join();
 
-    writer_ready.expect("writer must hold the sequencer before starting the reader");
+    writer_ready.expect("writer must reach its suspended phase before starting the reader");
     writer_result.unwrap().unwrap();
     assert!(!sink.writer_timed_out.load(Ordering::SeqCst));
     let (mut snapshot, view, epoch, output) = completed_while_writer_paused

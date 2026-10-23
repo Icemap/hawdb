@@ -821,6 +821,13 @@ impl AdvancedStatisticsDirtyState {
     }
 }
 
+#[derive(Debug, Clone)]
+struct SnapshotResidencyObserver {
+    segment_cache: Arc<SegmentCache>,
+    graph_manifest_open_budget_bytes: u64,
+    graph_manifest_encoded_bytes: u64,
+}
+
 #[derive(Debug, Default)]
 pub struct GraphStore {
     next_node_id: u64,
@@ -891,6 +898,7 @@ pub struct GraphStore {
     branch_root_pin: Option<Arc<crate::branch_root_pins::RootPin>>,
     branch_runtime_owner: Option<Arc<crate::file_descriptors::AdmittedRuntimeOwner>>,
     snapshot_file_context: Option<crate::file_descriptors::FileOpenContext>,
+    snapshot_residency_observer: Option<SnapshotResidencyObserver>,
     durable: Option<DurableStore>,
     // Data/COW runtime owners above must drop before decoded allocation leases.
     checkpoint_allocations: crate::background::CheckpointAllocationOwner,
@@ -1840,6 +1848,7 @@ impl GraphStore {
             branch_root_pin: None,
             branch_runtime_owner: None,
             snapshot_file_context: None,
+            snapshot_residency_observer: None,
             durable: Some(durable),
             checkpoint_allocations: Default::default(),
         };
@@ -2342,6 +2351,7 @@ impl GraphStore {
             branch_root_pin: self.branch_root_pin.clone(),
             branch_runtime_owner: self.branch_runtime_owner.clone(),
             snapshot_file_context: self.file_descriptor_context(),
+            snapshot_residency_observer: self.residency_observer(),
             durable: None,
             checkpoint_allocations: self.checkpoint_allocations.clone(),
         }
@@ -6114,6 +6124,81 @@ mod tests {
             assert_eq!(
                 store.canonical_node_from_segments(NodeId(1)).unwrap(),
                 store.node(NodeId(1)).cloned()
+            );
+        }
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    #[test]
+    fn detached_snapshots_preserve_live_cache_and_captured_manifest_observations() {
+        let path = unique_test_dir("snapshot_residency_observation");
+        {
+            let mut catalog = Catalog::default();
+            let mut store = GraphStore::open(&path, &mut catalog).unwrap();
+            store
+                .create_node(
+                    &mut catalog,
+                    "Memory",
+                    properties([("body", Value::String("snapshot payload".into()))]),
+                )
+                .unwrap();
+            store.checkpoint(&catalog).unwrap();
+        }
+        {
+            let mut catalog = Catalog::default();
+            let store = GraphStore::open_with_durability_and_replay_config(
+                &path,
+                &mut catalog,
+                DurabilityPolicy::default(),
+                WalReplayConfig {
+                    residency_mode: StorageResidencyMode::OutOfCore,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            let before = store.storage_residency_report();
+            let snapshot = store.snapshot_for_read();
+            let descendant = snapshot.snapshot_for_read();
+            assert!(snapshot.durable.is_none());
+            assert!(descendant.durable.is_none());
+            assert!(descendant.storage_recovery_report().durable);
+            for read in [&snapshot, &descendant] {
+                let residency = read.storage_residency_report();
+                assert_eq!(
+                    residency.segment_cache_capacity_bytes,
+                    before.segment_cache_capacity_bytes
+                );
+                assert_eq!(
+                    residency.graph_manifest_open_budget_bytes,
+                    before.graph_manifest_open_budget_bytes
+                );
+                assert_eq!(
+                    residency.graph_manifest_encoded_bytes,
+                    before.graph_manifest_encoded_bytes
+                );
+                assert_eq!(residency.canonical_generation, before.canonical_generation);
+            }
+            let cache_before = descendant.segment_cache_snapshot().unwrap();
+            assert!(cache_before.capacity_bytes > 0);
+            drop(store);
+            drop(snapshot);
+            assert!(descendant.node_owned(NodeId(0)).unwrap().is_some());
+            let after = descendant.segment_cache_snapshot().unwrap();
+            assert!(
+                after.hit_count + after.miss_count
+                    > cache_before.hit_count + cache_before.miss_count
+            );
+            assert_eq!(
+                descendant
+                    .storage_residency_report()
+                    .segment_cache_hit_count,
+                after.hit_count
+            );
+            assert_eq!(
+                descendant
+                    .storage_residency_report()
+                    .segment_cache_miss_count,
+                after.miss_count
             );
         }
         std::fs::remove_dir_all(path).unwrap();

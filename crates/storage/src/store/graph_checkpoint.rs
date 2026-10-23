@@ -1746,7 +1746,28 @@ impl GraphStore {
     pub fn segment_cache_snapshot(&self) -> Option<SegmentCacheSnapshot> {
         self.durable
             .as_ref()
-            .map(|durable| durable.segment_cache.snapshot())
+            .map(|durable| &durable.segment_cache)
+            .or_else(|| {
+                self.snapshot_residency_observer
+                    .as_ref()
+                    .map(|observer| &observer.segment_cache)
+            })
+            .map(|cache| cache.snapshot())
+    }
+
+    pub(super) fn residency_observer(&self) -> Option<SnapshotResidencyObserver> {
+        self.durable.as_ref().map_or_else(
+            || self.snapshot_residency_observer.clone(),
+            |durable| {
+                // Share counters, not the writable owner or its WAL handles.
+                // Manifest admission metadata belongs to the captured roots.
+                Some(SnapshotResidencyObserver {
+                    segment_cache: Arc::clone(&durable.segment_cache),
+                    graph_manifest_open_budget_bytes: durable.graph_manifest_open_budget_bytes(),
+                    graph_manifest_encoded_bytes: durable.graph_manifest_encoded_bytes(),
+                })
+            },
+        )
     }
 
     pub fn canonical_segment_manifest(&self) -> Option<&CanonicalSegmentManifest> {
@@ -1782,13 +1803,24 @@ impl GraphStore {
             .map(CanonicalSegmentReader::manifest);
         let estimated_delta_resident_bytes = self.estimated_delta_resident_bytes();
         let cache = self.segment_cache_snapshot().unwrap_or_default();
-        let (graph_manifest_open_budget_bytes, graph_manifest_encoded_bytes) =
-            self.durable.as_ref().map_or((0, 0), |durable| {
+        let (graph_manifest_open_budget_bytes, graph_manifest_encoded_bytes) = self
+            .durable
+            .as_ref()
+            .map(|durable| {
                 (
                     durable.graph_manifest_open_budget_bytes(),
                     durable.graph_manifest_encoded_bytes(),
                 )
-            });
+            })
+            .or_else(|| {
+                self.snapshot_residency_observer.as_ref().map(|observer| {
+                    (
+                        observer.graph_manifest_open_budget_bytes,
+                        observer.graph_manifest_encoded_bytes,
+                    )
+                })
+            })
+            .unwrap_or_default();
         StorageResidencyReport {
             out_of_core: self.canonical_base_out_of_core,
             canonical_generation: manifest.map(|manifest| manifest.generation.0),

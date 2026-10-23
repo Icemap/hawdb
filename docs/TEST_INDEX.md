@@ -104,9 +104,12 @@ not latency or allocation measurements.
 label but updating distinct unique keys, readers progressing while private
 execution is suspended, intervening commits without replanning, excluded unique
 candidates, schema invalidation, cancellation/output refusal, and durable create
-IDs after reopen. The root general suite and macOS/Windows runtime lane own these
+IDs after reopen. The root concurrent suite and macOS/Windows runtime lane own these
 cases, along with out-of-core unique lookup, EXPLAIN ANALYZE rejection, mutation
 summary ceilings and expression/NULL predicate parity.
+The expression fallback uses a supported `COALESCE` comparison. The concurrent
+read-observation case pauses Cypher private execution before publication;
+post-commit telemetry is not a prepublication synchronization point.
 `nowledge_mem::read_execution::tests` additionally exercises the actual
 admitted report adapter with two such writers, captured plans, one preparation
 per statement and full admission refund. These are correctness/operation-count
@@ -130,6 +133,14 @@ waiting; graph-only reports and plain EXPLAIN do not reserve projection I/O.
 A projection I/O-depth change during admission rejects the old request and
 releases its preparation, execution memory and I/O reservations.
 The root general unit owner and weekly runtime lane execute this family.
+Production resource-profile cases in the same family require completion while
+the publication owner is held, live cache observations with the original durable
+and manifest metadata, one preparation, host/statement ceilings and full refund
+after refusal. Admission telemetry advances data, schema or the database instance;
+profiling releases its preparation view and rejects stale evidence against the
+execution epoch. `store::tests::detached_snapshots_preserve_live_cache_and_captured_manifest_observations`
+additionally checks nested snapshots after their writable owner closes. These
+observations are shared cache/process metrics, not per-query concurrency attribution.
 The family also checks schema guidance and generated queries against the last
 published view while a direct writer holds the owner. Generated reads use one
 preparation lookup, retain parameter/row/payload checks, and reject a stale

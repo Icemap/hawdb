@@ -3509,28 +3509,37 @@ impl NowledgeMemEmbeddedStoreHandle {
     pub fn production_resource_profile(
         &self,
         statement: &NowledgeGraphStatement,
-        limits: StorageResourceProfileLimits,
+        mut limits: StorageResourceProfileLimits,
         evidence_binding: crate::ProductionEvidenceBinding,
         expected_identity: crate::ProductionQualificationIdentity,
     ) -> Result<StorageResourceProfileReport> {
-        let store = self.read_store()?;
-        let (permit, prepared) = store.graph.admit_streaming_query(
+        limits.validate()?;
+        evidence_binding.validate_for(&expected_identity)?;
+        self.with_admitted_graph_read(
             &statement.cypher,
             &statement.parameters,
-            u64::try_from(limits.max_output_payload_bytes).unwrap_or(u64::MAX),
-        )?;
-        let task_context = permit.bind_task_context(RuntimeTaskContext::default());
-        store
-            .graph
-            .database()
-            .storage_resource_profile_for_production_with_context(
-                prepared,
-                &statement.parameters,
-                limits,
-                evidence_binding,
-                expected_identity,
-                &task_context,
-            )
+            &NowledgeMemReadOptions {
+                max_rows: Some(limits.max_output_rows),
+                max_estimated_payload_bytes: Some(limits.max_output_payload_bytes),
+            },
+            &RuntimeTaskContext::default(),
+            |read, prepared, admitted, context, _| {
+                limits.max_output_rows = limits
+                    .max_output_rows
+                    .min(admitted.max_rows.unwrap_or(usize::MAX));
+                limits.max_output_payload_bytes = limits
+                    .max_output_payload_bytes
+                    .min(admitted.max_payload_bytes.unwrap_or(usize::MAX));
+                read.storage_resource_profile_for_production_with_context(
+                    prepared,
+                    &statement.parameters,
+                    limits,
+                    evidence_binding,
+                    expected_identity,
+                    context,
+                )
+            },
+        )
     }
 
     pub fn production_status(

@@ -290,7 +290,7 @@ fn mutation_preflight_preserves_expression_and_null_predicate_semantics() {
     assert_eq!(returned.rows[0]["total"], Value::Int(2));
     assert_eq!(score(&database, 3), Value::Null);
     let returned = database
-        .query("MATCH (n:Counter) WHERE true SET n.score = 7")
+        .query("MATCH (n:Counter) WHERE COALESCE(n.score, 0) >= 0 SET n.score = 7")
         .unwrap();
     assert_eq!(returned.rows.len(), 3);
     assert_eq!(score(&database, 3), Value::Int(7));

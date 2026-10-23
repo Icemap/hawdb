@@ -138,9 +138,20 @@ MUST NOT replace three-valued expression evaluation for RETURN. EXPLAIN ANALYZE
 remains diagnostic and MUST NOT enter the mutation path. Positive legacy mutation
 summary row caps remain enforced independently of explicit RETURN output limits.
 
-SQL autocommit, control/projection procedures and production resource profiling
-still require separate adapter work. Release A/B and actual owner-lock measurements
+SQL autocommit and control/projection procedures still require separate adapter
+work. Release A/B and actual owner-lock measurements
 remain required; the new Cypher path alone does not establish their performance.
+
+The Mem production resource-profile entry point MUST use the same detached read
+admission path and consume its preparation once. Evidence identity MUST match the
+execution snapshot's canonical commit epoch after admission; a data commit during
+admission invalidates that evidence even though the prepared read remains reusable.
+Profiling MUST preserve durable-source status, captured manifest metadata and live
+shared segment-cache counters without retaining the writable storage owner. Cache
+counters and process memory are shared observations; they are not per-query
+attribution when other work runs concurrently. Row and payload ceilings remain
+bounded by the host configuration and admission, and a failed read returns no
+successful qualification report.
 
 Request limits can tighten database limits but MUST NOT widen them. An explicit
 request `Some(0)` is a zero-row or zero-payload ceiling, not an unlimited sentinel.

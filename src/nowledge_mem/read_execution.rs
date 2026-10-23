@@ -389,6 +389,224 @@ mod tests {
         handle
     }
 
+    fn resource_profile_identity(
+        handle: &NowledgeMemEmbeddedStoreHandle,
+    ) -> crate::ProductionQualificationIdentity {
+        crate::ProductionQualificationIdentity {
+            source_revision: "test-revision".into(),
+            rust_toolchain: "test-toolchain".into(),
+            target_os: std::env::consts::OS.into(),
+            target_arch: std::env::consts::ARCH.into(),
+            enabled_features: Vec::new(),
+            durable_format_version: 1,
+            schema_version: 1,
+            configuration_digest: "test-config".into(),
+            deployment_profile: "test-production-replica".into(),
+            dataset_fingerprint: "test-dataset".into(),
+            canonical_graph_commit_epoch: handle
+                .read_store()
+                .unwrap()
+                .graph
+                .database()
+                .commit_epoch()
+                .unwrap(),
+            policy_version: crate::PRODUCTION_QUALIFICATION_POLICY_VERSION,
+        }
+    }
+
+    fn resource_profile_limits() -> crate::StorageResourceProfileLimits {
+        crate::StorageResourceProfileLimits {
+            min_canonical_artifact_bytes: 4096,
+            max_steady_resident_bytes: u64::MAX,
+            max_peak_resident_bytes: u64::MAX,
+            max_total_page_faults: Some(u64::MAX),
+            max_minor_page_faults: cfg!(unix).then_some(u64::MAX),
+            max_major_page_faults: cfg!(unix).then_some(u64::MAX),
+            max_intermediate_rows: 1024,
+            max_intermediate_payload_bytes: 1024 * 1024,
+            max_output_rows: 64,
+            max_output_payload_bytes: 1024 * 1024,
+            require_fully_streamed: true,
+        }
+    }
+
+    fn resource_profile(
+        handle: &NowledgeMemEmbeddedStoreHandle,
+        cypher: &str,
+        limits: crate::StorageResourceProfileLimits,
+        identity: crate::ProductionQualificationIdentity,
+    ) -> Result<crate::StorageResourceProfileReport> {
+        handle.production_resource_profile(
+            &crate::NowledgeGraphStatement {
+                cypher: cypher.into(),
+                parameters: BTreeMap::new(),
+            },
+            limits,
+            crate::ProductionEvidenceBinding {
+                identity: identity.clone(),
+                generated_at_unix_seconds: 1,
+            },
+            identity,
+        )
+    }
+
+    #[test]
+    fn resource_profile_uses_durable_snapshot_observations_while_owner_is_held() {
+        let path = std::env::temp_dir().join(format!(
+            "hawdb_detached_resource_profile_{}_{}",
+            std::process::id(),
+            hawdb_core::generate_uuidv7().unwrap(),
+        ));
+        let config = DatabaseConfig {
+            storage_residency_mode: crate::StorageResidencyMode::OutOfCore,
+            segment_cache_capacity_bytes: 1024,
+            ..DatabaseConfig::default()
+        };
+        let mut db = crate::Database::open_with_config(&path, config.clone()).unwrap();
+        let mut transaction = db.begin_transaction().unwrap();
+        for id in 0..32 {
+            transaction
+                .query_with_params(
+                    "CREATE (:Memory {id: $id, body: $body})",
+                    &BTreeMap::from([
+                        ("id".into(), Value::Int(id)),
+                        ("body".into(), Value::String("x".repeat(1024))),
+                    ]),
+                )
+                .unwrap();
+        }
+        transaction.commit().unwrap();
+        db.checkpoint().unwrap();
+        drop(db);
+        let db = crate::Database::open_with_config(&path, config).unwrap();
+        let graph =
+            crate::NowledgeMemGraph::from_database(db, NowledgeMemGraphMode::WritableCutover);
+        let handle =
+            NowledgeMemEmbeddedStoreHandle::new(crate::NowledgeMemEmbeddedStore::new(graph, None))
+                .unwrap();
+        let identity = resource_profile_identity(&handle);
+        let read_handle = handle.clone();
+        let read_identity = identity.clone();
+        let (finished, done) = mpsc::channel();
+        let owner = handle.write_store().unwrap();
+        let before_stats = owner.graph.database().plan_cache_stats().unwrap();
+        let before_residency = owner.graph.database().storage_residency_report().unwrap();
+        let reader = std::thread::spawn(move || {
+            let result = resource_profile(
+                &read_handle,
+                "MATCH (m:Memory) RETURN m.id AS memory_id",
+                resource_profile_limits(),
+                read_identity,
+            );
+            let _ = finished.send(result);
+        });
+        let result = done.recv_timeout(Duration::from_secs(10));
+        drop(owner);
+        reader.join().unwrap();
+        let profile = result
+            .expect("resource profiling waited for the publication owner")
+            .unwrap();
+        assert!(profile.resource_ready, "{:?}", profile.blocker_codes);
+        assert!(profile.production_ready());
+        assert!(profile.durable);
+        assert_eq!(
+            profile.canonical_graph_commit_epoch,
+            identity.canonical_graph_commit_epoch
+        );
+        assert_eq!(profile.query.output_rows, 32);
+        assert_eq!(profile.before.segment_cache_capacity_bytes, 1024);
+        assert_eq!(profile.after.segment_cache_capacity_bytes, 1024);
+        assert_eq!(
+            profile.after.graph_manifest_open_budget_bytes,
+            before_residency.graph_manifest_open_budget_bytes
+        );
+        assert_eq!(
+            profile.after.graph_manifest_encoded_bytes,
+            before_residency.graph_manifest_encoded_bytes
+        );
+        assert!(
+            profile.after.segment_cache_hit_count + profile.after.segment_cache_miss_count
+                > profile.before.segment_cache_hit_count + profile.before.segment_cache_miss_count
+        );
+        let after_stats = handle
+            .read_store()
+            .unwrap()
+            .graph
+            .database()
+            .plan_cache_stats()
+            .unwrap();
+        assert_eq!(
+            after_stats.hits + after_stats.misses + after_stats.bypasses
+                - before_stats.hits
+                - before_stats.misses
+                - before_stats.bypasses,
+            1
+        );
+        assert_eq!(
+            handle
+                .runtime_governor_snapshot()
+                .unwrap()
+                .admitted_memory_bytes,
+            0
+        );
+        drop(handle);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    #[test]
+    fn resource_profile_preserves_host_and_statement_limits_and_refunds_refusals() {
+        let handle = graph_only_handle();
+        let identity = resource_profile_identity(&handle);
+        let profile =
+            resource_profile(&handle, READ, resource_profile_limits(), identity.clone()).unwrap();
+        assert_eq!(profile.limits.max_output_payload_bytes, 16 * 1024);
+        assert_eq!(profile.query.output_rows, 1);
+        assert!(!profile.durable);
+        assert!(profile
+            .blocker_codes
+            .iter()
+            .any(|code| code == "database_not_durable"));
+        let before_epoch = identity.canonical_graph_commit_epoch;
+        for (cypher, resource) in [
+            (READ, Some(hawdb_core::ReadBudgetResource::PayloadBytes)),
+            (
+                "MATCH (n) RETURN n.id AS id",
+                Some(hawdb_core::ReadBudgetResource::Rows),
+            ),
+            (WRITE, None),
+        ] {
+            let mut limits = resource_profile_limits();
+            match resource {
+                Some(hawdb_core::ReadBudgetResource::PayloadBytes) => {
+                    limits.max_output_payload_bytes = 1
+                }
+                Some(hawdb_core::ReadBudgetResource::Rows) => limits.max_output_rows = 1,
+                None => {}
+            }
+            let error = resource_profile(&handle, cypher, limits, identity.clone()).unwrap_err();
+            if let Some(resource) = resource {
+                assert!(
+                    matches!(&error, HawDBError::ReadBudgetExceeded(cause)
+                    if cause.resource == resource && cause.limit == 1),
+                    "{error}"
+                );
+            } else {
+                assert!(error.to_string().contains("must be read-only"), "{error}");
+            }
+            assert_eq!(
+                handle
+                    .runtime_governor_snapshot()
+                    .unwrap()
+                    .admitted_memory_bytes,
+                0
+            );
+            assert_eq!(
+                resource_profile_identity(&handle).canonical_graph_commit_epoch,
+                before_epoch
+            );
+        }
+    }
+
     #[test]
     fn ordinary_report_writers_reuse_admission_and_overlap_on_distinct_unique_keys() {
         use crate::api::AutocommitMutationPhase;
@@ -1155,6 +1373,7 @@ mod tests {
         Ordinary,
         Report,
         Generated,
+        ResourceProfile,
     }
 
     #[test]
@@ -1163,6 +1382,7 @@ mod tests {
             ReadEntryPoint::Ordinary,
             ReadEntryPoint::Report,
             ReadEntryPoint::Generated,
+            ReadEntryPoint::ResourceProfile,
         ] {
             for change in [
                 AdmissionChange::Data,
@@ -1181,6 +1401,8 @@ mod tests {
                             .unwrap(),
                     )
                 });
+                let profile_identity = (entry == ReadEntryPoint::ResourceProfile)
+                    .then(|| resource_profile_identity(&handle));
                 let writer_handle = handle.clone();
                 let (start, started) = mpsc::channel();
                 let (finished, done) = mpsc::channel();
@@ -1230,6 +1452,15 @@ mod tests {
                             &options(),
                         )
                         .map(|result| result.output),
+                    ReadEntryPoint::ResourceProfile => resource_profile(
+                        &handle,
+                        READ,
+                        resource_profile_limits(),
+                        profile_identity.unwrap(),
+                    )
+                    .map(|_| crate::QueryOutput {
+                        rows: Default::default(),
+                    }),
                 };
                 handle.set_telemetry_sink(None).unwrap();
                 let prior_released = sink.prior_released.load(Ordering::SeqCst);
@@ -1240,6 +1471,12 @@ mod tests {
                     "preparation retained its publication: {entry:?} {change:?}"
                 );
                 match change {
+                    AdmissionChange::Data if entry == ReadEntryPoint::ResourceProfile => {
+                        assert!(result
+                            .unwrap_err()
+                            .to_string()
+                            .contains("does not match database epoch"))
+                    }
                     AdmissionChange::Data if entry == ReadEntryPoint::Generated => assert!(result
                         .unwrap_err()
                         .to_string()
