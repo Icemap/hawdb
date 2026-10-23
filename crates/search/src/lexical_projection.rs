@@ -1841,18 +1841,30 @@ impl LexicalProjectionReader {
             && candidate_postings >= self.config.pruning_min_postings;
         loop {
             query_context::check(context)?;
+            let floor = if prune { collector.floor() } else { None };
             order.clear();
+            let mut next_ordinal: Option<u64> = None;
             for (index, stream) in streams.iter_mut().enumerate() {
                 if let Some(ordinal) = stream.peek_ordinal()? {
-                    order.push((ordinal, index));
+                    if floor.is_some() {
+                        order.push((ordinal, index));
+                    } else {
+                        // Exhaustive scoring and WAND warmup only need the
+                        // next ID, without storing or sorting the cursors.
+                        next_ordinal = Some(next_ordinal.map_or(ordinal, |next| next.min(ordinal)));
+                    }
                 }
             }
-            if order.is_empty() {
+            let ordinal = if floor.is_some() {
+                order.sort_unstable();
+                order.first().map(|&(ordinal, _)| ordinal)
+            } else {
+                next_ordinal
+            };
+            let Some(ordinal) = ordinal else {
                 break;
-            }
-            order.sort_unstable();
-            let ordinal = order[0].0;
-            if prune && let Some(floor) = collector.floor() {
+            };
+            if let Some(floor) = floor {
                 // Block-Max WAND pivot: cursors are examined in ordinal order
                 // until their summed per-block bounds reach the retained floor.
                 // Every document below that pivot scores below the floor, so
@@ -3837,6 +3849,7 @@ mod tests {
 
     #[cfg(feature = "full-text-search")]
     mod checkpoint;
+    mod cursor_selection;
     mod pruning;
     mod query_context;
     mod robustness;
