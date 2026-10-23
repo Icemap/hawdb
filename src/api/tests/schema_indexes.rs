@@ -1754,6 +1754,128 @@ fn composite_index_uses_leading_equalities_and_next_column_range() {
     );
 }
 
+fn assert_sparse_composite_ranges(db: &mut Database, multiple_equalities: bool) {
+    let prefix = if multiple_equalities {
+        "n.kind = $kind AND n.bucket = $bucket"
+    } else {
+        "n.kind = $kind"
+    };
+    let mut params = BTreeMap::from([
+        ("kind".into(), Value::String("note".into())),
+        ("lower".into(), Value::Int(10)),
+        ("upper".into(), Value::Int(20)),
+    ]);
+    if multiple_equalities {
+        params.insert("bucket".into(), Value::String("primary".into()));
+    }
+    for (lower, upper) in [(">=", "<="), (">", "<="), (">=", "<"), (">", "<")] {
+        let query = format!("MATCH (n:Memory) WHERE {prefix} AND n.created_at {lower} $lower AND n.created_at {upper} $upper RETURN n.created_at AS rank, n.id AS id ORDER BY rank, id");
+        let reference = query
+            .replace("n.kind", "coalesce(n.kind, '')")
+            .replace("n.bucket", "coalesce(n.bucket, '')")
+            .replace("n.created_at", "coalesce(n.created_at, 0)");
+        assert_eq!(
+            db.query_with_params(&query, &params).unwrap().rows,
+            db.query_with_params(&reference, &params).unwrap().rows,
+            "{query}"
+        );
+    }
+}
+
+#[test]
+fn sparse_composite_prefix_range_keeps_rows_across_checkpoint_and_reopen() {
+    for multiple_equalities in [false, true] {
+        let path = unique_test_dir("sparse-composite-prefix-range");
+        let config = DatabaseConfig {
+            storage_residency_mode: hawdb_storage::config::StorageResidencyMode::OutOfCore,
+            ..DatabaseConfig::default()
+        };
+        let mut db = Database::open_with_config(&path, config.clone()).unwrap();
+        for rank in 0..64 {
+            let params = BTreeMap::from([
+                (
+                    "kind".into(),
+                    Value::String(if rank < 48 { "note" } else { "archive" }.into()),
+                ),
+                ("rank".into(), Value::Int(rank)),
+                ("id".into(), Value::String(format!("memory-{rank}"))),
+            ]);
+            db.query_with_params(
+                "CREATE (:Memory {kind: $kind, bucket: 'primary', created_at: $rank, id: $id})",
+                &params,
+            )
+            .unwrap();
+        }
+        for statement in [
+            "CREATE (:Memory {kind: 'note', bucket: 'primary', created_at: 15})",
+            "CREATE (:Memory {kind: 'note', bucket: 'primary', created_at: 16, id: null})",
+            "CREATE (:Memory {bucket: 'primary', created_at: 15, id: 'missing-kind'})",
+            "CREATE (:Memory {kind: 'note', bucket: 'primary', id: 'missing-rank'})",
+        ] {
+            db.query(statement).unwrap();
+        }
+        if multiple_equalities {
+            db.query("CREATE (:Memory {kind: 'note', created_at: 15, id: 'missing-bucket'})")
+                .unwrap();
+        }
+        let properties = if multiple_equalities {
+            "kind, bucket, created_at, id"
+        } else {
+            "kind, created_at, id"
+        };
+        db.query(&format!("CREATE INDEX ON :Memory({properties})"))
+            .unwrap();
+        let query = if multiple_equalities {
+            "MATCH (n:Memory) WHERE n.kind = 'note' AND n.bucket = 'primary' AND n.created_at >= 10 AND n.created_at <= 20 RETURN n.created_at AS rank, n.id AS id ORDER BY rank, id"
+        } else {
+            "MATCH (n:Memory) WHERE n.kind = 'note' AND n.created_at >= 10 AND n.created_at <= 20 RETURN n.created_at AS rank, n.id AS id ORDER BY rank, id"
+        };
+        let expected = db.query(query).unwrap().rows;
+        assert_eq!(expected.len(), 13);
+        assert!(!db
+            .explain_query(query)
+            .unwrap()
+            .physical_plan
+            .explain(0)
+            .contains("IndexNodeCompositeRangeSeek"));
+        assert_sparse_composite_ranges(&mut db, multiple_equalities);
+        db.checkpoint().unwrap();
+        assert_sparse_composite_ranges(&mut db, multiple_equalities);
+        let mut retained = db.begin_read_transaction().unwrap();
+        for statement in [
+            "MATCH (n:Memory) WHERE n.created_at = 10 SET n.id = null",
+            "MATCH (n:Memory) WHERE n.created_at = 20 DELETE n",
+            "CREATE (:Memory {kind: 'note', bucket: 'primary', created_at: 12})",
+        ] {
+            db.query(statement).unwrap();
+        }
+        assert_sparse_composite_ranges(&mut db, multiple_equalities);
+        assert_eq!(
+            retained
+                .query_with_params(query, &BTreeMap::new())
+                .unwrap()
+                .rows,
+            expected
+        );
+        drop(retained);
+        drop(db);
+        let mut db = Database::open_with_config(&path, config).unwrap();
+        assert_sparse_composite_ranges(&mut db, multiple_equalities);
+        db.query("CREATE INDEX ON :Memory(kind, created_at)")
+            .unwrap();
+        db.checkpoint().unwrap();
+        assert!(db
+            .explain_query(query)
+            .unwrap()
+            .physical_plan
+            .explain(0)
+            .contains("IndexNodeCompositeRangeSeek"));
+        assert_sparse_composite_ranges(&mut db, multiple_equalities);
+        drop(db);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+}
+
 #[test]
 fn composite_range_requires_a_leading_equality_prefix() {
     let mut db = Database::new();

@@ -228,6 +228,11 @@ fn composite_range_index_seek_candidate(
         if equality_prefix.is_empty() || equality_prefix.len() == index_properties.len() {
             continue;
         }
+        // Composite entries omit nodes missing any indexed property. A range
+        // before an unconstrained suffix cannot cover the canonical domain.
+        if equality_prefix.len() + 1 != index_properties.len() {
+            continue;
+        }
         let range_property = &index_properties[equality_prefix.len()];
         let Some((lower, upper)) = ranges.get(range_property) else {
             continue;
