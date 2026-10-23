@@ -78,6 +78,14 @@ adds an explicit `--reopen-before-measure` fixture for captured WAL ownership.
 The manually dispatched writer job runs separate fixed 40-pair cohorts with
 identical baseline/candidate harnesses, retained raw samples and unchanged
 per-cohort thresholds. It is excluded from default/scheduled execution.
+The concurrent matrix selects writer counts from one through half of the
+effective physical-core/cgroup capacity, with explicit manual writer/reader
+overrides. Fresh snapshot readers verify atomic row pairs and published epochs
+while a retained initial snapshot stays stable. Timed request intervals must
+prove mixed progress, and every final durable state is reopened and checked.
+Read/write p50/p95/p99 and fixed-work rates remain separate from the historical
+single-stream control. CPU topology fixtures run locally; the manual workflow
+retains complete paired receipts. See [matrix and replay protocol](CONCURRENT_WRITER_QUALIFICATION.md).
 Replacement, rotation, symlink/unlink, strict-capacity and captured append
 recovery regressions remain in their existing storage/native CI owners.
 See [protocol, coverage diagnosis and retained evidence](benchmarks/wal_identity_linux_2026_10_23/README.md).

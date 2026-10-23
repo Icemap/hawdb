@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
-"""Retain the predeclared 40-pair, zero-increase single-stream writer gate."""
+"""Measure a fixed 40-pair writer or mixed reader/writer cohort without sample removal."""
 
 import argparse
 from datetime import datetime, timezone
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import platform
 import statistics
 import subprocess
 import time
+
+from concurrent_writer_topology import detect
 
 
 def sha256(path):
@@ -26,12 +29,35 @@ def main():
     parser.add_argument("--fixture-parent", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--reopen-before-measure", action="store_true")
+    parser.add_argument("--writers", type=int, default=1)
+    parser.add_argument("--readers", type=int, default=0)
+    parser.add_argument("--cpu-topology", type=Path)
     args = parser.parse_args()
     source = Path(__file__).resolve().parents[1]
+    topology = None
+    if args.cpu_topology:
+        topology = json.loads(args.cpu_topology.read_text())
+        if topology["cpu"] != detect() or [args.writers, args.readers] not in topology["cohorts"]:
+            parser.error("CPU constraints changed or cohort is outside the frozen matrix")
+    elif (args.writers, args.readers) != (1, 0):
+        parser.error("concurrent qualification requires frozen CPU topology")
     binaries = {name: path.resolve(strict=True) for name, path in
                 [("baseline", args.baseline), ("candidate", args.candidate)]}
     harness = source / "benches/concurrent_writers.rs"
     assert sha256(harness) == sha256(args.baseline_source / "benches/concurrent_writers.rs")
+    helper = Path("benches/concurrent_writers/readers.rs")
+    assert sha256(source / helper) == sha256(args.baseline_source / helper)
+    metrics = [("commit_latency", name) for name in
+               (["p50_ns", "p95_ns", "p99_ns"] if topology else ["p50_ns", "p95_ns"])]
+    if topology:
+        metrics.append(("workload", "elapsed_ns"))
+    if args.readers:
+        metrics.extend(("read_latency", name) for name in ["p50_ns", "p95_ns", "p99_ns"])
+    endpoint_count = 3 * len(metrics)
+    # Exact sign/order-statistic intervals, Bonferroni-adjusted within this
+    # cohort. Freeze ranks before sampling; do not pool claims across cohorts.
+    rank = max(k for k in range(1, 21) if
+               endpoint_count * 2 * sum(math.comb(40, j) for j in range(k)) / 2**40 <= 0.05)
     args.fixture_parent.mkdir(parents=True, exist_ok=True)
     filesystem = subprocess.check_output(["df", "-T", str(args.fixture_parent)], text=True)
     if "tmpfs" in filesystem:
@@ -43,7 +69,7 @@ def main():
     source_manifest = {name: sha256(source / name) for name in source_names}
     (args.output / "candidate-source.json").write_text(json.dumps(source_manifest, indent=2) + "\n")
     protocol = {
-        "schema": "concurrent-writer-strict-gate-v1",
+        "schema": "concurrent-writer-strict-gate-v2",
         "created_utc": datetime.now(timezone.utc).isoformat(),
         "baseline_revision": args.baseline_revision,
         "candidate_head": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=source, text=True).strip(),
@@ -51,6 +77,7 @@ def main():
         "candidate_source_manifest_sha256": sha256(args.output / "candidate-source.json"),
         "candidate_diff_sha256": hashlib.sha256(subprocess.check_output(["git", "diff", "HEAD"], cwd=source)).hexdigest(),
         "harness_sha256": sha256(harness),
+        "reader_harness_sha256": sha256(source / helper),
         "binary_sha256": {name: sha256(path) for name, path in binaries.items()},
         "binary_paths": {name: str(path) for name, path in binaries.items()},
         "cargo_lock_sha256": {"baseline": sha256(args.baseline_source / "Cargo.lock"), "candidate": sha256(source / "Cargo.lock")},
@@ -58,11 +85,14 @@ def main():
         "build_profile": "bench; opt-level=3, codegen-units=1, thin LTO, strip=none; both builds invoked from candidate repository",
         "toolchain": "Rust 1.97.1", "default_features": True,
         "baseline_overlay": "identical writer harness and Cargo benchmark registration only",
-        "measured_pairs": 40, "warm_up_pairs": 1, "interval_ranks_one_based": [12, 29],
+        "measured_pairs": 40, "warm_up_pairs": 1, "interval_ranks_one_based": [rank, 41 - rank],
+        "writers": args.writers, "readers": args.readers, "cpu_topology": topology,
         "fixture_profile": "reopened-captured-wal" if args.reopen_before_measure else "post-checkpoint-control",
         "reopen_before_measure": args.reopen_before_measure,
-        "primary_endpoints": "commit p50/p95 for non-serialized API in memory, durable ungrouped, durable grouped",
-        "pass_rule": "all six unrounded upper ratio endpoints <= 1.0; no adaptive stopping or sample removal",
+        "primary_endpoints": metrics, "primary_endpoint_count": endpoint_count,
+        "primary_cases": "non-serialized API in memory, durable ungrouped, durable grouped",
+        "pass_rule": "all unrounded upper ratio endpoints <= 1.0; no adaptive stopping or sample removal",
+        "coverage": "95% simultaneous intervals within this cohort only; no joint matrix claim",
         "order": "baseline first for even pairs, candidate first for odd pairs; alternate --round 0/1",
         "platform": platform.platform(), "filesystem": filesystem,
         "limitations": "shared host; no exclusive machine, affinity, cache flush, or power-loss claim; median-ratio intervals assume independent pairs from continuous distributions",
@@ -73,7 +103,8 @@ def main():
         for pair in range(-1, 40):
             order = ["baseline", "candidate"] if pair < 0 or pair % 2 == 0 else ["candidate", "baseline"]
             for revision in order:
-                command = [str(binaries[revision]), "--writers", "1", "--round", str(max(pair, 0) % 2),
+                command = [str(binaries[revision]), "--writers", str(args.writers),
+                           "--readers", str(args.readers), "--round", str(max(pair, 0) % 2),
                            "--fixture-parent", str(args.fixture_parent)]
                 if args.reopen_before_measure:
                     command.append("--reopen-before-measure")
@@ -97,6 +128,18 @@ def main():
                         assert case["commits"] == case["verified_rows"] == case["commit_latency"]["count"] == 256
                         assert case["reopen_verified"] == case["durable"]
                         assert case["reopened_before_measure"] == (args.reopen_before_measure and case["durable"])
+                        assert (case["writers"], case["readers"]) == (args.writers, args.readers)
+                        assert len(case["workers"]) == args.writers
+                        assert sum(w["commits"] for w in case["workers"]) == 256
+                        assert all(w["commits"] > 0 for w in case["workers"])
+                        if args.readers:
+                            reads = case["read_workload"]
+                            assert reads["requests"] == reads["latency"]["count"] == args.readers * 64
+                            assert len(reads["workers"]) == args.readers
+                            assert all(w["requests"] == 64 for w in reads["workers"])
+                            assert reads["pinned_snapshot_verified"]
+                            assert min(reads["reads_during_writer_phase"], reads["writes_during_reader_phase"],
+                                       reads["intermediate_snapshot_reads"]) > 0
                 except (ValueError, KeyError, AssertionError):
                     record["stdout"] = result.stdout
                     (args.output / "failure.json").write_text(json.dumps(record, indent=2) + "\n")
@@ -109,18 +152,20 @@ def main():
                 print(f"pair={pair} revision={revision} cases=6 seconds={record['elapsed_seconds']:.3f}", flush=True)
     endpoints = []
     for durable, grouped in [(False, False), (True, False), (True, True)]:
-        for metric in ["p50_ns", "p95_ns"]:
+        for family, metric in metrics:
             samples = {"baseline": [], "candidate": []}
             for pair in range(40):
                 for revision in samples:
                     case = next(row["result"] for row in measured[pair, revision]
                                 if row["result"]["durable"] == durable and row["result"]["grouped"] == grouped
                                 and not row["result"]["serialized_control"])
-                    samples[revision].append(case["commit_latency"][metric])
+                    container = case["read_workload"]["latency"] if family == "read_latency" else (
+                        case if family == "workload" else case[family])
+                    samples[revision].append(container[metric])
             ratios = [c / b for b, c in zip(samples["baseline"], samples["candidate"])]
             ordered = sorted(ratios)
-            low, high = ordered[11], ordered[28]
-            endpoints.append({"durable": durable, "grouped": grouped, "metric": metric,
+            low, high = ordered[rank - 1], ordered[40 - rank]
+            endpoints.append({"durable": durable, "grouped": grouped, "family": family, "metric": metric,
                               "baseline_median_ns": statistics.median(samples["baseline"]),
                               "candidate_median_ns": statistics.median(samples["candidate"]),
                               "paired_ratios": ratios, "median_ratio": statistics.median(ratios),
@@ -129,9 +174,14 @@ def main():
     receipt = {"strict_gate_passed": all(row["disposition"] == "pass" for row in endpoints),
                "measured_cases": 480, "measured_commits": 122880, "measured_reopens": 320,
                "warm_up_cases": 12, "primary_endpoints": endpoints,
+               "measured_reads": 480 * args.readers * 64,
+               "writers": args.writers, "readers": args.readers,
+               "cpu_constraints_unchanged": topology is None or topology["cpu"] == detect(),
                "protocol_sha256": sha256(args.output / "protocol.json"),
                "raw_sha256": sha256(args.output / "results.jsonl")}
     (args.output / "receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
+    if not receipt["cpu_constraints_unchanged"]:
+        raise SystemExit("CPU constraints changed; complete evidence retained but cohort is not qualified")
     print(json.dumps({"strict_gate_passed": receipt["strict_gate_passed"]}), flush=True)
 
 

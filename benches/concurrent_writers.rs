@@ -14,6 +14,9 @@ use std::path::Path;
 use std::sync::{Barrier, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+#[path = "concurrent_writers/readers.rs"]
+mod readers;
+
 const SMOKE: bool = cfg!(debug_assertions);
 const COMMITS: usize = if SMOKE { 16 } else { 256 };
 const ROUNDS: usize = if SMOKE { 1 } else { 5 };
@@ -48,6 +51,7 @@ fn latency(samples: &[u64]) -> JsonValue {
         "count": sorted.len(),
         "p50_ns": sorted[(sorted.len() * 50).div_ceil(100) - 1],
         "p95_ns": sorted[(sorted.len() * 95).div_ceil(100) - 1],
+        "p99_ns": sorted[(sorted.len() * 99).div_ceil(100) - 1],
         "max_ns": sorted.last().unwrap(),
         "samples_ns": samples,
     })
@@ -71,6 +75,7 @@ fn measure(
     writers: usize,
     serial: bool,
     reopen_before_measure: bool,
+    readers: usize,
 ) -> JsonValue {
     let database = if durable {
         Database::open(path).unwrap()
@@ -93,7 +98,11 @@ fn measure(
         .unwrap();
     for id in 0..COMMITS {
         seed.query_with_params(
-            "CREATE (:MvccCounter {id: $id, value: 0})",
+            if readers == 0 {
+                "CREATE (:MvccCounter {id: $id, value: 0})"
+            } else {
+                "CREATE (:MvccCounter {id: $id, value: 0, mirror: 0})"
+            },
             &BTreeMap::from([("id".into(), Value::Int(id.try_into().unwrap()))]),
         )
         .unwrap();
@@ -111,12 +120,18 @@ fn measure(
     };
     assert_eq!(database.query(READ).unwrap().rows, expected(0));
     let initial_epoch = database.commit_epoch().unwrap();
+    let mut pinned = (readers > 0).then(|| database.begin_read_transaction().unwrap());
+    if let Some(snapshot) = &mut pinned {
+        assert_eq!(snapshot.commit_epoch(), initial_epoch);
+        readers::verify(&snapshot.query(readers::READ).unwrap(), 0);
+    }
     let before = database.wal_group_commit_snapshot().unwrap();
     let serial_gate = Mutex::new(());
     // Threads and per-request parameters are prepared before the timed start.
-    let ready = Barrier::new(writers + 1);
-    let go = Barrier::new(writers + 1);
-    let (elapsed, workers) = std::thread::scope(|scope| {
+    let ready = Barrier::new(writers + readers + 1);
+    let go = Barrier::new(writers + readers + 1);
+    let origin = Instant::now();
+    let (elapsed, workers, reader_measurements) = std::thread::scope(|scope| {
         let handles = (0..writers)
             .map(|worker| {
                 let database = &database;
@@ -132,6 +147,7 @@ fn measure(
                         .collect::<Vec<_>>();
                     let mut transaction_latencies = Vec::with_capacity(requests.len());
                     let mut commit_latencies = Vec::with_capacity(requests.len());
+                    let mut intervals = Vec::with_capacity(requests.len());
                     ready.wait();
                     go.wait();
                     let worker_started = Instant::now();
@@ -141,19 +157,48 @@ fn measure(
                         let mut tx = database
                             .begin_transaction(ConcurrentTransactionOptions::optimistic())
                             .unwrap();
-                        tx.query_with_params(UPDATE, &params).unwrap();
+                        tx.query_with_params(
+                            if readers == 0 {
+                                UPDATE
+                            } else {
+                                readers::UPDATE
+                            },
+                            &params,
+                        )
+                        .unwrap();
                         let commit_started = Instant::now();
                         // Disjoint keys must commit once, without hidden retries.
                         tx.commit().unwrap();
                         commit_latencies.push(nanos(commit_started));
                         transaction_latencies.push(nanos(started));
+                        if readers > 0 {
+                            intervals.push((
+                                started
+                                    .duration_since(origin)
+                                    .as_nanos()
+                                    .try_into()
+                                    .unwrap(),
+                                nanos(origin),
+                            ));
+                        }
                     }
                     (
                         worker,
                         nanos(worker_started),
                         transaction_latencies,
                         commit_latencies,
+                        intervals,
                     )
+                })
+            })
+            .collect::<Vec<_>>();
+        let reader_handles = (0..readers)
+            .map(|worker| {
+                let database = &database;
+                let ready = &ready;
+                let go = &go;
+                scope.spawn(move || {
+                    readers::measure(database, worker, ready, go, origin, initial_epoch)
                 })
             })
             .collect::<Vec<_>>();
@@ -164,7 +209,11 @@ fn measure(
             .into_iter()
             .map(|handle| handle.join().unwrap())
             .collect::<Vec<_>>();
-        (nanos(started), workers)
+        let reader_measurements = reader_handles
+            .into_iter()
+            .map(|handle| handle.join().unwrap())
+            .collect::<Vec<_>>();
+        (nanos(started), workers, reader_measurements)
     });
     let after = database.wal_group_commit_snapshot().unwrap();
     if grouped {
@@ -189,6 +238,17 @@ fn measure(
         COMMITS as u64
     );
     assert_eq!(database.query(READ).unwrap().rows, expected(1));
+    if let Some(snapshot) = &mut pinned {
+        assert_eq!(snapshot.commit_epoch(), initial_epoch);
+        readers::verify(&snapshot.query(readers::READ).unwrap(), 0);
+        readers::verify(&database.query(readers::READ).unwrap(), COMMITS as u64);
+    }
+    drop(pinned);
+    let writes = workers
+        .iter()
+        .flat_map(|w| w.4.iter().copied())
+        .collect::<Vec<_>>();
+    let read_report = readers::report(&reader_measurements, &writes, elapsed, initial_epoch);
     let transaction_samples = workers
         .iter()
         .flat_map(|w| w.2.iter().copied())
@@ -206,11 +266,15 @@ fn measure(
             initial_epoch + COMMITS as u64
         );
         assert_eq!(reopened.query(READ).unwrap().rows, expected(1));
+        if readers > 0 {
+            readers::verify(&reopened.query(readers::READ).unwrap(), COMMITS as u64);
+        }
         drop(reopened);
         std::fs::remove_dir_all(path).unwrap();
     }
     json!({
         "durable": durable, "grouped": grouped, "writers": writers, "serialized_control": serial,
+        "readers": readers, "read_workload": read_report,
         "reopened_before_measure": reopened_before_measure,
         "commits": COMMITS, "elapsed_ns": elapsed,
         "commits_per_second": COMMITS as f64 * 1e9 / elapsed as f64,
@@ -218,6 +282,7 @@ fn measure(
         "commit_latency": latency(&commit_samples),
         "workers": workers.iter().map(|w| json!({
             "worker": w.0, "elapsed_ns": w.1, "commits": w.2.len(),
+            "transaction_intervals_ns": w.4,
         })).collect::<Vec<_>>(),
         "group_commit": {
             "submitted": after.submitted_commits - before.submitted_commits,
@@ -233,6 +298,7 @@ fn measure(
 fn main() {
     let mut selected_round = None;
     let mut selected_writers = None;
+    let mut selected_readers = None;
     let mut reopen_before_measure = false;
     let mut fixture_parent = None;
     let mut args = std::env::args().skip(1);
@@ -264,8 +330,20 @@ fn main() {
                     .expect("--writers requires a count")
                     .parse::<usize>()
                     .expect("writers must be an unsigned integer");
-                assert!([1, 4, 8].contains(&writers), "writers must be 1, 4 or 8");
+                assert!(
+                    (1..=COMMITS).contains(&writers),
+                    "each writer requires at least one transaction"
+                );
                 selected_writers = Some(writers);
+            }
+            "--readers" => {
+                assert!(selected_readers.is_none(), "--readers may appear only once");
+                let readers = args
+                    .next()
+                    .expect("--readers requires a count")
+                    .parse::<usize>()
+                    .expect("readers must be an unsigned integer");
+                selected_readers = Some(readers);
             }
             "--round" => {
                 assert!(selected_round.is_none(), "--round may appear only once");
@@ -291,6 +369,7 @@ fn main() {
                 .as_nanos()
         ));
     std::fs::create_dir(&root).unwrap();
+    let writer_counts = selected_writers.map_or_else(|| vec![1, 4, 8], |count| vec![count]);
     for round in 0..ROUNDS {
         if selected_round.is_some_and(|selected| selected != round) {
             continue;
@@ -298,10 +377,7 @@ fn main() {
         // Reverse case order every round to reduce consistent order bias.
         let mut cases = Vec::new();
         for (durable, grouped) in [(false, false), (true, false), (true, true)] {
-            for writers in [1, 4, 8] {
-                if selected_writers.is_some_and(|selected| selected != writers) {
-                    continue;
-                }
+            for &writers in &writer_counts {
                 for serial in [true, false] {
                     cases.push((durable, grouped, writers, serial));
                 }
@@ -318,10 +394,11 @@ fn main() {
                 writers,
                 serial,
                 reopen_before_measure,
+                selected_readers.unwrap_or(0),
             );
             println!(
                 "{}",
-                json!({"schema": "concurrent-writers-v1", "smoke": SMOKE, "round": round, "result": result})
+                json!({"schema": "concurrent-writers-v2", "smoke": SMOKE, "round": round, "result": result})
             );
         }
     }

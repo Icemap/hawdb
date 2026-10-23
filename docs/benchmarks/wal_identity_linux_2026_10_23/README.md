@@ -131,3 +131,11 @@ target-identity semantics. The comparison above predates this integration and
 does not qualify the merged source against the newer main. Keep its receipts
 unchanged, report subsequent CI by SHA, and retain Draft status while the strict
 gate and runtime qualification remain unresolved.
+
+The subsequent [concurrent qualification protocol](../../CONCURRENT_WRITER_QUALIFICATION.md)
+adds CPU/cgroup-aware writer counts and simultaneous snapshot readers, with
+explicit manual count overrides. The measurements in this directory are still
+single-writer controls; they do not qualify that mixed workload. Their samples,
+thresholds and conclusions remain unchanged. Root CI passed at integration
+`74cd8661165b0027cafbd070215d142aac27d3d7`; the earlier timeout log is retained,
+without inferring its cause from the later passing run.
