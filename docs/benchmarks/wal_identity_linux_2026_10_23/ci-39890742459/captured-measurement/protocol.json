@@ -1,0 +1,41 @@
+{
+  "schema": "concurrent-writer-strict-gate-v1",
+  "created_utc": "2026-10-23T02:57:42.746007+00:00",
+  "baseline_revision": "a92f8dfa277eee1558d66baec02e91c427fb83a1",
+  "candidate_head": "f51ead21472a495ad3332ef9fbf11b71acfb2964",
+  "candidate_status": "?? artifacts/\n",
+  "candidate_source_manifest_sha256": "c654a15744062cb97ec72be728390c872885e755f647c4382612acc63922995a",
+  "candidate_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "harness_sha256": "d6238c3265380e1be797b18ed2bea322acf6b031f758406407beaec2f0334cde",
+  "binary_sha256": {
+    "baseline": "fc0cb60ec53c4c3a0823677a75bdec08267c117a0bdf8212c90287dca90c0767",
+    "candidate": "c544f20fd145b26de96450912b046293201fad2a2fd98a1a82ca23f502fc1878"
+  },
+  "binary_paths": {
+    "baseline": "/home/runner/work/hawdb/hawdb/artifacts/strict-writer-gate/baseline-concurrent-writers",
+    "candidate": "/home/runner/work/hawdb/hawdb/artifacts/strict-writer-gate/candidate-concurrent-writers"
+  },
+  "cargo_lock_sha256": {
+    "baseline": "b2416903e53ca973a2064b3044028bff19ad8bb3a865e379a27e1f756d8881d9",
+    "candidate": "b2416903e53ca973a2064b3044028bff19ad8bb3a865e379a27e1f756d8881d9"
+  },
+  "effective_cargo_config_sha256": "06c7ca26d39223bd90a6412acd8609c380ce2d1650a72b70c90171656ca89819",
+  "build_profile": "bench; opt-level=3, codegen-units=1, thin LTO, strip=none; both builds invoked from candidate repository",
+  "toolchain": "Rust 1.97.1",
+  "default_features": true,
+  "baseline_overlay": "identical writer harness and Cargo benchmark registration only",
+  "measured_pairs": 40,
+  "warm_up_pairs": 1,
+  "interval_ranks_one_based": [
+    12,
+    29
+  ],
+  "fixture_profile": "reopened-captured-wal",
+  "reopen_before_measure": true,
+  "primary_endpoints": "commit p50/p95 for non-serialized API in memory, durable ungrouped, durable grouped",
+  "pass_rule": "all six unrounded upper ratio endpoints <= 1.0; no adaptive stopping or sample removal",
+  "order": "baseline first for even pairs, candidate first for odd pairs; alternate --round 0/1",
+  "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+  "filesystem": "Filesystem     Type 1K-blocks     Used Available Use% Mounted on\n/dev/root      ext4 151263856 64107652  87139820  43% /\n",
+  "limitations": "shared host; no exclusive machine, affinity, cache flush, or power-loss claim; median-ratio intervals assume independent pairs from continuous distributions"
+}

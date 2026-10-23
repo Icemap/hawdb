@@ -1,0 +1,12 @@
+{
+  "baseline": "a92f8dfa277eee1558d66baec02e91c427fb83a1",
+  "candidate": "f51ead21472a495ad3332ef9fbf11b71acfb2964",
+  "harness_sha256": "d6238c3265380e1be797b18ed2bea322acf6b031f758406407beaec2f0334cde",
+  "order": "build baseline, build candidate, then all timing; no concurrent builds",
+  "fixture_profiles": [
+    "post-checkpoint-control",
+    "reopened-captured-wal"
+  ],
+  "cohort_rule": "complete both declared cohorts even if the first strict gate fails; never pool intervals across profiles",
+  "comparison": "whole versions; identical harness, effective Cargo config and pinned toolchain; separate lockfiles and target directories"
+}

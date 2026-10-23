@@ -1,0 +1,49 @@
+{
+  "command": "run",
+  "completed_cases": 5738,
+  "directory": "/tmp/hawdb-867-validation/write-optimization/review-mvcc/588364-1792723707558854019",
+  "elapsed_ms": 30004,
+  "families_by_first_terminal": [
+    [
+      355,
+      363
+    ],
+    [
+      340,
+      378
+    ],
+    [
+      176,
+      541
+    ],
+    [
+      363,
+      354
+    ],
+    [
+      196,
+      521
+    ],
+    [
+      363,
+      354
+    ],
+    [
+      363,
+      354
+    ],
+    [
+      354,
+      363
+    ]
+  ],
+  "format_version": 1,
+  "provenance": "runtime checkout HEAD; may include uncommitted changes; not build attestation",
+  "reduction_attempts": null,
+  "requested_cases": 1000000,
+  "scope": "two optimistic snapshots; deterministic statement order; in-memory relational primary keys and broad predicates",
+  "seed": 1,
+  "source_revision": "f51ead21472a495ad3332ef9fbf11b71acfb2964",
+  "status": "passed",
+  "time_budget_seconds": 30
+}
