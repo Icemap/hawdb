@@ -2620,24 +2620,17 @@ impl<'a> NowledgeMemReadSnapshot<'a> {
             })?;
         let max_rows = self.statement_row_budget(max_rows)?;
         let max_payload_bytes = self.remaining_payload_bytes()?;
-        let mut rows = Vec::new();
-        let report = self.transaction.query_request_streaming_with_external(
+        let result = self.transaction.query_request_profiled_with_external(
             request.with_restrictive_output_limits(QueryStreamOptions {
                 max_rows: Some(max_rows),
                 max_payload_bytes: Some(max_payload_bytes),
             }),
             &mut self.external,
-            |row| {
-                rows.push(row);
-                Ok(())
-            },
         )?;
-        self.consume(report.output_rows, report.output_payload_bytes)?;
+        let metrics = &result.execution_profile.pipeline_memory_report;
+        self.consume(metrics.output_rows, metrics.output_payload_bytes)?;
         self.cypher_statement_count = completed_statement_count;
-        Ok(BoundedReadQueryOutput {
-            output: QueryOutput { rows: rows.into() },
-            execution_profile: report.execution_profile,
-        })
+        Ok(result)
     }
 
     pub fn query_sql(

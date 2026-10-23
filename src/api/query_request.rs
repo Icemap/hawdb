@@ -391,35 +391,39 @@ impl<'a> BoundScoringRequest<'a> {
 
 impl<S: crate::executor::ExecutionStore> super::DatabaseReadTransaction<S> {
     pub fn query_request(&mut self, request: QueryRequest<'_>) -> Result<super::QueryOutput> {
+        self.query_request_profiled(request)
+            .map(|result| result.output)
+    }
+
+    /// Collects compact result rows under the same request and snapshot limits.
+    pub fn query_request_profiled(
+        &mut self,
+        request: QueryRequest<'_>,
+    ) -> Result<super::BoundedReadQueryOutput> {
+        self.query_request_profiled_with_external(
+            request,
+            &mut crate::executor::NoExternalReadOperator,
+        )
+    }
+
+    pub(crate) fn query_request_profiled_with_external(
+        &mut self,
+        request: QueryRequest<'_>,
+        external: &mut dyn crate::executor::ExternalReadOperator,
+    ) -> Result<super::BoundedReadQueryOutput> {
         let task_context = self.task_context.clone();
         let options = super::query_runtime::QueryExecutionOptions::for_request(
             request,
             task_context.as_ref(),
         );
         let prepared = super::query_runtime::parse_runtime_execution(request.cypher)?;
-        if let crate::cypher::Statement::Explain(explain) = &prepared.statement {
-            self.store.ensure_usable()?;
-            return self
-                .execute_explain_request(
-                    request.cypher,
-                    explain,
-                    request.parameters.unwrap_or(&BTreeMap::new()),
-                    options,
-                )
-                .map(|profiled| profiled.output);
-        }
-        let mut rows = Vec::new();
-        self.query_request_streaming_prepared_external(
-            request,
+        self.query_prepared_request_profiled(
+            request.cypher,
             prepared,
+            request.parameters.unwrap_or(&BTreeMap::new()),
             options,
-            &mut crate::executor::NoExternalReadOperator,
-            &mut |row| {
-                rows.push(row);
-                Ok(())
-            },
-        )?;
-        Ok(super::QueryOutput { rows: rows.into() })
+            external,
+        )
     }
 
     /// Uses the existing validated row-consumer boundary and snapshot budgets.
@@ -490,6 +494,70 @@ mod tests {
     };
 
     pub(super) const QUERY: &str = "MATCH (m:Memory) WHERE m.kind = $kind RETURN m.id AS id, m.seed AS score, m.importance AS importance, m.created AS created ORDER BY id";
+
+    #[test]
+    fn snapshot_request_collects_compact_rows_with_owned_result_accounting() {
+        let mut database = Database::new();
+        let parameters = BTreeMap::from([(
+            "ids".into(),
+            Value::List((0..2_048).map(Value::Int).collect()),
+        )]);
+        database
+            .query_with_params(
+                "UNWIND $ids AS id CREATE (:Sample {id: id, title: 'payload'})",
+                &parameters,
+            )
+            .unwrap();
+        let mut snapshot = database.begin_read_transaction().unwrap();
+        let request = QueryRequest::new(
+            "MATCH (n:Sample) RETURN n.id AS id, n.title AS title, n.absent AS missing",
+        )
+        .with_output_limits(QueryStreamOptions {
+            max_rows: Some(2_048),
+            max_payload_bytes: Some(256 * 1_024),
+        });
+        let compact = snapshot.query_request_profiled(request).unwrap();
+        assert_eq!(compact.output.rows.len(), 2_048);
+        for (id, row) in compact.output.rows.iter().enumerate() {
+            assert_eq!(row.get("id"), Some(&Value::Int(id as i64)));
+            assert_eq!(row.get("title"), Some(&Value::String("payload".into())));
+            assert_eq!(row.get("missing"), Some(&Value::Null));
+        }
+        let mut delivered = 0;
+        let streamed = snapshot
+            .query_request_streaming(request, |row| {
+                assert_eq!(compact.output.rows[delivered], row);
+                delivered += 1;
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(delivered, 2_048);
+        let owned_memory = &compact.execution_profile.pipeline_memory_report;
+        let stream_memory = &streamed.execution_profile.pipeline_memory_report;
+        assert!(owned_memory.query_memory_completion_bytes > 0);
+        assert_eq!(stream_memory.query_memory_completion_bytes, 0);
+        assert!(owned_memory.query_memory_peak_bytes < stream_memory.query_memory_peak_bytes);
+        assert_eq!(
+            owned_memory.output_payload_bytes,
+            stream_memory.output_payload_bytes
+        );
+
+        for limits in [
+            QueryStreamOptions {
+                max_rows: Some(2_047),
+                max_payload_bytes: Some(256 * 1_024),
+            },
+            QueryStreamOptions {
+                max_rows: Some(2_048),
+                max_payload_bytes: Some(1),
+            },
+        ] {
+            assert!(snapshot
+                .query_request(request.with_output_limits(limits))
+                .is_err());
+        }
+        assert_eq!(snapshot.query_request(request).unwrap().rows.len(), 2_048);
+    }
 
     pub(super) fn fixture() -> Database {
         let mut database = Database::new_with_config(crate::DatabaseConfig {

@@ -6,6 +6,14 @@ authoritative; this is a map of test families, not an exhaustive list of every
 Rust test function. Update it when changing a family's scope, build profile,
 execution lane, fixture size, isolation or known failure mode.
 
+The `api::query_request::tests` unit family covers compact request collection
+through the ordinary read-transaction API. The 2,048-row collection regression
+compares rows and payload accounting with validated consumer delivery, checks
+owned-result completion/peak charges, rejects row and payload overflows, and
+reuses the snapshot after refusal. Existing scoring, access-control, EXPLAIN,
+and cancellation cases exercise the same compact collector. Mem bounded read
+snapshots use this collector and retain cumulative statement budgets.
+
 ## Execution lanes
 
 | Lane / entry point | Problems covered | Execution policy |

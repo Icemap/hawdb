@@ -22647,12 +22647,37 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
         access_control: Option<QueryAccessControlContext>,
         task_context: Option<&hawdb_core::RuntimeTaskContext>,
     ) -> Result<BoundedReadQueryOutput> {
+        let mut execution_options = query_runtime::QueryExecutionOptions::for_bounded_read(
+            options.max_rows,
+            access_control.as_ref(),
+            task_context,
+        );
+        execution_options.output_limits = options;
+        self.query_prepared_request_profiled(
+            cypher_text,
+            prepared,
+            parameters,
+            execution_options,
+            &mut executor::NoExternalReadOperator,
+        )
+    }
+
+    fn query_prepared_request_profiled(
+        &mut self,
+        cypher_text: &str,
+        prepared: query_runtime::PreparedRuntimeExecution,
+        parameters: &BTreeMap<String, Value>,
+        options: query_runtime::QueryExecutionOptions<'_>,
+        external: &mut dyn executor::ExternalReadOperator,
+    ) -> Result<BoundedReadQueryOutput> {
+        let task_context = options.task_context;
         self.store.ensure_usable()?;
         query_runtime::query_runtime_checkpoint(task_context)?;
-        let max_rows = restrictive_query_limit(self.read_result_row_limit(), options.max_rows);
+        let max_rows =
+            restrictive_query_limit(self.read_result_row_limit(), options.output_limits.max_rows);
         let max_payload_bytes = restrictive_query_limit(
             self.config.max_read_result_payload_bytes,
-            options.max_payload_bytes,
+            options.output_limits.max_payload_bytes,
         );
         let query_runtime::PreparedRuntimeExecution {
             statement,
@@ -22661,17 +22686,7 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
         } = prepared;
         let body = statement_body(&statement);
         if let cypher::Statement::Explain(explain) = &statement {
-            return self.execute_explain_statement(
-                cypher_text,
-                explain,
-                parameters,
-                QueryStreamOptions {
-                    max_rows,
-                    max_payload_bytes,
-                },
-                access_control,
-                task_context,
-            );
+            return self.execute_explain_request(cypher_text, explain, parameters, options);
         }
         if matches!(body, cypher::Statement::Checkpoint) {
             reject_transaction_control_parameters("CHECKPOINT", parameters)?;
@@ -22687,12 +22702,16 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
         }
         query_work_request_for_statement(&QuerySystemVariables::default(), &statement)?;
         let optimized = match prepared_optimized {
-            Some(optimized) if access_control.is_none() => optimized,
-            _ => self.optimized_query_plan_with_access_control(
+            Some(optimized) if options.access_control.is_none() && options.scoring.is_none() => {
+                optimized
+            }
+            _ => self.optimized_query_plan_for_request(
                 cypher_text,
                 &statement,
                 parameters,
-                access_control.as_ref(),
+                options.access_control,
+                PlanTraceMode::Template,
+                options.scoring,
             )?,
         };
         if executor::is_mutation_plan(&optimized.physical_plan)? {
@@ -22700,7 +22719,6 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
                 "read transaction query must not be a mutation".to_string(),
             ));
         }
-        let mut external = executor::NoExternalReadOperator;
         let profiled = executor::execute_with_request(
             executor::ExecutionRequest::new(
                 &optimized.physical_plan,
@@ -22708,8 +22726,9 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
                 &self.config.execution_memory,
             )
             .with_output_limits(max_rows, max_payload_bytes)
-            .with_optional_task_context(task_context),
-            executor::ExecutionResources::new(&mut self.catalog, &mut self.store, &mut external),
+            .with_optional_task_context(task_context)
+            .with_optional_host_scorer(options.scoring.and_then(BoundScoringRequest::host_scorer)),
+            executor::ExecutionResources::new(&mut self.catalog, &mut self.store, external),
         );
         self.store.poison_on_storage_error(&profiled);
         let profiled = profiled?;
@@ -22720,24 +22739,6 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
             },
             execution_profile: profiled.profile,
         })
-    }
-
-    fn execute_explain_statement(
-        &mut self,
-        cypher_text: &str,
-        explain: &cypher::Explain,
-        parameters: &BTreeMap<String, Value>,
-        options: QueryStreamOptions,
-        access_control: Option<QueryAccessControlContext>,
-        task_context: Option<&hawdb_core::RuntimeTaskContext>,
-    ) -> Result<BoundedReadQueryOutput> {
-        let mut execution_options = query_runtime::QueryExecutionOptions::for_bounded_read(
-            options.max_rows,
-            access_control.as_ref(),
-            task_context,
-        );
-        execution_options.output_limits = options;
-        self.execute_explain_request(cypher_text, explain, parameters, execution_options)
     }
 
     fn execute_explain_request(
