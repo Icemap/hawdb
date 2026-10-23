@@ -477,8 +477,10 @@ impl AppendState {
     ) -> Result<AppendCommitPreparation, AppendTableError> {
         admit_transaction(transaction, limits)?;
 
-        let mut schemas = self.schemas().clone();
-        let mut generated_order_watermarks = self.generated_order_watermarks().clone();
+        // Ordinary appends borrow the catalog and overlay only touched sequences.
+        // Materialized staging owns the metadata copies needed for publication.
+        let mut schemas = None;
+        let mut generated_order_watermarks = BTreeMap::new();
         let mut writes = Vec::with_capacity(transaction.writes.len());
         let mut mutation_outcomes = Vec::new();
 
@@ -486,6 +488,7 @@ impl AppendState {
             match write {
                 AppendWrite::CreateTable { schema } => {
                     validate_table_schema(schema)?;
+                    let schemas = schemas.get_or_insert_with(|| self.schemas().clone());
                     if schemas.contains_key(&schema.name) {
                         return Err(AppendTableError::Schema(format!(
                             "table {} already exists",
@@ -499,9 +502,13 @@ impl AppendState {
                     writes.push(write.clone());
                 }
                 AppendWrite::Append { table, rows } => {
-                    let schema = schemas.get(table).ok_or_else(|| {
-                        AppendTableError::Schema(format!("unknown table {table}"))
-                    })?;
+                    let schema = schemas
+                        .as_ref()
+                        .unwrap_or(self.schemas())
+                        .get(table)
+                        .ok_or_else(|| {
+                            AppendTableError::Schema(format!("unknown table {table}"))
+                        })?;
                     if schema.order_mode != AppendOrderMode::CallerProvided {
                         return Err(AppendTableError::Constraint(format!(
                             "table {table} requires generated commit-sequence order keys"
@@ -518,9 +525,13 @@ impl AppendState {
                     });
                 }
                 AppendWrite::AppendGenerated { table, rows } => {
-                    let schema = schemas.get(table).ok_or_else(|| {
-                        AppendTableError::Schema(format!("unknown table {table}"))
-                    })?;
+                    let schema = schemas
+                        .as_ref()
+                        .unwrap_or(self.schemas())
+                        .get(table)
+                        .ok_or_else(|| {
+                            AppendTableError::Schema(format!("unknown table {table}"))
+                        })?;
                     if schema.order_mode != AppendOrderMode::CommitSequence {
                         return Err(AppendTableError::Constraint(format!(
                             "table {table} requires caller-provided order keys"
@@ -530,15 +541,15 @@ impl AppendState {
                     for row in rows {
                         validate_generated_row(schema, order_position, row)?;
                     }
-                    let watermark =
-                        generated_order_watermarks
-                            .get(table)
-                            .copied()
-                            .ok_or_else(|| {
-                                AppendTableError::Corruption(format!(
-                                    "generated-order table {table} has no durable watermark"
-                                ))
-                            })?;
+                    let watermark = generated_order_watermarks
+                        .get(table)
+                        .or_else(|| self.generated_order_watermarks().get(table))
+                        .copied()
+                        .ok_or_else(|| {
+                            AppendTableError::Corruption(format!(
+                                "generated-order table {table} has no durable watermark"
+                            ))
+                        })?;
                     let requested = rows.len();
                     let requested_i64 = i64::try_from(requested).map_err(|_| {
                         AppendTableError::SequenceExhausted {
@@ -585,9 +596,20 @@ impl AppendState {
         let materialized_transaction = AppendTransaction { writes };
         let state = self.apply_recovered_transaction(&materialized_transaction, limits)?;
         debug_assert_eq!(
-            state.generated_order_watermarks(),
-            &generated_order_watermarks
+            state.generated_order_watermarks().len(),
+            self.generated_order_watermarks().len()
+                + generated_order_watermarks
+                    .keys()
+                    .filter(|table| !self.generated_order_watermarks().contains_key(*table))
+                    .count()
         );
+        debug_assert!(state
+            .generated_order_watermarks()
+            .iter()
+            .all(|(table, watermark)| generated_order_watermarks
+                .get(table)
+                .or_else(|| self.generated_order_watermarks().get(table))
+                == Some(watermark)));
         Ok(AppendCommitPreparation {
             state,
             materialized_transaction,
@@ -653,7 +675,7 @@ impl AppendState {
                         if schema.order_mode == AppendOrderMode::CommitSequence {
                             let watermarks = generated_order_watermarks
                                 .get_or_insert_with(|| self.generated_order_watermarks().clone());
-                            let watermark = watermarks.get(table).copied().ok_or_else(|| {
+                            let watermark = watermarks.get_mut(table).ok_or_else(|| {
                                 AppendTableError::Corruption(format!(
                                     "generated-order table {table} has no durable watermark"
                                 ))
@@ -670,16 +692,21 @@ impl AppendState {
                                     "table {table} generated order key is not the next commit sequence value"
                                 )));
                             }
-                            watermarks.insert(table.clone(), expected);
+                            *watermark = expected;
                         }
-                        let prior = staged_watermarks
-                            .get(table)
-                            .and_then(|partitions| partitions.get(&partition_key))
-                            .or_else(|| self.watermark(table, &partition_key));
-                        if prior.is_some_and(|watermark| order_key <= *watermark) {
-                            return Err(AppendTableError::Constraint(format!(
-                                "table {table} order key must increase within its partition"
-                            )));
+                        // Exact table-wide sequence validation above implies an
+                        // increase in every partition, including newly seen ones.
+                        // Caller-provided keys still need their partition's history.
+                        if schema.order_mode == AppendOrderMode::CallerProvided {
+                            let prior = staged_watermarks
+                                .get(table)
+                                .and_then(|partitions| partitions.get(&partition_key))
+                                .or_else(|| self.watermark(table, &partition_key));
+                            if prior.is_some_and(|watermark| order_key <= *watermark) {
+                                return Err(AppendTableError::Constraint(format!(
+                                    "table {table} order key must increase within its partition"
+                                )));
+                            }
                         }
                         staged_watermarks
                             .entry(table.clone())
@@ -1326,6 +1353,8 @@ pub fn merge_live_read_report(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    mod preparation;
     use crate::relational::RelationalScalarType;
 
     #[test]

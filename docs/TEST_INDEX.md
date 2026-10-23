@@ -26,9 +26,9 @@ execution lane, fixture size, isolation or known failure mode.
 | `//:hawdb_unit_concurrent_tests` | Transaction locks, read observation, commit admission and concurrent publication races | Known long target: [#972](https://github.com/nowledge-co/hawdb/issues/972). Preserve barriers and observations; a deadline is not a substitute for a deterministic schedule. |
 | Covered pessimistic graph mutations (`covered_graph`) and concurrent metrics (`api::concurrent::metrics::tests`) | Retained staged results under existing locks, new-target/upgrade replay, stale-epoch refusal, lock timeout/retry, rollback, failed-statement atomicity, durable reopen, disabled-by-default instrumentation and explicit metrics inspection during writer ownership | Owned by `//:hawdb_unit_concurrent_tests`; local replay with `--test_arg=covered_graph` or `--test_arg=api::concurrent::metrics::tests`. Assertions use work counts and final rows rather than timing thresholds. |
 | `//:hawdb_unit_analytics_core_general_tests` | Graph algorithms, projected artifacts, identity and generation behavior | Separate from isolated dense RSS ownership. |
-| `//:hawdb_unit_analytics_rss_tests` | Dense persistent graph algorithms with bounded reader RSS and streamed adjacency | 128 nodes / 16,256 relationships. Known cost: [#1027](https://github.com/nowledge-co/hawdb/issues/1027). Uses the same repository test profile as every other root partition. |
+| `//:hawdb_unit_analytics_rss_tests` | Dense persistent graph algorithms with bounded reader RSS and streamed adjacency | 128 nodes / 16,256 relationships. Isolated by #1030; history in [#1027](https://github.com/nowledge-co/hawdb/issues/1027). Uses the same repository test profile as every other root partition. |
 | `//:hawdb_unit_recovery_tests`, `//:hawdb_unit_storage_crash_matrix_tests` | Transaction persistence, checkpoint/compaction and recovery boundary regressions | Dedicated crash-job evidence has additional identity and completeness checks. |
-| `//:hawdb_unit_row_page_compaction_{materialized,out_of_core}_tests` | Physical row-page reclamation while pinned readers retain old generations; correct reopen/scrub in both residency modes | Full 16-table churn fixture and physical-byte assertions. Repository-wide checked test profile. Known long target: [#889](https://github.com/nowledge-co/hawdb/issues/889). |
+| `//:hawdb_unit_row_page_compaction_{materialized,out_of_core}_tests` | Physical row-page reclamation while pinned readers retain old generations; correct reopen/scrub in both residency modes | Full 16-table churn fixture and physical-byte assertions. Repository-wide checked test profile. Split by residency in #959; history in [#889](https://github.com/nowledge-co/hawdb/issues/889). |
 | `//:hawdb_unit_row_page_compaction_admission_tests` | Budget refusal, retryability, failpoints and admission release around compaction | Ordinary compilation; separate from the two full convergence cases. |
 | `//:hawdb_mvcc_joined_reads{,_minimal}_tests` | Joined-read dependencies, absent/filtered parents, off-page children, key bindings and sticky errors | Root CI, full and minimal feature contracts; each retains the complete eight-case synchronous fresh-project/reopen scenario matrix. Both targets run `exclusive` within the Bazel job after observed 300-second execution timeouts ([#1158](https://github.com/nowledge-co/hawdb/issues/1158)); the timeout, fixtures and global checked profile are unchanged. This is not timed fuzz or physical-host exclusivity. Final-source CI evidence is required before any speedup claim. |
 | `//:hawdb_mvcc_projection_publication{,_minimal}_tests` | Projection publication versus concurrent reads and transaction validation | Preserve publication barriers and complete observation evidence. |
@@ -299,3 +299,23 @@ publication after registry-cache reload, and a scoped mapper that follows a
 relationship to an out-of-scope label whose post-E mutation must invalidate
 publication. Storage units check immutable reservation predecessors, missing
 registration policy, and direct history pruning without staging compaction.
+
+
+## Strict append preparation
+
+- Existing storage unit owner: `//crates/storage:hawdb_storage_tests`, discovered
+  by the Prow crate presubmit suite on PRs. The weekly Storage Platform Cargo
+  job additionally runs these library cases on macOS and Windows.
+  `append_table::tests::preparation` covers mixed DDL/caller/generated batches,
+  sparse metadata overlays, deep-history old/new partitions, checkpoint-state
+  restoration and exact recovered sequence gaps, late rejection atomicity and
+  retry without consumed sequence values. The tests are deterministic and use
+  the global checked profile. Existing append admission/exhaustion and
+  durability/concurrency cases remain additional coverage.
+- Manual measurements: `cargo bench --locked -p hawdb-storage --bench
+  strict_append_prepare` uses the global release profile. Both key modes,
+  one/64 rows, zero/1024 unrelated tables and zero/1024 live batches; 257 measured
+  preparations per release case with exact output/source validation. No CI or
+  scheduled registration. See [workload, results and limits](STRICT_APPEND_PREPARE_BENCHMARK.md).
+  These are preparation timings without WAL synchronization, not committed
+  throughput or durable p99 measurements.
