@@ -86,6 +86,7 @@ def main():
         "rounds": args.rounds, "writes_per_case": args.writes,
         "quiescent_publications_per_enabled_case": args.quiet_samples,
         "sustained": args.sustained,
+        "staging_advance_call_limit": 200001,
         "publication_attempt_ceiling": 4096 if args.sustained else 16,
         "checkpoint_every_foreground_writes": 16384 if args.sustained else None,
         "concurrent_phase_publications_per_enabled_case": None if args.sustained else 16,
@@ -116,16 +117,24 @@ def main():
                 started = time.monotonic()
                 load_before = os.getloadavg()
                 completed = subprocess.run(command, text=True, capture_output=True, check=False)
-                if completed.returncode:
+                try:
+                    if completed.returncode:
+                        raise ValueError(f"process exited {completed.returncode}")
+                    result = json.loads(completed.stdout)
+                    assert (result["documents"], result["payload_bytes_per_document"],
+                            result["writers"], result["writes"], result["mode"]) == (
+                                docs, payload, writers, args.writes, mode)
+                    attempts = result["publication_attempts"] + result["quiescent_publication_samples"]
+                    for attempt in attempts:
+                        assert attempt["staging_advance_call_limit"] == manifest["staging_advance_call_limit"]
+                        assert 0 < attempt["staging_advance_calls"] <= manifest["staging_advance_call_limit"]
+                except (ValueError, KeyError, TypeError, AssertionError) as error:
                     (args.output / "failure.json").write_text(json.dumps({
                         "command": command, "returncode": completed.returncode,
                         "stdout": completed.stdout, "stderr": completed.stderr,
+                        "validation_error": str(error),
                     }, indent=2) + "\n")
                     raise SystemExit(f"case failed; evidence retained in {args.output / 'failure.json'}")
-                result = json.loads(completed.stdout)
-                assert (result["documents"], result["payload_bytes_per_document"],
-                        result["writers"], result["writes"], result["mode"]) == (
-                            docs, payload, writers, args.writes, mode)
                 result["run"] = {"round": round_index, "command": command,
                                  "wall_seconds_including_setup": time.monotonic() - started,
                                  "load_before": load_before, "load_after": os.getloadavg()}

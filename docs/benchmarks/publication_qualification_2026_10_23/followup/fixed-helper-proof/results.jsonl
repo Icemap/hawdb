@@ -1,0 +1,1 @@
+{"corrected_call_limit":200001,"old_limit":100000,"published_source_epoch":60005,"resource_limits":"original feed/mapping/memory/retention limits unchanged","scope":"actual corrected helper, complete-source coverage and native publication correctness only; not sustained or timing acceptance","staging_calls":120003,"verified_documents":32,"verified_foreground_value":60000}

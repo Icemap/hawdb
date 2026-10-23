@@ -126,3 +126,17 @@ Completed processes do not by themselves satisfy the sustained gate; the final
 receipt records unmet progress and the driver fails after retaining every
 completed case. Correctness/process errors stop with original failure evidence.
 This finite workload is not an open-loop or starvation-freedom proof.
+
+## Caller accounting follow-up
+
+The [source-scoped follow-up](benchmarks/publication_qualification_2026_10_23/followup/README.md)
+retains the complete 18-case sustained and 54-case control cohorts after correcting
+host-call accounting. One feed item requires separate intake and Done-mapping
+calls, including End, then a close; the helper now permits `2 * feed.items + 1`
+calls and asserts completion before complete-source verification. Actual calls
+are retained per attempt and checked by the driver. Feed, mapping, memory,
+retention, live-row and durability limits remain unchanged. A separate 60,000-update
+actual-helper regression completes coverage/publication at 120,003 calls. The
+sustained cohort itself never exceeded the old host-call bound, so its progress
+must not be attributed causally to that correction. Original failures remain
+retained. Final integrated-source and strict performance acceptance remain open.

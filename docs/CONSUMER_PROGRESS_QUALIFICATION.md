@@ -23,6 +23,21 @@ work removal, not a passing latency gate. Final-commit CI, original-baseline and
 current-main paired timing remain separate requirements. Administrative closure
 of #232 does not waive this acceptance under #1119.
 
+## Subsequent source-scoped receipts
+
+The [7546 follow-up and caller correction](benchmarks/publication_qualification_2026_10_23/followup/README.md)
+records 18/18 sustained cases and 54/54 exact controls, plus actual complete-source
+coverage/native publication beyond the old host-call bound. All original failed
+cohorts remain retained. These are finite, frozen-library receipts; main has
+since advanced to `8e9eab185`, requiring integrated-source qualification.
+
+The original-baseline post-checkpoint writer cohort now passes all six endpoints,
+but captured-WAL grouped p50/p95 remain inconclusive. Pinned-main attribution
+shows 17-22% lower durable medians and a 1.7% memory p95 regression. Neither full
+strict gate passes. Current root CI also has two 300-second joined-read execution
+timeouts and one headroom capacity assertion failure. Test isolation/diagnostics
+preserve all fixtures, deadlines and refusal assertions; new-head CI is required.
+
 ## Original-baseline writer gate
 
 [Run 39784901600](https://github.com/nowledge-co/hawdb/actions/runs/39784901600)

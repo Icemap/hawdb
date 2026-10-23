@@ -90,6 +90,7 @@ fn attempt(
     let mut capture_held = 0;
     let mut preparation = 0;
     let mut captured_epoch = None;
+    let mut staging_advance_calls = None;
     let mut source_at_publication = None;
     let mut reserve_wait = 0;
     let mut reserve_held = 0;
@@ -109,7 +110,8 @@ fn attempt(
         capture_held = held;
         captured_epoch = Some(session.source_epoch());
         let outside = Instant::now();
-        let covered = workload::prepare(session, mode != Mode::Covered);
+        let (covered, calls) = workload::prepare(session, mode != Mode::Covered);
+        staging_advance_calls = Some(calls);
         preparation = ns(outside);
         if mode == Mode::Detached {
             let (reserved, wait, held) = exclusive(owner, |db| {
@@ -163,6 +165,8 @@ fn attempt(
         "outcome": outcome, "watermark_before": old, "watermark_after": new,
         "advanced": new > old, "elapsed_ns": ns(started),
         "captured_source_epoch": captured_epoch,
+        "staging_advance_calls": staging_advance_calls,
+        "staging_advance_call_limit": workload::STAGING_ADVANCE_CALL_LIMIT,
         "source_epoch_at_publication": source_at_publication,
         "committed_post_e_advance": new > old && captured_epoch.zip(source_at_publication).is_some_and(|(e, current)| current > e),
         "reservation_wait_plus_entry_ns": reserve_wait, "reservation_exclusive_callback_ns": reserve_held,

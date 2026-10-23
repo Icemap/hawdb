@@ -1,0 +1,50 @@
+   Compiling hawdb-plan-core v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/plan-core)
+   Compiling hawdb-cgroup v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/cgroup)
+   Compiling hawdb-core v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/core)
+   Compiling hawdb-cascades v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/cascades)
+   Compiling hawdb-integrity v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/integrity)
+   Compiling hawdb-sql-syntax v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/sql-syntax)
+   Compiling hawdb-query v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/query)
+   Compiling hawdb-route-ownership v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/route-ownership)
+   Compiling hawdb-optimizer-vector v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/optimizer-vector)
+   Compiling hawdb-optimizer-predicate v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/optimizer-predicate)
+   Compiling hawdb-ddl v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/ddl)
+   Compiling hawdb-expression v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/expression)
+   Compiling hawdb-qos v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/qos)
+   Compiling hawdb-analytics v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/analytics)
+   Compiling hawdb-evidence v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/evidence)
+   Compiling hawdb-fuzz-contracts v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/fuzz-contracts)
+   Compiling hawdb-cypher v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/cypher)
+   Compiling hawdb-optimizer-relational v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/optimizer-relational)
+   Compiling hawdb-telemetry v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/telemetry)
+   Compiling hawdb-plan-cypher v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/plan-cypher)
+   Compiling hawdb-storage v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/storage)
+   Compiling hawdb-plan-cache v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/plan-cache)
+   Compiling hawdb-optimizer-graph v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/optimizer-graph)
+   Compiling hawdb-sql v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/sql)
+   Compiling hawdb-optimizer v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/optimizer)
+   Compiling hawdb-query-policy v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/query-policy)
+   Compiling hawdb-executor v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/executor)
+   Compiling hawdb-search v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/search)
+   Compiling hawdb-system-sql v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/system-sql)
+   Compiling hawdb-relational v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/relational)
+   Compiling hawdb-resource-profile v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/resource-profile)
+   Compiling hawdb-explain v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/explain)
+   Compiling hawdb-compat v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/compat)
+   Compiling hawdb-artifact v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/artifact)
+   Compiling hawdb-nowledge-contracts v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/nowledge-contracts)
+   Compiling hawdb-bootstrap v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/bootstrap)
+   Compiling hawdb-readiness v0.14.0 (/private/tmp/hawdb-optimizer-work/crates/readiness)
+   Compiling hawdb v0.14.0 (/private/tmp/hawdb-optimizer-work)
+   Compiling hawdb-mvcc-fuzz v0.0.0 (/private/tmp/hawdb-optimizer-work/tools/mvcc-fuzz)
+    Finished `dev` profile [optimized] target(s) in 1m 32s
+     Running `tools/mvcc-fuzz/target/debug/hawdb-mvcc-fuzz run --seconds 30 --explain`
+PASS | 23870 cases | 30000 ms | target/mvcc-fuzz/27648-1792769418031833000
+  same_key           T1 first:   1458  T2 first:   1526
+  disjoint           T1 first:   1478  T2 first:   1506
+  net_zero           T1 first:    747  T2 first:   2237
+  absent_delete      T1 first:   1492  T2 first:   1492
+  delete_insert      T1 first:    787  T2 first:   2197
+  broad_narrow       T1 first:   1502  T2 first:   1482
+  duplicate_insert   T1 first:   1501  T2 first:   1482
+  rollback           T1 first:   1457  T2 first:   1526
