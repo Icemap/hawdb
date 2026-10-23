@@ -440,27 +440,6 @@ pub struct KnowledgeAugmentationJobInterruptOutput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeEntityDeleteRequest {
-    pub entity: KnowledgeEntityRequest,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeScopedEntityDeleteRequest {
-    pub delete: KnowledgeEntityDeleteRequest,
-    pub metadata_filters: BTreeMap<String, String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeEntityDeleteOutput {
-    pub graph_commit_epoch_before: u64,
-    pub graph_commit_epoch_after: u64,
-    pub node_id: Option<u64>,
-    pub matched: bool,
-    pub filtered_out: bool,
-    pub deleted_node_count: usize,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KnowledgeEntityDeleteBatchRequest {
     pub label: String,
     pub external_ids: Vec<String>,

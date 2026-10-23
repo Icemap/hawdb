@@ -197,6 +197,10 @@ fn assert_sql_contract(
     assert_eq!(output.rows[1]["body"], Value::String("two".into()));
     for limits in [
         QueryStreamOptions {
+            max_rows: None,
+            max_payload_bytes: Some(0),
+        },
+        QueryStreamOptions {
             max_rows: Some(1),
             max_payload_bytes: None,
         },

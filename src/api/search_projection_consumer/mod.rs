@@ -1221,9 +1221,17 @@ impl Database {
     }
 
     fn consumer_publication_permit(&mut self) -> Result<Arc<hawdb_qos::RuntimePermit>> {
+        self.consumer_publication_permit_with_results(0)
+    }
+
+    fn consumer_publication_permit_with_results(
+        &mut self,
+        result_bytes: u64,
+    ) -> Result<Arc<hawdb_qos::RuntimePermit>> {
         self.consumer_governor()?
             .try_admit(
                 hawdb_qos::RuntimeWorkRequest::background_maintenance(64 * 1024 * 1024)
+                    .with_result_bytes(result_bytes)
                     .with_io_wave_slots(1),
             )
             .map(Arc::new)

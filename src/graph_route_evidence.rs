@@ -16,13 +16,17 @@ use crate::{NowledgeMemGraph, NowledgeMemQueryReportOptions, Result};
 pub use hawdb_readiness::graph_route_evidence_cli::nowledge_graph_route_evidence_usage;
 use hawdb_readiness::graph_route_evidence_cli::parse_graph_route_evidence_cli_inputs;
 
-pub use hawdb_readiness::graph_route_catalog::{
+mod queries;
+pub(crate) use queries::{
     nowledge_mem_graph_augmentation_state_route_query,
     nowledge_mem_graph_community_members_route_query,
     nowledge_mem_graph_community_recent_memories_route_query,
     nowledge_mem_graph_community_subgraph_route_query, nowledge_mem_graph_node_details_route_query,
     nowledge_mem_graph_orphans_route_query, nowledge_mem_graph_overview_route_query,
     nowledge_mem_graph_pagerank_plan_route_query, nowledge_mem_graph_sample_route_query,
+};
+
+pub use hawdb_readiness::graph_route_catalog::{
     parse_route_parity_evidence, parse_route_query_inventory, RouteCypherQuery,
     RouteParityEvidence, RouteParityEvidenceRoute, RouteQuery,
     NMEM_GRAPH_ROUTE_PARITY_EVIDENCE_PROTOCOL,

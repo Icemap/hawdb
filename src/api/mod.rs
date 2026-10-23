@@ -5217,20 +5217,6 @@ impl Database {
         interrupt_knowledge_augmentation_jobs_for(self, request)
     }
 
-    pub fn delete_knowledge_entity(
-        &mut self,
-        request: &KnowledgeEntityDeleteRequest,
-    ) -> Result<KnowledgeEntityDeleteOutput> {
-        delete_knowledge_entity_for(self, request)
-    }
-
-    pub fn delete_scoped_knowledge_entity(
-        &mut self,
-        request: &KnowledgeScopedEntityDeleteRequest,
-    ) -> Result<KnowledgeEntityDeleteOutput> {
-        delete_scoped_knowledge_entity_for(self, request)
-    }
-
     pub fn delete_knowledge_entity_batch(
         &mut self,
         request: &KnowledgeEntityDeleteBatchRequest,
@@ -16322,92 +16308,6 @@ pub(super) fn interrupt_knowledge_augmentation_jobs_for(
         rows,
         interrupted_count,
         updated_property_count,
-    })
-}
-
-pub(super) fn delete_knowledge_entity_for(
-    db: &mut Database,
-    request: &KnowledgeEntityDeleteRequest,
-) -> Result<KnowledgeEntityDeleteOutput> {
-    delete_scoped_knowledge_entity_for(
-        db,
-        &KnowledgeScopedEntityDeleteRequest {
-            delete: request.clone(),
-            metadata_filters: BTreeMap::new(),
-        },
-    )
-}
-
-pub(super) fn delete_scoped_knowledge_entity_for(
-    db: &mut Database,
-    request: &KnowledgeScopedEntityDeleteRequest,
-) -> Result<KnowledgeEntityDeleteOutput> {
-    db.ensure_writable()?;
-    validate_cypher_identifier(&request.delete.entity.label, "label")?;
-
-    let graph_commit_epoch_before = db.runtime.get().unwrap().store.commit_epoch();
-    let Some(seed) = try_seed_node_by_label_and_external_id(
-        &db.runtime.get().unwrap().catalog,
-        &db.runtime.get().unwrap().store,
-        request.delete.entity.label.as_str(),
-        request.delete.entity.external_id.as_str(),
-    )?
-    else {
-        return Ok(KnowledgeEntityDeleteOutput {
-            graph_commit_epoch_before,
-            graph_commit_epoch_after: graph_commit_epoch_before,
-            node_id: None,
-            matched: false,
-            filtered_out: false,
-            deleted_node_count: 0,
-        });
-    };
-    let node_id = seed.id.0;
-    if !node_has_external_id_property(&seed, request.delete.entity.external_id.as_str()) {
-        return Ok(KnowledgeEntityDeleteOutput {
-            graph_commit_epoch_before,
-            graph_commit_epoch_after: graph_commit_epoch_before,
-            node_id: Some(node_id),
-            matched: false,
-            filtered_out: false,
-            deleted_node_count: 0,
-        });
-    }
-    if !request.metadata_filters.is_empty()
-        && !knowledge_graph_seed_matches_filters(
-            &db.runtime.get().unwrap().catalog,
-            &db.runtime.get().unwrap().store,
-            &seed,
-            &request.metadata_filters,
-        )
-    {
-        return Ok(KnowledgeEntityDeleteOutput {
-            graph_commit_epoch_before,
-            graph_commit_epoch_after: graph_commit_epoch_before,
-            node_id: Some(node_id),
-            matched: false,
-            filtered_out: true,
-            deleted_node_count: 0,
-        });
-    }
-
-    let cypher = format!(
-        "MATCH (n:{} {{id: $external_id}}) DETACH DELETE n",
-        request.delete.entity.label
-    );
-    let parameters = BTreeMap::from([(
-        "external_id".to_string(),
-        Value::String(request.delete.entity.external_id.clone()),
-    )]);
-    let output = db.query_with_params(cypher.as_str(), &parameters)?;
-    let deleted_node_count = output.rows.len();
-    Ok(KnowledgeEntityDeleteOutput {
-        graph_commit_epoch_before,
-        graph_commit_epoch_after: db.runtime.get().unwrap().store.commit_epoch(),
-        node_id: Some(node_id),
-        matched: deleted_node_count > 0,
-        filtered_out: false,
-        deleted_node_count,
     })
 }
 

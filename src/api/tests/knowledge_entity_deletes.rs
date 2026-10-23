@@ -1,148 +1,135 @@
 // Copyright 2026 Nowledge
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Licensed under the Apache License, Version 2.0.
 
 use super::*;
+use crate::QueryRequest;
 
-#[test]
-fn deletes_knowledge_entity_through_typed_api() {
-    let mut db = Database::new();
-    db.query("CREATE (:Memory {id: 'memory_1', title: 'First'})-[:MENTIONS]->(:Entity {id: 'entity_1', name: 'HawDB'})")
-        .unwrap();
-
-    let output = db
-        .delete_knowledge_entity(&KnowledgeEntityDeleteRequest {
-            entity: KnowledgeEntityRequest {
-                label: "Memory".to_string(),
-                external_id: "memory_1".to_string(),
-            },
+fn bounded_query<'a>(query: &'a str, parameters: &'a BTreeMap<String, Value>) -> QueryRequest<'a> {
+    QueryRequest::new(query)
+        .with_params(parameters)
+        .with_output_limits(QueryStreamOptions {
+            max_rows: Some(4),
+            max_payload_bytes: Some(4096),
         })
-        .unwrap();
-
-    assert_eq!(output.graph_commit_epoch_before, 1);
-    assert_eq!(output.graph_commit_epoch_after, 2);
-    assert_eq!(output.node_id, Some(0));
-    assert!(output.matched);
-    assert!(!output.filtered_out);
-    assert_eq!(output.deleted_node_count, 1);
-    assert!(db
-        .query_entity_via_cypher(&KnowledgeEntityRequest {
-            label: "Memory".to_string(),
-            external_id: "memory_1".to_string(),
-        })
-        .unwrap()
-        .entity
-        .is_none());
-    assert!(db
-        .query_entity_via_cypher(&KnowledgeEntityRequest {
-            label: "Entity".to_string(),
-            external_id: "entity_1".to_string(),
-        })
-        .unwrap()
-        .entity
-        .is_some());
-    let relationships = db
-        .query_relationships_via_cypher(&KnowledgeRelationshipsRequest {
-            seeds: vec![KnowledgeEntityRequest {
-                label: "Entity".to_string(),
-                external_id: "entity_1".to_string(),
-            }],
-            relationship_type: None,
-            direction: KnowledgeNeighborDirection::Incoming,
-            limit_per_seed: 4,
-        })
-        .unwrap();
-    assert_eq!(relationships.relationship_count, 0);
 }
 
 #[test]
-fn scoped_knowledge_entity_delete_does_not_write_filtered_seed() {
+fn deletes_entity_and_incident_edges_through_parameterized_query() {
+    let mut db = Database::new();
+    db.query("CREATE (:Memory {id: 'memory_1', title: 'First'})-[:MENTIONS]->(:Entity {id: 'entity_1', name: 'HawDB'})").unwrap();
+    let parameters = BTreeMap::from([("id".into(), Value::String("memory_1".into()))]);
+    assert_eq!(db.commit_epoch().unwrap(), 1);
+    let output = db
+        .query_request(
+            QueryRequest::new("MATCH (m:Memory {id: $id}) DETACH DELETE m")
+                .with_params(&parameters),
+        )
+        .unwrap();
+    assert_eq!(output.rows.len(), 1);
+    assert_eq!(db.commit_epoch().unwrap(), 2);
+    assert!(db
+        .query_request(bounded_query(
+            "MATCH (m:Memory {id: $id}) RETURN id(m) AS node_id",
+            &parameters
+        ))
+        .unwrap()
+        .rows
+        .is_empty());
+    let parameters = BTreeMap::from([("id".into(), Value::String("entity_1".into()))]);
+    assert_eq!(
+        db.query_request(bounded_query(
+            "MATCH (e:Entity {id: $id}) RETURN e.name AS name",
+            &parameters
+        ))
+        .unwrap()
+        .rows[0]["name"],
+        Value::String("HawDB".into())
+    );
+    assert!(db
+        .query_request(bounded_query(
+            "MATCH ()-[r:MENTIONS]->(e:Entity {id: $id}) RETURN id(r) AS relationship_id",
+            &parameters
+        ))
+        .unwrap()
+        .rows
+        .is_empty());
+}
+
+#[test]
+fn scoped_entity_delete_does_not_write_filtered_seed() {
     let mut db = Database::new();
     db.query("CREATE (:Memory {id: 'memory_1', source_id: 'thread_1', space_id: ''})")
         .unwrap();
-
+    let parameters = BTreeMap::from([
+        ("id".into(), Value::String("memory_1".into())),
+        ("source_id".into(), Value::String("thread_2".into())),
+    ]);
     let output = db
-        .delete_scoped_knowledge_entity(&KnowledgeScopedEntityDeleteRequest {
-            delete: KnowledgeEntityDeleteRequest {
-                entity: KnowledgeEntityRequest {
-                    label: "Memory".to_string(),
-                    external_id: "memory_1".to_string(),
-                },
-            },
-            metadata_filters: BTreeMap::from([("source_id".to_string(), "thread_2".to_string())]),
-        })
+        .query_request(
+            QueryRequest::new(
+                "MATCH (m:Memory {id: $id}) WHERE m.source_id = $source_id DETACH DELETE m",
+            )
+            .with_params(&parameters),
+        )
         .unwrap();
-
-    assert_eq!(output.graph_commit_epoch_before, 1);
-    assert_eq!(output.graph_commit_epoch_after, 1);
-    assert_eq!(output.node_id, Some(0));
-    assert!(!output.matched);
-    assert!(output.filtered_out);
-    assert_eq!(output.deleted_node_count, 0);
-    assert!(db
-        .query_entity_via_cypher(&KnowledgeEntityRequest {
-            label: "Memory".to_string(),
-            external_id: "memory_1".to_string(),
-        })
+    assert!(output.rows.is_empty());
+    assert_eq!(db.commit_epoch().unwrap(), 1);
+    assert_eq!(
+        db.query_request(bounded_query(
+            "MATCH (m:Memory {id: $id}) RETURN m.source_id AS source_id",
+            &parameters
+        ))
         .unwrap()
-        .entity
-        .is_some());
+        .rows[0]["source_id"],
+        Value::String("thread_1".into())
+    );
 }
 
 #[test]
-fn knowledge_entity_delete_does_not_write_projected_idless_identity() {
+fn external_id_delete_does_not_match_projected_idless_identity() {
     let mut db = Database::new();
     db.query("CREATE (:Memory {title: 'Idless memory'})")
         .unwrap();
-
-    let output = db
-        .delete_knowledge_entity(&KnowledgeEntityDeleteRequest {
-            entity: KnowledgeEntityRequest {
-                label: "Memory".to_string(),
-                external_id: "0".to_string(),
-            },
-        })
-        .unwrap();
-
-    assert_eq!(output.graph_commit_epoch_before, 1);
-    assert_eq!(output.graph_commit_epoch_after, 1);
-    assert_eq!(output.node_id, Some(0));
-    assert!(!output.matched);
-    assert!(!output.filtered_out);
-    assert_eq!(output.deleted_node_count, 0);
+    let parameters = BTreeMap::from([("id".into(), Value::String("0".into()))]);
+    assert!(db
+        .query_request(
+            QueryRequest::new("MATCH (m:Memory {id: $id}) DETACH DELETE m")
+                .with_params(&parameters)
+        )
+        .unwrap()
+        .rows
+        .is_empty());
+    assert_eq!(db.commit_epoch().unwrap(), 1);
+    let rows = db
+        .query_request(bounded_query(
+            "MATCH (m:Memory) RETURN id(m) AS node_id, m.title AS title",
+            &parameters,
+        ))
+        .unwrap()
+        .rows;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0]["node_id"], Value::Int(0));
+    assert_eq!(rows[0]["title"], Value::String("Idless memory".into()));
 }
 
 #[test]
-fn knowledge_entity_delete_rejects_invalid_identifier() {
+fn entity_delete_rejects_invalid_query_identifier_without_writing() {
     let mut db = Database::new();
     db.query("CREATE (:Memory {id: 'memory_1'})").unwrap();
-
+    let parameters = BTreeMap::from([("id".into(), Value::String("memory_1".into()))]);
     let error = db
-        .delete_knowledge_entity(&KnowledgeEntityDeleteRequest {
-            entity: KnowledgeEntityRequest {
-                label: "Bad-Label".to_string(),
-                external_id: "memory_1".to_string(),
-            },
-        })
+        .query_request(
+            QueryRequest::new("MATCH (m:Bad-Label {id: $id}) DETACH DELETE m")
+                .with_params(&parameters),
+        )
         .unwrap_err();
-
-    assert!(error.to_string().contains("label identifier"));
-    assert_eq!(db.runtime.get().unwrap().store.commit_epoch(), 1);
+    assert!(matches!(error, crate::HawDBError::Parse(_)), "{error}");
+    assert_eq!(db.commit_epoch().unwrap(), 1);
 }
 
 #[test]
-fn read_only_database_rejects_typed_knowledge_entity_delete() {
-    let path = unique_test_dir("read_only_typed_knowledge_entity_delete");
+fn read_only_database_rejects_entity_delete_query() {
+    let path = unique_test_dir("read_only_entity_delete_query");
     {
         let mut db = Database::open(&path).unwrap();
         db.query("CREATE (:Memory {id: 'memory_1'})").unwrap();
@@ -156,54 +143,72 @@ fn read_only_database_rejects_typed_knowledge_entity_delete() {
             },
         )
         .unwrap();
+        let parameters = BTreeMap::from([("id".into(), Value::String("memory_1".into()))]);
         let error = db
-            .delete_knowledge_entity(&KnowledgeEntityDeleteRequest {
-                entity: KnowledgeEntityRequest {
-                    label: "Memory".to_string(),
-                    external_id: "memory_1".to_string(),
-                },
-            })
+            .query_request(
+                QueryRequest::new("MATCH (m:Memory {id: $id}) DETACH DELETE m")
+                    .with_params(&parameters),
+            )
             .unwrap_err();
         assert!(error.to_string().contains("read-only"));
+        assert_eq!(
+            db.query_request(bounded_query(
+                "MATCH (m:Memory {id: $id}) RETURN m.id AS id",
+                &parameters
+            ))
+            .unwrap()
+            .rows
+            .len(),
+            1
+        );
     }
     std::fs::remove_dir_all(path).unwrap();
 }
 
 #[test]
-fn typed_knowledge_entity_delete_persists_and_replays_from_wal() {
-    let path = unique_test_dir("typed_knowledge_entity_delete_wal_replay");
+fn entity_delete_query_persists_and_replays_from_wal() {
+    let path = unique_test_dir("entity_delete_query_wal_replay");
+    let parameters = BTreeMap::from([("id".into(), Value::String("memory_1".into()))]);
     {
         let mut db = Database::open(&path).unwrap();
         db.query("CREATE (:Memory {id: 'memory_1'})-[:MENTIONS]->(:Entity {id: 'entity_1'})")
             .unwrap();
-        db.delete_knowledge_entity(&KnowledgeEntityDeleteRequest {
-            entity: KnowledgeEntityRequest {
-                label: "Memory".to_string(),
-                external_id: "memory_1".to_string(),
-            },
-        })
+        db.query_request(
+            QueryRequest::new("MATCH (m:Memory {id: $id}) DETACH DELETE m")
+                .with_params(&parameters),
+        )
         .unwrap();
     }
-    let wal = read_test_wal(&path).unwrap();
-    assert!(wal.contains("delete_node"));
+    assert!(read_test_wal(&path).unwrap().contains("delete_node"));
     {
-        let db = Database::open(&path).unwrap();
+        let mut db = Database::open(&path).unwrap();
         assert!(db
-            .query_entity_via_cypher(&KnowledgeEntityRequest {
-                label: "Memory".to_string(),
-                external_id: "memory_1".to_string(),
-            })
+            .query_request(bounded_query(
+                "MATCH (m:Memory {id: $id}) RETURN m.id AS id",
+                &parameters
+            ))
             .unwrap()
-            .entity
-            .is_none());
+            .rows
+            .is_empty());
+        let parameters = BTreeMap::from([("id".into(), Value::String("entity_1".into()))]);
+        assert_eq!(
+            db.query_request(bounded_query(
+                "MATCH (e:Entity {id: $id}) RETURN e.id AS id",
+                &parameters
+            ))
+            .unwrap()
+            .rows
+            .len(),
+            1
+        );
         assert!(db
-            .query_entity_via_cypher(&KnowledgeEntityRequest {
-                label: "Entity".to_string(),
-                external_id: "entity_1".to_string(),
-            })
+            .query_request(bounded_query(
+                "MATCH ()-[r:MENTIONS]->(e:Entity {id: $id}) RETURN id(r) AS relationship_id",
+                &parameters
+            ))
             .unwrap()
-            .entity
-            .is_some());
+            .rows
+            .is_empty());
     }
     std::fs::remove_dir_all(path).unwrap();
 }

@@ -152,6 +152,7 @@ impl PreparedRead {
         cypher_text: &str,
         parameters: &BTreeMap<String, Value>,
     ) -> Result<BoundedReadQueryOutput> {
+        query_runtime::query_runtime_checkpoint(self.read.task_context.as_ref())?;
         let mut prepared = query_runtime::parse_runtime_execution(cypher_text)?;
         if matches!(prepared.statement, cypher::Statement::Explain(_)) {
             return Err(HawDBError::Execution(
@@ -171,6 +172,7 @@ impl PreparedRead {
             &mut self.dependencies.graph,
         )?;
         prepared.optimized = Some(optimized);
+        let task_context = self.read.task_context.clone();
         self.read
             .query_with_params_bounded_profile_prepared_internal(
                 cypher_text,
@@ -178,7 +180,7 @@ impl PreparedRead {
                 parameters,
                 self.read.config.max_read_result_rows,
                 None,
-                None,
+                task_context.as_ref(),
             )
     }
 
@@ -649,6 +651,59 @@ impl Database {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn prepared_source_queries_preserve_task_result_limits_and_cancellation() {
+        let mut db = Database::new();
+        db.query("CREATE (:Record {id: 1})").unwrap();
+        db.query_sql("CREATE TABLE records (id BIGINT PRIMARY KEY)")
+            .unwrap();
+        db.query_sql("INSERT INTO records VALUES (1)").unwrap();
+        for sql in [false, true] {
+            for (result_bytes, cancelled) in [(0, false), (1, false), (4096, false), (4096, true)] {
+                let mut read = db
+                    .begin_prepared_read(PreparedReadLimits {
+                        dependency_entries: NonZeroUsize::new(16).unwrap(),
+                        dependency_bytes: NonZeroUsize::new(4096).unwrap(),
+                        statement_rows: NonZeroUsize::new(4).unwrap(),
+                        statement_payload_bytes: NonZeroUsize::new(4096).unwrap(),
+                    })
+                    .unwrap();
+                let task = hawdb_core::RuntimeTaskContext::default().with_memory_reservation(
+                    hawdb_core::RuntimeMemoryReservation::new(16 << 20, result_bytes),
+                );
+                if cancelled {
+                    task.cancellation().cancel();
+                }
+                read.read.task_context = Some(task);
+                let output = if sql {
+                    read.query_sql_with_params(
+                        "SELECT id FROM records WHERE id = $1",
+                        &[Value::Int(1)],
+                    )
+                } else {
+                    read.query_with_params(
+                        "MATCH (n:Record {id: $id}) RETURN n.id AS id",
+                        &BTreeMap::from([("id".into(), Value::Int(1))]),
+                    )
+                    .map(|output| output.output)
+                };
+                if result_bytes == 4096 && !cancelled {
+                    assert_eq!(output.unwrap().rows[0]["id"], Value::Int(1));
+                    read.finish().unwrap();
+                } else {
+                    assert!(
+                        output.is_err(),
+                        "sql={sql}, bytes={result_bytes}, cancelled={cancelled}"
+                    );
+                    assert!(
+                        read.finish().is_err(),
+                        "a failed source read cannot authorize publication"
+                    );
+                }
+            }
+        }
+    }
 
     #[test]
     fn validation_failure_report_is_available_from_embedded_database() {

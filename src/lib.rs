@@ -285,14 +285,8 @@ pub use executor::{
     RowRef,
 };
 pub use graph_route_evidence::{
-    nowledge_graph_route_evidence_json, nowledge_mem_graph_augmentation_state_route_query,
-    nowledge_mem_graph_community_members_route_query,
-    nowledge_mem_graph_community_recent_memories_route_query,
-    nowledge_mem_graph_community_subgraph_route_query, nowledge_mem_graph_node_details_route_query,
-    nowledge_mem_graph_orphans_route_query, nowledge_mem_graph_overview_route_query,
-    nowledge_mem_graph_pagerank_plan_route_query, nowledge_mem_graph_sample_route_query,
-    parse_route_parity_evidence, parse_route_query_inventory, RouteCypherQuery,
-    RouteParityEvidence, RouteParityEvidenceRoute, RouteQuery,
+    nowledge_graph_route_evidence_json, parse_route_parity_evidence, parse_route_query_inventory,
+    RouteCypherQuery, RouteParityEvidence, RouteParityEvidenceRoute, RouteQuery,
     NMEM_GRAPH_ROUTE_PARITY_EVIDENCE_PROTOCOL,
 };
 pub use graph_route_readiness::{
@@ -674,11 +668,10 @@ pub use telemetry::{
 };
 pub use value::{Value, ValueRef};
 pub use workload_fixtures::{
-    nowledge_graph_route_workload_fixture_queries, nowledge_graph_route_workload_fixture_report,
-    NowledgeGraphRouteWorkloadBoundedExpansionReport, NowledgeGraphRouteWorkloadFixtureOptions,
-    NowledgeGraphRouteWorkloadFixtureReport, NowledgeGraphRouteWorkloadQueryReport,
-    NowledgeGraphRouteWorkloadRouteReport, NowledgeSearchMetadataWorkloadReport,
-    NOWLEDGE_GRAPH_ROUTE_WORKLOAD_FIXTURE_PROTOCOL,
+    nowledge_graph_route_workload_fixture_report, NowledgeGraphRouteWorkloadBoundedExpansionReport,
+    NowledgeGraphRouteWorkloadFixtureOptions, NowledgeGraphRouteWorkloadFixtureReport,
+    NowledgeGraphRouteWorkloadQueryReport, NowledgeGraphRouteWorkloadRouteReport,
+    NowledgeSearchMetadataWorkloadReport, NOWLEDGE_GRAPH_ROUTE_WORKLOAD_FIXTURE_PROTOCOL,
 };
 
 #[cfg(test)]

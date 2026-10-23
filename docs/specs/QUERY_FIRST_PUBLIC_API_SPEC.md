@@ -116,6 +116,15 @@ context does not cancel either enclosing scope. An existing dynamic memory or
 I/O controller remains attached; two distinct controllers for the same resource
 are rejected because they do not describe a single admission.
 
+Consumer source mappings MUST reserve query-result capacity in addition to
+publication working memory. Registered catch-up reserves the configured
+per-statement payload allowance as result capacity; physical materialization
+may refuse before that logical ceiling. Standalone staging and rebuild hosts
+must include result capacity in their explicit generation admission. Both
+Cypher and SQL source reads preserve the admitted task's cancellation and
+result ceilings. A zero result reservation is not an unlimited-output sentinel;
+a failed mapping cannot contribute a successful publication proof.
+
 Prepared query reuse also checks authorization identity, including policy epoch,
 and scoring-plan shape. Changed scoring coefficients, query parameters and
 reference clocks MUST bind to the current execution. A mismatch uses the normal
@@ -222,6 +231,13 @@ The old adapters and route response DTOs MUST NOT remain behind `cfg(test)`.
 Regression coverage MUST execute parameterized queries through the ordinary
 runtime. Route-evidence builders MAY retain private query fixtures, but neither
 their statements nor route-specific response shapes are public database APIs.
+
+The route qualification statements live in the facade's private
+`graph_route_evidence::queries` module. The readiness crate exposes only the
+generic query-inventory and evidence contracts. Single-entity deletion
+regressions use bounded parameterized query requests, including scoped
+predicates, incident-edge deletion and WAL recovery. Remaining legacy business
+adapters still require migration; this removal does not complete issue #1193.
 
 ## Stable typed boundaries
 

@@ -12,14 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{
+use crate::graph_route_evidence::{
     nowledge_mem_graph_augmentation_state_route_query,
     nowledge_mem_graph_community_members_route_query,
     nowledge_mem_graph_community_recent_memories_route_query,
     nowledge_mem_graph_community_subgraph_route_query, nowledge_mem_graph_node_details_route_query,
     nowledge_mem_graph_orphans_route_query, nowledge_mem_graph_overview_route_query,
-    nowledge_mem_graph_pagerank_plan_route_query, nowledge_mem_graph_sample_route_query, Database,
-    KnowledgeCandidateScoringPolicy, KnowledgeRetrievalRequest, NowledgeMemGraph,
+    nowledge_mem_graph_pagerank_plan_route_query, nowledge_mem_graph_sample_route_query,
+};
+use crate::{
+    Database, KnowledgeCandidateScoringPolicy, KnowledgeRetrievalRequest, NowledgeMemGraph,
     NowledgeMemGraphMode, NowledgeMemQueryReportOptions, NowledgeMemReadOptions, Result,
     RouteQuery, SearchFusionWeights, SearchIndex, SearchMode, SearchPredicatePushdownReport,
     SearchQueryOptions, SearchRebuildOptions, Value, DENSE_ADJACENCY_DEGREE_THRESHOLD,
@@ -48,7 +50,7 @@ pub fn nowledge_graph_route_workload_fixture_report(
     run_graph_route_workload_fixture(&mut graph, &route_queries, options)
 }
 
-pub fn nowledge_graph_route_workload_fixture_queries(
+fn nowledge_graph_route_workload_fixture_queries(
     options: NowledgeGraphRouteWorkloadFixtureOptions,
 ) -> Result<Vec<RouteQuery>> {
     Ok(vec![

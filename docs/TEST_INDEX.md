@@ -14,6 +14,26 @@ reuses the snapshot after refusal. Existing scoring, access-control, EXPLAIN,
 and cancellation cases exercise the same compact collector. Mem bounded read
 snapshots use this collector and retain cumulative statement budgets.
 
+`api::tests::knowledge_entity_deletes` retains its six deletion scenarios through
+ordinary parameterized requests: incident edges, scoped nonmatches, idless
+identity, invalid syntax, read-only refusal and WAL replay. It no longer uses
+single-entity deletion adapters or their DTOs. `graph_route_evidence` and
+`workload_fixtures` retain private route statement qualification, while the
+readiness crate tests its generic reducer with a small parameterized statement.
+These remain in their existing root/readiness CI owners; the weekly native
+runtime lane also selects the deletion and route-evidence families.
+
+`api::dependency_read::tests` checks both Cypher and SQL source mappings under
+zero, undersized and sufficient result reservations, plus cancellation and
+failed-proof refusal. Consumer catch-up admits result memory separately from
+publication working memory. The registered Consumer integration cases in
+`mvcc_staging_session` exercise graph/SQL delta and full-source verification,
+rebuild, reopen and released admission, including the native Windows lane.
+Standalone staging/baseline fixtures explicitly reserve results too; a zero
+reservation remains a refusal. Request parity also checks explicit zero SQL
+payload limits. CI owns these regressions; the weekly native runtime lane
+explicitly selects the prepared-source reservation/cancellation case.
+
 The executor `result_delivery::tests::borrowed` family checks native columnar
 payload pointer identity for immediate consumers, compact validated delivery
 across source retirement and segment boundaries, logical quota refusal before

@@ -61,7 +61,9 @@ fn governor() -> RuntimeGovernor {
 fn admission() -> SearchGenerationAdmission {
     SearchGenerationAdmission::acquire(
         &governor(),
-        RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024).with_io_wave_slots(1),
+        RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024)
+            .with_result_bytes(16 * 1024)
+            .with_io_wave_slots(1),
     )
     .unwrap()
 }
@@ -95,7 +97,7 @@ fn config(after_epoch: u64) -> ProjectionStagingSessionConfig {
             ..Default::default()
         },
         task: RuntimeTaskContext::default()
-            .with_memory_reservation(RuntimeMemoryReservation::new(16 * 1024 * 1024, 0)),
+            .with_memory_reservation(RuntimeMemoryReservation::new(16 * 1024 * 1024, 16 * 1024)),
     }
 }
 fn doc(id: &str, body: &str) -> SearchDocument {
@@ -566,8 +568,9 @@ fn staging_session_empty_interval_still_requires_mapped_end() {
 fn staging_session_retains_governor_permit_through_stage_and_failure_cleanup() {
     let (root, db, reader, c) = setup(false);
     let governor = governor();
-    let request =
-        RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024).with_io_wave_slots(1);
+    let request = RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024)
+        .with_result_bytes(16 * 1024)
+        .with_io_wave_slots(1);
     let admission = SearchGenerationAdmission::acquire(&governor, request).unwrap();
     let mut session = db
         .begin_projection_staging_session(&reader, config(c), fanout, admission)
@@ -756,8 +759,9 @@ fn verification_compare(
 fn staging_verification_failure_panic_and_cancellation_retain_permit_until_cleanup() {
     let (root, db, reader, c) = setup(false);
     let g = governor();
-    let request =
-        RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024).with_io_wave_slots(1);
+    let request = RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024)
+        .with_result_bytes(16 * 1024)
+        .with_io_wave_slots(1);
     for verifier in [
         verification_error as ProjectionOutputVerificationFunction,
         verification_panic,
