@@ -72,7 +72,11 @@ fn projection_procedure_waits_for_publication_and_appends_to_the_adopted_wal() {
     let mut db = std::thread::scope(|scope| {
         let projection = scope.spawn(move || {
             let output = db
-                .query_prepared_with_params(prepared, &parameters)
+                .query_prepared_request(
+                    prepared,
+                    crate::QueryRequest::new("CALL project_graph('g', ['Memory'], [])")
+                        .with_params(&parameters),
+                )
                 .unwrap();
             assert_eq!(output.rows.len(), 1);
             db

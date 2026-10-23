@@ -191,7 +191,7 @@ pub use api::{
     SearchProjectionConsumerRebuildReason, SearchProjectionConsumerResult,
     SearchProjectionConsumerState, SearchProjectionConsumerStatus,
     SearchProjectionGraphDeltaRequest, SearchProjectionRelationalDelta, SessionConfig,
-    SlowQueryLogExportOptions, SlowQueryLogRecordSummary, SqlStatementResult,
+    SlowQueryLogExportOptions, SlowQueryLogRecordSummary, SqlQueryRequest, SqlStatementResult,
     StorageResourceProfileLimits, StorageResourceProfileReport, SystemSchemaMigration,
     SystemSchemaRegistry, SystemSchemaUpgradeReport, TransactionCommitResult, TransactionIsolation,
     TransactionReadDependencyLimits, TransactionReadDependencyUsage, WalGroupCommitActivation,

@@ -14,6 +14,17 @@ reuses the snapshot after refusal. Existing scoring, access-control, EXPLAIN,
 and cancellation cases exercise the same compact collector. Mem bounded read
 snapshots use this collector and retain cumulative statement budgets.
 
+The `api::query_request::adapter_tests` family exercises shared Cypher and SQL
+requests across database, pinned-read, explicit-write, concurrent optimistic and
+pessimistic, and Embedded transaction paths. Cases include parameters, scoring,
+ACL availability, zero/output limits, parent/request cancellation, prepared-policy
+invalidation, and SQL RETURNING refusal before private staging or publication.
+`api::query_request::host::tests` also covers host-scorer delivery through the
+concurrent and transaction entry points. These remain root-unit regressions;
+the weekly platform runtime lane exercises the request families with ACL enabled
+and disabled. Core cancellation tests cover linked cancellation/waker cleanup,
+controller preservation and common-ancestor work accounting in that lane.
+
 ## Execution lanes
 
 | Lane / entry point | Problems covered | Execution policy |

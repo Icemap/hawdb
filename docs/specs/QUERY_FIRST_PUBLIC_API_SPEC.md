@@ -93,6 +93,39 @@ Application mutations MUST use parameterized Cypher inside
 The transaction owns read-your-own-writes behavior and the single canonical
 WAL publication boundary.
 
+## Shared request constraints
+
+`QueryRequest` carries Cypher parameters, authorization, scoring, cancellation,
+and read-output limits. `SqlQueryRequest` carries SQL parameters, cancellation,
+output limits, and the relational join-planning directive. String overloads
+remain convenience entry points. Synchronous database, read-snapshot, and
+explicit transaction entry points MUST preserve the same request attachments;
+concurrent transactions MUST retain their existing locking and read-dependency
+validation. Embedded explicit transactions use the same statement kernel.
+
+Request limits can tighten database limits but MUST NOT widen them. An explicit
+request `Some(0)` is a zero-row or zero-payload ceiling, not an unlimited sentinel.
+SQL mutation results MUST be validated before private state is installed or a
+commit is published. Cypher mutations continue to use `MutationLimits`.
+
+A request context MUST NOT replace an enclosing snapshot or transaction
+context. Both cancellation tokens and the earlier deadline apply. CPU, executor,
+working-memory and result-memory ceilings are intersected. Work budgets remain
+shared, with common ancestors charged once. Cancelling a statement's combined
+context does not cancel either enclosing scope. An existing dynamic memory or
+I/O controller remains attached; two distinct controllers for the same resource
+are rejected because they do not describe a single admission.
+
+Prepared query reuse also checks authorization identity, including policy epoch,
+and scoring-plan shape. Changed scoring coefficients, query parameters and
+reference clocks MUST bind to the current execution. A mismatch uses the normal
+planner rather than a plan prepared with different permissions.
+
+The synchronous implementation does not by itself establish Tokio attachment
+parity, general multi-statement snapshot budgets, lock-free callback execution,
+or end-to-end borrowed result delivery. Those remain separate acceptance items
+in issue #1193.
+
 ## Preparation and admission ownership
 
 Admission and execution SHOULD reuse one internally prepared statement when its

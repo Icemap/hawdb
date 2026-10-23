@@ -456,7 +456,10 @@ mod tests {
                 .query_sql_with_params("USE BRANCH ID $1", &[Value::Uuid(grandchild)])
                 .unwrap();
             assert!(database
-                .query_prepared_with_params(prepared_write, &Default::default())
+                .query_prepared_request(
+                    prepared_write,
+                    crate::QueryRequest::new("CREATE (:Memory {id: 'stale-plan'})"),
+                )
                 .unwrap_err()
                 .to_string()
                 .contains("different branch"));

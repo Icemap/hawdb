@@ -624,3 +624,37 @@ fn host_query_authorization_limits_the_normalization_cohort_and_rebinds_actor_sc
         assert_eq!(calls.get(), 3);
     }
 }
+
+#[test]
+fn host_scoring_survives_concurrent_and_transaction_request_paths() {
+    let mut database = fixture();
+    let parameters = parameters("x");
+    let mut scorer = CohortScorer::new(10.0);
+    let calls = Rc::clone(&scorer.calls);
+    let host = host(&mut scorer, 2, 1, 1_000);
+    let request = QueryRequest::new(QUERY)
+        .with_params(&parameters)
+        .with_host_scoring(&host);
+    let expected = database.query_request(request).unwrap();
+    assert_eq!(calls.get(), 1);
+    let mut transaction = database.begin_transaction().unwrap();
+    assert_eq!(
+        transaction.query_request(request).unwrap().rows,
+        expected.rows
+    );
+    transaction.rollback();
+    let database = crate::ConcurrentDatabase::new(database);
+    assert_eq!(database.query_request(request).unwrap().rows, expected.rows);
+    for options in [
+        crate::ConcurrentTransactionOptions::optimistic(),
+        crate::ConcurrentTransactionOptions::default(),
+    ] {
+        let mut transaction = database.begin_transaction(options).unwrap();
+        assert_eq!(
+            transaction.query_request(request).unwrap().rows,
+            expected.rows
+        );
+        transaction.rollback();
+    }
+    assert_eq!(calls.get(), 5);
+}

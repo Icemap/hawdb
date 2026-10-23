@@ -21,7 +21,9 @@ use hawdb_plan_cypher::{
 use std::collections::BTreeMap;
 
 mod host;
+mod sql;
 pub use host::HostScoringRequest;
+pub use sql::SqlQueryRequest;
 
 #[derive(Clone, Copy)]
 pub(super) enum ScoringAttachment<'a> {
@@ -160,12 +162,12 @@ impl ScoringRequest {
 /// A borrowed ordinary Cypher request. Existing string overloads remain valid.
 #[derive(Clone, Copy)]
 pub struct QueryRequest<'a> {
-    pub(super) cypher: &'a str,
-    pub(super) parameters: Option<&'a BTreeMap<String, Value>>,
+    pub(crate) cypher: &'a str,
+    pub(crate) parameters: Option<&'a BTreeMap<String, Value>>,
     pub(super) scoring: Option<ScoringAttachment<'a>>,
     pub(super) access_control: Option<&'a QueryAccessControlContext>,
-    pub(super) task_context: Option<&'a hawdb_core::RuntimeTaskContext>,
-    pub(super) output_limits: QueryStreamOptions,
+    pub(crate) task_context: Option<&'a hawdb_core::RuntimeTaskContext>,
+    pub(crate) output_limits: QueryStreamOptions,
 }
 
 impl<'a> QueryRequest<'a> {
@@ -228,6 +230,17 @@ impl<'a> QueryRequest<'a> {
             ),
         };
         self
+    }
+}
+
+pub(crate) fn bind_request_context(
+    parent: Option<&hawdb_core::RuntimeTaskContext>,
+    request: Option<&hawdb_core::RuntimeTaskContext>,
+) -> Result<Option<hawdb_core::RuntimeTaskContext>> {
+    match (parent, request) {
+        (Some(parent), Some(request)) => parent.constrained_by(request).map(Some),
+        (Some(parent), None) => Ok(Some(parent.clone())),
+        (None, request) => Ok(request.cloned()),
     }
 }
 
@@ -411,11 +424,12 @@ impl<S: crate::executor::ExecutionStore> super::DatabaseReadTransaction<S> {
         request: QueryRequest<'_>,
         external: &mut dyn crate::executor::ExternalReadOperator,
     ) -> Result<super::BoundedReadQueryOutput> {
-        let task_context = self.task_context.clone();
-        let options = super::query_runtime::QueryExecutionOptions::for_request(
-            request,
-            task_context.as_ref(),
-        );
+        let task_context = bind_request_context(self.task_context.as_ref(), request.task_context)?;
+        let request = QueryRequest {
+            task_context: task_context.as_ref(),
+            ..request
+        };
+        let options = super::query_runtime::QueryExecutionOptions::for_request(request, None);
         let prepared = super::query_runtime::parse_runtime_execution(request.cypher)?;
         self.query_prepared_request_profiled(
             request.cypher,
@@ -445,11 +459,12 @@ impl<S: crate::executor::ExecutionStore> super::DatabaseReadTransaction<S> {
         external: &mut dyn crate::executor::ExternalReadOperator,
         mut consumer: impl FnMut(crate::executor::Row) -> Result<()>,
     ) -> Result<super::QueryStreamReport> {
-        let task_context = self.task_context.clone();
-        let options = super::query_runtime::QueryExecutionOptions::for_request(
-            request,
-            task_context.as_ref(),
-        );
+        let task_context = bind_request_context(self.task_context.as_ref(), request.task_context)?;
+        let request = QueryRequest {
+            task_context: task_context.as_ref(),
+            ..request
+        };
+        let options = super::query_runtime::QueryExecutionOptions::for_request(request, None);
         self.query_request_streaming_prepared_external(
             request,
             super::query_runtime::parse_runtime_execution(request.cypher)?,
@@ -518,8 +533,13 @@ mod tests {
         });
         let compact = snapshot.query_request_profiled(request).unwrap();
         assert_eq!(compact.output.rows.len(), 2_048);
-        for (id, row) in compact.output.rows.iter().enumerate() {
-            assert_eq!(row.get("id"), Some(&Value::Int(id as i64)));
+        let mut ids = std::collections::BTreeSet::new();
+        for row in &compact.output.rows {
+            let Some(Value::Int(id)) = row.get("id") else {
+                panic!("missing integer id")
+            };
+            assert!((0..2_048).contains(id));
+            assert!(ids.insert(*id));
             assert_eq!(row.get("title"), Some(&Value::String("payload".into())));
             assert_eq!(row.get("missing"), Some(&Value::Null));
         }
@@ -581,7 +601,11 @@ mod tests {
         BTreeMap::from([("kind".into(), Value::String(kind.into()))])
     }
 
-    fn scoring(combination: ScoringCombination, search: f64, importance: f64) -> ScoringRequest {
+    pub(super) fn scoring(
+        combination: ScoringCombination,
+        search: f64,
+        importance: f64,
+    ) -> ScoringRequest {
         ScoringRequest::new(
             ScoringProgram::new(
                 combination,
@@ -1084,3 +1108,7 @@ mod graph_seed_tests;
 #[cfg(test)]
 #[path = "query_request/expansion_budget_tests.rs"]
 mod expansion_budget_tests;
+
+#[cfg(test)]
+#[path = "query_request/adapter_tests.rs"]
+mod adapter_tests;

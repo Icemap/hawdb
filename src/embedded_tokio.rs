@@ -1256,7 +1256,23 @@ mod tests {
             ))
             .unwrap()
             .unwrap_err();
-        assert!(error.to_string().contains("max_payload_bytes 64"));
+        // Compact results reserve their owner before producing the first row.
+        // A budget below that owner must retain the governor's typed origin.
+        let HawDBTokioEmbeddedError::Task(TokioTaskError::Operation(
+            HawDBError::ResourceBudgetExceeded(cause),
+        )) = error
+        else {
+            panic!("expected a result-memory refusal, got {error:?}");
+        };
+        assert_eq!(cause.budget, 64);
+        assert_eq!(cause.owner, "query result");
+        assert_eq!(cause.memory_class, Some("result_materialization"));
+        assert_eq!(
+            cause.budget_option,
+            "RuntimeTaskContext.memory_reservation.result_bytes"
+        );
+        assert_eq!(embedded.runtime_snapshot().active_foreground_tasks, 0);
+        assert_eq!(embedded.runtime_snapshot().admitted_memory_bytes, 0);
     }
 
     #[test]

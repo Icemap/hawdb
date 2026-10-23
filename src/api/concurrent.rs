@@ -25,7 +25,7 @@ use super::transaction_locks::{
     DEFAULT_LOCK_ESCALATION_ENTRIES_PER_TABLE,
 };
 use super::{
-    commit_database_transaction_state, execute_concurrent_graph_transaction_query,
+    commit_database_transaction_state, execute_concurrent_graph_transaction_request,
     execute_database_transaction_prepared_sql, Database, DatabaseConfig, DatabaseReadTransaction,
     DatabaseTransactionRuntime, DatabaseTransactionSqlOptions, DatabaseTransactionState,
     QueryOutput, StatementExecutionContext, TransactionCommitResult,
@@ -425,24 +425,28 @@ impl ConcurrentDatabase {
         cypher_text: &str,
         parameters: &BTreeMap<String, Value>,
     ) -> Result<QueryOutput> {
+        self.query_request(super::QueryRequest::new(cypher_text).with_params(parameters))
+    }
+
+    pub fn query_request(&self, request: super::QueryRequest<'_>) -> Result<QueryOutput> {
+        super::query_runtime::query_runtime_checkpoint(request.task_context)?;
+        let cypher_text = request.cypher;
         let started = Instant::now();
         let view = self.inner.commits.read_view()?;
-        let prepared = match view.prepare(cypher_text.to_string(), parameters) {
+        let prepared = match view.prepare(request) {
             Ok(prepared) => prepared,
             Err(_) => {
                 // Failed preparation cannot prove that the statement is read-only. Re-run it
                 // through the original exclusive path so planning failures retain their
                 // statement-observability behavior and uncertain statements fail closed.
                 drop(view);
-                return self.with_autocommit_exclusive(|database| {
-                    database.query_with_params(cypher_text, parameters)
-                });
+                return self.with_autocommit_exclusive(|database| database.query_request(request));
             }
         };
         if !prepared.uses_read_snapshot() {
             drop(view);
             return self.with_autocommit_exclusive(move |database| {
-                database.query_prepared_with_params(prepared, parameters)
+                database.query_prepared_request(prepared, request)
             });
         }
         let statement_kind = prepared.statement_kind();
@@ -451,10 +455,10 @@ impl ConcurrentDatabase {
 
         #[cfg(test)]
         self.wait_after_autocommit_read_snapshot()?;
-        let result = self.inner.commits.finish_read(
-            &view,
-            snapshot.query_prepared_with_params_bounded_profile(prepared, parameters),
-        );
+        let result = self
+            .inner
+            .commits
+            .finish_read(&view, snapshot.query_prepared_request(prepared, request));
         drop(snapshot);
         view.recorder.record_statement_execution(
             "cypher",
@@ -468,7 +472,7 @@ impl ConcurrentDatabase {
                     .ok()
                     .map(|profiled| &profiled.execution_profile),
                 retained_profile: None,
-                access_control: None,
+                access_control: request.access_control,
                 parse_nanos,
             },
         );
@@ -486,6 +490,12 @@ impl ConcurrentDatabase {
         sql_text: &str,
         parameters: &[Value],
     ) -> Result<QueryOutput> {
+        self.query_sql_request(super::SqlQueryRequest::new(sql_text).with_params(parameters))
+    }
+
+    pub fn query_sql_request(&self, request: super::SqlQueryRequest<'_>) -> Result<QueryOutput> {
+        super::query_runtime::query_runtime_checkpoint(request.task_context)?;
+        let sql_text = request.sql;
         let started = Instant::now();
         let prepared = self.inner.commits.prepare_sql(sql_text)?;
         if let SqlStatement::Branch(statement) = prepared.statement() {
@@ -502,14 +512,14 @@ impl ConcurrentDatabase {
                 self.wait_after_autocommit_read_snapshot()?;
             }
             return self.with_autocommit_exclusive(|database| {
-                database.query_sql_with_prepared_params(sql_text, parameters, prepared)
+                database.query_sql_with_prepared_request(request, prepared)
             });
         }
         let view = self.inner.commits.read_view()?;
         if !sql_statement_uses_snapshot(prepared.statement()) {
             drop(view);
             return self.with_autocommit_exclusive(move |database| {
-                database.query_sql_with_prepared_params(sql_text, parameters, prepared)
+                database.query_sql_with_prepared_request(request, prepared)
             });
         }
         let statement_kind = super::observability::sql_statement_kind(prepared.statement());
@@ -518,7 +528,7 @@ impl ConcurrentDatabase {
         let result = self
             .inner
             .commits
-            .finish_read(&view, view.query_sql(sql_text, parameters, prepared));
+            .finish_read(&view, view.query_sql(request, prepared));
         view.recorder.record_statement_execution(
             "sql",
             sql_text,
@@ -643,27 +653,26 @@ impl ConcurrentDatabaseTransaction {
         cypher_text: &str,
         parameters: &BTreeMap<String, Value>,
     ) -> Result<QueryOutput> {
-        let result = self.query_with_params_inner(cypher_text, parameters);
+        self.query_request(super::QueryRequest::new(cypher_text).with_params(parameters))
+    }
+
+    pub fn query_request(&mut self, request: super::QueryRequest<'_>) -> Result<QueryOutput> {
+        let result = self.query_request_inner(request);
         if result.is_err() {
             self.state.fail_read_dependencies();
         }
         result
     }
 
-    fn query_with_params_inner(
-        &mut self,
-        cypher_text: &str,
-        parameters: &BTreeMap<String, Value>,
-    ) -> Result<QueryOutput> {
+    fn query_request_inner(&mut self, request: super::QueryRequest<'_>) -> Result<QueryOutput> {
         self.ensure_active()?;
         let lock_savepoint = (self.options.mode == ConcurrentTransactionMode::Pessimistic)
             .then(|| self.inner.locks.savepoint(self.transaction_id))
             .transpose()?;
-        let execution = execute_concurrent_graph_transaction_query(
+        let execution = execute_concurrent_graph_transaction_request(
             &self.runtime,
             &mut self.state,
-            cypher_text,
-            parameters,
+            request,
             self.task_context.as_ref(),
         );
         let outcome = match execution {
@@ -688,11 +697,10 @@ impl ConcurrentDatabaseTransaction {
                 .expect("a staged graph mutation must retain its statement savepoint");
             self.state.restore_graph_statement(graph_savepoint);
             self.acquire_graph_statement_locks(&requests, lock_savepoint.clone())?;
-            let replayed = execute_concurrent_graph_transaction_query(
+            let replayed = execute_concurrent_graph_transaction_request(
                 &self.runtime,
                 &mut self.state,
-                cypher_text,
-                parameters,
+                request,
                 self.task_context.as_ref(),
             );
             let replayed = match replayed {
@@ -737,21 +745,44 @@ impl ConcurrentDatabaseTransaction {
         sql_text: &str,
         parameters: &[Value],
     ) -> Result<super::SqlStatementResult> {
-        let result = self.query_sql_with_result_and_params_inner(sql_text, parameters);
+        self.query_sql_request_with_result(
+            super::SqlQueryRequest::new(sql_text).with_params(parameters),
+        )
+    }
+
+    pub fn query_sql_request(
+        &mut self,
+        request: super::SqlQueryRequest<'_>,
+    ) -> Result<QueryOutput> {
+        self.query_sql_request_with_result(request)
+            .map(|result| result.output)
+    }
+
+    pub fn query_sql_request_with_result(
+        &mut self,
+        request: super::SqlQueryRequest<'_>,
+    ) -> Result<super::SqlStatementResult> {
+        let result = self.query_sql_request_inner(request);
         if result.is_err() {
             self.state.fail_read_dependencies();
         }
         result
     }
 
-    fn query_sql_with_result_and_params_inner(
+    fn query_sql_request_inner(
         &mut self,
-        sql_text: &str,
-        parameters: &[Value],
+        request: super::SqlQueryRequest<'_>,
     ) -> Result<super::SqlStatementResult> {
         self.ensure_active()?;
+        let task = super::query_request::bind_request_context(
+            self.task_context.as_ref(),
+            request.task_context,
+        )?;
+        super::query_runtime::query_runtime_checkpoint(task.as_ref())?;
+        let sql_text = request.sql;
+        let parameters = request.parameters;
         if let Some(dependencies) = &mut self.state.read_dependencies {
-            super::query_runtime::query_runtime_checkpoint(self.task_context.as_ref())?;
+            super::query_runtime::query_runtime_checkpoint(task.as_ref())?;
             dependencies.admit_sql(sql_text, parameters)?;
         }
         let prepared = self
@@ -782,7 +813,9 @@ impl ConcurrentDatabaseTransaction {
             DatabaseTransactionSqlOptions {
                 allow_system_schema_registry_write: false,
                 allow_locking_select: true,
-                task_context: self.task_context.as_ref(),
+                task_context: task.as_ref(),
+                output_limits: request.output_limits,
+                join_planning: request.join_planning,
             },
         );
         if result.is_ok() {

@@ -456,6 +456,19 @@ impl HawDBEmbedded {
         parameters: &BTreeMap<String, Value>,
         task_context: &RuntimeTaskContext,
     ) -> std::result::Result<QueryOutput, EmbeddedQueryError> {
+        self.query_request_admitted(
+            crate::QueryRequest::new(cypher_text)
+                .with_params(parameters)
+                .with_task_context(task_context),
+        )
+    }
+
+    pub fn query_request_admitted(
+        &mut self,
+        query: crate::QueryRequest<'_>,
+    ) -> std::result::Result<QueryOutput, EmbeddedQueryError> {
+        let default_context = RuntimeTaskContext::default();
+        let task_context = query.task_context.unwrap_or(&default_context);
         if self.transaction.is_some() {
             return Err(EmbeddedQueryError::Database(HawDBError::Execution(
                 "a user transaction is open on this database".into(),
@@ -463,14 +476,12 @@ impl HawDBEmbedded {
         }
         self.check_admitted_query_context(task_context)?;
         let planning_request = crate::api::runtime_planning_request(
-            cypher_text.len(),
+            query.cypher.len(),
             hawdb_qos::RuntimeWorkPriority::Foreground,
         );
         let prepared = {
             let planning_permit = self.try_admit_query(planning_request)?;
-            let prepared = self
-                .database
-                .prepare_runtime_query(cypher_text.to_string(), parameters)?;
+            let prepared = self.database.prepare_runtime_request(query)?;
             prepared.with_planning_memory(
                 planning_permit
                     .into_retained_memory()
@@ -479,6 +490,8 @@ impl HawDBEmbedded {
         };
         let admission = prepared.admission();
         self.check_admitted_query_context(task_context)?;
+        // Logical payload limits do not estimate the compact result owner's
+        // retained capacity. Keep admission and output validation independent.
         let result_budget_bytes = self.admitted_result_budget_bytes();
         let request = admission.runtime_work_request_for_snapshot(
             result_budget_bytes,
@@ -492,26 +505,21 @@ impl HawDBEmbedded {
         let permit = self.try_admit_query(request)?;
         let execution_task_context = permit.bind_task_context(task_context.clone());
         let _permit = permit;
+        let query = query.with_task_context(&execution_task_context);
         let result = if is_mutation || !streaming_eligible {
-            self.database.query_prepared_with_params_context(
-                prepared,
-                parameters,
-                &execution_task_context,
-            )
+            self.database.query_prepared_request(prepared, query)
         } else {
-            let max_rows = self.database.config().read_result_row_limit();
             let max_payload_bytes = usize::try_from(request.result_bytes).unwrap_or(usize::MAX);
             self.database
                 .begin_read_transaction_with_shared_plan_cache()?
-                .query_prepared_with_params_owned_context(
+                .query_prepared_request(
                     prepared,
-                    parameters,
-                    QueryStreamOptions {
-                        max_rows,
+                    query.with_restrictive_output_limits(QueryStreamOptions {
+                        max_rows: self.database.config().read_result_row_limit(),
                         max_payload_bytes: Some(max_payload_bytes),
-                    },
-                    &execution_task_context,
+                    }),
                 )
+                .map(|result| result.output)
         };
         if !is_mutation {
             self.check_admitted_query_context(task_context)?;
@@ -617,14 +625,27 @@ impl HawDBEmbedded {
         cypher_text: &str,
         parameters: &BTreeMap<String, Value>,
     ) -> Result<QueryOutput> {
+        self.transaction_query_request(
+            crate::QueryRequest::new(cypher_text).with_params(parameters),
+        )
+    }
+
+    pub fn transaction_query_request(
+        &mut self,
+        request: crate::QueryRequest<'_>,
+    ) -> Result<QueryOutput> {
         let transaction = self.transaction_mut()?;
-        crate::api::execute_database_transaction_query(
+        let result = crate::api::execute_concurrent_graph_transaction_request(
             &transaction.runtime,
             &mut transaction.state,
-            cypher_text,
-            parameters,
+            request,
             None,
         )
+        .map(|outcome| outcome.output);
+        if result.is_err() {
+            transaction.state.fail_read_dependencies();
+        }
+        result
     }
 
     /// Runs one SQL statement inside the open user transaction.
@@ -633,14 +654,20 @@ impl HawDBEmbedded {
         sql_text: &str,
         parameters: &[Value],
     ) -> Result<QueryOutput> {
+        self.transaction_query_sql_request(
+            crate::SqlQueryRequest::new(sql_text).with_params(parameters),
+        )
+    }
+
+    pub fn transaction_query_sql_request(
+        &mut self,
+        request: crate::SqlQueryRequest<'_>,
+    ) -> Result<QueryOutput> {
         let transaction = self.transaction_mut()?;
-        crate::api::execute_database_transaction_sql(
+        crate::api::execute_database_transaction_sql_request(
             &transaction.runtime,
             &mut transaction.state,
-            sql_text,
-            parameters,
-            false,
-            false,
+            request,
             None,
         )
         .map(|result| result.output)

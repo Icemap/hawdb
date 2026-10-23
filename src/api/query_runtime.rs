@@ -27,6 +27,8 @@ pub(crate) struct PreparedRuntimeQuery {
     config: DatabaseConfig,
     system_variables: QuerySystemVariables,
     planning_memory: Option<hawdb_qos::RuntimeRetainedMemory>,
+    access_control: Option<QueryAccessControlContext>,
+    scoring_key: Option<super::query_request::ScoringPlanCacheKey>,
 }
 
 #[cfg_attr(not(feature = "tokio-runtime"), allow(dead_code))]
@@ -104,6 +106,7 @@ impl RuntimePlanningSnapshot {
             parameters,
             &self.plan_cache,
             &self.planning_cache,
+            QueryExecutionOptions::default(),
         )
     }
 }
@@ -114,9 +117,32 @@ pub(super) struct PreparedRuntimeExecution {
     pub(super) parse_metrics: hawdb_cypher::ParseMetrics,
     pub(super) statement_started: Option<hawdb_core::time::Instant>,
     pub(super) planning_memory: Option<hawdb_qos::RuntimeRetainedMemory>,
+    access_control: Option<QueryAccessControlContext>,
+    scoring_key: Option<super::query_request::ScoringPlanCacheKey>,
 }
 
-#[derive(Clone, Copy)]
+impl PreparedRuntimeExecution {
+    pub(super) fn take_optimized(
+        &mut self,
+        access: Option<&QueryAccessControlContext>,
+        scoring: Option<BoundScoringRequest<'_>>,
+    ) -> Result<Option<OptimizedQueryPlan>> {
+        if self.access_control.as_ref() != access
+            || self.scoring_key != scoring.map(BoundScoringRequest::cache_key)
+        {
+            return Ok(None);
+        }
+        let Some(mut optimized) = self.optimized.take() else {
+            return Ok(None);
+        };
+        if let Some(scoring) = scoring {
+            scoring.rebind(&mut optimized.physical_plan)?;
+        }
+        Ok(Some(optimized))
+    }
+}
+
+#[derive(Clone, Copy, Default)]
 pub(super) struct QueryExecutionOptions<'a> {
     capture_trace: bool,
     pub(super) access_control: Option<&'a QueryAccessControlContext>,
@@ -168,6 +194,8 @@ pub(super) fn parse_runtime_execution(cypher_text: &str) -> Result<PreparedRunti
         parse_metrics: parsed.metrics,
         statement_started: Some(statement_started),
         planning_memory: None,
+        access_control: None,
+        scoring_key: None,
     })
 }
 
@@ -231,6 +259,8 @@ impl PreparedRuntimeQuery {
                 parse_metrics: self.parse_metrics,
                 statement_started: None,
                 planning_memory: self.planning_memory,
+                access_control: self.access_control,
+                scoring_key: self.scoring_key,
             },
         )
     }
@@ -319,15 +349,28 @@ impl Database {
             parameters,
             &self.runtime.get()?.plan_cache,
             &self.runtime.get()?.optimizer_planning_cache,
+            QueryExecutionOptions::default(),
+        )
+    }
+    pub(crate) fn prepare_runtime_request(
+        &self,
+        request: QueryRequest<'_>,
+    ) -> Result<PreparedRuntimeQuery> {
+        let runtime = self.runtime.get()?;
+        self.runtime_planning_context(&runtime)?.prepare(
+            request.cypher.to_string(),
+            request.parameters.unwrap_or(&BTreeMap::new()),
+            &runtime.plan_cache,
+            &runtime.optimizer_planning_cache,
+            QueryExecutionOptions::for_request(request, None),
         )
     }
 }
 
 impl DatabaseReadSnapshot {
-    pub(super) fn prepare_runtime_query(
+    pub(super) fn prepare_runtime_request(
         &self,
-        cypher_text: String,
-        parameters: &BTreeMap<String, Value>,
+        request: QueryRequest<'_>,
         system_variables: &QuerySystemVariables,
         plan_cache: &SharedState<PlanCache>,
     ) -> Result<PreparedRuntimeQuery> {
@@ -344,10 +387,11 @@ impl DatabaseReadSnapshot {
             system_variables,
         }
         .prepare(
-            cypher_text,
-            parameters,
+            request.cypher.to_string(),
+            request.parameters.unwrap_or(&BTreeMap::new()),
             plan_cache,
             &source.optimizer_planning_cache,
+            QueryExecutionOptions::for_request(request, None),
         )
     }
 }
@@ -359,6 +403,7 @@ impl RuntimePlanningContext<'_> {
         parameters: &BTreeMap<String, Value>,
         plan_cache: &SharedState<PlanCache>,
         planning_cache: &SharedState<OptimizerPlanningCache>,
+        options: QueryExecutionOptions<'_>,
     ) -> Result<PreparedRuntimeQuery> {
         self.store.ensure_usable()?;
         let parsed = hawdb_cypher::parse_profiled(&cypher_text);
@@ -395,6 +440,7 @@ impl RuntimePlanningContext<'_> {
                     parameters,
                     plan_cache,
                     planning_cache,
+                    options,
                 )?;
                 let is_mutation = executor::is_mutation_plan(&optimized.physical_plan)?;
                 streaming_eligible &= !executor::requires_write_access(&optimized.physical_plan);
@@ -470,6 +516,8 @@ impl RuntimePlanningContext<'_> {
             config: self.config.clone(),
             system_variables: self.system_variables.clone(),
             planning_memory: None,
+            access_control: options.access_control.cloned(),
+            scoring_key: options.scoring.map(BoundScoringRequest::cache_key),
         })
     }
 
@@ -480,6 +528,7 @@ impl RuntimePlanningContext<'_> {
         parameters: &BTreeMap<String, Value>,
         plan_cache: &SharedState<PlanCache>,
         planning_cache: &SharedState<OptimizerPlanningCache>,
+        options: QueryExecutionOptions<'_>,
     ) -> Result<OptimizedQueryPlan> {
         let optimizer_search =
             query_statement_variables_for_statement(self.system_variables, statement)?
@@ -504,9 +553,9 @@ impl RuntimePlanningContext<'_> {
                 config: self.config,
                 cache: plan_cache,
                 planning_cache,
-                access_control: None,
+                access_control: options.access_control,
                 optimizer_search,
-                scoring: None,
+                scoring: options.scoring,
             },
         )
     }
@@ -540,10 +589,10 @@ impl Database {
             .map(|(output, _)| output)
     }
 
-    pub(super) fn query_prepared_with_params(
+    pub(crate) fn query_prepared_request(
         &mut self,
         prepared: PreparedRuntimeQuery,
-        parameters: &BTreeMap<String, Value>,
+        request: QueryRequest<'_>,
     ) -> Result<QueryOutput> {
         self.validate_prepared_branch(&prepared)?;
         let runtime = self.runtime.get()?;
@@ -553,15 +602,9 @@ impl Database {
         self.query_with_params_trace_and_external_prepared(
             &cypher_text,
             prepared,
-            parameters,
+            request.parameters.unwrap_or(&BTreeMap::new()),
             &mut external,
-            QueryExecutionOptions {
-                capture_trace: false,
-                access_control: None,
-                task_context: None,
-                scoring: None,
-                output_limits: QueryStreamOptions::default(),
-            },
+            QueryExecutionOptions::for_request(request, None),
         )
         .map(|(output, _)| output)
     }
@@ -703,6 +746,8 @@ impl Database {
         options: QueryExecutionOptions<'_>,
     ) -> Result<(QueryOutput, QueryExecutionTrace)> {
         let _planning_memory = prepared.planning_memory.take();
+        let prepared_optimized =
+            prepared.take_optimized(options.access_control, options.scoring)?;
         let QueryExecutionOptions {
             capture_trace,
             access_control,
@@ -715,7 +760,6 @@ impl Database {
         query_runtime_checkpoint(task_context)?;
         let PreparedRuntimeExecution {
             statement,
-            optimized: prepared_optimized,
             parse_metrics,
             statement_started,
             ..
@@ -780,7 +824,7 @@ impl Database {
             query_runtime_checkpoint(task_context)?;
             query_work_request_for_statement(&self.system_variables, &statement)?;
             let optimized = match prepared_optimized {
-                Some(optimized) if access_control.is_none() && scoring.is_none() => optimized,
+                Some(optimized) => optimized,
                 _ => self.optimized_query_plan_for_request(
                     cypher_text,
                     &statement,

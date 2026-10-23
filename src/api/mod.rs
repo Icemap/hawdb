@@ -174,7 +174,7 @@ pub use hawdb_storage::branch_create_recovery::{
     BranchCreateRecoveryStatus,
 };
 use query_request::BoundScoringRequest;
-pub use query_request::{HostScoringRequest, QueryRequest, ScoringRequest};
+pub use query_request::{HostScoringRequest, QueryRequest, ScoringRequest, SqlQueryRequest};
 pub(crate) use query_runtime::PreparedRuntimeQuery;
 #[cfg(feature = "tokio-runtime")]
 pub(crate) use query_runtime::RuntimePlanningSnapshot;
@@ -926,7 +926,7 @@ struct SparseRelationalStatementStage {
     row_capture: hawdb_storage::relational::RelationalRowChangeCapture,
 }
 
-pub(super) struct GraphTransactionStatementOutcome {
+pub(crate) struct GraphTransactionStatementOutcome {
     pub(crate) output: QueryOutput,
     pub(crate) savepoint: Option<GraphMutationSavepoint>,
     pub(crate) lock_footprint: GraphMutationLockFootprint,
@@ -20762,7 +20762,7 @@ impl DatabaseTransactionState {
 }
 
 struct GraphTransactionStatementOptions<'a> {
-    task_context: Option<&'a hawdb_core::RuntimeTaskContext>,
+    execution: query_runtime::QueryExecutionOptions<'a>,
     read_dependencies: Option<&'a mut transaction_read_dependencies::TransactionReadDependencies>,
 }
 
@@ -20776,9 +20776,11 @@ fn execute_graph_transaction_statement(
     options: GraphTransactionStatementOptions<'_>,
 ) -> Result<GraphTransactionStatementOutcome> {
     let GraphTransactionStatementOptions {
-        task_context,
+        execution,
         read_dependencies,
     } = options;
+    let task_context = execution.task_context;
+    query_runtime::query_runtime_checkpoint(task_context)?;
     query_work_request_for_statement(system_variables, statement)?;
     let optimizer_search =
         query_statement_variables_for_statement(system_variables, statement)?.optimizer_search;
@@ -20795,9 +20797,9 @@ fn execute_graph_transaction_statement(
             config: &runtime.config,
             cache: &runtime.plan_cache,
             planning_cache: &runtime.optimizer_planning_cache,
-            access_control: None,
+            access_control: execution.access_control,
             optimizer_search,
-            scoring: None,
+            scoring: execution.scoring,
         },
     )?;
 
@@ -20896,10 +20898,21 @@ fn execute_graph_transaction_statement(
                 &runtime.config.execution_memory,
             )
             .with_output_limits(
-                runtime.read_result_row_limit(),
-                runtime.config.max_read_result_payload_bytes,
+                restrictive_query_limit(
+                    runtime.read_result_row_limit(),
+                    execution.output_limits.max_rows,
+                ),
+                restrictive_query_limit(
+                    runtime.config.max_read_result_payload_bytes,
+                    execution.output_limits.max_payload_bytes,
+                ),
             )
-            .with_optional_task_context(task_context),
+            .with_optional_task_context(task_context)
+            .with_optional_host_scorer(
+                execution
+                    .scoring
+                    .and_then(query_request::BoundScoringRequest::host_scorer),
+            ),
             executor::ExecutionResources::new(catalog, store, &mut external),
         );
         profiled.map(|profiled| QueryOutput {
@@ -20914,56 +20927,22 @@ fn execute_graph_transaction_statement(
     })
 }
 
-pub(super) fn execute_database_transaction_query(
+pub(crate) fn execute_concurrent_graph_transaction_request(
     runtime: &DatabaseTransactionRuntime,
     state: &mut DatabaseTransactionState,
-    cypher_text: &str,
-    parameters: &BTreeMap<String, Value>,
-    task_context: Option<&hawdb_core::RuntimeTaskContext>,
-) -> Result<QueryOutput> {
-    if let Some(dependencies) = &mut state.read_dependencies {
-        query_runtime::query_runtime_checkpoint(task_context)?;
-        dependencies.admit_cypher(cypher_text, parameters)?;
-    }
-    let statement = cypher::parse(cypher_text)?;
-    let body = statement_body(&statement);
-    if matches!(body, cypher::Statement::SetSystemVariable(_)) {
-        reject_system_variable_parameters(parameters)?;
-        return Err(HawDBError::Execution(
-            "SET system variable is not allowed inside a transaction".to_string(),
-        ));
-    }
-    if matches!(body, cypher::Statement::Explain(_)) {
-        return Err(HawDBError::Execution(
-            "EXPLAIN is not allowed inside a transaction".to_string(),
-        ));
-    }
-    let transaction = state
-        .graph_transaction
-        .as_mut()
-        .expect("database transaction must own a graph workspace");
-    execute_graph_transaction_statement(
-        runtime,
-        transaction,
-        &runtime.system_variables,
-        cypher_text,
-        &statement,
-        parameters,
-        GraphTransactionStatementOptions {
-            task_context,
-            read_dependencies: state.read_dependencies.as_mut(),
-        },
-    )
-    .map(|outcome| outcome.output)
-}
-
-pub(super) fn execute_concurrent_graph_transaction_query(
-    runtime: &DatabaseTransactionRuntime,
-    state: &mut DatabaseTransactionState,
-    cypher_text: &str,
-    parameters: &BTreeMap<String, Value>,
-    task_context: Option<&hawdb_core::RuntimeTaskContext>,
+    request: QueryRequest<'_>,
+    parent_context: Option<&hawdb_core::RuntimeTaskContext>,
 ) -> Result<GraphTransactionStatementOutcome> {
+    let task = query_request::bind_request_context(parent_context, request.task_context)?;
+    let task_context = task.as_ref();
+    let request = QueryRequest {
+        task_context,
+        ..request
+    };
+    let execution = query_runtime::QueryExecutionOptions::for_request(request, None);
+    let cypher_text = request.cypher;
+    let empty = BTreeMap::new();
+    let parameters = request.parameters.unwrap_or(&empty);
     query_runtime::query_runtime_checkpoint(task_context)?;
     if let Some(dependencies) = &mut state.read_dependencies {
         query_runtime::query_runtime_checkpoint(task_context)?;
@@ -20994,10 +20973,46 @@ pub(super) fn execute_concurrent_graph_transaction_query(
         &statement,
         parameters,
         GraphTransactionStatementOptions {
-            task_context,
+            execution,
             read_dependencies: state.read_dependencies.as_mut(),
         },
     )
+}
+
+pub(crate) fn execute_database_transaction_sql_request(
+    runtime: &DatabaseTransactionRuntime,
+    state: &mut DatabaseTransactionState,
+    request: SqlQueryRequest<'_>,
+    parent_context: Option<&hawdb_core::RuntimeTaskContext>,
+) -> Result<SqlStatementResult> {
+    let result = (|| {
+        let task = query_request::bind_request_context(parent_context, request.task_context)?;
+        query_runtime::query_runtime_checkpoint(task.as_ref())?;
+        if let Some(dependencies) = &mut state.read_dependencies {
+            dependencies.admit_sql(request.sql, request.parameters)?;
+        }
+        let prepared = runtime
+            .relational_plan_template_cache
+            .prepare(request.sql)?;
+        execute_database_transaction_prepared_sql(
+            runtime,
+            state,
+            request.sql,
+            prepared,
+            request.parameters,
+            DatabaseTransactionSqlOptions {
+                allow_system_schema_registry_write: false,
+                allow_locking_select: false,
+                task_context: task.as_ref(),
+                output_limits: request.output_limits,
+                join_planning: request.join_planning,
+            },
+        )
+    })();
+    if result.is_err() {
+        state.fail_read_dependencies();
+    }
+    result
 }
 
 pub(super) fn execute_database_transaction_sql(
@@ -21024,6 +21039,8 @@ pub(super) fn execute_database_transaction_sql(
             allow_system_schema_registry_write,
             allow_locking_select,
             task_context,
+            output_limits: QueryStreamOptions::default(),
+            join_planning: RelationalJoinPlanningDirective::Auto,
         },
     )
 }
@@ -21032,6 +21049,8 @@ pub(super) struct DatabaseTransactionSqlOptions<'a> {
     allow_system_schema_registry_write: bool,
     allow_locking_select: bool,
     task_context: Option<&'a hawdb_core::RuntimeTaskContext>,
+    output_limits: QueryStreamOptions,
+    join_planning: RelationalJoinPlanningDirective,
 }
 
 pub(super) fn execute_database_transaction_prepared_sql(
@@ -21042,12 +21061,20 @@ pub(super) fn execute_database_transaction_prepared_sql(
     parameters: &[Value],
     options: DatabaseTransactionSqlOptions<'_>,
 ) -> Result<SqlStatementResult> {
+    query_runtime::query_runtime_checkpoint(options.task_context)?;
+    let max_rows = restrictive_query_limit(
+        runtime.read_result_row_limit(),
+        options.output_limits.max_rows,
+    );
     let admitted_result_bytes = options
         .task_context
         .and_then(hawdb_core::RuntimeTaskContext::memory_reservation)
         .map(|reservation| usize::try_from(reservation.result_bytes()).unwrap_or(usize::MAX));
     let max_read_result_payload_bytes = match (
-        runtime.config.max_read_result_payload_bytes,
+        restrictive_query_limit(
+            runtime.config.max_read_result_payload_bytes,
+            options.output_limits.max_payload_bytes,
+        ),
         admitted_result_bytes,
     ) {
         (Some(configured), Some(admitted)) => Some(configured.min(admitted)),
@@ -21070,7 +21097,7 @@ pub(super) fn execute_database_transaction_prepared_sql(
             "explicit transaction",
             statement,
             parameters,
-            runtime.read_result_row_limit(),
+            max_rows,
             max_read_result_payload_bytes,
         )
         .map(sql_query_result);
@@ -21097,7 +21124,7 @@ pub(super) fn execute_database_transaction_prepared_sql(
         return system_sql::query_sql_with_params(
             sql_text,
             parameters,
-            runtime.read_result_row_limit(),
+            max_rows,
             max_read_result_payload_bytes,
             &system_sql::SystemSqlContext {
                 catalog: graph_transaction.catalog(),
@@ -21136,7 +21163,7 @@ pub(super) fn execute_database_transaction_prepared_sql(
         &prepared.template,
         parameters,
         &state.append_state,
-        runtime.read_result_row_limit().unwrap_or(usize::MAX),
+        max_rows.unwrap_or(usize::MAX),
     )? {
         let store = state
             .graph_transaction
@@ -21159,7 +21186,7 @@ pub(super) fn execute_database_transaction_prepared_sql(
         &prepared.template,
         parameters,
         &state.append_state,
-        runtime.read_result_row_limit().unwrap_or(usize::MAX),
+        max_rows.unwrap_or(usize::MAX),
     )? {
         let report = if plan.analyze {
             let store = state
@@ -21186,7 +21213,7 @@ pub(super) fn execute_database_transaction_prepared_sql(
             crate::relational_sql::format_append_explain(&plan, report.as_ref()),
             &runtime.config,
             QueryStreamOptions {
-                max_rows: runtime.read_result_row_limit(),
+                max_rows,
                 max_payload_bytes: max_read_result_payload_bytes,
             },
             options.task_context,
@@ -21237,10 +21264,11 @@ pub(super) fn execute_database_transaction_prepared_sql(
             crate::relational_sql::RelationalQueryReadModes::new(index_read_mode, row_read_mode),
             relational_query_resource_context(
                 &runtime.config,
-                runtime.read_result_row_limit(),
+                max_rows,
                 max_read_result_payload_bytes,
                 options.task_context,
-            ),
+            )
+            .with_join_planning(options.join_planning),
         )?;
         return Ok(sql_query_result(QueryOutput { rows: output.rows }));
     }
@@ -21373,6 +21401,15 @@ pub(super) fn execute_database_transaction_prepared_sql(
         .transpose()?;
     if let Some(mutation) = &mutation {
         runtime.validate_result_rows(mutation.rows.len())?;
+        if let Some(limit) = max_rows
+            && mutation.rows.len() > limit
+        {
+            return Err(HawDBError::read_budget_exceeded(
+                crate::ReadBudgetResource::Rows,
+                limit,
+                "SQL mutation result exceeds the request row ceiling",
+            ));
+        }
         runtime.validate_result_payload(
             mutation.rows.payload_bytes(),
             max_read_result_payload_bytes,
@@ -21712,25 +21749,21 @@ impl DatabaseTransaction<'_> {
         cypher_text: &str,
         parameters: &BTreeMap<String, Value>,
     ) -> Result<QueryOutput> {
-        let result = self.query_with_params_inner(cypher_text, parameters);
+        self.query_request(QueryRequest::new(cypher_text).with_params(parameters))
+    }
+
+    pub fn query_request(&mut self, request: QueryRequest<'_>) -> Result<QueryOutput> {
+        let result = execute_concurrent_graph_transaction_request(
+            &self.runtime,
+            &mut self.state,
+            request,
+            self.task_context.as_ref(),
+        )
+        .map(|outcome| outcome.output);
         if result.is_err() {
             self.state.fail_read_dependencies();
         }
         result
-    }
-
-    fn query_with_params_inner(
-        &mut self,
-        cypher_text: &str,
-        parameters: &BTreeMap<String, Value>,
-    ) -> Result<QueryOutput> {
-        execute_database_transaction_query(
-            &self.runtime,
-            &mut self.state,
-            cypher_text,
-            parameters,
-            self.task_context.as_ref(),
-        )
     }
 
     pub fn query_sql(&mut self, sql_text: &str) -> Result<QueryOutput> {
@@ -21757,25 +21790,22 @@ impl DatabaseTransaction<'_> {
         sql_text: &str,
         parameters: &[Value],
     ) -> Result<SqlStatementResult> {
-        let result = self.query_sql_with_result_and_params_inner(sql_text, parameters);
-        if result.is_err() {
-            self.state.fail_read_dependencies();
-        }
-        result
+        self.query_sql_request_with_result(SqlQueryRequest::new(sql_text).with_params(parameters))
     }
 
-    fn query_sql_with_result_and_params_inner(
+    pub fn query_sql_request(&mut self, request: SqlQueryRequest<'_>) -> Result<QueryOutput> {
+        self.query_sql_request_with_result(request)
+            .map(|result| result.output)
+    }
+
+    pub fn query_sql_request_with_result(
         &mut self,
-        sql_text: &str,
-        parameters: &[Value],
+        request: SqlQueryRequest<'_>,
     ) -> Result<SqlStatementResult> {
-        execute_database_transaction_sql(
+        execute_database_transaction_sql_request(
             &self.runtime,
             &mut self.state,
-            sql_text,
-            parameters,
-            false,
-            false,
+            request,
             self.task_context.as_ref(),
         )
     }
@@ -22061,7 +22091,10 @@ impl DatabaseSession<'_> {
                     statement,
                     parameters,
                     GraphTransactionStatementOptions {
-                        task_context: None,
+                        execution: query_runtime::QueryExecutionOptions::for_request(
+                            QueryRequest::new(cypher_text).with_params(parameters),
+                            None,
+                        ),
                         read_dependencies: None,
                     },
                 )
@@ -22319,20 +22352,24 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
         )
     }
 
-    pub(super) fn query_prepared_with_params_bounded_profile(
+    pub(crate) fn query_prepared_request(
         &mut self,
         prepared: PreparedRuntimeQuery,
-        parameters: &BTreeMap<String, Value>,
+        request: QueryRequest<'_>,
     ) -> Result<BoundedReadQueryOutput> {
-        let task_context = self.task_context.clone();
+        let task =
+            query_request::bind_request_context(self.task_context.as_ref(), request.task_context)?;
+        let request = QueryRequest {
+            task_context: task.as_ref(),
+            ..request
+        };
         let (cypher_text, prepared) = prepared.into_execution(&self.catalog, &self.store);
-        self.query_with_params_bounded_profile_prepared_internal(
+        self.query_prepared_request_profiled(
             &cypher_text,
             prepared,
-            parameters,
-            self.read_result_row_limit(),
-            None,
-            task_context.as_ref(),
+            request.parameters.unwrap_or(&BTreeMap::new()),
+            query_runtime::QueryExecutionOptions::for_request(request, None),
+            &mut executor::NoExternalReadOperator,
         )
     }
 
@@ -22506,11 +22543,9 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
             self.config.max_read_result_payload_bytes,
             options.max_payload_bytes,
         );
-        let query_runtime::PreparedRuntimeExecution {
-            statement,
-            optimized: prepared_optimized,
-            ..
-        } = prepared;
+        let prepared_optimized =
+            prepared.take_optimized(context.access_control, context.scoring)?;
+        let query_runtime::PreparedRuntimeExecution { statement, .. } = prepared;
         let body = statement_body(&statement);
         if matches!(statement, cypher::Statement::Explain(_)) {
             return Err(HawDBError::Execution(
@@ -22529,9 +22564,7 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
         }
         query_work_request_for_statement(&QuerySystemVariables::default(), &statement)?;
         let optimized = match prepared_optimized {
-            Some(optimized) if context.scoring.is_none() && context.access_control.is_none() => {
-                optimized
-            }
+            Some(optimized) => optimized,
             _ => self.optimized_query_plan_for_request(
                 cypher_text,
                 &statement,
@@ -22676,11 +22709,9 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
             self.config.max_read_result_payload_bytes,
             options.output_limits.max_payload_bytes,
         );
-        let query_runtime::PreparedRuntimeExecution {
-            statement,
-            optimized: prepared_optimized,
-            ..
-        } = prepared;
+        let prepared_optimized =
+            prepared.take_optimized(options.access_control, options.scoring)?;
+        let query_runtime::PreparedRuntimeExecution { statement, .. } = prepared;
         let body = statement_body(&statement);
         if let cypher::Statement::Explain(explain) = &statement {
             return self.execute_explain_request(cypher_text, explain, parameters, options);
@@ -22699,9 +22730,7 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
         }
         query_work_request_for_statement(&QuerySystemVariables::default(), &statement)?;
         let optimized = match prepared_optimized {
-            Some(optimized) if options.access_control.is_none() && options.scoring.is_none() => {
-                optimized
-            }
+            Some(optimized) => optimized,
             _ => self.optimized_query_plan_for_request(
                 cypher_text,
                 &statement,
@@ -23051,19 +23080,37 @@ where
         parameters: &[Value],
         prepared: crate::relational_sql::PreparedRelationalSql,
     ) -> Result<QueryOutput> {
+        self.query_sql_with_prepared_request(
+            SqlQueryRequest::new(sql_text).with_params(parameters),
+            prepared,
+        )
+    }
+
+    pub(super) fn query_sql_with_prepared_request(
+        &self,
+        request: SqlQueryRequest<'_>,
+        prepared: crate::relational_sql::PreparedRelationalSql,
+    ) -> Result<QueryOutput> {
         self.store.ensure_usable()?;
+        let task =
+            query_request::bind_request_context(self.task_context.as_ref(), request.task_context)?;
         let default_context = hawdb_core::RuntimeTaskContext::default();
-        let task_context = self.task_context.as_ref().unwrap_or(&default_context);
+        let task_context = task.as_ref().unwrap_or(&default_context);
         query_runtime::query_runtime_checkpoint(Some(task_context))?;
+        let request = SqlQueryRequest {
+            task_context: Some(task_context),
+            ..request
+        };
+        let limits = request.effective_output_limits(&self.config);
         self.query_sql_with_prepared_params_context_and_join_planning(
-            sql_text,
-            parameters,
+            request.sql,
+            request.parameters,
             prepared,
             DatabaseReadSqlOptions {
-                max_rows: self.read_result_row_limit(),
-                max_payload_bytes: self.config.max_read_result_payload_bytes,
+                max_rows: limits.max_rows,
+                max_payload_bytes: limits.max_payload_bytes,
                 task_context,
-                join_planning: RelationalJoinPlanningDirective::Auto,
+                join_planning: request.join_planning,
             },
         )
     }

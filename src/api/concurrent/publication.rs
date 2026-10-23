@@ -16,8 +16,9 @@ use super::super::{
     observability::StatementRecorder, Database, DatabaseReadSnapshot, DatabaseReadTransaction,
     PlanCache, PreparedRuntimeQuery, QuerySystemVariables, SharedState,
 };
-use crate::{QueryOutput, Result, Value};
-use std::collections::BTreeMap;
+#[cfg(test)]
+use crate::Value;
+use crate::{QueryOutput, Result};
 use std::sync::Arc;
 
 pub(super) struct PublishedConcurrentRead {
@@ -47,8 +48,7 @@ impl PublishedConcurrentRead {
 
     pub(super) fn query_sql(
         &self,
-        sql_text: &str,
-        parameters: &[Value],
+        request: crate::SqlQueryRequest<'_>,
         prepared: crate::relational_sql::PreparedRelationalSql,
     ) -> Result<QueryOutput> {
         if matches!(
@@ -60,27 +60,19 @@ impl PublishedConcurrentRead {
             // Capture them privately rather than mutating the shared view.
             return self
                 .begin_read_transaction()?
-                .query_sql_with_prepared_params(sql_text, parameters, prepared);
+                .query_sql_with_prepared_request(request, prepared);
         }
         // SQL execution borrows its store. The caller's publication Arc keeps
         // the complete schema/data view and generation pin alive, so ordinary
         // reads need neither a second store snapshot nor observation copies.
         self.snapshot
             .0
-            .query_sql_with_prepared_params(sql_text, parameters, prepared)
+            .query_sql_with_prepared_request(request, prepared)
     }
 
-    pub(super) fn prepare(
-        &self,
-        cypher_text: String,
-        parameters: &BTreeMap<String, Value>,
-    ) -> Result<PreparedRuntimeQuery> {
-        self.snapshot.prepare_runtime_query(
-            cypher_text,
-            parameters,
-            &self.system_variables,
-            &self.plan_cache,
-        )
+    pub(super) fn prepare(&self, request: crate::QueryRequest<'_>) -> Result<PreparedRuntimeQuery> {
+        self.snapshot
+            .prepare_runtime_request(request, &self.system_variables, &self.plan_cache)
     }
 }
 
