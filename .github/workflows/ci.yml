@@ -2,12 +2,17 @@ name: Weekly Platform CI
 
 on:
   workflow_dispatch:
+    inputs:
+      power_loss_only:
+        description: Run only the complete branch power-loss platform matrix
+        type: boolean
+        default: false
   schedule:
     # Scheduled workflows run the latest revision of the default branch (main).
     - cron: "37 3 * * 1"
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}${{ inputs.power_loss_only && '-power-loss' || '' }}
   cancel-in-progress: true
 
 defaults:
@@ -17,6 +22,7 @@ defaults:
 
 jobs:
   runtime-platform:
+    if: ${{ !inputs.power_loss_only }}
     name: Runtime Platform (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
@@ -108,6 +114,7 @@ jobs:
           cargo test --locked -p hawdb --features tokio-runtime --lib nowledge_mem::app_read_snapshot_tests
 
   vector-projection-platform:
+    if: ${{ !inputs.power_loss_only }}
     name: Vector Projection (${{ matrix.target }})
     runs-on: ${{ matrix.runner }}
     strategy:
@@ -170,6 +177,7 @@ jobs:
         run: cargo test -p hawdb-qualification production_vector
 
   storage-platform:
+    if: ${{ !inputs.power_loss_only }}
     name: Storage Platform (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
@@ -294,6 +302,7 @@ jobs:
           POWER_LOSS_SHARD: ${{ matrix.shard }}
         run: |
           set -euo pipefail
+          python3 scripts/branch-power-loss-shard.test.py
           mkdir -p branch-power-loss-results
           git rev-parse HEAD > branch-power-loss-results/source-revision.txt
           rustc --version --verbose > branch-power-loss-results/toolchain.txt
@@ -387,6 +396,7 @@ jobs:
           if-no-files-found: error
 
   storage-crash-recovery:
+    if: ${{ !inputs.power_loss_only }}
     name: Storage Crash Recovery (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:

@@ -504,3 +504,15 @@ are unchanged. This trades repeated build/setup cost for completing independent
 fault groups before the job ceiling. Source `83eab403` run 39959116101 stopped
 inside the automatic manifest case at 120 minutes; that is incomplete coverage,
 not a 120-minute fuzz campaign. Final-source runtime durations remain required.
+
+`//:power_loss_partition_script_test` and the platform job's preflight check
+exercise actual selector output under simulated Windows default CRLF translation,
+then interpret LF-delimited arguments as Bash does. Control files explicitly use
+LF so filters and `--exact`/`--skip` reach libtest unchanged. The test also rejects
+duplicate, missing, unexpected and empty discovery. Candidate `92681f67` exposed
+this transport bug before the selected qualification cases could start; those
+failed jobs are not recovery-test results.
+Manual dispatch with `power_loss_only=true` runs the same complete power-loss
+platform matrix in a separate concurrency group, preserving an ongoing full run.
+It does not qualify the skipped runtime, vector, storage or crash-recovery lanes.
+Scheduled and default manual runs continue to include every lane.

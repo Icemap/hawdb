@@ -52,14 +52,21 @@ def main() -> None:
     else:
         test_filter, test_arguments = PREFIX, []
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    (args.output_dir / "selected-tests.txt").write_text("\n".join(selected) + "\n", encoding="utf-8")
-    (args.output_dir / "test-filter.txt").write_text(test_filter + "\n", encoding="utf-8")
+    # Bash consumes these files as arguments. Windows text-mode CRLF translation
+    # would leave a literal carriage return in the filter and each option.
+    (args.output_dir / "selected-tests.txt").write_text(
+        "\n".join(selected) + "\n", encoding="utf-8", newline="\n"
+    )
+    (args.output_dir / "test-filter.txt").write_text(
+        test_filter + "\n", encoding="utf-8", newline="\n"
+    )
     (args.output_dir / "test-arguments.txt").write_text(
-        "".join(argument + "\n" for argument in test_arguments), encoding="utf-8"
+        "".join(argument + "\n" for argument in test_arguments), encoding="utf-8", newline="\n"
     )
     (args.output_dir / "partition.json").write_text(
         json.dumps({"shard": args.shard, "partitions": partitions}, indent=2) + "\n",
         encoding="utf-8",
+        newline="\n",
     )
 
 
