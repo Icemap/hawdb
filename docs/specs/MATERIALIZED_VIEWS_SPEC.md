@@ -36,7 +36,7 @@ The first useful delivery MUST support actual graph workloads:
    the current query's multiplicity semantics.
 2. **Memory and Space inventories:** maintain the distinct Active, Stored,
    Archived, and Crystals axes used across lists, statistics, MCP, and Space
-   usage; optionally maintain separately defined physical graph counters.
+   usage. Separately defined physical graph counters are outside phase one.
 
 A SQL-only `CREATE MATERIALIZED VIEW ... COUNT(*)` demonstration over an
 unrelated table does not satisfy this milestone. It must exercise graph node
@@ -47,13 +47,48 @@ Source/Thread rollups and deterministic search-document inputs are later
 consumers with additional contracts, not reasons to build a general streaming
 platform in the first change.
 
+### Phase-one scope and completion
+
+Phase one is a Mem delivery, not a general streaming-platform milestone. Its
+required outputs are exactly the Entity association counts and Memory/Space
+inventories above. Existing pinned Mem queries and visibility/count contracts
+set the supported shapes. Register their versioned definitions through the
+embedded query runtime; do not hard-code Mem routes or lifecycle rules in the
+engine. New primitives need reusable ownership, but do not require speculative
+operators or frontends without a phase-one consumer.
+
+Deliver the two workloads as vertical slices. Start with Memory/Space inventory
+to qualify node reclassification, grouped counts and exact indexed reads, then
+extend the same capture/publication path to Entity usage with one-hop expansion,
+endpoint scope changes and bag counts. Both are required to complete phase one;
+a usable inventory slice alone is partial delivery.
+
+Phase-one acceptance includes a development/nightly Mem query-path integration
+or shadow comparison for the designated callers, preserving response fields,
+zero-count entities, scope/lifecycle rules and post-write refresh behavior.
+Record reference-query equality and actual indexed access before measuring
+query latency, maintenance lag and writer overhead. Thresholds come from the
+same Mem workload baseline. Engine fixtures, capture APIs, DDL syntax or a
+working background scheduler alone do not complete the milestone. Stable/GA
+inclusion and activation remain subject to the existing AGENTS.md prohibitions
+and separately authorized gates.
+
+Physical graph inventories, Community membership/count relations, Source and
+Thread rollups, search-document inputs and health/time-window summaries are
+later deliveries. Phase one also excludes arbitrary query incrementalization,
+view DAGs, automatic query substitution, full SQL materialized-view DDL and a
+general external changefeed. Add only capture fields, arrangements, operators,
+serving indexes and read interfaces needed by the two named workloads. Graph
+and relational effects still share a complete transaction boundary; unrelated
+relational tables need not gain row-image capture merely to ship this phase.
+
 ### Business coverage
 
 | Priority | Mem business | Proposed relation | Required maintenance | Read contract |
 | --- | --- | --- | --- | --- |
 | P0 | Entity search and community seed ranking | `entity_usage`, grouped by entity identity and both endpoint scope keys | Graph expansion, endpoint changes, bag counts, indexed grouping | Exact snapshot shared with candidate filtering and ranking |
 | P0 | Memory headlines, archive inventory, Space usage | `memory_inventory`, keyed by scope and predicate version | Deterministic visibility projection, grouped counts, old/new classification | Exact snapshot; read-your-write floor for refresh after mutations |
-| P0 extension | Graph statistics and density inputs | `graph_inventory`, with explicit node/edge kinds and scope policy | Node/edge counts, deletion and endpoint handling | One coherent snapshot; preserve each existing response's definitions |
+| Later | Graph statistics and density inputs | `graph_inventory`, with explicit node/edge kinds and scope policy | Node/edge counts, deletion and endpoint handling | One coherent snapshot; preserve each existing response's definitions |
 | P1 | Community detail, representative memories, GraphRAG candidates | `community_memory` and membership support | Graph/derived-relation join, distinct reference counts, generation fencing | One community generation and one canonical snapshot; scope before Top-K |
 | P1 | Source library counts and Thread activity | `source_memory_usage`, `thread_message_activity` | Edge counts, relational grouping, retractable extrema | Exact list/detail snapshot; preserve source provenance separately |
 | P2 | Search catch-up and rebuild inputs | `search_document_input` | Deterministic graph/relational projection, deletion tombstones | Complete source coverage handed to the existing search pipeline |
@@ -330,9 +365,11 @@ operations. A definition contains:
   versions, plan fingerprint, and application predicate/mapping version;
 - refresh policy, explicitly supported operator set, and resource limits.
 
-First delivery accepts the qualified Cypher graph subset and relational SQL
-subset, lowering both into shared logical operators. View contents are tabular.
-SQL can explicitly name a view in `FROM`. For Cypher consumers, propose a
+Phase one accepts the qualified graph query shapes needed by the two named
+Mem workloads and lowers them into shared logical operators. View contents are
+tabular; relational SQL definitions and SQL `FROM` integration are later scope
+unless a designated phase-one caller requires them. For Cypher consumers,
+propose a
 generic `CALL hawdb.materialized_view('view_name') YIELD ...` table source
 that lowers to the same relation-scan operator and composes with graph queries.
 The name is a bound catalog identifier, not executable dynamic query text.
@@ -508,9 +545,11 @@ numeric overflow, and collation with the source dialect's existing semantics.
 
 | Operator | Initial contract | Important boundary |
 | --- | --- | --- |
-| Node/relational scan, deterministic filter/project | Required | Referenced-field updates and predicate entry/exit |
+| Node scan, deterministic filter/project | Required for phase one | Referenced-field updates and predicate entry/exit |
+| Relational base scans | Later unless a designated definition needs them | Preserve the same transaction/epoch contract |
 | Directed one-hop graph expansion / inner equijoin | Required for entity counts | Indexed endpoint arrangements; duplicate edges preserved |
-| Grouped `COUNT(*)`, `COUNT(expr)`, exact integer `SUM` | Required | NULL differences, checked arithmetic, group disappearance |
+| Grouped `COUNT(*)`, `COUNT(expr)` | Required for the two phase-one workloads | NULL differences, checked arithmetic, group disappearance |
+| Incrementally maintained exact integer `SUM` | Later unless a phase-one definition requires it | Preserve NULL/non-null support state and checked arithmetic |
 | Zero-fill / left join to a canonical entity | Required serving capability | No-match entities must remain candidates with zero usage |
 | `COUNT(DISTINCT key)` | Community milestone | Reference counts, including final-reference deletion |
 | `AVG` | Later | Sum and non-null count, numeric semantics, NULL on empty input |
@@ -773,36 +812,43 @@ not tasks completed by the specification PR.
 
 | Slice | Scope and dependency | Exit gate |
 | --- | --- | --- |
-| A: Semantic and publication foundation | Catalog/definition binding, exact source capture, bounded coverage/gaps, identity and publication model; depends on qualified MVCC pins and publication fences | Executable model and native negative controls cover every invariant below; unsupported operators reject before installation |
-| B: First Mem value | Node scan/filter/project, one-hop joins, grouped counts, complete refresh plus incremental arrangements, indexed reads, Cypher/SQL view sources | Entity and Memory inventory business fixtures pass exact differential comparison, deletion/reclassification, reopen and contention cases; read path uses serving indexes |
+| A: Phase-one prerequisites | Only definition binding, referenced-field capture, bounded coverage/gaps and publication needed by the two Mem workloads; depends on qualified MVCC pins and publication fences | Models/native negative controls cover the enabled subset; foundation completion alone is not a Mem delivery |
+| B: Phase-one Mem delivery | Memory/Space inventory first, then Entity usage; the necessary node filter/project, one-hop joins, grouped counts, indexed reads and embedded Cypher composition | Both workloads pass business fixtures and development/nightly Mem query-path shadow comparison, deletion/reclassification, reopen, continuous writers and indexed-read cost gates |
 | C: Community retrieval | Distinct reference counts, explicit community-generation dependency/rebuild, pinned candidate queries | Duplicate/delete/replacement and scope-before-Top-K scenarios pass; no mixed membership generation |
 | D: Source and Thread rollups | Audit current write/delete/import paths, retractable extrema, relational messages and provenance resolution | Existing denormalization compares successfully before removal; imported time/completeness contract preserved |
 | E: Search inputs and health | Existing search handoff, deterministic mapping versions, large-value handling; scheduled-time semantics only if separately adopted | No skipped search identities/deletes or weakened readiness; health values state their input epoch/evaluation time |
 
-A and B are the minimum usable capability. Do not claim first delivery after
+A supports B; together they form phase one. C through E are later scope, as
+are physical graph inventories. Do not claim first delivery after
 only catalog syntax or background refresh of an unrelated SQL table. Broad
 optimizer substitution, arbitrary view DAGs, synchronous transaction maintenance,
 recursive paths, rolling-window engines and distributed execution are deferred.
 
 ### First implementation PR
 
-Start with the bounded complete-transaction delta seam and its native
-reference oracle, not view DDL or a background full-query timer. This slice
-must capture graph node/relationship and relational old/new transitions at the
-same canonical commit, with rollback, repeated writes, mixed transactions,
-empty relevant deltas, overflow and missing-coverage controls. Compare applying
-the captured transition to the referenced before-state projection with that
-projection of the actual after-state at the same epoch. Cover process recovery and missing/torn sidecar records without
-weakening canonical commit durability. Keep the protocol internal until its
-capture and replay boundaries are qualified. If this spans independent owners,
-split capture and durable replay qualification into sequential PRs against main.
+Start with the bounded complete-transaction delta seam needed by Memory/Space
+inventory and its native reference oracle, not a general CDC API or full view
+DDL. Capture old/new values only for the referenced node identity, scope and
+classification fields. Mixed graph/relational transactions retain one complete
+commit boundary even when their unrelated effects have no captured row images.
+Cover rollback, repeated writes, empty relevant deltas, overflow and missing
+coverage. Compare the captured transition on the referenced before-state
+projection with that projection of the actual after-state at the same epoch.
+Cover recovery and missing/torn sidecar records without weakening canonical
+durability. Keep this seam internal; if capture and durable replay need separate
+owners, split them into sequential PRs against main.
 
-Subsequent independently reviewable changes add the qualified incremental
-operators, catalog/full bootstrap, durable arrangements and serving indexes,
-then publication/read integration and graph workload acceptance. Catalog syntax
-alone does not complete any runtime milestone. Existing runtime/formal test
-owners must be named in each implementation PR and added to the test index;
-this documentation change does not register or execute those future tests.
+Follow promptly with the inventory vertical slice: the required grouped-count
+state, bounded bootstrap, serving key lookup, exact publication/read behavior
+and designated Mem shadow comparison. Then extend capture/arrangements for the
+Entity usage workload, including relationship and endpoint-property changes.
+Do not expand generic capture, SQL frontends or operator coverage before these
+slices demonstrate their Mem value. All graph/relational data actually consumed
+by an enabled definition must still obey the exact transaction protocol.
+
+Each implementation PR names existing runtime/formal test owners and updates
+the test index. This documentation change neither registers nor executes those
+future tests, and no individual foundation PR completes phase one.
 
 ### Formal and native correctness qualification
 
