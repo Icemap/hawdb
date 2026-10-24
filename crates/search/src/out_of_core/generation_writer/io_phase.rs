@@ -173,6 +173,9 @@ impl Scope {
     pub(super) fn task(&self) -> RuntimeTaskContext {
         self.task.clone()
     }
+    pub(super) fn cleanup_task(&self) -> Option<&RuntimeTaskContext> {
+        self.cleanup.as_ref()
+    }
     pub(super) fn install(&self, writer: &mut SearchOutOfCoreGenerationWriter) {
         writer.task_context = self.task();
         self.install_stage(&mut writer.stage);

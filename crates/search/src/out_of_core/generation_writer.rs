@@ -427,9 +427,12 @@ impl SearchOutOfCoreGenerationWriter {
         io.native(&[&root], || {
             hawdb_storage::durability::sync_directory_ancestors(&root)
         })??;
-        let mut stage =
-            StageDirectory::create(staging_root.unwrap_or(&root), &memory, &task_context)?;
-        scope.install_stage(&mut stage);
+        let stage = StageDirectory::create_with_cleanup(
+            staging_root.unwrap_or(&root),
+            &memory,
+            &task_context,
+            scope.cleanup_task(),
+        )?;
         let mut writer =
             Self::create_in_stage(root, options, task_context, memory, stage, creation_memory)?;
         writer.set_io_task(original);

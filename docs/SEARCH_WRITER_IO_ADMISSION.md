@@ -26,7 +26,8 @@ An I/O failure during an already started streamed frame poisons the writer. An u
 is discarded without BufWriter's implicit Drop flush. Stage destruction uses a
 nonblocking wave attempt under a fresh cleanup context from the same permit;
 foreground cancellation cannot suppress necessary cleanup. An active phase
-lends its held wave to cleanup. When unrelated work occupies capacity, cleanup
+lends its held wave to cleanup, including cancellation after native stage
+creation but before its constructor returns. When unrelated work occupies capacity, cleanup
 retains the existing ticket for retry. Retained debt owns accounted metadata and
 disk evidence, not active task or I/O slots. A retry needs fresh caller I/O
 admission for a governed ticket. Captured Consumer native custody and its
