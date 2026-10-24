@@ -857,4 +857,16 @@ the same explicit transaction. Coverage preserves duplicate source edges,
 space refusal, protected idless memories, existing relationship identity and
 properties, retry no-op epoch/WAL, single-batch recovery and exact reopen. Four
 business methods, twelve DTOs and their graph-scan helpers are removed. The
-remaining entity-label read wrappers are separate migration work.
+entity-label read fixture migration is described below.
+
+### Entity label read queries
+
+`api::tests::entity_labels` retains four existing root general cases using one
+public read transaction and bounded parameterized requests. Separate entity
+lookup and label pages distinguish a missing entity from a found entity with
+no labels; Cypher owns ordering, projection and LIMIT. The same pinned reader
+preserves three cache hits on repeat, future-property projections and stable
+epochs. Malformed label/property syntax and empty normalized identities refuse
+without WAL changes. Two business read wrappers, their handwritten result
+shaping and eight DTOs are removed, completing removal of the test-only
+lifecycle DTO module. Runtime execution remains in the root general CI owner.

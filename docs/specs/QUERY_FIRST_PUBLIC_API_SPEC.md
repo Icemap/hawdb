@@ -464,6 +464,10 @@ stay in Cypher; each selected identity is passed to an exact MERGE in the same
 explicit transaction. Their twelve runtime cases preserve idless/space refusal,
 existing relationship properties, no-op and one-batch recovery semantics while
 removing four business methods, twelve DTOs and handwritten graph scans.
+Entity-label fixture reads use a pinned public read transaction with separate
+bounded entity lookup and label-page statements. Ordering, projection and LIMIT
+remain in Cypher; cache and missing/empty distinctions are asserted directly
+without the two business read wrappers or eight lifecycle DTOs.
 Remaining legacy business adapters still require migration; this removal does
 not complete issue #1193.
 

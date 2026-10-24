@@ -82,16 +82,6 @@ pub(super) trait QueryFirstTestExt {
         request: &KnowledgeScopedPropertyBatchRequest,
     ) -> Result<KnowledgePropertyBatchOutput>;
 
-    fn query_entity_labels_via_cypher(
-        &self,
-        request: &KnowledgeEntityLabelListRequest,
-    ) -> Result<KnowledgeEntityLabelListOutput>;
-
-    fn query_entity_label_projected_list_via_cypher(
-        &self,
-        request: &KnowledgeEntityLabelProjectedListRequest,
-    ) -> Result<KnowledgeEntityLabelProjectedListOutput>;
-
     fn query_neighbors_via_cypher(
         &self,
         request: &KnowledgeNeighborsRequest,
@@ -212,20 +202,6 @@ impl QueryFirstTestExt for Database {
         request: &KnowledgeScopedPropertyBatchRequest,
     ) -> Result<KnowledgePropertyBatchOutput> {
         knowledge_scoped_property_batch_via_query_runtime(self, request)
-    }
-
-    fn query_entity_labels_via_cypher(
-        &self,
-        request: &KnowledgeEntityLabelListRequest,
-    ) -> Result<KnowledgeEntityLabelListOutput> {
-        super::super::knowledge_entity_labels_via_query_runtime(self, request)
-    }
-
-    fn query_entity_label_projected_list_via_cypher(
-        &self,
-        request: &KnowledgeEntityLabelProjectedListRequest,
-    ) -> Result<KnowledgeEntityLabelProjectedListOutput> {
-        super::super::knowledge_entity_label_projected_list_via_query_runtime(self, request)
     }
 
     fn query_neighbors_via_cypher(
