@@ -503,6 +503,9 @@ Single and batch relationship deletion fixtures use bounded DELETE statements
 with endpoint, relationship-property and scope predicates. They preserve idless
 protection, nodes and WAL/reopen boundaries without four mutation adapters,
 seven DTOs or a dynamic statement builder.
+Relationship property updates use bounded SET and readback with endpoint,
+property and scope predicates. Four adapters, seven DTOs and the dynamic SET
+builder disappear while assignment, idless, read-only and recovery cases remain.
 Remaining legacy business adapters still require migration; this removal does
 not complete issue #1193.
 

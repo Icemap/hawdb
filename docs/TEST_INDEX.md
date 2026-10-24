@@ -977,3 +977,13 @@ idless fixture retains a real edge to prove an internal projected identifier
 cannot delete it. Four mutation adapters, seven DTOs and the dynamic deletion
 statement builder are removed. The obsolete compile-only identity assertion for
 the deleted DTO disappears separately; runtime root general ownership is unchanged.
+
+### Relationship property update queries
+
+`api::tests::knowledge_relationship_updates` retains nine root general scenarios
+through bounded SET and projection queries. Relationship properties and source
+scopes remain Cypher predicates; exact assignments, missing/idless endpoints,
+filtered no-ops, invalid/empty SET, read-only refusal and one-batch durable reopen
+remain covered. The idless case includes a real relationship whose weight must
+remain unchanged. Four adapters, seven DTOs and their dynamic SET builder are
+removed; non-returning SET results are verified through commit and readback.
