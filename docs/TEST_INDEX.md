@@ -878,8 +878,8 @@ fixed bounded requests. Cypher predicates enforce current lifecycle state and
 external identity; optional chunk assignments use a separate statement. Host
 normalization validates identifiers, states and nonnegative chunk counts and
 retains first-input duplicates without graph inspection. Assertions preserve
-filtered/missing rows, idless protection, omitted fields, timestamps, one WAL
-batch and exact durable reopen. Two business methods and eight mutation DTOs
+filtered/missing statement rows, empty commit output for SET RETURN, idless
+protection, omitted fields, timestamps, one WAL batch and exact durable reopen. Two business methods and eight mutation DTOs
 are removed. Source count, parsed/revision and label adapters remain separate
 migration work.
 

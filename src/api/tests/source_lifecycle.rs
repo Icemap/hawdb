@@ -132,7 +132,8 @@ fn updates_source_lifecycle_batch_for_nowledge_shapes() {
     }
     assert_eq!(duplicate_count, 1);
     assert_eq!(affected, [1, 1, 0, 0]);
-    assert_eq!(transaction.commit().unwrap().rows.len(), 2);
+    // SET RETURN delivers rows at statement execution, without retaining commit rows.
+    assert!(transaction.commit().unwrap().rows.is_empty());
     assert_eq!(db.commit_epoch().unwrap(), epoch + 1);
     let rows = db
         .query_request(bounded_batch_query(SOURCE_READ, &BTreeMap::new()))
@@ -231,7 +232,7 @@ fn typed_source_lifecycle_batch_persists_as_one_wal_batch_and_replays() {
                 1
             );
         }
-        assert_eq!(transaction.commit().unwrap().rows.len(), 2);
+        assert!(transaction.commit().unwrap().rows.is_empty());
         assert_eq!(
             read_test_wal(&path).unwrap().matches("\tbatch\t").count(),
             before + 1
@@ -323,7 +324,7 @@ fn updates_source_metadata_batch_for_nowledge_auto_ocr_shape() {
     }
     assert_eq!(duplicate_count, 1);
     assert_eq!(affected, [1, 0, 0, 1]);
-    assert_eq!(transaction.commit().unwrap().rows.len(), 2);
+    assert!(transaction.commit().unwrap().rows.is_empty());
     assert_eq!(db.commit_epoch().unwrap(), epoch + 1);
     assert_eq!(
         db.query_request(bounded_batch_query(IDLESS_READ, &idless_parameters))
@@ -415,7 +416,7 @@ fn typed_source_metadata_batch_persists_as_one_wal_batch_and_replays() {
                 1
             );
         }
-        assert_eq!(transaction.commit().unwrap().rows.len(), 2);
+        assert!(transaction.commit().unwrap().rows.is_empty());
         assert_eq!(
             read_test_wal(&path).unwrap().matches("\tbatch\t").count(),
             before + 1
