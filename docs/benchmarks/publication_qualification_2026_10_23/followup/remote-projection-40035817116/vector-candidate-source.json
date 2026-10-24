@@ -1,0 +1,11 @@
+{
+  "head": "7da5fc6c81790121491dd23ee1c1b232ad9a8c3b",
+  "source_overlay_sha256": {
+    "crates/executor/src/expression.rs": "e5efb1e5b67bfcc1fe786a90220972ad98f2fb739af3c24c577ab2c100fe7c75",
+    "crates/executor/src/expression/projection.rs": "23753c4a41f0c44d88ffd9ee045bf5bc945afd8701a677f1921702311025a26a",
+    "crates/executor/src/scan.rs": "2ff63bec6b0e8866821156cfdc29be089373d92873c62e613c8a1cce7328b15f",
+    "crates/executor/src/expression/projection/tests.rs": "7dda1b8dadef59eebaecfc238dc6474858aa5899e5fac67eb9f6f75b8032b716"
+  },
+  "source": "vector representation from completed experimental run40035817116; rustfmt only, no temporary root instrumentation",
+  "qualification": "pending actual-source local fuzz, MVCC, final-head CI and unchanged strict writer gates"
+}

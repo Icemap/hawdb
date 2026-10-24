@@ -1,0 +1,12 @@
+{
+  "diagnostic_only": true,
+  "exact_checks_passed": true,
+  "counts": {
+    "processes": 32,
+    "cases": 192,
+    "commits": 49152,
+    "reads": 110592,
+    "reopens": 128
+  },
+  "results_sha256": "adaa7b0db545824accbd5e563892e2d60796868237699aeabe29790fee4bca55"
+}

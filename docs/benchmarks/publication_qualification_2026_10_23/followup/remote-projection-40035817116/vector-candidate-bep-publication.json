@@ -1,0 +1,10 @@
+{
+  "original_sha256": "0f89909c1a386b9e680e6441a29c8d85b4374793c35df0434024645dfe912c85",
+  "published_sha256": "a3cdbd4b0a662d018070a27e514ee5efa27aa3efe35c7ccbe80515d848566de1",
+  "events_preserved": 607,
+  "removed_environment_options": {
+    "--client_env": 71,
+    "client_env": 142
+  },
+  "transformation": "Remove client_env, test_env and repo_env option records and argument strings. Preserve all test summaries and terminal events. Original remains private."
+}

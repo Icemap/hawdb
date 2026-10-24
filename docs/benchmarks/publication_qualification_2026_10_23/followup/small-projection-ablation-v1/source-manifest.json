@@ -1,0 +1,39 @@
+{
+  "baseline": {
+    "Cargo.toml": "01459c5d1068bea837028eff86a6d3799f421b3154ba21a1020bef8338cebfcb",
+    "Cargo.lock": "d06d2c813a3ff92fbc0216b241943049a9652c2c26440d87cf09f5c73db8b019",
+    ".cargo/config.toml": "06c7ca26d39223bd90a6412acd8609c380ce2d1650a72b70c90171656ca89819",
+    "rust-toolchain.toml": "8e390d6a0838315f972690f46ef8bae8b7ecc9ee6c1ed70140ef852869c2482e",
+    "benches/concurrent_writers.rs": "4cf99da0d024d7cfc4af77c834a78eb7dac32d02091bb1c579e441c559ec050e",
+    "benches/concurrent_writers/readers.rs": "1eb468c67658964ef44d66a7a9acc051e856beed10857c986b98fc1af640b1ec",
+    "src/api/concurrent.rs": "7a90c4285f957648ed6ad8b2e57e0154e7a7e1e2d824507cd9a595f2c981d842",
+    "src/api/concurrent/coordinator.rs": "d067dce269392f53fd4b6244051781c9b5c804b12bfa258d8f8d8ab3ea1cee9a",
+    "src/api/concurrent/publication.rs": "bee34677ddfe6dc0665947f53627b11970a17c2dd78d38391d7371d5b0167e70",
+    "src/api/publication.rs": "78027a3337b868f048152b2fc337ff4ee5d5b8f1c913d677cfb7befa25dd2b7e",
+    "src/api/observability.rs": "e4c84578dc515f26afd2ea17758445f4754e30e026dd34c4e7a1527bfd996039",
+    "src/api/mod.rs": "a667d4dae0b81bb74b256e70126ff3192ca61f4eb034ba2def3183bc9bf5cb5f",
+    "crates/storage/src/store/durable/wal.rs": "1e45de86e81f26317eace4237578e52218620f632b73b9d14215e65c999df350",
+    "crates/executor/src/expression.rs": "2c535458efa057631da680c06de7fdd312b60fc0b7ff477c5ca62bff5a7e9928",
+    "crates/executor/src/expression/projection.rs": "dcd687874cfabbfb85ce57f1371c05f44af7997edb5f047713b169a411c485e6",
+    "crates/executor/src/scan.rs": "a1942c44ce728832866926ea817e86022f210790f2eb627e7c92befa64c4cd23"
+  },
+  "candidate": {
+    "Cargo.toml": "01459c5d1068bea837028eff86a6d3799f421b3154ba21a1020bef8338cebfcb",
+    "Cargo.lock": "d06d2c813a3ff92fbc0216b241943049a9652c2c26440d87cf09f5c73db8b019",
+    ".cargo/config.toml": "06c7ca26d39223bd90a6412acd8609c380ce2d1650a72b70c90171656ca89819",
+    "rust-toolchain.toml": "8e390d6a0838315f972690f46ef8bae8b7ecc9ee6c1ed70140ef852869c2482e",
+    "benches/concurrent_writers.rs": "4cf99da0d024d7cfc4af77c834a78eb7dac32d02091bb1c579e441c559ec050e",
+    "benches/concurrent_writers/readers.rs": "1eb468c67658964ef44d66a7a9acc051e856beed10857c986b98fc1af640b1ec",
+    "src/api/concurrent.rs": "7a90c4285f957648ed6ad8b2e57e0154e7a7e1e2d824507cd9a595f2c981d842",
+    "src/api/concurrent/coordinator.rs": "d067dce269392f53fd4b6244051781c9b5c804b12bfa258d8f8d8ab3ea1cee9a",
+    "src/api/concurrent/publication.rs": "bee34677ddfe6dc0665947f53627b11970a17c2dd78d38391d7371d5b0167e70",
+    "src/api/publication.rs": "78027a3337b868f048152b2fc337ff4ee5d5b8f1c913d677cfb7befa25dd2b7e",
+    "src/api/observability.rs": "e4c84578dc515f26afd2ea17758445f4754e30e026dd34c4e7a1527bfd996039",
+    "src/api/mod.rs": "a667d4dae0b81bb74b256e70126ff3192ca61f4eb034ba2def3183bc9bf5cb5f",
+    "crates/storage/src/store/durable/wal.rs": "1e45de86e81f26317eace4237578e52218620f632b73b9d14215e65c999df350",
+    "crates/executor/src/expression.rs": "e5efb1e5b67bfcc1fe786a90220972ad98f2fb739af3c24c577ab2c100fe7c75",
+    "crates/executor/src/expression/projection.rs": "2e48fc56572f0d3c604b2f2805f09407162b7820c1121357993290043631e2a0",
+    "crates/executor/src/scan.rs": "2ff63bec6b0e8866821156cfdc29be089373d92873c62e613c8a1cce7328b15f",
+    "crates/executor/src/expression/projection/tests.rs": "7dda1b8dadef59eebaecfc238dc6474858aa5899e5fac67eb9f6f75b8032b716"
+  }
+}

@@ -129,3 +129,16 @@ The checked-profile benchmark uses 16 commits and eight reads per reader for
 local correctness proof; its outputs are labelled `smoke=true` and rejected by
 the performance driver. Release qualification uses the normal repository bench
 profile, with no per-target optimization or assertion overrides.
+
+## Admission work attribution
+
+Generation-debt directory scans must be attributed separately from WAL barriers
+and namespace fences. WAL admission can first evaluate a conservative upper
+bound on retained-generation bytes. If that bound still permits the mutation,
+measuring the exact inventory cannot make its permission more restrictive.
+Refusal diagnostics then evaluate actual retained bytes before reporting the
+existing pressure snapshot and reasons. Explicit pressure reports keep their
+complete inventory; no cached file identity, free-space allowance, threshold or
+durability barrier is substituted. Storage-unit comparisons cover full refusal
+snapshots across pressure states, and separate syscall traces verify the work
+boundary. Traced latency is not a performance result.

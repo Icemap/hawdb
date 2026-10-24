@@ -23,6 +23,7 @@ use crate::binding::{
 use crate::expression::{
     evaluate_predicate_with_context, evaluate_projection_borrowed, prepare_borrowed_projection,
     property_filter_from_predicate, push_borrowed_projection, ProjectedValue,
+    SmallBorrowedProjection,
 };
 use crate::kernel::{push_bounded_operator_binding, OperatorMemoryTracker};
 use crate::observer::ExecutionObserver;
@@ -738,6 +739,7 @@ pub fn stream_node_projection_scan_batches(
     let mut batch = context.output_batch("NodeProjectionScanExec");
     let mut emitted = 0usize;
     let mut visited = 0usize;
+    let small_projection = SmallBorrowedProjection::new(spec.items);
     let mut visit = |node: ProjectedNodeRecord| {
         runtime_checkpoint(context.task_context)?;
         visited = visited.saturating_add(1);
@@ -768,6 +770,21 @@ pub fn stream_node_projection_scan_batches(
         }
         let control = if spec.items.is_empty() {
             batch.push(binding, emit)?
+        } else if let Some(projection) = &small_projection {
+            projection.push(
+                &mut batch,
+                context.memory_account,
+                |expression| {
+                    evaluate_projection_borrowed(
+                        expression,
+                        context.catalog,
+                        &binding,
+                        Some(context.memory_account),
+                    )
+                },
+                context.task_context,
+                emit,
+            )?
         } else {
             push_borrowed_projection(
                 &mut batch,
@@ -980,6 +997,22 @@ pub fn stream_node_projection_scan_batches(
     })
 }
 
+fn simple_node_projection_value<'a>(
+    node: &'a NodeRecord,
+    expression: &'a ProjectionExpression,
+) -> ProjectedValue<'a> {
+    match expression {
+        ProjectionExpression::Property { property, .. } => node
+            .properties
+            .get(property)
+            .map(ProjectedValue::borrowed)
+            .unwrap_or_else(|| ProjectedValue::scalar(Value::Null)),
+        ProjectionExpression::Id { .. } => ProjectedValue::scalar(Value::Int(node.id.0 as i64)),
+        ProjectionExpression::Literal(value) => ProjectedValue::borrowed(value),
+        _ => unreachable!("simple projection eligibility checks expressions"),
+    }
+}
+
 fn stream_simple_node_projection_scan(
     spec: NodeProjectionScanSpec<'_>,
     context: NodeScanContext<'_>,
@@ -991,6 +1024,7 @@ fn stream_simple_node_projection_scan(
     observer.record_scan_pruning_report(scan.report);
     let mut batch = context.output_batch("NodeProjectionScanExec");
     let mut emitted = 0usize;
+    let small_projection = SmallBorrowedProjection::new(spec.items);
     for input in scan.nodes {
         runtime_checkpoint(context.task_context)?;
         // Hydrating sources keep their own read boundary. Preserve the old
@@ -1010,32 +1044,29 @@ fn stream_simple_node_projection_scan(
         };
         let node = input.as_ref();
         observer.record_borrowed_node_projection_rows(1);
-        let control = push_borrowed_projection(
-            &mut batch,
-            || {
-                prepare_borrowed_projection(
-                    spec.items,
-                    context.memory_account,
-                    None,
-                    |expression| {
-                        Ok(match expression {
-                            ProjectionExpression::Property { property, .. } => node
-                                .properties
-                                .get(property)
-                                .map(ProjectedValue::borrowed)
-                                .unwrap_or_else(|| ProjectedValue::scalar(Value::Null)),
-                            ProjectionExpression::Id { .. } => {
-                                ProjectedValue::scalar(Value::Int(node.id.0 as i64))
-                            }
-                            ProjectionExpression::Literal(value) => ProjectedValue::borrowed(value),
-                            _ => unreachable!("simple projection eligibility checks expressions"),
-                        })
-                    },
-                )
-            },
-            context.task_context,
-            emit,
-        )?;
+        let control = if let Some(projection) = &small_projection {
+            projection.push(
+                &mut batch,
+                context.memory_account,
+                |expression| Ok(simple_node_projection_value(node, expression)),
+                context.task_context,
+                emit,
+            )?
+        } else {
+            push_borrowed_projection(
+                &mut batch,
+                || {
+                    prepare_borrowed_projection(
+                        spec.items,
+                        context.memory_account,
+                        None,
+                        |expression| Ok(simple_node_projection_value(node, expression)),
+                    )
+                },
+                context.task_context,
+                emit,
+            )?
+        };
         if control == BatchControl::Stop {
             return Ok(BatchControl::Stop);
         }

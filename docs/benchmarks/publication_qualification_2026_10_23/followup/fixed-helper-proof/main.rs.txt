@@ -1,0 +1,30 @@
+#[path = "/work/benches/consumer_publication/workload.rs"]
+mod workload;
+use hawdb::{ProjectionSourceDurability, Value};
+use serde_json::json;
+fn main() {
+    let root = std::path::Path::new("/fixtures/staging-fixed-helper-proof-1");
+    std::fs::create_dir(root).unwrap();
+    let (mut database, mut consumer) = workload::setup(root, 32, 128, 1, 104_192);
+    let before = database.commit_epoch().unwrap();
+    for value in 1..=60_000 {
+        database.query_sql_with_params("UPDATE foreground SET value=$1 WHERE id=0", &[Value::Int(value)]).unwrap();
+    }
+    let session = workload::begin(&mut database, &consumer, true);
+    let captured = session.source_epoch();
+    assert_eq!(captured, before + 60_000);
+    let (covered, calls) = workload::prepare(session, true);
+    assert_eq!(calls, 120_003);
+    assert!(calls > 100_000 && calls <= workload::STAGING_ADVANCE_CALL_LIMIT);
+    database.publish_search_projection_consumer_covered_update(&mut consumer, covered, ProjectionSourceDurability::RequireKnownDurable).unwrap();
+    assert_eq!(consumer.projection().receipt().source_epoch, captured);
+    let index = consumer.search_index().unwrap();
+    assert_eq!(index.document_count(), 32);
+    for id in 0..32 {
+        assert_eq!(index.document(&format!("m{id}")).unwrap().content, "x".repeat(128));
+    }
+    let output = database.query_sql("SELECT value FROM foreground WHERE id=0").unwrap();
+    assert_eq!(output.rows.len(), 1);
+    assert_eq!(output.rows[0]["value"], Value::Int(60_000));
+    println!("{}",json!({"scope":"actual corrected helper, complete-source coverage and native publication correctness only; not sustained or timing acceptance", "staging_calls":calls,"old_limit":100000,"corrected_call_limit":workload::STAGING_ADVANCE_CALL_LIMIT,"published_source_epoch":captured,"verified_documents":32,"verified_foreground_value":60000,"resource_limits":"original feed/mapping/memory/retention limits unchanged"}));
+}

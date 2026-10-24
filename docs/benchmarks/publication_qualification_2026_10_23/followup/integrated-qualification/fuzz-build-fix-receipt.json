@@ -1,0 +1,12 @@
+{
+  "source": "a4eea1cc85bbf6635399a191907000a1b5b109be",
+  "targets": 98,
+  "executed": 0,
+  "cached": 98,
+  "xml_checked": 98,
+  "failures": [],
+  "invocation": "06d98d0c-a751-420c-8ecf-246c327b44ad",
+  "seconds_including_build": 6.405,
+  "runtime_source_equivalent_to": "4b65398f1580cd771ee22d1085d2e13b20f0109d",
+  "prior_execution_receipt": "fuzz-integrated-receipt.json"
+}

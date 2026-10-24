@@ -22,7 +22,7 @@ use hawdb_storage::{
 };
 use std::cell::Cell;
 
-mod fixtures;
+pub(crate) mod fixtures;
 mod inflight_budget;
 mod mixed_budget;
 mod query_cost_contexts;

@@ -1,0 +1,160 @@
+{
+  "baseline": {
+    "container": "hawdb-1119-read-query-stages-baseline-build-1",
+    "build_state": {
+      "Status": "exited",
+      "Running": false,
+      "Paused": false,
+      "Restarting": false,
+      "OOMKilled": false,
+      "Dead": false,
+      "Pid": 0,
+      "ExitCode": 0,
+      "Error": "",
+      "StartedAt": "2026-10-23T21:21:10.834182962Z",
+      "FinishedAt": "2026-10-23T21:27:11.064317796Z"
+    },
+    "metadata": {
+      "path": "/build/read-phase-baseline-v1/release/deps/concurrent_writers-ba954da0915e1c32",
+      "sha256": "1dc859e5de13e266628e283626a349421bdb4e19c88e5824bbf97903597672c7"
+    },
+    "rebuilt_targets": [
+      {
+        "kind": [
+          "lib"
+        ],
+        "crate_types": [
+          "lib"
+        ],
+        "name": "hawdb_storage",
+        "src_path": "/work/crates/storage/src/lib.rs",
+        "edition": "2024",
+        "doc": true,
+        "doctest": true,
+        "test": true
+      },
+      {
+        "kind": [
+          "lib"
+        ],
+        "crate_types": [
+          "lib"
+        ],
+        "name": "hawdb",
+        "src_path": "/work/src/lib.rs",
+        "edition": "2024",
+        "doc": true,
+        "doctest": true,
+        "test": true
+      },
+      {
+        "kind": [
+          "bench"
+        ],
+        "crate_types": [
+          "bin"
+        ],
+        "name": "concurrent_writers",
+        "src_path": "/work/benches/concurrent_writers.rs",
+        "edition": "2024",
+        "doc": false,
+        "doctest": false,
+        "test": false
+      },
+      {
+        "kind": [
+          "bin"
+        ],
+        "crate_types": [
+          "bin"
+        ],
+        "name": "hawdb",
+        "src_path": "/work/src/main.rs",
+        "edition": "2024",
+        "doc": true,
+        "doctest": false,
+        "test": true
+      }
+    ],
+    "target_directory": "CARGO_TARGET_DIR=/build/read-phase-baseline-v1"
+  },
+  "candidate": {
+    "container": "hawdb-1119-read-query-stages-candidate-build-1",
+    "build_state": {
+      "Status": "exited",
+      "Running": false,
+      "Paused": false,
+      "Restarting": false,
+      "OOMKilled": false,
+      "Dead": false,
+      "Pid": 0,
+      "ExitCode": 0,
+      "Error": "",
+      "StartedAt": "2026-10-23T21:15:10.883869212Z",
+      "FinishedAt": "2026-10-23T21:21:10.632765379Z"
+    },
+    "metadata": {
+      "path": "/build/release/deps/concurrent_writers-ba954da0915e1c32",
+      "sha256": "be093ddbbf5e292fd7c13627adca236c0d572d15abb830c8a82c2016a43c17d5"
+    },
+    "rebuilt_targets": [
+      {
+        "kind": [
+          "lib"
+        ],
+        "crate_types": [
+          "lib"
+        ],
+        "name": "hawdb_storage",
+        "src_path": "/work/crates/storage/src/lib.rs",
+        "edition": "2024",
+        "doc": true,
+        "doctest": true,
+        "test": true
+      },
+      {
+        "kind": [
+          "lib"
+        ],
+        "crate_types": [
+          "lib"
+        ],
+        "name": "hawdb",
+        "src_path": "/work/src/lib.rs",
+        "edition": "2024",
+        "doc": true,
+        "doctest": true,
+        "test": true
+      },
+      {
+        "kind": [
+          "bin"
+        ],
+        "crate_types": [
+          "bin"
+        ],
+        "name": "hawdb",
+        "src_path": "/work/src/main.rs",
+        "edition": "2024",
+        "doc": true,
+        "doctest": false,
+        "test": true
+      },
+      {
+        "kind": [
+          "bench"
+        ],
+        "crate_types": [
+          "bin"
+        ],
+        "name": "concurrent_writers",
+        "src_path": "/work/benches/concurrent_writers.rs",
+        "edition": "2024",
+        "doc": false,
+        "doctest": false,
+        "test": false
+      }
+    ],
+    "target_directory": "CARGO_TARGET_DIR=/build"
+  }
+}

@@ -169,6 +169,25 @@ post-drain publications as simultaneous progress. Native build intervals record
 real foreground commit counts. Publication callback timing is
 a lower bound on outer-owner hold time, not the selector mutex's duration.
 
+An opt-in manual `--sustained true` detached workload extends publication attempts
+through the foreground writer phase, with a 4,096-attempt ceiling. It uses the
+same fixed write count and performs ordinary blocking checkpoints after every
+16,384 completed foreground writes, inside the publication owner. This exercises
+maintenance at the existing live-row ceiling rather than increasing that ceiling.
+Every checkpoint count and elapsed interval is retained. Caller-triggered
+checkpoint admission is separate from the query/native-preparation governor;
+whole-process memory and timing limits must be declared by the measurement host.
+
+The sustained retention-entry reservation includes the declared maximum trigger
+writes: `foreground writes + quiet publications + 4096 + 64`; the 64 MiB byte
+ceiling is unchanged. The default 16-publication workload and its reservation
+remain unchanged. Source epochs must equal all actual foreground and trigger
+commits, and exact final counters and documents remain mandatory. Qualification
+requires at least two successful post-E advances with active writers and no
+publication-cap exit while writers remain active. Cap hits, resource refusals,
+checkpoint failures and incomplete datasets are retained as unmet evidence.
+A finite fixed-work run is not a steady-state or starvation-freedom proof.
+
 The separate original single-stream gate keeps the a703cc0f baseline, identical
 writer harness, 40 paired runs plus a labelled warm-up, six primary commit
 p50/p95 endpoints, ranks 12/29, and zero tolerated increase. Neither throughput

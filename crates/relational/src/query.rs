@@ -38,7 +38,7 @@ use hawdb_executor::Row;
 use hawdb_executor::{
     BindingSchema, BlockingOperatorMemoryReport, ColumnVector, ColumnarBatch, ExecutionLimit,
     QueryMemoryClass, QueryMemoryLease, QueryMemoryLedger, QueryRows, QueryRowsBuilder,
-    RelationalRowLocator, SlotDescriptor, SlotId, SlotType,
+    QuerySchema, RelationalRowLocator, SlotDescriptor, SlotId, SlotType,
 };
 use hawdb_expression::{BindingId, SortDirection, SortItem, SortKey};
 use hawdb_optimizer::{
@@ -103,6 +103,7 @@ mod explain;
 use explain::format_relational_explain;
 
 mod expression;
+pub(crate) use expression::select_output_schema;
 use expression::{
     account_intermediate, aggregate_filter_matches, bind_bound, bind_sql_value, predicate_truth,
     project_bound_row, projection_uses_non_aggregate_scalar_function, reject_non_public_schema,
@@ -156,6 +157,7 @@ use preparation::{
 };
 
 mod projection;
+mod projection_memory;
 use projection::{
     execute_blocking_projection, push_relational_output, DistinctAggregateValueBatchSource,
     RelationalBlockingObserver, StreamingProjectionOutput,
@@ -388,10 +390,26 @@ impl RelationalRowStoreReader for crate::RelationalMaterializedReader {
 fn execute_fromless_select(
     select: &SelectStatement,
     parameters: &[Value],
+    state: &RelationalState,
     stage_timings: RelationalSqlStageTimings,
     hydration: RelationalHydrationBudget,
+    resources: &RelationalQueryResourceContext<'_>,
 ) -> Result<RelationalQueryOutput> {
+    let ledger = QueryMemoryLedger::new(hawdb_executor::memory::enforced_query_memory_budget(
+        resources.execution_memory,
+        resources.task_context,
+    )?);
+    let account = projection_memory::copy_account(&ledger);
+    let _copies = projection_memory::admit_ordinary(
+        select,
+        &BoundRow::default(),
+        parameters,
+        &account,
+        usize::MAX,
+        false,
+    )?;
     let row = expression::project_bound_row(&BoundRow::default(), &select.projection, parameters)?;
+    let rows = QueryRows::try_from_named_rows(select_output_schema(select, state)?, vec![row])?;
     let access_path = RelationalAccessPathDescriptor {
         kind: RelationalAccessPathKind::FullScan,
         name: "(no table)".to_string(),
@@ -407,7 +425,7 @@ fn execute_fromless_select(
         estimated_rows: 1,
     };
     Ok(RelationalQueryOutput {
-        rows: QueryRows::from(vec![row]),
+        rows,
         stage_timings,
         join_planning: RelationalJoinPlanningOutcome::not_eligible(
             RelationalJoinPlanningReason::NoJoin,
@@ -456,8 +474,10 @@ pub fn execute_prepared_relational_query_with_resources<'a, R: RelationalQuerySt
                 return execute_fromless_select(
                     &select,
                     parameters,
+                    state,
                     initial_stage_timings,
                     resources.limits.hydration,
+                    &resources,
                 );
             }
             let (prepared, snapshot) = prepare_relational_select_with_snapshot(

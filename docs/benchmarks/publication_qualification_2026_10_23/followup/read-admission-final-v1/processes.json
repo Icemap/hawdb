@@ -1,0 +1,72 @@
+[
+  {
+    "cohort": "read-resource",
+    "command": [
+      "python3",
+      "/work/scripts/measure-consumer-publication.py",
+      "--binary",
+      "/build/release/deps/consumer_publication-ee5e1a723b428eea",
+      "--build-artifacts",
+      "/evidence/build.jsonl",
+      "--output",
+      "/evidence/read-resource",
+      "--fixture-parent",
+      "/fixtures/read-admission-final-823e-read-resource",
+      "--writes",
+      "4096",
+      "--rounds",
+      "3",
+      "--quiet-samples",
+      "32",
+      "--with-readers",
+      "--reads-per-reader",
+      "512"
+    ],
+    "returncode": 0
+  },
+  {
+    "cohort": "sustained",
+    "command": [
+      "python3",
+      "/work/scripts/measure-consumer-publication.py",
+      "--binary",
+      "/build/release/deps/consumer_publication-ee5e1a723b428eea",
+      "--build-artifacts",
+      "/evidence/build.jsonl",
+      "--output",
+      "/evidence/sustained",
+      "--fixture-parent",
+      "/fixtures/read-admission-final-823e-sustained",
+      "--writes",
+      "100000",
+      "--rounds",
+      "3",
+      "--quiet-samples",
+      "32",
+      "--sustained"
+    ],
+    "returncode": 0
+  },
+  {
+    "cohort": "controls",
+    "command": [
+      "python3",
+      "/work/scripts/measure-consumer-publication.py",
+      "--binary",
+      "/build/release/deps/consumer_publication-ee5e1a723b428eea",
+      "--build-artifacts",
+      "/evidence/build.jsonl",
+      "--output",
+      "/evidence/controls",
+      "--fixture-parent",
+      "/fixtures/read-admission-final-823e-controls",
+      "--writes",
+      "4096",
+      "--rounds",
+      "3",
+      "--quiet-samples",
+      "32"
+    ],
+    "returncode": 0
+  }
+]

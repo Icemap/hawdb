@@ -1,0 +1,86 @@
+[
+  {
+    "case": "calibration-0-disabled-baseline",
+    "revision": "baseline",
+    "same_query_preparation_and_active_writer": 0,
+    "original_qualification": true,
+    "scope": "v1 calibration has active flags only; formal v2 additionally records committed-write counts"
+  },
+  {
+    "case": "calibration-0-disabled-gated",
+    "revision": "gated",
+    "same_query_preparation_and_active_writer": 0,
+    "original_qualification": true,
+    "scope": "v1 calibration has active flags only; formal v2 additionally records committed-write counts"
+  },
+  {
+    "case": "calibration-0-scoped-blocking-gated",
+    "revision": "gated",
+    "same_query_preparation_and_active_writer": 89,
+    "original_qualification": true,
+    "scope": "v1 calibration has active flags only; formal v2 additionally records committed-write counts"
+  },
+  {
+    "case": "calibration-0-scoped-blocking-baseline",
+    "revision": "baseline",
+    "same_query_preparation_and_active_writer": 0,
+    "original_qualification": false,
+    "scope": "v1 calibration has active flags only; formal v2 additionally records committed-write counts"
+  },
+  {
+    "case": "calibration-0-detached-baseline",
+    "revision": "baseline",
+    "same_query_preparation_and_active_writer": 0,
+    "original_qualification": false,
+    "scope": "v1 calibration has active flags only; formal v2 additionally records committed-write counts"
+  },
+  {
+    "case": "calibration-0-detached-gated",
+    "revision": "gated",
+    "same_query_preparation_and_active_writer": 468,
+    "original_qualification": true,
+    "scope": "v1 calibration has active flags only; formal v2 additionally records committed-write counts"
+  },
+  {
+    "case": "calibration-1-disabled-gated",
+    "revision": "gated",
+    "same_query_preparation_and_active_writer": 0,
+    "original_qualification": true,
+    "scope": "v1 calibration has active flags only; formal v2 additionally records committed-write counts"
+  },
+  {
+    "case": "calibration-1-disabled-baseline",
+    "revision": "baseline",
+    "same_query_preparation_and_active_writer": 0,
+    "original_qualification": true,
+    "scope": "v1 calibration has active flags only; formal v2 additionally records committed-write counts"
+  },
+  {
+    "case": "calibration-1-scoped-blocking-baseline",
+    "revision": "baseline",
+    "same_query_preparation_and_active_writer": 0,
+    "original_qualification": false,
+    "scope": "v1 calibration has active flags only; formal v2 additionally records committed-write counts"
+  },
+  {
+    "case": "calibration-1-scoped-blocking-gated",
+    "revision": "gated",
+    "same_query_preparation_and_active_writer": 129,
+    "original_qualification": true,
+    "scope": "v1 calibration has active flags only; formal v2 additionally records committed-write counts"
+  },
+  {
+    "case": "calibration-1-detached-gated",
+    "revision": "gated",
+    "same_query_preparation_and_active_writer": 463,
+    "original_qualification": true,
+    "scope": "v1 calibration has active flags only; formal v2 additionally records committed-write counts"
+  },
+  {
+    "case": "calibration-1-detached-baseline",
+    "revision": "baseline",
+    "same_query_preparation_and_active_writer": 1,
+    "original_qualification": true,
+    "scope": "v1 calibration has active flags only; formal v2 additionally records committed-write counts"
+  }
+]

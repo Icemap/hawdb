@@ -1,0 +1,11 @@
+{
+  "committed_parent": "a4eea1cc85bbf6635399a191907000a1b5b109be",
+  "declared_utc": "2026-10-23T18:40:51.522352+00:00",
+  "overlay_sha256": {
+    "benches/consumer_publication.rs": "5cd9c1a527ffad5c29212ccff1e51e82a72044d3eff250e4a942e53d285f1996",
+    "benches/consumer_publication/probes.rs": "f0500b57df83e850b34a99ea372cba38a012e17cda6f1421ef089aae37c65526",
+    "scripts/measure-consumer-publication.py": "26576a5d10f53657475d4d362b740611fa337de9c066a3be185cb9ed18a535e7",
+    "scripts/measure-consumer-publication.test.py": "e0e688507284af53995cb1cf6ef39fa6cdefd07345b32a7d8f2eee95160255af"
+  },
+  "purpose": "API/correctness/resource proof only; no latency qualification"
+}

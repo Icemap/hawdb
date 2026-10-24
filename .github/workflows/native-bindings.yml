@@ -113,7 +113,7 @@ jobs:
           - os: macos-latest
             library: libhawdb_ffi.dylib
     env:
-      USE_BAZEL_VERSION: "9.3.0"
+      USE_BAZEL_VERSION: "9.3.1"
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -355,7 +355,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     env:
-      USE_BAZEL_VERSION: "9.3.0"
+      USE_BAZEL_VERSION: "9.3.1"
       BENCHMARK_SIZES: ${{ inputs.benchmark_sizes }}
       BENCHMARK_CASES: ${{ inputs.benchmark_cases }}
       BENCHMARK_SAMPLES: ${{ inputs.benchmark_samples }}

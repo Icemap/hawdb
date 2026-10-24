@@ -1,0 +1,38 @@
+{
+  "refs": {
+    "org": "nowledge-co",
+    "repo": "hawdb",
+    "repo_link": "https://github.com/nowledge-co/hawdb",
+    "base_ref": "main",
+    "base_sha": "8e9eab185ef880794d216d99ac6cd57442c511aa",
+    "base_link": "https://github.com/nowledge-co/hawdb/commit/8e9eab185ef880794d216d99ac6cd57442c511aa",
+    "pulls": [
+      {
+        "number": 1217,
+        "author": "hawkingrei",
+        "sha": "823e8e9c735050dcafb3e0bf024e12f0a46ea140",
+        "title": "fix(api): preserve foreground read progress during publication",
+        "head_ref": "bench/1119-sustained-publication",
+        "link": "https://github.com/nowledge-co/hawdb/pull/1217",
+        "commit_link": "https://github.com/nowledge-co/hawdb/pull/1217/commits/823e8e9c735050dcafb3e0bf024e12f0a46ea140",
+        "author_link": "https://github.com/hawkingrei"
+      }
+    ]
+  },
+  "events": 926,
+  "target_statuses": {
+    "PASSED": 70
+  },
+  "result_actions": 84,
+  "unit_owner": "//:hawdb_unit_general_tests",
+  "unit_owner_result": "PASSED",
+  "unit_owner_actual_ms": 140883,
+  "new_tests": [
+    "api::publication::tests::admitted_reader_precedes_a_later_writer",
+    "api::publication::tests::admitted_writer_precedes_a_later_reader",
+    "api::publication::tests::read_callbacks_remain_concurrent_after_admission"
+  ],
+  "source_sha256": "78027a3337b868f048152b2fc337ff4ee5d5b8f1c913d677cfb7befa25dd2b7e",
+  "partition_script_sha256": "fe02f34239bb194682da9a61ae039cf7340a838de5e95726bc486ee3d8335e1b",
+  "evidence_boundary": "BEP proves target execution; source and deterministic partition ownership establish inclusion. Per-case stdout is not exported: BEP output URIs are local file paths and the GCS object listing contains only the aggregate log and BEP."
+}

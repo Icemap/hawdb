@@ -108,6 +108,12 @@
 - Report first-build cost as well as execution time. Local improvements do not
   establish remote CI speedup; record final-head CI evidence before that claim.
 
+- Keep checkpoint headroom timing/phase tests in the required isolated
+  `//:hawdb_unit_checkpoint_headroom_tests` lane, using the ordinary checked root
+  binary. Joined-read default/minimal targets shard the complete discovered case
+  inventory over one executable per mode; retain every scenario and refuse empty
+  shards. See `docs/TEST_INDEX.md` for scheduling evidence and replay.
+
 - Windows native contracts run as seven independent Bazel shards plus independent Cargo Clippy; the original required check aggregates their results. See [Windows native CI](docs/WINDOWS_NATIVE_CI.md) for feature ownership, cache layout and evidence. Keep disk/repository/external cache roots disjoint and preserve default/minimal/all-feature and daily qualification selections.
 
 ## Consumer Failure Recovery

@@ -196,6 +196,7 @@ pub(super) fn prepared(
     let execution =
         PreparedRelationalExecutionDescriptor::prepare(&statement, &access_plan).unwrap();
     PreparedRelationalSelect {
+        output_schema: crate::query::select_output_schema(&statement, &state()).unwrap(),
         statement,
         access_plan,
         join_planning: RelationalJoinPlanningOutcome::explicit_syntax_order(

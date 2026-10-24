@@ -1,0 +1,13 @@
+{
+  "baseline": "a703cc0f18f549918c73f454cda521edb4f0fb13",
+  "candidate": "823e8e9c735050dcafb3e0bf024e12f0a46ea140",
+  "harness_sha256": "802a8f19ef71ff149fb4a5a4c21b2d810d2b0d2b25eef07941792a38e562a498",
+  "reader_harness_sha256": "4b844fa1d028f509a29a7f272995fc36e4d41db3a2cb596cd17b6aa1a41e3c85",
+  "order": "build baseline, build candidate, then all timing; no concurrent builds",
+  "fixture_profiles": [
+    "post-checkpoint-control",
+    "reopened-captured-wal"
+  ],
+  "cohort_rule": "complete all declared cohorts despite inconclusive/regressed endpoints; never pool intervals across profiles or concurrency levels",
+  "comparison": "whole versions; identical harness, effective Cargo config and pinned toolchain; separate lockfiles and target directories"
+}
