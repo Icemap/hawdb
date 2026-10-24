@@ -19,6 +19,7 @@ use crate::build_memory::{directory, path::OwnedPath};
 use hawdb_executor::QueryMemoryLease;
 use hawdb_storage::file_descriptors::ProjectFileDescriptors;
 use std::collections::BTreeMap;
+use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
 
 // Bound each canonical root independently. Every map entry is pre-admitted;
@@ -32,6 +33,11 @@ const AUTOMATIC_CLEANUP_BATCHES: usize = 4;
 // Bound the three shared ledger accounts retained by path and metadata leases.
 use crate::build_memory::ACCOUNT_METADATA_BYTES as CLEANUP_ACCOUNT_METADATA_BYTES;
 mod captured;
+
+#[cfg(test)]
+thread_local! {
+    static CANCEL_AFTER_CREATE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
 
 enum Slot {
     Active,
@@ -121,6 +127,7 @@ struct TicketFields {
     path: OwnedPath,
     source_root: OwnedPath,
     disk_reservation: u64,
+    governed: bool,
     error: Option<CleanupFailure>,
     captured: Option<Box<captured::Custody>>,
 }
@@ -332,6 +339,10 @@ fn retry_registered(
                         crate::out_of_core::scratch_directory::io_scope(task, native.governed)?;
                     return attempt.ticket().remove_batches(max_batches);
                 }
+                let _io = crate::out_of_core::scratch_directory::io_scope(
+                    task,
+                    attempt.ticket().governed,
+                )?;
                 let _project = ProjectFileDescriptors::acquire_component(
                     attempt
                         .ticket()
@@ -451,9 +462,18 @@ pub(in crate::out_of_core) struct StageDirectory {
     admission: Option<Arc<hawdb_qos::RuntimePermit>>,
     native: Option<Arc<crate::out_of_core::ScratchDirectory>>,
     captured_task: Option<RuntimeTaskContext>,
+    io_task: Option<RuntimeTaskContext>,
 }
 
 impl StageDirectory {
+    pub(in crate::out_of_core) fn set_io_task(&mut self, task: &RuntimeTaskContext) {
+        self.io_task = Some(task.clone());
+    }
+
+    pub(in crate::out_of_core) fn inherit_io_task(&mut self, parent: &Self) {
+        self.io_task = parent.io_task.clone();
+    }
+
     pub(in crate::out_of_core) fn cleanup_working_bytes(&self) -> u64 {
         self.cleanup_memory
             .as_ref()
@@ -469,6 +489,7 @@ impl StageDirectory {
         }
         self.admission.take();
         self.captured_task = Some(task.clone());
+        self.io_task = Some(task.clone());
         Ok(())
     }
 
@@ -477,6 +498,18 @@ impl StageDirectory {
         memory: &BuildMemory,
         task: &RuntimeTaskContext,
     ) -> Result<Self> {
+        Self::create_with_cleanup(root, memory, task, None)
+    }
+
+    pub(in crate::out_of_core) fn create_with_cleanup(
+        root: &Path,
+        memory: &BuildMemory,
+        task: &RuntimeTaskContext,
+        cleanup: Option<&RuntimeTaskContext>,
+    ) -> Result<Self> {
+        let io_task = cleanup
+            .cloned()
+            .unwrap_or_else(|| super::super::io_phase::cleanup_context(memory, task));
         let source_root = OwnedPath::absolute(root, memory, task)?;
         let project = ProjectFileDescriptors::acquire_component(&source_root, false)?;
         let root = OwnedPath::canonicalize(&source_root, memory, task)?;
@@ -557,6 +590,7 @@ impl StageDirectory {
                                 path: ticket_path,
                                 source_root,
                                 disk_reservation: 0,
+                                governed: memory.host_admission.is_some(),
                                 error: None,
                                 captured: None,
                             }),
@@ -566,7 +600,12 @@ impl StageDirectory {
                         admission: memory.host_admission.clone(),
                         native: None,
                         captured_task: None,
+                        io_task: Some(io_task),
                     };
+                    #[cfg(test)]
+                    if CANCEL_AFTER_CREATE.with(|flag| flag.replace(false)) {
+                        task.cancellation().cancel();
+                    }
                     checkpoint(task)?;
                     return Ok(stage);
                 }
@@ -614,10 +653,27 @@ impl StageDirectory {
                 .captured
                 .as_ref()
                 .is_some_and(|native| native.governed);
+            // Drop must not wait behind an unrelated wave or the caller's
+            // own active scope. Keep the original ticket for a fresh retry.
             let _io = self
-                .captured_task
+                .io_task
                 .as_ref()
-                .map(|task| crate::out_of_core::scratch_directory::io_scope(task, governed))
+                .or(self.captured_task.as_ref())
+                .map(|task| {
+                    match task
+                        .try_acquire_io_wave(NonZeroUsize::MIN)
+                        .map_err(|error| HawDBError::Execution(error.to_string()))?
+                    {
+                        hawdb_core::RuntimeIoWaveTryAcquire::Acquired(permit)
+                            if permit.is_some() || (!governed && self.admission.is_none()) =>
+                        {
+                            Ok(permit)
+                        }
+                        _ => Err(HawDBError::Execution(
+                            "stage cleanup awaits I/O capacity".into(),
+                        )),
+                    }
+                })
                 .transpose()?;
             attempt
                 .ticket()
@@ -644,6 +700,7 @@ impl StageDirectory {
         self.project.take();
         self.admission.take();
         self.captured_task.take();
+        self.io_task.take();
         pending
     }
 }
@@ -657,6 +714,55 @@ impl Drop for StageDirectory {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cancelled_stage_creation_cleans_before_returning_to_the_writer() {
+        use hawdb_qos::{
+            IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeMemorySnapshot,
+            RuntimeResourceBudget, RuntimeResourceSnapshot, RuntimeWorkRequest,
+        };
+        for task_scope in [false, true] {
+            let root =
+                crate::out_of_core::generation_writer::tests::test_dir("cancel-created-stage");
+            let governor = RuntimeGovernor::new(
+                RuntimeGovernorConfig {
+                    memory_budget_bytes: Some(256 << 20),
+                    ..RuntimeGovernorConfig::shared_host()
+                },
+                RuntimeResourceSnapshot::from_parts(
+                    RuntimeResourceBudget::from_limits(NonZeroUsize::new(4).unwrap(), None, None),
+                    RuntimeMemorySnapshot::from_limits(
+                        Some(1 << 30),
+                        Some(1 << 30),
+                        None,
+                        None,
+                        None,
+                    ),
+                ),
+                IoConcurrencyBudget::new(1, 1),
+            );
+            let request = RuntimeWorkRequest::background_maintenance(64 << 20);
+            let request = if task_scope {
+                request.with_io_slots(1)
+            } else {
+                request.with_io_wave_slots(1)
+            };
+            let admission = crate::SearchGenerationAdmission::acquire(&governor, request).unwrap();
+            CANCEL_AFTER_CREATE.with(|flag| flag.set(true));
+            let error = admission
+                .create_writer(&root, Default::default())
+                .err()
+                .unwrap();
+            assert!(error.to_string().contains("cancel"), "{error}");
+            let report = retry_staging_cleanup(&root, 0).unwrap();
+            assert_eq!(report.pending_stages, 0, "{report:?}");
+            assert_eq!(report.retained_memory_bytes, 0);
+            assert_eq!(fs::read_dir(&root).unwrap().count(), 0);
+            assert_eq!(governor.snapshot().active_background_io_slots, 0);
+            assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+            fs::remove_dir_all(root).unwrap();
+        }
+    }
 
     #[test]
     fn retry_admission_failure_preserves_cleanup_disposition() {

@@ -306,6 +306,8 @@ pub(super) struct State {
 
 #[derive(Debug, Default)]
 pub(super) struct Control {
+    #[cfg(test)]
+    frontend_clock: Mutex<Option<Instant>>,
     work_progress: Arc<AtomicU64>,
     state: Mutex<State>,
     changed: Condvar,
@@ -340,6 +342,27 @@ impl Drop for PublicationRequest<'_> {
 }
 
 impl Control {
+    fn frontend_now(&self) -> Instant {
+        #[cfg(test)]
+        if let Some(now) = *self
+            .frontend_clock
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+        {
+            return now;
+        }
+        Instant::now()
+    }
+
+    #[cfg(all(test, feature = "background-maintenance", not(target_arch = "wasm32")))]
+    fn set_frontend_time(&self, now: Instant) {
+        // Match the frontend's state -> clock lock order. Holding State also
+        // prevents losing a wake between deadline inspection and condvar wait.
+        let _state = self.lock().unwrap();
+        *self.frontend_clock.lock().unwrap() = Some(now);
+        self.changed.notify_all();
+    }
+
     pub(super) fn attach_frontend(&self, runtime: &Arc<super::runtime_cell::SharedBranchRuntime>) {
         self.frontend_runtime
             .set(Arc::downgrade(runtime))
@@ -410,8 +433,8 @@ impl Control {
                 && preparation_needs_capacity(&state);
             let capacity_remaining = if waits_for_capacity {
                 let deadline = capacity_deadline
-                    .get_or_insert_with(|| Instant::now() + PREPARATION_CAPACITY_WAIT_LIMIT);
-                let remaining = deadline.saturating_duration_since(Instant::now());
+                    .get_or_insert_with(|| self.frontend_now() + PREPARATION_CAPACITY_WAIT_LIMIT);
+                let remaining = deadline.saturating_duration_since(self.frontend_now());
                 if remaining.is_zero() {
                     self.ensure_healthy()?;
                     return Err(HawDBError::BranchBusy {
@@ -427,8 +450,8 @@ impl Control {
                 && needs_headroom(&state)
             {
                 let deadline = preparation_deadline
-                    .get_or_insert_with(|| Instant::now() + PREPARATION_BACKOFF_LIMIT);
-                Some(deadline.saturating_duration_since(Instant::now()))
+                    .get_or_insert_with(|| self.frontend_now() + PREPARATION_BACKOFF_LIMIT);
+                Some(deadline.saturating_duration_since(self.frontend_now()))
             } else {
                 None
             };
@@ -471,18 +494,31 @@ impl Control {
             if let Some(probe) = &state.frontend_wait_probe {
                 let _ = probe.send(state.phase);
             }
-            state = if let Some(remaining) = capacity_remaining {
+            let timeout = if must_fence {
+                capacity_remaining
+            } else {
+                preparation_remaining
+            };
+            #[cfg(test)]
+            let timeout = if self
+                .frontend_clock
+                .lock()
+                .unwrap_or_else(|error| error.into_inner())
+                .is_some()
+            {
+                // A frozen policy clock advances only through explicit wakes.
+                // Real one-nanosecond waits would spin and queue stale probes.
+                None
+            } else {
+                timeout
+            };
+            state = if let Some(remaining) = timeout {
                 self.changed
                     .wait_timeout(state, remaining)
                     .map_err(|_| Self::poisoned())?
                     .0
-            } else if must_fence {
-                self.changed.wait(state).map_err(|_| Self::poisoned())?
             } else {
-                self.changed
-                    .wait_timeout(state, preparation_remaining.expect("preparation backoff"))
-                    .map_err(|_| Self::poisoned())?
-                    .0
+                self.changed.wait(state).map_err(|_| Self::poisoned())?
             };
             #[cfg(all(test, feature = "background-maintenance", not(target_arch = "wasm32")))]
             if let Some(probe) = state.frontend_resume_probe.take() {

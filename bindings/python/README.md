@@ -317,7 +317,8 @@ the transaction context normally.
 notebooks, and other hosts that already hold their data. It answers the same
 `execute` / `execute_sql` calls through the same embedded admission path;
 `close()` discards everything and a later `open()` does not see it.
-`db.path` is `None` for in-memory handles.
+`db.path` is `None` for in-memory handles. Unlike `sqlite3`, `":memory:"` is
+not an in-memory path: `hawdb.open(":memory:")` raises `ValueError`.
 
 ```python
 db = hawdb.open()
@@ -356,6 +357,48 @@ free-space refusals, `budget` is the usable space after preserving
 File-descriptor failures retain `DescriptorError`. Other execution checks may
 still raise the general `ExecutionError`. The [resource metadata contract](../../docs/EXECUTION_REQUEST_CONTRACT.md#resource-refusal-metadata)
 lists built-in budget origins and explains how to handle caller-defined origins.
+
+## DB-API (PEP 249)
+
+`hawdb.connect()` returns a PEP 249 connection for SQL. It takes the same
+arguments as `hawdb.open`, plus `autocommit`, and owns the database it opens.
+`connect` used to be another name for `open`; code that relied on that should
+call `open`, which keeps Cypher, named parameters and graph values. A
+connection holds its path like any handle, so close it before opening the same
+path with `open`.
+
+```python
+with hawdb.connect() as connection:
+    cursor = connection.cursor()
+    cursor.execute("CREATE TABLE trades (id BIGINT PRIMARY KEY, price DOUBLE PRECISION)")
+    cursor.executemany("INSERT INTO trades (id, price) VALUES ($1, $2)", [(1, 9.5), (2, 7.25)])
+    cursor.execute("SELECT id, price FROM trades WHERE id >= $1", [2])
+    print(cursor.description[1][:2])  # ('price', <class 'float'>)
+    print(cursor.fetchall())          # [(2, 7.25)]
+```
+
+Parameters bind by position to `$1`, `$2`, ... (`paramstyle` is
+`"numeric_dollar"`). Autocommit is off: statements, queries included, run in a
+transaction that `commit()` publishes and that `rollback()`, `close()` or an
+exception leaving the `with` block discards. A transaction that only reads
+still pins its snapshot until it ends, so end it promptly, or turn autocommit on
+for long-lived reading. A failed `executemany` rolls back
+the whole transaction, and the connection refuses further work until
+`rollback()`. Branch commands need autocommit, which
+`connect(..., autocommit=True)` turns on and `connection.autocommit` changes
+between transactions; read-only connections always autocommit. Errors follow
+the PEP 249 hierarchy, and engine errors keep their `hawdb.exceptions` types
+as well: a syntax error is both a `ProgrammingError` and a
+`hawdb.exceptions.ParseError`. Constraint violations such as a duplicate
+primary key are plain `DatabaseError`s, because the engine does not set them
+apart yet. Use and close a connection on the thread that opened it.
+
+Rows are tuples. Until an engine fix, some query shapes, such as key lookups,
+`ORDER BY`, aggregates and `GROUP BY`, return their columns sorted by name, and
+report no columns at all when nothing matches. Read rows by the names in
+`description` rather than by SELECT-list position. `pandas.read_sql` works,
+with a warning that pandas only tests SQLAlchemy and sqlite3 connections, but
+it fails on such an empty result. `help(hawdb.dbapi)` gives the full contract.
 
 ## Pydantic rows (optional)
 

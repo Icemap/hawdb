@@ -32,6 +32,7 @@ mod context;
 mod held_spool;
 mod incremental_ownership;
 mod initial;
+mod io_waves;
 mod manifest_budget;
 mod prepared;
 mod source_policy;

@@ -10,9 +10,21 @@ satisfy the first example when both tables expose `id`.
 `crates/executor/src/profile.rs` defines `Row` as `BTreeMap<String, Value>`.
 `QuerySchema::try_new` rejects duplicate column names. `QueryRow::get`, string
 indexing and `QueryRowRef::to_owned_row` rely on that unique-name contract.
-`src/relational_sql/query/expression.rs::project_bound_row` builds a Row and
-rejects duplicate names before constructing QueryRows. SQL rows are also
-materialized through map-based aggregate and blocking-projection paths.
+`crates/relational/src/query/expression.rs::select_output_schema` names the
+SELECT output during preparation and rejects duplicate names before any row is
+read, so such a statement fails even when no row matches, and so does its
+EXPLAIN. `project_bound_row` and the map-based aggregate and blocking-projection
+paths still build name-keyed rows, which `QueryRows::try_from_named_rows` orders
+by that schema.
+
+Refusing repeated names during preparation is a deliberate behavior change
+([#1225](https://github.com/nowledge-co/hawdb/issues/1225)). Before it, the
+columnar aggregate collapsed `SELECT count(*), count(email) FROM t` into one
+`count` column, and `SELECT a AS x, b AS x FROM t WHERE false` returned an
+empty result with no columns. PostgreSQL accepts both. HawDB refuses them for as
+long as result rows are keyed by name. The same check refuses output names
+that start with the internal sort-key prefix `__hawdb_relational_sort_`, which
+blocking projection strips from its rows.
 
 For tables `a(id, value_a)` and `b(id, value_b)`, PostgreSQL retains both `id`
 columns in distinct result positions. A map cannot represent that schema. Letting

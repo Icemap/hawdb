@@ -113,15 +113,14 @@ impl RelationalAccessCostContext {
         // Each point invocation initializes descriptor/key artifact access,
         // then searches the checked page bounds. The current demand scan also
         // initializes both artifacts for every descriptor it visits. Estimate work
-        // using the binary-search depth bound and average page occupancy.
+        // using the binary-search depth bound for points and every page for
+        // a scan without separate safe early-stop evidence.
         // Descriptor records and both bounds also incur logical access work:
         // point probes jump among descriptors, while scans visit them in order.
         // Cache residency does not remove those checked metadata reads.
         match access.kind {
             RelationalAccessPathKind::FullScan => {
-                let pages = (u128::from(rows) * u128::from(snapshot.table_pages.get()))
-                    .div_ceil(u128::from(snapshot.table_rows.get()))
-                    .min(u128::from(snapshot.table_pages.get())) as u64;
+                let pages = snapshot.table_pages.get();
                 SnapshotRootWork {
                     cpu: pages.saturating_mul(SNAPSHOT_ROOT_ARTIFACT_SETUP_CPU.saturating_add(1)),
                     random: 0,
@@ -251,8 +250,20 @@ pub fn estimate_relational_access_path_cost_with_context(
     let rows = u64::try_from(access.estimated_rows)
         .unwrap_or(u64::MAX)
         .max(1);
+    // A candidate cap describes retained/output rows, not proof that a scan
+    // can stop after visiting that many inputs. Residual predicates may reject
+    // every preceding row. Use the pinned source bound until selectivity and
+    // safe early-stop evidence are represented separately.
+    let input_rows = match (access.kind, context.snapshot_rows) {
+        (RelationalAccessPathKind::FullScan, Some(snapshot)) => rows.max(snapshot.table_rows.get()),
+        _ => rows,
+    };
     let (cpu, random, sequential) = match access.kind {
-        RelationalAccessPathKind::FullScan => (rows.saturating_add(FULL_SCAN_SETUP_CPU), 0, rows),
+        RelationalAccessPathKind::FullScan => (
+            input_rows.saturating_add(FULL_SCAN_SETUP_CPU),
+            0,
+            input_rows,
+        ),
         RelationalAccessPathKind::PrimaryKey => (rows, rows, 0),
         RelationalAccessPathKind::Index => {
             let fetches = if access.requires_row_fetch { rows } else { 0 };
@@ -263,7 +274,7 @@ pub fn estimate_relational_access_path_cost_with_context(
             )
         }
     };
-    let root_work = context.additional_work(access, rows);
+    let root_work = context.additional_work(access, input_rows);
     PlanCostBreakdown::new(
         rows,
         cpu.saturating_add(root_work.cpu),
