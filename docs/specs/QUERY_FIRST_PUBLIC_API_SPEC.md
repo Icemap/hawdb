@@ -489,6 +489,9 @@ Source memory-count fixtures use bounded point calculations and fixed SET in
 one transaction. The host binds query-computed counts; sequential/floor and
 NULL behavior, nonnumeric refusal and one-batch recovery remain covered without
 the business adapter, four DTOs or handwritten graph-side aggregation.
+Source-reference cleanup fixtures select and delete through bounded ordinary
+queries, preserving reference isolation, retained nodes and recovery assertions
+without the cleanup adapter, three DTOs or graph-scan candidate collection.
 Remaining legacy business adapters still require migration; this removal does
 not complete issue #1193.
 

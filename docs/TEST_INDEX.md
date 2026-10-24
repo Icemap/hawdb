@@ -934,3 +934,14 @@ missing identities produce no candidate. A nonnumeric stored count refuses its
 query while prior staged changes remain committable. Invalid input preserves
 WAL/epoch; two source updates retain one batch and exact reopen. One business
 method, four DTOs and the graph-side aggregation helpers are removed.
+
+### Source-reference cleanup queries
+
+`api::tests::source_reference` retains its five root general cases. The three
+mutation cases now use bounded parameterized CREATE/DELETE and candidate reads,
+removing the cleanup adapter, three DTOs and three generic create-fixture calls.
+Selection stays in Cypher; committed counts and exact survivor identities cover
+reference isolation and retained nodes. Empty/whitespace references refuse
+before WAL changes; setup-close/reopen-cleanup preserves one delete batch and
+exact durable recovery. Existing pinned read/cache and delete-guard cases stay
+in the same module and CI owner.

@@ -40,13 +40,12 @@ use super::{
     KnowledgeScopedRelationshipCreateRequest, KnowledgeScopedRelationshipDeleteBatchRequest,
     KnowledgeScopedRelationshipDeleteRequest, KnowledgeScopedRelationshipUpdateBatchRequest,
     KnowledgeScopedRelationshipUpdateRequest, KnowledgeScopedRelationshipsRequest,
-    KnowledgeScopedSubgraphRequest, KnowledgeSourceReferenceRelationshipCleanupRequest,
-    KnowledgeSubgraphRequest, KnowledgeTraversalFallbackReasonCode, KnowledgeTruncationReasonCode,
-    NowledgeGraphAdapter, NowledgeGraphStatement, PlanCacheBypassReason, PlanCacheLookup,
-    QueryOutput, QueryStreamOptions, RecoveryMode, SearchProjectionGraphDeltaRequest,
-    HAWDB_LIGHTNING_BOOTSTRAP_PROTOCOL_VERSION, NOWLEDGE_DEEP_SEARCH_FILTERED_RANK_WINDOW,
-    NOWLEDGE_DEEP_SEARCH_GRAPH_CONTEXT_MAX_HOPS, NOWLEDGE_DEEP_SEARCH_MIN_GRAPH_SEED_LIMIT,
-    NOWLEDGE_DEEP_SEARCH_MIN_RANK_WINDOW,
+    KnowledgeScopedSubgraphRequest, KnowledgeSubgraphRequest, KnowledgeTraversalFallbackReasonCode,
+    KnowledgeTruncationReasonCode, NowledgeGraphAdapter, NowledgeGraphStatement,
+    PlanCacheBypassReason, PlanCacheLookup, QueryOutput, QueryStreamOptions, RecoveryMode,
+    SearchProjectionGraphDeltaRequest, HAWDB_LIGHTNING_BOOTSTRAP_PROTOCOL_VERSION,
+    NOWLEDGE_DEEP_SEARCH_FILTERED_RANK_WINDOW, NOWLEDGE_DEEP_SEARCH_GRAPH_CONTEXT_MAX_HOPS,
+    NOWLEDGE_DEEP_SEARCH_MIN_GRAPH_SEED_LIMIT, NOWLEDGE_DEEP_SEARCH_MIN_RANK_WINDOW,
 };
 use crate::optimizer::PlanCost;
 use crate::qos::{

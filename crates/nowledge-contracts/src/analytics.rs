@@ -292,27 +292,3 @@ pub struct KnowledgeRelationshipDeleteBatchOutput {
     pub non_writable_count: usize,
     pub deleted_relationship_count: usize,
 }
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeSourceReferenceRelationshipCleanupRequest {
-    pub source_reference: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeSourceReferenceRelationshipCleanupRow {
-    pub relationship_id: u64,
-    pub source_node_id: u64,
-    pub target_node_id: u64,
-    pub source_external_id: Option<String>,
-    pub target_external_id: Option<String>,
-    pub deleted: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeSourceReferenceRelationshipCleanupOutput {
-    pub graph_commit_epoch_before: u64,
-    pub graph_commit_epoch_after: u64,
-    pub rows: Vec<KnowledgeSourceReferenceRelationshipCleanupRow>,
-    pub candidate_count: usize,
-    pub deleted_relationship_count: usize,
-}

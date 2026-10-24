@@ -5005,13 +5005,6 @@ impl Database {
     ) -> Result<KnowledgeRelationshipDeleteBatchOutput> {
         delete_scoped_knowledge_relationship_batch_for(self, request)
     }
-
-    pub fn delete_knowledge_source_reference_relationships(
-        &mut self,
-        request: &KnowledgeSourceReferenceRelationshipCleanupRequest,
-    ) -> Result<KnowledgeSourceReferenceRelationshipCleanupOutput> {
-        delete_knowledge_source_reference_relationships_for(self, request)
-    }
 }
 
 impl Database {
@@ -10554,124 +10547,6 @@ pub(super) fn delete_scoped_knowledge_relationship_batch_for(
         non_writable_count,
         deleted_relationship_count,
     })
-}
-
-pub(super) struct KnowledgeSourceReferenceRelationshipDeleteCandidate {
-    relationship_id: u64,
-    source_node_id: u64,
-    target_node_id: u64,
-    source_external_id: Option<String>,
-    target_external_id: Option<String>,
-}
-
-pub(super) fn validate_source_reference(source_reference: &str, operation: &str) -> Result<()> {
-    if source_reference.trim().is_empty() {
-        return Err(HawDBError::Semantic(format!(
-            "knowledge {operation} requires a non-empty source_reference"
-        )));
-    }
-    Ok(())
-}
-
-pub(super) fn delete_knowledge_source_reference_relationships_for(
-    db: &mut Database,
-    request: &KnowledgeSourceReferenceRelationshipCleanupRequest,
-) -> Result<KnowledgeSourceReferenceRelationshipCleanupOutput> {
-    db.ensure_writable()?;
-    validate_source_reference(
-        &request.source_reference,
-        "source-reference relationship cleanup",
-    )?;
-
-    let graph_commit_epoch_before = db.runtime.get().unwrap().store.commit_epoch();
-    let Some(rel_type_id) = db.runtime.get().unwrap().catalog.rel_type_id("RELATES_TO") else {
-        return Ok(KnowledgeSourceReferenceRelationshipCleanupOutput {
-            graph_commit_epoch_before,
-            graph_commit_epoch_after: graph_commit_epoch_before,
-            rows: Vec::new(),
-            candidate_count: 0,
-            deleted_relationship_count: 0,
-        });
-    };
-
-    let mut candidates = Vec::new();
-    db.runtime.get().unwrap().store
-        .try_visit_relationships_owned(Some(rel_type_id), |relationship| {
-            if relationship
-                .properties
-                .get("source_reference")
-                .is_some_and(|value| value_to_external_id(value) == request.source_reference)
-            {
-                candidates.push(KnowledgeSourceReferenceRelationshipDeleteCandidate {
-                    relationship_id: relationship.id.0,
-                    source_node_id: relationship.source.0,
-                    target_node_id: relationship.target.0,
-                    source_external_id: db
-                        .runtime.get().unwrap().store
-                        .node_owned(relationship.source)?
-                        .as_ref()
-                        .and_then(node_external_id),
-                    target_external_id: db
-                        .runtime.get().unwrap().store
-                        .node_owned(relationship.target)?
-                        .as_ref()
-                        .and_then(node_external_id),
-                });
-            }
-            Ok(crate::store::GraphScanControl::Continue)
-        })?;
-    candidates.sort_by_key(|candidate| candidate.relationship_id);
-
-    if candidates.is_empty() {
-        return Ok(KnowledgeSourceReferenceRelationshipCleanupOutput {
-            graph_commit_epoch_before,
-            graph_commit_epoch_after: graph_commit_epoch_before,
-            rows: Vec::new(),
-            candidate_count: 0,
-            deleted_relationship_count: 0,
-        });
-    }
-
-    let mut tx = db.begin_transaction()?;
-    for candidate in &candidates {
-        let (cypher, parameters) =
-            knowledge_source_reference_relationship_delete_statement(candidate.relationship_id)?;
-        tx.query_with_params(cypher.as_str(), &parameters)?;
-    }
-    tx.commit()?;
-    let deleted_relationship_count = candidates.len();
-    let rows = candidates
-        .into_iter()
-        .map(|candidate| KnowledgeSourceReferenceRelationshipCleanupRow {
-            relationship_id: candidate.relationship_id,
-            source_node_id: candidate.source_node_id,
-            target_node_id: candidate.target_node_id,
-            source_external_id: candidate.source_external_id,
-            target_external_id: candidate.target_external_id,
-            deleted: true,
-        })
-        .collect::<Vec<_>>();
-
-    Ok(KnowledgeSourceReferenceRelationshipCleanupOutput {
-        graph_commit_epoch_before,
-        graph_commit_epoch_after: db.runtime.get().unwrap().store.commit_epoch(),
-        candidate_count: rows.len(),
-        rows,
-        deleted_relationship_count,
-    })
-}
-
-pub(super) fn knowledge_source_reference_relationship_delete_statement(
-    relationship_id: u64,
-) -> Result<(String, BTreeMap<String, Value>)> {
-    let relationship_id = i64::try_from(relationship_id).map_err(|_| {
-        HawDBError::Semantic("relationship id does not fit Cypher integer".to_string())
-    })?;
-    Ok((
-        "MATCH (:Entity)-[r:RELATES_TO]->(:Entity) WHERE id(r) = $relationship_id DELETE r"
-            .to_string(),
-        BTreeMap::from([("relationship_id".to_string(), Value::Int(relationship_id))]),
-    ))
 }
 
 pub(super) fn node_has_external_id_property(node: &NodeRecord, external_id: &str) -> bool {
