@@ -15,7 +15,7 @@
 //! Relational row execution over caller-pinned storage readers.
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 use crate::field_plan::RelationalFieldPlan;
 use hawdb_core::RuntimeTaskContext;

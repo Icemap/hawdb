@@ -156,6 +156,7 @@ use preparation::{
 };
 
 mod projection;
+mod projection_memory;
 use projection::{
     execute_blocking_projection, push_relational_output, DistinctAggregateValueBatchSource,
     RelationalBlockingObserver, StreamingProjectionOutput,
@@ -390,7 +391,21 @@ fn execute_fromless_select(
     parameters: &[Value],
     stage_timings: RelationalSqlStageTimings,
     hydration: RelationalHydrationBudget,
+    resources: &RelationalQueryResourceContext<'_>,
 ) -> Result<RelationalQueryOutput> {
+    let ledger = QueryMemoryLedger::new(hawdb_executor::memory::enforced_query_memory_budget(
+        resources.execution_memory,
+        resources.task_context,
+    )?);
+    let account = projection_memory::copy_account(&ledger);
+    let _copies = projection_memory::admit_ordinary(
+        select,
+        &BoundRow::default(),
+        parameters,
+        &account,
+        usize::MAX,
+        false,
+    )?;
     let row = expression::project_bound_row(&BoundRow::default(), &select.projection, parameters)?;
     let access_path = RelationalAccessPathDescriptor {
         kind: RelationalAccessPathKind::FullScan,
@@ -458,6 +473,7 @@ pub fn execute_prepared_relational_query_with_resources<'a, R: RelationalQuerySt
                     parameters,
                     initial_stage_timings,
                     resources.limits.hydration,
+                    &resources,
                 );
             }
             let (prepared, snapshot) = prepare_relational_select_with_snapshot(

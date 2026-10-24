@@ -745,8 +745,13 @@ pub(super) fn project_typed_locator(
     select: &SelectStatement,
     parameters: &[Value],
     row_runtime: &RelationalRowRuntime<'_>,
+    account: &hawdb_executor::QueryMemoryAccount,
+    row_limit: usize,
 ) -> Result<Row> {
     with_typed_locator_bound_row(locator, locator_layout, row_runtime, |bound| {
+        let _copies = super::projection_memory::admit_ordinary(
+            select, bound, parameters, account, row_limit, false,
+        )?;
         project_bound_row(bound, &select.projection, parameters)
     })
 }

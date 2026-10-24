@@ -32,6 +32,7 @@ mod distinct_output;
 mod exact_count_planning;
 mod having;
 mod ordinary_aggregate;
+mod projection_admission;
 
 fn assert_aggregate_memory_refusal(error: &HawDBError, owner: &str) {
     let HawDBError::ResourceBudgetExceeded(cause) = error else {
