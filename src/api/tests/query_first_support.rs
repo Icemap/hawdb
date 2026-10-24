@@ -16,16 +16,6 @@ use crate::api::*;
 use crate::error::Result;
 
 pub(super) trait QueryFirstTestExt {
-    fn query_community_entity_visibility_via_cypher(
-        &self,
-        request: &KnowledgeCommunityEntityVisibilityRequest,
-    ) -> Result<KnowledgeCommunityEntityVisibilityOutput>;
-
-    fn query_community_memories_via_cypher(
-        &self,
-        request: &KnowledgeCommunityMemoryListRequest,
-    ) -> Result<KnowledgeCommunityMemoryListOutput>;
-
     fn query_neighbors_via_cypher(
         &self,
         request: &KnowledgeNeighborsRequest,
@@ -71,20 +61,6 @@ pub(super) trait QueryFirstTestExt {
 }
 
 impl QueryFirstTestExt for Database {
-    fn query_community_entity_visibility_via_cypher(
-        &self,
-        request: &KnowledgeCommunityEntityVisibilityRequest,
-    ) -> Result<KnowledgeCommunityEntityVisibilityOutput> {
-        super::super::knowledge_community_entity_visibility_via_query_runtime(self, request)
-    }
-
-    fn query_community_memories_via_cypher(
-        &self,
-        request: &KnowledgeCommunityMemoryListRequest,
-    ) -> Result<KnowledgeCommunityMemoryListOutput> {
-        super::super::knowledge_community_memories_via_query_runtime(self, request)
-    }
-
     fn query_neighbors_via_cypher(
         &self,
         request: &KnowledgeNeighborsRequest,

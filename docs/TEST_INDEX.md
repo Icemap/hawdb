@@ -1039,3 +1039,18 @@ validation. Cache assertions account for separate count/page templates and the
 snapshot cache. All field, path-multiplicity, pagination and read-only epoch
 checks remain in the root general CI lane. The three legacy wrappers, twelve
 DTOs and host-side graph-result sorting/truncation helpers are removed.
+
+### Community query fixtures
+
+The existing two visibility and four memory cases retain their files and root
+general CI owner. Visibility uses a bounded optional match and separate entity
+count, preserving entities without memories, label isolation, default latest
+flags, deterministic ordering and two-template cache reuse. Memory reads use
+fixed mentioned/ranked/direct statements with query-owned scope/unit/crystal
+predicates, distinct entity aggregation, ordered entity IDs and bounded output.
+The main three-phase case shares one snapshot and cumulative budget. Mixed
+sources remain separate named phases rather than a host-side graph merge.
+All existing field, missing/default, rank, invalid input and cache assertions
+remain query fixtures. Shared scope validation only normalizes caller input.
+Two read wrappers, ten DTOs and their handwritten join/filter/sort helpers are
+removed; navigation wrappers remain for the next migration.

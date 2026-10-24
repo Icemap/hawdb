@@ -70,23 +70,6 @@ fn filter_parameters(
     Ok(parameters)
 }
 
-fn community_parameters(ids: Vec<Value>) -> Result<BTreeMap<String, Value>> {
-    if ids.is_empty() {
-        return Err(HawDBError::Semantic(
-            "non-empty community ids required".into(),
-        ));
-    }
-    if ids.contains(&Value::Null) {
-        return Err(HawDBError::Semantic(
-            "non-null community ids required".into(),
-        ));
-    }
-    Ok(BTreeMap::from([
-        ("community_ids".into(), Value::List(ids)),
-        ("limit".into(), Value::Int(10)),
-    ]))
-}
-
 #[test]
 fn reads_crystals_for_wiki_and_okf_shapes() {
     let mut db = Database::new();

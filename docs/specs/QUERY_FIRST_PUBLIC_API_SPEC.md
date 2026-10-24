@@ -513,8 +513,11 @@ on read snapshots.
 Their six read wrappers and eleven request/response types are removed.
 Crystal list, community aggregation and source visibility fixtures also use
 fixed statements for projection, filtering, sorting and pagination. Their three
-read wrappers and twelve DTOs are removed. The remaining eleven read wrappers
-and final qualification remain unfinished;
+read wrappers and twelve DTOs are removed. Community visibility uses an optional
+match and separate entity count; community memory phases use bounded aggregation
+and ordering statements. Their two wrappers, ten DTOs and host joins/filters/sorts
+are removed. The remaining nine navigation read wrappers and final qualification
+remain unfinished;
 this mutation cleanup alone does not complete issue #1193.
 
 ## Stable typed boundaries

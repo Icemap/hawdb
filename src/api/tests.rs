@@ -17,10 +17,7 @@ use super::{
     BackgroundMaintenanceKind, BackgroundMaintenanceOptions, CanonicalStableIdMapping, Database,
     DatabaseConfig, DatabaseReadTransaction, DerivedArtifactJobStatus,
     ExternalContentArtifactJobCompletion, ExternalContentArtifactRuntimeManifest,
-    KnowledgeCandidateScoringPolicy, KnowledgeCandidateSource,
-    KnowledgeCommunityEntityVisibilityRequest, KnowledgeCommunityMemoryCrystalFilter,
-    KnowledgeCommunityMemoryListOrder, KnowledgeCommunityMemoryListRequest,
-    KnowledgeCommunityMemoryRowSource, KnowledgeCommunityMemorySource, KnowledgeEntityRequest,
+    KnowledgeCandidateScoringPolicy, KnowledgeCandidateSource, KnowledgeEntityRequest,
     KnowledgeFallbackReasonCode, KnowledgeFanoutReasonCode, KnowledgeGraphPathDirection,
     KnowledgeInducedEdgeListRequest, KnowledgeNeighborDirection, KnowledgeNeighborsRequest,
     KnowledgePathRequest, KnowledgeRelationshipsRequest, KnowledgeRetrievalEmptyReasonCode,
@@ -2876,4 +2873,21 @@ fn bounded_batch_query<'a>(
             max_rows: Some(5),
             max_payload_bytes: Some(4096),
         })
+}
+
+fn community_parameters(ids: Vec<Value>) -> Result<BTreeMap<String, Value>> {
+    if ids.is_empty() {
+        return Err(HawDBError::Semantic(
+            "non-empty community ids required".into(),
+        ));
+    }
+    if ids.contains(&Value::Null) {
+        return Err(HawDBError::Semantic(
+            "non-null community ids required".into(),
+        ));
+    }
+    Ok(BTreeMap::from([
+        ("community_ids".into(), Value::List(ids)),
+        ("limit".into(), Value::Int(10)),
+    ]))
 }

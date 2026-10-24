@@ -14,6 +14,17 @@
 
 use super::*;
 
+const ENTITY_COUNT: &str = "MATCH (e:Entity) WHERE e.community_id IN $community_ids \
+    RETURN count(e) AS count";
+const VISIBILITY: &str = "MATCH (e:Entity) WHERE e.community_id IN $community_ids \
+    OPTIONAL MATCH (m:Memory)-[:MENTIONS]->(e) \
+    RETURN e.community_id AS community_id, e.id AS entity_id, id(e) AS entity_node_id, \
+    e.name AS entity_name, e.entity_type AS entity_type, m.id AS memory_id, \
+    id(m) AS memory_node_id, m.metadata AS memory_metadata, \
+    COALESCE(m.is_latest, true) AS memory_is_latest, m.lifecycle_state AS memory_lifecycle_state \
+    ORDER BY community_id, entity_name, entity_id, memory_id, entity_node_id, memory_node_id \
+    LIMIT $limit";
+
 #[test]
 fn reads_community_entity_visibility_for_wiki_anchor_shapes() {
     let mut db = Database::new();
@@ -41,94 +52,83 @@ fn reads_community_entity_visibility_for_wiki_anchor_shapes() {
         .unwrap();
     db.query("MATCH (s:Source {id: 'source_alpha'}), (e:Entity {id: 'entity_alpha'}) CREATE (s)-[:MENTIONS]->(e)")
         .unwrap();
-    let graph_commit_epoch = db.runtime.get().unwrap().store.commit_epoch();
 
-    let visibility = db
-        .query_community_entity_visibility_via_cypher(&KnowledgeCommunityEntityVisibilityRequest {
-            community_ids: vec![Value::Int(7), Value::Int(8)],
-            limit: 0,
-        })
+    let epoch = db.commit_epoch().unwrap();
+    let parameters = community_parameters(vec![Value::Int(7), Value::Int(8)]).unwrap();
+    let mut snapshot = db.begin_read_transaction().unwrap();
+    let count = snapshot
+        .query_request(bounded_batch_query(ENTITY_COUNT, &parameters))
         .unwrap();
-
-    assert_eq!(visibility.graph_commit_epoch, graph_commit_epoch);
-    assert_eq!(
-        db.runtime.get().unwrap().store.commit_epoch(),
-        graph_commit_epoch
-    );
-    assert_eq!(visibility.matched_entity_count, 3);
-    assert_eq!(visibility.matched_row_count, 4);
-    assert_eq!(visibility.returned_count, 4);
-    assert_eq!(visibility.rows[0].community_id, Value::Int(7));
-    assert_eq!(
-        visibility.rows[0].entity_id.as_deref(),
-        Some("entity_alpha")
-    );
-    assert_eq!(visibility.rows[0].entity_name.as_deref(), Some("Alpha"));
-    assert_eq!(visibility.rows[0].entity_type.as_deref(), Some("concept"));
-    assert_eq!(
-        visibility.rows[0].memory_id.as_deref(),
-        Some("memory_alpha_new")
-    );
-    assert_eq!(
-        visibility.rows[0].memory_metadata,
-        Some(Value::String("{\"rank\":1}".to_string()))
-    );
-    assert!(visibility.rows[0].memory_is_latest);
-    assert_eq!(
-        visibility.rows[0].memory_lifecycle_state.as_deref(),
-        Some("active")
-    );
-    assert_eq!(
-        visibility.rows[1].memory_id.as_deref(),
-        Some("memory_alpha_old")
-    );
-    assert!(!visibility.rows[1].memory_is_latest);
-    assert_eq!(visibility.rows[2].entity_id.as_deref(), Some("entity_beta"));
-    assert_eq!(visibility.rows[2].memory_id, None);
-    assert_eq!(visibility.rows[2].memory_node_id, None);
-    assert!(visibility.rows[2].memory_is_latest);
-    assert_eq!(visibility.rows[3].community_id, Value::Int(8));
-    assert_eq!(
-        visibility.rows[3].entity_id.as_deref(),
-        Some("entity_gamma")
-    );
-    assert_eq!(
-        visibility.rows[3].memory_id.as_deref(),
-        Some("memory_gamma")
-    );
-    assert!(visibility.rows[3].memory_is_latest);
-
-    let cached_visibility = db
-        .query_community_entity_visibility_via_cypher(&KnowledgeCommunityEntityVisibilityRequest {
-            community_ids: vec![Value::Int(7), Value::Int(8)],
-            limit: 0,
-        })
+    assert_eq!(count.rows.len(), 1);
+    assert_eq!(count.rows[0]["count"], Value::Int(3));
+    let visibility = snapshot
+        .query_request(bounded_batch_query(VISIBILITY, &parameters))
         .unwrap();
-    assert_eq!(cached_visibility, visibility);
-    let stats = db.plan_cache_stats().unwrap();
+    assert_eq!(snapshot.commit_epoch(), epoch);
+    assert_eq!(db.commit_epoch().unwrap(), epoch);
+    assert_eq!(visibility.rows.len(), 4);
+    for (key, value) in [
+        ("community_id", Value::Int(7)),
+        ("entity_id", Value::String("entity_alpha".into())),
+        ("entity_name", Value::String("Alpha".into())),
+        ("entity_type", Value::String("concept".into())),
+        ("memory_id", Value::String("memory_alpha_new".into())),
+        ("memory_metadata", Value::String("{\"rank\":1}".into())),
+        ("memory_is_latest", Value::Bool(true)),
+        ("memory_lifecycle_state", Value::String("active".into())),
+    ] {
+        assert_eq!(visibility.rows[0][key], value);
+    }
+    assert_eq!(
+        visibility.rows[1]["memory_id"],
+        Value::String("memory_alpha_old".into())
+    );
+    assert_eq!(visibility.rows[1]["memory_is_latest"], Value::Bool(false));
+    assert_eq!(
+        visibility.rows[2]["entity_id"],
+        Value::String("entity_beta".into())
+    );
+    assert_eq!(visibility.rows[2]["memory_id"], Value::Null);
+    assert_eq!(visibility.rows[2]["memory_node_id"], Value::Null);
+    assert_eq!(visibility.rows[2]["memory_is_latest"], Value::Bool(true));
+    assert_eq!(visibility.rows[3]["community_id"], Value::Int(8));
+    assert_eq!(
+        visibility.rows[3]["entity_id"],
+        Value::String("entity_gamma".into())
+    );
+    assert_eq!(
+        visibility.rows[3]["memory_id"],
+        Value::String("memory_gamma".into())
+    );
+    assert_eq!(visibility.rows[3]["memory_is_latest"], Value::Bool(true));
+    assert_eq!(
+        snapshot
+            .query_request(bounded_batch_query(ENTITY_COUNT, &parameters))
+            .unwrap()
+            .rows,
+        count.rows
+    );
+    assert_eq!(
+        snapshot
+            .query_request(bounded_batch_query(VISIBILITY, &parameters))
+            .unwrap()
+            .rows,
+        visibility.rows
+    );
+    let stats = snapshot.plan_cache_stats();
     assert_eq!(stats.misses, 2);
     assert_eq!(stats.hits, 2);
 }
 
 #[test]
 fn community_entity_visibility_rejects_invalid_scope() {
-    let db = Database::new();
-
-    let empty_ids_error = db
-        .query_community_entity_visibility_via_cypher(&KnowledgeCommunityEntityVisibilityRequest {
-            community_ids: Vec::new(),
-            limit: 0,
-        })
-        .unwrap_err();
-    assert!(empty_ids_error
-        .to_string()
-        .contains("non-empty community ids"));
-
-    let null_id_error = db
-        .query_community_entity_visibility_via_cypher(&KnowledgeCommunityEntityVisibilityRequest {
-            community_ids: vec![Value::Null],
-            limit: 0,
-        })
-        .unwrap_err();
-    assert!(null_id_error.to_string().contains("non-null community ids"));
+    for (ids, message) in [
+        (vec![], "non-empty community ids"),
+        (vec![Value::Null], "non-null community ids"),
+    ] {
+        assert!(community_parameters(ids)
+            .unwrap_err()
+            .to_string()
+            .contains(message));
+    }
 }
