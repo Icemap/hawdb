@@ -3,17 +3,25 @@
 Issue Number: ref #1222
 
 The current implementation is based on main
-`01793dc2923da88e8b8d053ffda8daf6d8b84f06`. Both checkouts use the pinned
+`80c4b84357757ac6344e90f8fd4b73dbf9bcd0d0`. Both checkouts use the pinned
 Rust toolchain and ordinary repository bench profile. Identical scan and
 publication harnesses exercise baseline and candidate with fresh fixtures;
 source/binary/harness hashes identify each measurement. Logical scan units are
 separate from physical I/O and governor-admission costs.
 
-The earlier `720d98f` controls are preserved under [preintegration](preintegration/README.md).
-They include the dense resident scan regression and the original publication
-negative controls with zero active-writer/post-E advances. They describe their
-recorded sources, rather than the subsequently integrated main implementation.
-The follow-up controls use the current baseline and keep all repetitions.
+The earlier `720d98f` controls remain available in the existing immutable
+[source archive for `9bb71b8`](https://api.github.com/repos/nowledge-co/hawdb/tarball/9bb71b8c82120806a1304328dd6644c8f3a7dafc),
+under `docs/benchmarks/architecture_2026_10_24/`. All 34 files were downloaded and
+compared byte-for-byte by SHA-256 before removal from the current tree. The
+archive SHA-256 is
+`8c2e14cef5e6d44bdba1f2d0e286222759e51c3996b1f9dbae15f5deb3d24ff6`.
+No release, evidence branch or workflow was created. Git history is unchanged.
+
+Those historical controls reported dense resident bulk enumeration at
+188.29 -> 536.21 microseconds, and zero active-writer/post-E advances in the
+original publication runs. They do not describe the integrated implementation
+or qualify a performance gate. The [PR validation section](https://github.com/nowledge-co/hawdb/pull/1240)
+records current-source results and outstanding gates; raw runs remain outside Git.
 
 ## Measurement contract
 
@@ -25,16 +33,22 @@ consume work; the implementation does not promise work proportional only to
 selected labels.
 
 Publication controls use small 32-document/128-byte and bulk
-1,024-document/512-byte projections, one foreground writer, 1,024 disjoint SQL
-writes, 16 shared trigger writes and four quiet successful publications. Disabled
-and detached modes receive identical foreground/trigger work. The optional
-`--capture-before-writers true` schedule captures E before releasing workers,
-then waits for their first real commit through bounded setup handshakes outside
-measured write/preparation/construction intervals. Writers continue immediately;
-no rate limiter, sleep or changed progress threshold is added. Total elapsed time
-includes setup. The first detached publication must witness a committed post-E
-advance. Active-writer advances and the existing two-advance qualification remain
-separate. This finite workload does not establish starvation freedom.
+1,024-document/512-byte projections, four foreground writers, four pinned readers,
+8,192 disjoint SQL writes, 1,024 reads per reader, 16 shared trigger writes and
+32 quiet publications. Disabled, scoped-blocking and detached modes receive
+identical foreground/trigger work. Repetitions, successful post-E publications,
+reader overlap, foreground p95/p99 and outer-owner wait/hold times must be
+reported separately. Owner callback hold time includes validation and selection;
+it is not a direct measurement of an internal selector mutex.
+
+The optional `--capture-before-writers true` schedule is a separate, reader-free
+control: it captures E before releasing workers, then waits for their first real
+commit through bounded setup handshakes outside measured
+write/preparation/construction intervals. Writers continue immediately. Total
+elapsed time includes setup. That first post-E publication does not establish
+repeated progress. Qualification still requires at least two successful post-E
+advances while writers remain active; finite workloads do not establish
+starvation freedom.
 
 ## Unchanged Search segment reuse
 
@@ -73,10 +87,11 @@ Run executables sequentially with new fixture roots. The scan binary takes its
 root as its sole argument. Publication commands use the recorded parameters:
 
 ```console
-consumer_publication --mode detached --documents 32 --payload 128 --writers 1 --writes 1024 --quiet-samples 4 --capture-before-writers true --root NEW_ROOT
-consumer_publication --mode detached --documents 1024 --payload 512 --writers 1 --writes 1024 --quiet-samples 4 --capture-before-writers true --root ANOTHER_NEW_ROOT
+consumer_publication --mode detached --documents 32 --payload 128 --writers 4 --readers 4 --reads-per-reader 1024 --writes 8192 --quiet-samples 32 --root NEW_ROOT
+consumer_publication --mode detached --documents 1024 --payload 512 --writers 4 --readers 4 --reads-per-reader 1024 --writes 8192 --quiet-samples 32 --root ANOTHER_NEW_ROOT
 ```
 
-Use `--mode disabled` for the corresponding foreground controls. Keep all raw
+Repeat each cohort three times. Use `--mode disabled` and
+`--mode scoped-blocking` for the corresponding controls. Keep all raw
 samples, source/binary hashes, successes and refusals. The benchmark removes only
 its own newly created fixture; never point it at an existing database.
