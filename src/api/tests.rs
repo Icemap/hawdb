@@ -19,16 +19,16 @@ use super::{
     ExternalContentArtifactJobCompletion, ExternalContentArtifactRuntimeManifest,
     KnowledgeCandidateScoringPolicy, KnowledgeCandidateSource, KnowledgeEntityRequest,
     KnowledgeFallbackReasonCode, KnowledgeFanoutReasonCode, KnowledgeGraphPathDirection,
-    KnowledgeInducedEdgeListRequest, KnowledgeNeighborDirection, KnowledgeNeighborsRequest,
-    KnowledgePathRequest, KnowledgeRelationshipsRequest, KnowledgeRetrievalEmptyReasonCode,
-    KnowledgeRetrievalRequest, KnowledgeRetrievalStage, KnowledgeScopedNeighborsRequest,
-    KnowledgeScopedPathRequest, KnowledgeScopedRelationshipsRequest,
-    KnowledgeScopedSubgraphRequest, KnowledgeSubgraphRequest, KnowledgeTraversalFallbackReasonCode,
-    KnowledgeTruncationReasonCode, NowledgeGraphAdapter, NowledgeGraphStatement,
-    PlanCacheBypassReason, PlanCacheLookup, QueryOutput, QueryStreamOptions, RecoveryMode,
-    SearchProjectionGraphDeltaRequest, HAWDB_LIGHTNING_BOOTSTRAP_PROTOCOL_VERSION,
-    NOWLEDGE_DEEP_SEARCH_FILTERED_RANK_WINDOW, NOWLEDGE_DEEP_SEARCH_GRAPH_CONTEXT_MAX_HOPS,
-    NOWLEDGE_DEEP_SEARCH_MIN_GRAPH_SEED_LIMIT, NOWLEDGE_DEEP_SEARCH_MIN_RANK_WINDOW,
+    KnowledgeNeighborDirection, KnowledgeNeighborsRequest, KnowledgePathRequest,
+    KnowledgeRelationshipsRequest, KnowledgeRetrievalEmptyReasonCode, KnowledgeRetrievalRequest,
+    KnowledgeRetrievalStage, KnowledgeScopedNeighborsRequest, KnowledgeScopedPathRequest,
+    KnowledgeScopedRelationshipsRequest, KnowledgeScopedSubgraphRequest, KnowledgeSubgraphRequest,
+    KnowledgeTraversalFallbackReasonCode, KnowledgeTruncationReasonCode, NowledgeGraphAdapter,
+    NowledgeGraphStatement, PlanCacheBypassReason, PlanCacheLookup, QueryOutput,
+    QueryStreamOptions, RecoveryMode, SearchProjectionGraphDeltaRequest,
+    HAWDB_LIGHTNING_BOOTSTRAP_PROTOCOL_VERSION, NOWLEDGE_DEEP_SEARCH_FILTERED_RANK_WINDOW,
+    NOWLEDGE_DEEP_SEARCH_GRAPH_CONTEXT_MAX_HOPS, NOWLEDGE_DEEP_SEARCH_MIN_GRAPH_SEED_LIMIT,
+    NOWLEDGE_DEEP_SEARCH_MIN_RANK_WINDOW,
 };
 use crate::optimizer::PlanCost;
 use crate::qos::{
@@ -75,6 +75,7 @@ mod graph_analytics;
 mod graph_hash_join;
 mod graph_meta;
 mod graph_rag_schema_guidance;
+mod induced_edge_reads;
 mod knowledge_community_entity_visibility;
 mod knowledge_community_memories;
 mod knowledge_context_memory_preview;

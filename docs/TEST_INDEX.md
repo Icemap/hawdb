@@ -1054,3 +1054,15 @@ All existing field, missing/default, rank, invalid input and cache assertions
 remain query fixtures. Shared scope validation only normalizes caller input.
 Two read wrappers, ten DTOs and their handwritten join/filter/sort helpers are
 removed; navigation wrappers remain for the next migration.
+
+### Induced-edge query fixtures
+
+The two existing induced-edge cases move from `knowledge_navigation.rs` to
+`induced_edge_reads.rs` under the same root general CI owner. Parameterized
+identity, edge-count and ordered-page statements share an immutable snapshot
+and explicit cumulative row/payload budget. Queries own endpoint membership,
+strength/confidence/default selection, sorting and LIMIT. Caller missing-slot
+shaping only consumes selected identity rows. Exact endpoints/types/strengths,
+outside-node exclusion, total count independent of page size, repeat-cache hits
+and invalid empty input remain covered. One wrapper, three DTOs and the legacy
+host-side graph filtering/sorting helpers are removed.

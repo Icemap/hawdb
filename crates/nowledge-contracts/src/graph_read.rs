@@ -20,7 +20,6 @@ use crate::{
     KnowledgeEntity, KnowledgeFanoutReasonCode, KnowledgeFanoutReasonDetail,
     KnowledgeGraphContextPath,
 };
-use hawdb_core::Value;
 use hawdb_search::{SearchCandidateSetReport, SearchRetrieverCandidateSetReport};
 use std::collections::BTreeMap;
 use std::str::FromStr;
@@ -96,33 +95,6 @@ pub struct KnowledgeRelationshipsOutput {
     pub missing_seed_count: usize,
     pub filtered_out_seed_count: usize,
     pub relationship_count: usize,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeInducedEdgeListRequest {
-    pub external_ids: Vec<String>,
-    pub limit: usize,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeInducedEdgeRow {
-    pub source_id: Option<String>,
-    pub source_node_id: u64,
-    pub target_id: Option<String>,
-    pub target_node_id: u64,
-    pub relationship_id: u64,
-    pub relationship_type: String,
-    pub strength: Value,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeInducedEdgeListOutput {
-    pub graph_commit_epoch: u64,
-    pub rows: Vec<KnowledgeInducedEdgeRow>,
-    pub matched_node_count: usize,
-    pub missing_external_ids: Vec<String>,
-    pub matched_count: usize,
-    pub returned_count: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

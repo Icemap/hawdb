@@ -36,11 +36,6 @@ pub(super) trait QueryFirstTestExt {
         request: &KnowledgeScopedRelationshipsRequest,
     ) -> Result<KnowledgeRelationshipsOutput>;
 
-    fn query_induced_edges_via_cypher(
-        &self,
-        request: &KnowledgeInducedEdgeListRequest,
-    ) -> Result<KnowledgeInducedEdgeListOutput>;
-
     fn query_paths_via_cypher(&self, request: &KnowledgePathRequest)
         -> Result<KnowledgePathOutput>;
 
@@ -87,13 +82,6 @@ impl QueryFirstTestExt for Database {
         request: &KnowledgeScopedRelationshipsRequest,
     ) -> Result<KnowledgeRelationshipsOutput> {
         super::super::knowledge_scoped_relationships_via_query_runtime(self, request)
-    }
-
-    fn query_induced_edges_via_cypher(
-        &self,
-        request: &KnowledgeInducedEdgeListRequest,
-    ) -> Result<KnowledgeInducedEdgeListOutput> {
-        super::super::knowledge_induced_edges_via_query_runtime(self, request)
     }
 
     fn query_paths_via_cypher(
