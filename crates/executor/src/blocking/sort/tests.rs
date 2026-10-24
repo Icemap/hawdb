@@ -19,6 +19,111 @@ use std::num::NonZeroU64;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 
+#[cfg(target_pointer_width = "64")]
+#[test]
+fn inline_integer_sort_matches_general_keys_and_stable_ties() {
+    assert!(
+        std::mem::size_of::<SortRunValues>() <= std::mem::size_of::<Vec<(Value, SortDirection)>>()
+    );
+    let budget = NonZeroUsize::new(1 << 20).unwrap();
+    let ledger = QueryMemoryLedger::new(budget);
+    let account = ledger.account(QueryMemoryClass::BlockingState, "test", budget);
+    let keys = KeyMemory::new(&account, budget, "test", "expressions", "keys");
+    let values = [
+        Value::Null,
+        Value::Bool(false),
+        Value::Int(i64::MIN),
+        Value::Int(-1),
+        Value::Int(0),
+        Value::Int(i64::MAX),
+        Value::Float(-0.0),
+        Value::Float(f64::NAN),
+        Value::String("x".repeat(256)),
+        Value::List(vec![Value::Null]),
+    ];
+    for direction in [SortDirection::Asc, SortDirection::Desc] {
+        let items = [SortItem {
+            key: SortKey::Column("value".into()),
+            direction,
+        }];
+        for left in &values {
+            for right in &values {
+                let left_binding = Binding::scalar("value", left.clone());
+                let reference = keys
+                    .sort(&items, &Catalog::default(), &left_binding, None)
+                    .unwrap();
+                let expected_bytes = binding_memory_bytes(&left_binding)
+                    + crate::binding::sort_values_memory_bytes(&reference.values);
+                let prepared_bytes = reference.allocation.bytes();
+                drop(reference);
+                let first =
+                    SortRunRow::new(&Catalog::default(), &items, 0, left_binding, &keys, None)
+                        .unwrap();
+                assert_eq!(first.values.memory_bytes(), expected_bytes);
+                assert_eq!(first.allocation.bytes(), prepared_bytes);
+                assert_eq!(
+                    matches!(first.values.sort_values, SortRunValues::Integer(..)),
+                    matches!(left, Value::Int(_)),
+                );
+                let second = SortRunRow::new(
+                    &Catalog::default(),
+                    &items,
+                    1,
+                    Binding::scalar("value", right.clone()),
+                    &keys,
+                    None,
+                )
+                .unwrap();
+                let expected = match direction {
+                    SortDirection::Asc => left.cmp(right),
+                    SortDirection::Desc => left.cmp(right).reverse(),
+                }
+                .then(Ordering::Less);
+                assert_eq!(first.values.cmp_key(&second.values), expected);
+                assert_eq!(second.values.cmp_key(&first.values), expected.reverse());
+                drop(first);
+                drop(second);
+                assert_eq!(ledger.snapshot().used_bytes, 0);
+            }
+        }
+    }
+}
+
+#[cfg(target_pointer_width = "64")]
+#[test]
+fn inline_integer_sort_preserves_refusal_and_cancellation() {
+    let bytes = std::mem::size_of::<(Value, SortDirection)>();
+    let items = [SortItem {
+        key: SortKey::Column("value".into()),
+        direction: SortDirection::Asc,
+    }];
+    for available in [bytes - 1, bytes] {
+        let budget = NonZeroUsize::new(available).unwrap();
+        let ledger = QueryMemoryLedger::new(budget);
+        let account = ledger.account(QueryMemoryClass::BlockingState, "test", budget);
+        let keys = KeyMemory::new(&account, budget, "test", "expressions", "keys");
+        let binding = Binding::scalar("value", Value::Int(5));
+        let result = keys.single_integer_sort(&items, &binding, None);
+        assert_eq!(result.is_ok(), available == bytes);
+        drop(result);
+        assert_eq!(ledger.snapshot().used_bytes, 0);
+        let context = RuntimeTaskContext::default();
+        context.cancellation().cancel();
+        assert!(keys
+            .single_integer_sort(&items, &binding, Some(&context))
+            .is_err());
+        assert_eq!(ledger.snapshot().used_bytes, 0);
+        assert!(keys
+            .single_integer_sort(&[], &binding, None)
+            .unwrap()
+            .is_none());
+        assert!(keys
+            .single_integer_sort(&[items[0].clone(), items[0].clone()], &binding, None)
+            .unwrap()
+            .is_none());
+    }
+}
+
 struct Rows(Vec<Binding>);
 
 impl BindingBatchSource for Rows {
@@ -633,7 +738,7 @@ fn legacy_merge_entrypoint_keeps_pipeline_accounting_and_signature() {
         let mut rows: Vec<_> = (0..6)
             .filter(|value| value % 2 == parity)
             .map(|value| SortRunRow {
-                sort_values: vec![(Value::Int(value), SortDirection::Asc)],
+                sort_values: vec![(Value::Int(value), SortDirection::Asc)].into(),
                 ordinal: value as u64,
                 binding: Binding::scalar("value", Value::Int(value)),
             })
@@ -691,7 +796,7 @@ fn legacy_merge_refusal_preserves_explicit_budget_origin_and_releases_state() {
     let mut spill = SpillBudgetTracker::with_ledger("legacy merge", &memory, &ledger);
     let rows: Vec<_> = (0..2)
         .map(|value| SortRunRow {
-            sort_values: Vec::new(),
+            sort_values: Vec::new().into(),
             ordinal: value as u64,
             binding: Binding::scalar("value", Value::Int(value)),
         })
@@ -798,7 +903,7 @@ fn spilled_json_sort_keys_use_query_working_memory_during_merge_and_compaction()
                 ]));
                 // Prebuilt keys isolate reconstruction from initial expression evaluation.
                 let mut rows = vec![SortRunRow {
-                    sort_values: vec![(Value::Int(rank), SortDirection::Asc)],
+                    sort_values: vec![(Value::Int(rank), SortDirection::Asc)].into(),
                     ordinal: rank as u64,
                     binding,
                 }];

@@ -1,5 +1,5 @@
 // Copyright 2026 Nowledge
-// Licensed under the Apache License, Version 2.0.
+// SPDX-License-Identifier: Apache-2.0
 
 //! Admit scalar working memory and retain owned keys until operator handoff.
 
@@ -69,6 +69,34 @@ impl KeyMemory {
         }
         runtime_checkpoint(task_context)?;
         Ok(PreparedKey { values, allocation })
+    }
+
+    #[cfg(target_pointer_width = "64")]
+    pub(crate) fn single_integer_sort(
+        &self,
+        items: &[SortItem],
+        binding: &Binding,
+        task_context: Option<&RuntimeTaskContext>,
+    ) -> Result<Option<PreparedKey<(i64, SortDirection)>>> {
+        let [item] = items else {
+            return Ok(None);
+        };
+        let SortKey::Column(name) = &item.key else {
+            return Ok(None);
+        };
+        let Some(Value::Int(value)) = binding.values.get(name) else {
+            return Ok(None);
+        };
+        runtime_checkpoint(task_context)?;
+        // Keep the general key's admission and cancellation boundaries even
+        // though its tuple does not require a separate allocation here.
+        let allocation = self
+            .preparation
+            .reserve(std::mem::size_of::<(Value, SortDirection)>())?;
+        runtime_checkpoint(task_context)?;
+        let values = (*value, item.direction);
+        runtime_checkpoint(task_context)?;
+        Ok(Some(PreparedKey { values, allocation }))
     }
 
     pub(crate) fn sort(

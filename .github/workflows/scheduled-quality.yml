@@ -240,6 +240,15 @@ jobs:
             sudo apt-get install -y strace
           fi
 
+      - name: Check complete executor unit suite for the isolated sort experiment
+        if: ${{ github.ref_name == 'experiment/1119-inline-integer-sort' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/inline-sort
+          cargo test --locked -p hawdb-executor --lib --all-features -- --nocapture \
+            > artifacts/inline-sort/unit.log 2>&1
+
       - name: Build both revisions and measure the fixed protocol
         shell: bash
         env:
@@ -275,6 +284,8 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: strict-writer-gate-${{ github.sha }}-${{ github.run_attempt }}
-          path: artifacts/strict-writer-gate
+          path: |
+            artifacts/strict-writer-gate
+            artifacts/inline-sort
           if-no-files-found: error
           retention-days: 30
