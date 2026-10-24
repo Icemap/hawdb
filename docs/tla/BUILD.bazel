@@ -332,7 +332,14 @@ tla_test_suite(
         timeout_seconds = 1800,
         tlc_args = ["-cleanup", "-workers", "auto"],
     )
-    for control in ["ReleaseMemory", "KeepCpu", "IgnoreFloor", "KeepQueuedMemory"]
+    for control in [
+        "ReleaseMemory",
+        "KeepCpu",
+        "IgnoreFloor",
+        "KeepQueuedMemory",
+        "HardRefusalRecovery",
+        "HardRefusalFailure",
+    ]
 ]
 
 [

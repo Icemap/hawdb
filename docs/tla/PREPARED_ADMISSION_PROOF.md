@@ -5,8 +5,12 @@ bounded memory governor. Preparation owns a temporary reader pin and a fixed
 memory reservation. Transfer releases CPU/task/I/O ownership and the reader
 pin while retaining the memory charge. Execution separately admits its working
 and result memory; normal completion, failure, cancellation and panic retire
-all ownership. On a retryable admission refusal, rebuildable preparation is
-released before waiting. The execution callback rebuilds it under its new
+all ownership. On any admission refusal, rebuildable preparation is
+released before retrying. A hard refusal enters `retrying` without retaining
+memory, CPU or a source pin. The next admission tests execution alone: it can
+succeed in the band `execution <= capacity < execution + preparation`, queue
+for transient capacity, or terminate when execution itself cannot fit.
+The execution callback rebuilds preparation under its new
 reservation. Queued queries therefore cannot retain each other's required
 execution capacity; immediate admissions still reuse preparation.
 
@@ -21,6 +25,13 @@ shared process-policy ceilings, not transient RSS headroom.
 
 Four negative controls remove the transfer charge, retain the only CPU slot,
 omit the retained-memory floor, and keep prepared memory while queued. Each must violate its named invariant.
+Two additional reachability controls require counterexamples witnessing both
+successful execution after a hard refusal and a final hard refusal after the
+preparation has been released. They prevent the model from silently removing
+either fallback outcome. `retrying` is an immediate admission attempt, not a
+queued wait, so the waiting-capacity invariant applies only after that attempt.
+Tokio queue-ticket renewal after a terminal refusal is owned by the native
+capacity-band regression; this model does not represent queue identities.
 These safety checks do not prove fairness under indefinite external resource
 pressure, allocator-accurate plan sizing, or query-plan validity. Rust tests
 cover the actual governor and process reservation counters, queued cancellation
@@ -83,5 +94,6 @@ Recommended verification:
 ```console
 bazel test //docs/tla:HawDBPreparedAdmission_check
 bazel test //docs/tla:HawDBPreparedAdmissionReleaseMemory_check //docs/tla:HawDBPreparedAdmissionKeepCpu_check //docs/tla:HawDBPreparedAdmissionIgnoreFloor_check //docs/tla:HawDBPreparedAdmissionKeepQueuedMemory_check
+bazel test //docs/tla:HawDBPreparedAdmissionHardRefusalRecovery_check //docs/tla:HawDBPreparedAdmissionHardRefusalFailure_check
 bazel test //crates/qos:hawdb_qos_tests //crates/runtime-tokio:hawdb_runtime_tokio_tests
 ```

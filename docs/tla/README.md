@@ -2196,7 +2196,9 @@ remains open under #1092 and draft #1039.
 
 [`HawDBPreparedAdmission.tla`](HawDBPreparedAdmission.tla) covers fixed planning
 memory transfer, single-CPU admission, cancellation ownership, and the retained
-memory floor that prevents self-wait. See the
+memory floor that prevents self-wait. Hard refusals release preparation before
+retrying execution alone; reachability controls cover both recovery and final
+refusal. See the
 [implementation correspondence and negative controls](PREPARED_ADMISSION_PROOF.md).
 
 ### Ordinary autocommit semantic scopes

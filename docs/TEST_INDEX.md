@@ -637,7 +637,10 @@ schema, branch and configuration revalidation and verify that a prepared object
 does not retain a reader pin. Embedded template-cache tests require one lookup per
 request, including disabled caches and non-deterministic bypasses. The
 `HawDBPreparedAdmission` model and four negative controls cover the ownership
-transition independently of query execution.
+transition independently of query execution. Two manual reachability controls
+also witness hard-refusal recovery after releasing preparation and a final
+refusal when execution alone still exceeds capacity. The positive model remains
+in the existing TLA suite; native capacity-band tests own Tokio waiter renewal.
 
 ## PR #1217 root CI scheduling
 
