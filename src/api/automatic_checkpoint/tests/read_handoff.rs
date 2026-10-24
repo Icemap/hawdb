@@ -22,12 +22,13 @@ use crate::Value;
 use std::collections::BTreeMap;
 use std::sync::mpsc;
 
-struct PublicationRead {
+struct PublicationRead<'a> {
     control: Arc<Control>,
     resume: Option<mpsc::Sender<()>>,
+    handoff: &'a HandoffPauseForTest,
 }
 
-impl ExternalReadOperator for PublicationRead {
+impl ExternalReadOperator for PublicationRead<'_> {
     fn execute_vector_seed(
         &mut self,
         request: VectorSeedExecutionRequest<'_>,
@@ -35,7 +36,7 @@ impl ExternalReadOperator for PublicationRead {
         request.resources.checkpoint()?;
         assert_eq!(request.embedding, &[1.0, 0.0]);
         self.resume.take().unwrap().send(()).unwrap();
-        wait_control(&self.control, |state| state.phase == Phase::Handoff);
+        wait_for_handoff_pause(&self.control, self.handoff);
         assert!(self.control.has_pending_handoff());
         Ok(VectorSeedExecutionOutput {
             rows: vec![VectorSeedExecutionRow {
@@ -87,17 +88,13 @@ fn wait_control(control: &Control, predicate: impl Fn(&State) -> bool) {
     }
 }
 
-struct HandoffHold {
-    resume: Option<mpsc::Sender<()>>,
-    _paused: mpsc::Receiver<()>,
-}
-
-impl Drop for HandoffHold {
-    fn drop(&mut self) {
-        if let Some(resume) = self.resume.take() {
-            let _ = resume.send(());
-        }
-    }
+fn wait_for_handoff_pause(control: &Control, handoff: &HandoffPauseForTest) {
+    // The owner publishes Handoff before entering the pause probe. Wait for
+    // its acknowledgement before a frontend can adopt or drop the receiver.
+    handoff
+        .wait(Duration::from_secs(15))
+        .expect("checkpoint owner did not reach handoff pause");
+    assert_eq!(control.lock().unwrap().phase, Phase::Handoff);
 }
 
 fn fixture_with_seal_pause() -> (
@@ -105,7 +102,7 @@ fn fixture_with_seal_pause() -> (
     Database,
     Arc<Control>,
     mpsc::Sender<()>,
-    HandoffHold,
+    HandoffPauseForTest,
 ) {
     let fixture = Fixture::new();
     let mut db = Database::open_with_config(
@@ -127,19 +124,10 @@ fn fixture_with_seal_pause() -> (
     let (sealed, paused) = mpsc::channel();
     let (resume, continuation) = mpsc::channel();
     let (error_sender, errors) = mpsc::channel();
-    let (handoff_paused, handoff_observed) = mpsc::channel();
-    let (handoff_resume, handoff_continuation) = mpsc::channel();
-    let handoff = HandoffHold {
-        resume: Some(handoff_resume),
-        _paused: handoff_observed,
-    };
+    let handoff = control.pause_idle_handoff_for_test().unwrap();
     {
         let mut state = control.lock().unwrap();
         state.preparation_error_probe = Some(error_sender);
-        state.idle_handoff_probe = Some(Arc::new(OwnerPauseProbe {
-            paused: handoff_paused,
-            resume: Mutex::new(handoff_continuation),
-        }));
         state.prefix_seal_probe = Some(Arc::new(PrefixSealProbe {
             sealed,
             resume: Mutex::new(continuation),
@@ -178,6 +166,7 @@ fn checkpoint_publishes_while_read_callback_is_running() {
     let mut external = PublicationRead {
         control: control.clone(),
         resume: Some(resume),
+        handoff: &handoff,
     };
     let output = db
         .query_with_params_trace_and_external_with_context(
@@ -255,7 +244,7 @@ fn concurrent_read_only_traffic_adopts_and_releases_checkpoint_admission() {
     let mut old = db.begin_read_transaction().unwrap();
     let before = db.published_read_view().unwrap();
     resume.send(()).unwrap();
-    wait_control(&control, |state| state.phase == Phase::Handoff);
+    wait_for_handoff_pause(&control, &handoff);
     assert!(control.has_pending_handoff());
     assert_eq!(
         db.query("MATCH (n:Memory) RETURN n.id").unwrap().rows.len(),
@@ -315,7 +304,7 @@ fn concurrent_read_only_traffic_adopts_and_releases_checkpoint_admission() {
 fn invalid_read_handoff_fails_closed_and_preserves_disk_authority() {
     let (fixture, mut db, control, resume, handoff) = fixture_with_seal_pause();
     resume.send(()).unwrap();
-    wait_control(&control, |state| state.phase == Phase::Handoff);
+    wait_for_handoff_pause(&control, &handoff);
     let other_fixture = Fixture::new();
     let mut other = Database::open(&other_fixture.0).unwrap();
     other.query("CREATE (:Memory {id: 'other'})").unwrap();
@@ -379,7 +368,7 @@ fn typed_explain_analyze_runs_without_the_owner_mutex() {
         output.output.rows[0]["id"],
         Value::String("memory-1".into())
     );
-    wait_control(&control, |state| state.phase == Phase::Handoff);
+    wait_for_handoff_pause(&control, &handoff);
     drop(handoff);
     db.checkpoint().unwrap();
 }
@@ -389,7 +378,7 @@ fn plain_sql_only_reads_adopt_the_ready_physical_generation() {
     let (fixture, mut db, control, resume, handoff) = fixture_with_seal_pause();
     let before = db.runtime.get().unwrap().store.published_read_view();
     resume.send(()).unwrap();
-    wait_control(&control, |state| state.phase == Phase::Handoff);
+    wait_for_handoff_pause(&control, &handoff);
     assert!(control.has_pending_handoff());
     assert_eq!(
         db.query_sql("SELECT body FROM records").unwrap().rows[0]["body"],
