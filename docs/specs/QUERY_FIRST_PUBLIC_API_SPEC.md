@@ -301,10 +301,19 @@ checkpoint freshness. Capture performs no filesystem reads. External edits to
 marker files are observed by the live diagnostic API or after reopening; a read
 generation and its query reports retain the locally captured freshness.
 
-Read generations preserve an already captured RaBitQ index. If an in-memory
-query lazily builds a missing index, that build remains operation-local and is
-not installed into the fixed-capacity generation. Repeated lazy-build cost still
-requires qualification; this change does not claim a latency improvement.
+Read generations preserve an already captured RaBitQ index. In-memory generations
+also reserve a conservative bound for all lazy projection segments, ID maps and
+one serialized build workspace before returning a governed lease. The first
+vector query builds the missing index once; subsequent reads reuse that generation's
+cache. A writer publishes a distinct generation without changing the old cache.
+The fixed bound remains charged during the lease, including unused build allowance.
+
+Funding is conservative per generation, not per distinct COW page. Two retained
+generations can therefore require close to twice the corpus bound even when most
+pages are shared; admission can refuse new reads until an old lease is released.
+This is an explicit availability limitation, not a claim that physical usage
+necessarily doubled. Page-level shared funding needs a separate ownership design;
+this implementation never silently bypasses the configured memory limit.
 Standalone candidate search, hydration, retrieval and candidate-evidence helpers
 also capture a published pair after admission and execute outside the owner lock.
 Admission retains only instance/configuration/capability metadata. Configuration,
@@ -363,11 +372,11 @@ consumed or dropped. Transferring that reservation MUST release preparation's
 CPU, blocking-task and I/O slots without a memory release/reacquire gap. Execution
 requires a separate admission. Hard capacity checks MUST include any separately
 charged memory that the caller cannot release while waiting, but MUST NOT charge
-those bytes again. An impossible combined reservation fails non-retryably rather
-than waiting for its own retained state. Rejection, cancellation, future drop,
-error and panic MUST release the associated ownership. An adapter that queues
-execution MUST release rebuildable preparation on a retryable admission refusal,
-then reprepare under the execution reservation. This prevents multiple prepared
+those bytes again. On any admission refusal, synchronous and queued execution
+MUST drop rebuildable preparation and recompute the request before deciding
+whether execution exceeds hard capacity. Reprepare only after admission under
+an execution reservation large enough for planning. Rejection, cancellation,
+future drop, error and panic MUST release the associated ownership. This prevents multiple prepared
 queries from holding all available memory while waiting for one another.
 
 Admitted SQL retains a parameter-neutral relational template, database instance

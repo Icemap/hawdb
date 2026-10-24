@@ -182,6 +182,13 @@ impl NowledgeMemEmbeddedStore {
         })?;
         match projection.refresh_reader() {
             Ok(_) => {}
+            Err(error @ HawDBError::FileDescriptors(_)) => {
+                // Refresh leaves the old immutable reader intact. Keep its
+                // native pins and maintenance configuration so releasing a long
+                // read allows the same handle to retry; propagate the resource
+                // refusal rather than pretending the durable head was attached.
+                return Err(error);
+            }
             Err(error) => {
                 // Keep published evidence on disk, but do not serve a stale
                 // generation after failing to attach the durable head.

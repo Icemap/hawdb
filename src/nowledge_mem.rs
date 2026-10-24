@@ -13287,6 +13287,82 @@ mod tests {
     }
 
     #[test]
+    fn incremental_refresh_retries_after_descriptor_pressure_without_reopen() {
+        let root = unique_nowledge_mem_test_dir("incremental_refresh_fd_retry");
+        let search_path = root.join("search");
+        let files =
+            hawdb_storage::file_descriptors::ProjectFileDescriptors::acquire_with_capacity_limit(
+                &search_path,
+                64,
+                true,
+            )
+            .unwrap();
+        let mut index = SearchIndex::open(&search_path).unwrap();
+        index
+            .upsert_projection_row(SearchProjectionRow {
+                kind: SearchProjectionKind::Memory,
+                external_id: "a".into(),
+                title: "original".into(),
+                body: "original".into(),
+                embedding: None,
+                source_id: None,
+                metadata: BTreeMap::new(),
+            })
+            .unwrap();
+        index.checkpoint().unwrap();
+        drop(index);
+        let options = super::NowledgeMemOpenOptions::with_search_projection(
+            root.join("graph"),
+            search_path,
+            NowledgeMemGraphMode::WritableCutover,
+        )
+        .with_incremental_search_maintenance(Default::default());
+        let (handle, _) = NowledgeMemEmbeddedStoreHandle::open_with_options(options).unwrap();
+        let pinned = handle
+            .lock_published_read()
+            .unwrap()
+            .as_ref()
+            .unwrap()
+            .out_of_core_projection
+            .as_ref()
+            .unwrap()
+            .read_snapshot();
+        let metrics = files.metrics();
+        let pressure = files
+            .reserve(metrics.limit - metrics.open - metrics.reserved)
+            .unwrap();
+        let error = handle
+            .catch_up_search_projection_with_batch_hydrator(4, 4, 1, |_, _| {
+                Ok(SearchProjectionRelationalDelta::default())
+            })
+            .unwrap_err();
+        assert!(
+            matches!(
+                error,
+                HawDBError::FileDescriptors(crate::FileDescriptorError::BudgetExceeded { .. })
+            ),
+            "{error}"
+        );
+        drop(pressure);
+        drop(pinned);
+        handle
+            .query_with_report("CREATE (:Memory {id: 'm', title: 'Recovered'})")
+            .unwrap();
+        handle
+            .catch_up_search_projection_with_batch_hydrator(4, 4, 1, |_, _| {
+                Ok(SearchProjectionRelationalDelta::default())
+            })
+            .unwrap();
+        let output = handle
+            .search_projection_documents(&["memory:m".into()], 1)
+            .unwrap();
+        assert_eq!(output[0].title, "Recovered");
+        drop(handle);
+        drop(files);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn incremental_maintenance_budget_failure_does_not_advance_the_watermark() {
         let maintenance = super::NowledgeMemIncrementalSearchMaintenanceOptions {
             working_memory_bytes: std::num::NonZeroU64::new(1).unwrap(),

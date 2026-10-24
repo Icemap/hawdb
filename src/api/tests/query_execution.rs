@@ -918,6 +918,13 @@ fn native_numeric_results_preserve_borrowing_validation_and_owned_parity() {
             .native_projection_rows,
         3
     );
+    let limited = tx
+        .query_with_params_bounded_profile(&format!("{query} SKIP 1 LIMIT 1"), &parameters, Some(1))
+        .unwrap();
+    let memory = &limited.execution_profile.pipeline_memory_report;
+    assert_eq!(limited.output.rows.len(), 1);
+    assert_eq!(memory.native_projection_rows, 1);
+    assert_eq!(memory.intermediate_rows, 1);
     for bounded in [false, true] {
         let mut rows = Vec::new();
         let report = tx

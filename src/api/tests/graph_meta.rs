@@ -107,23 +107,14 @@ fn stamps_graph_meta_batch_for_nowledge_algorithm_state() {
         ]),
     )
     .unwrap();
-    let duplicate = parameters(
-        "main",
-        BTreeMap::from([("pagerank_applied".into(), Value::Bool(false))]),
-    )
-    .unwrap();
-    let mut seen = BTreeSet::new();
+    let mut duplicate = pagerank.clone();
+    duplicate.insert("pagerank_applied".into(), Value::Bool(false));
     let mut node_ids = Vec::new();
-    let mut duplicates = 0;
-    for (id, query, parameters) in [
-        ("main", STAMP_PAGERANK, pagerank),
-        ("community", STAMP_COMMUNITY, community),
-        ("main", STAMP_PAGERANK, duplicate),
+    for (query, parameters) in [
+        (STAMP_PAGERANK, pagerank),
+        (STAMP_COMMUNITY, community),
+        (STAMP_PAGERANK, duplicate),
     ] {
-        if !seen.insert(id) {
-            duplicates += 1;
-            continue;
-        }
         transaction
             .query_request(bounded_query(query, &parameters))
             .unwrap();
@@ -133,9 +124,8 @@ fn stamps_graph_meta_batch_for_nowledge_algorithm_state() {
         assert_eq!(output.rows.len(), 1);
         node_ids.push(output.rows[0]["node_id"].clone());
     }
-    assert_eq!(duplicates, 1);
-    assert_eq!(node_ids.len(), 2);
     assert_ne!(node_ids[0], node_ids[1]);
+    assert_eq!(node_ids[0], node_ids[2]);
     transaction.commit().unwrap();
     assert_eq!(before, 1);
     assert_eq!(db.commit_epoch().unwrap(), before + 1);
@@ -143,7 +133,7 @@ fn stamps_graph_meta_batch_for_nowledge_algorithm_state() {
     let rows = db
         .query_request(bounded_query("MATCH (m:GraphMeta {meta_id: 'main'}) RETURN m.pagerank_applied AS applied, m.pagerank_algorithm AS algorithm, m.pagerank_damping AS damping, m.pagerank_iterations AS iterations, m.pagerank_computed_at AS computed_at, m.updated_at AS updated_at", &BTreeMap::new()))
         .unwrap();
-    assert_eq!(rows.rows[0].get("applied"), Some(&Value::Bool(true)));
+    assert_eq!(rows.rows[0].get("applied"), Some(&Value::Bool(false)));
     assert_eq!(
         rows.rows[0].get("algorithm"),
         Some(&Value::String("pagerank".to_string()))
@@ -524,4 +514,38 @@ fn graph_meta_delete_query_persists_and_replays() {
         assert_eq!(community.rows.len(), 1);
     }
     std::fs::remove_dir_all(path).unwrap();
+}
+
+#[test]
+fn graph_meta_merge_set_rejects_missing_parameters_and_removes_explicit_nulls() {
+    let mut db = Database::new();
+    db.query(
+        "CREATE (:GraphMeta {meta_id: 'main', pagerank_applied: true, pagerank_algorithm: 'old'})",
+    )
+    .unwrap();
+    let epoch = db.commit_epoch().unwrap();
+    let incomplete = BTreeMap::from([("meta_id".into(), Value::String("main".into()))]);
+    assert!(db
+        .query_request(bounded_query(STAMP_PAGERANK, &incomplete))
+        .unwrap_err()
+        .to_string()
+        .contains("missing parameter"));
+    assert_eq!(db.commit_epoch().unwrap(), epoch);
+    let mut parameters = incomplete;
+    for field in [
+        "pagerank_applied",
+        "pagerank_algorithm",
+        "pagerank_damping",
+        "pagerank_iterations",
+        "pagerank_computed_at",
+        "updated_at",
+    ] {
+        parameters.insert(field.into(), Value::Null);
+    }
+    db.query_request(bounded_query(STAMP_PAGERANK, &parameters))
+        .unwrap();
+    let output = db.query("MATCH (m:GraphMeta {meta_id: 'main'}) RETURN m.pagerank_applied AS applied, m.pagerank_algorithm AS algorithm").unwrap();
+    assert_eq!(output.rows[0]["applied"], Value::Null);
+    assert_eq!(output.rows[0]["algorithm"], Value::Null);
+    assert_eq!(db.commit_epoch().unwrap(), epoch + 1);
 }

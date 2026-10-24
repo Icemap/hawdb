@@ -358,6 +358,7 @@ fn ordered_range_indexes<R: hawdb_storage::graph_engine::GraphReadEngine>(
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct OptimizerSchemaKey {
     labels: Vec<String>,
+    unique_constraints: Vec<(crate::schema::ConstraintSubject, String)>,
     relationship_types: Vec<String>,
     equality_indexes: Vec<(String, String)>,
     range_indexes: Vec<(String, String)>,
@@ -475,6 +476,10 @@ impl OptimizerSchemaKey {
             .collect::<Vec<_>>();
         property_descriptors.sort();
         Self {
+            unique_constraints: catalog
+                .unique_constraints()
+                .map(|constraint| (constraint.subject, constraint.property.clone()))
+                .collect(),
             labels,
             relationship_types,
             equality_indexes,

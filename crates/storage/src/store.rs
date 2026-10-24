@@ -699,6 +699,7 @@ struct MutationCommitOptions<'a> {
 #[doc(hidden)]
 pub struct GraphMutationTransaction {
     base_commit_epoch: u64,
+    base_catalog: Catalog,
     catalog: Catalog,
     store: GraphStore,
     ops: Vec<WalOp>,

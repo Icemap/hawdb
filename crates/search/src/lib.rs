@@ -1745,8 +1745,15 @@ impl SearchIndex {
 
     #[cfg(feature = "vector-search")]
     fn build_in_memory_rabitq_projection(&self) -> Result<Option<Arc<RaBitQCandidateProjection>>> {
-        if let Some(projection) = self.rabitq_projection() {
-            return Ok(Some(projection));
+        // Serialize the first build within a generation. Captured generations
+        // reserve its complete build/cache capacity before a governed lease is
+        // returned; concurrent readers must not allocate duplicate projections.
+        let mut cached = self
+            .rabitq_projection
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if let Some(projection) = cached.as_ref() {
+            return Ok(Some(Arc::clone(projection)));
         }
         let projection = RaBitQCandidateProjection::build_from_view(
             &self.documents,
@@ -1754,14 +1761,7 @@ impl SearchIndex {
             self.rabitq_build_options,
         )?
         .map(Arc::new);
-        // Captured generations have a fixed retained-capacity contract. A lazy
-        // query build remains operation-local instead of extending that owner.
-        if self.read_freshness.is_none() {
-            *self
-                .rabitq_projection
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner()) = projection.clone();
-        }
+        *cached = projection.clone();
         Ok(projection)
     }
 

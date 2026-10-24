@@ -660,6 +660,11 @@ impl Database {
         prepared: PreparedRuntimeQuery,
         request: QueryRequest<'_>,
     ) -> Result<QueryOutput> {
+        if !prepared.matches_request(request) || !self.accepts_prepared_query(&prepared)? {
+            return Err(HawDBError::Execution(
+                "prepared execution context changed; prepare and admit again".into(),
+            ));
+        }
         self.validate_prepared_branch(&prepared)?;
         let runtime = self.runtime.get()?;
         let (cypher_text, prepared) = prepared.into_execution(&runtime.catalog, &runtime.store);
@@ -1248,6 +1253,30 @@ mod tests {
         assert!(db.accepts_prepared_query(&prepared).unwrap());
         db.system_variables.estimated_operations += 1;
         assert!(!db.accepts_prepared_query(&prepared).unwrap());
+    }
+
+    #[test]
+    fn prepared_execution_rejects_changed_configuration_and_request() {
+        for changed_config in [false, true] {
+            let mut db = Database::new();
+            let text = "CREATE NODE TABLE Prepared";
+            let prepared = db.prepare_runtime_request(QueryRequest::new(text)).unwrap();
+            if changed_config {
+                db.config.max_read_result_rows = Some(1);
+            }
+            let request = QueryRequest::new(if changed_config {
+                text
+            } else {
+                "CREATE NODE TABLE Other"
+            });
+            let epoch = db.commit_epoch().unwrap();
+            assert!(db
+                .query_prepared_request(prepared, request)
+                .unwrap_err()
+                .to_string()
+                .contains("prepare and admit again"));
+            assert_eq!(db.commit_epoch().unwrap(), epoch);
+        }
     }
 
     #[test]

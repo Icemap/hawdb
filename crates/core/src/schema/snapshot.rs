@@ -23,6 +23,14 @@ use std::sync::Arc;
 
 pub(super) struct CatalogSnapshot<T>(Arc<T>);
 
+impl<T: PartialEq> PartialEq for CatalogSnapshot<T> {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0) || self.0 == other.0
+    }
+}
+
+impl<T: Eq> Eq for CatalogSnapshot<T> {}
+
 impl<T> Clone for CatalogSnapshot<T> {
     fn clone(&self) -> Self {
         Self(Arc::clone(&self.0))

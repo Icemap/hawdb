@@ -91,12 +91,15 @@ fn knowledge_property_batch_update_rejects_invalid_identifiers() {
 }
 
 #[test]
-fn knowledge_property_batch_update_rejects_empty_assignment_rows() {
+fn knowledge_property_batch_update_rejects_missing_assignment_parameters() {
     let mut db = Database::new();
     db.query("CREATE (:Memory {id: 'memory_1', title: 'Old'})")
         .unwrap();
-    let error = property_title_parameters("memory_1", None).unwrap_err();
-    assert!(error.to_string().contains("at least one assignment"));
+    let parameters = BTreeMap::from([("id".into(), Value::String("memory_1".into()))]);
+    let error = db
+        .query_request(bounded_batch_query(PROPERTY_TITLE_UPDATE, &parameters))
+        .unwrap_err();
+    assert!(error.to_string().contains("missing parameter"));
     assert_eq!(db.commit_epoch().unwrap(), 1);
     let output = db
         .query_request(bounded_batch_query(PROPERTY_SNAPSHOT, &BTreeMap::new()))
@@ -105,7 +108,7 @@ fn knowledge_property_batch_update_rejects_empty_assignment_rows() {
 }
 
 #[test]
-fn knowledge_property_batch_update_does_not_write_projected_idless_identity() {
+fn knowledge_property_batch_update_does_not_resolve_an_internal_id_as_an_external_identity() {
     let mut db = Database::new();
     db.query("CREATE (:Memory {title: 'Idless memory'})")
         .unwrap();

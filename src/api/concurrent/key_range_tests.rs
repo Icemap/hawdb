@@ -171,9 +171,22 @@ fn derive_ranges(predicate: &str, parameters: &[Value]) -> KeyRanges {
     let SqlStatement::Select(select) = prepared.statement() else {
         panic!("expected SELECT")
     };
+    let schema = RelationalTableSchema {
+        name: "messages".into(),
+        columns: vec![hawdb_storage::relational::RelationalColumnSchema {
+            name: "id".into(),
+            scalar_type: hawdb_storage::relational::RelationalScalarType::BigInt,
+            nullable: false,
+            default: None,
+        }],
+        primary_key: vec!["id".into()],
+        unique_constraints: Vec::new(),
+        foreign_keys: Vec::new(),
+        indexes: Vec::new(),
+    };
     single_key_ranges(
         select.selection.as_ref().unwrap(),
-        "id",
+        &schema,
         select.from_table(),
         select.from_alias.as_deref(),
         parameters,

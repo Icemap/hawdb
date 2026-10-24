@@ -121,7 +121,7 @@ fn reads_community_entity_visibility_for_wiki_anchor_shapes() {
 }
 
 #[test]
-fn community_entity_visibility_rejects_invalid_scope() {
+fn community_entity_visibility_parameter_normalization_rejects_invalid_scope() {
     for (ids, message) in [
         (vec![], "non-empty community ids"),
         (vec![Value::Null], "non-null community ids"),

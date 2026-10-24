@@ -1140,3 +1140,22 @@ comparisons. Bidirectional one/two-hop checks use fixed one-hop edges per patter
 the frontend intentionally rejects non-outgoing variable-length patterns even
 for missing endpoints or unknown relationship types. These syntax repairs retain
 all exact-result, missing-endpoint, zero-hop and exhausted-budget assertions.
+
+### Query-first concurrency review regressions
+
+PR #1194 review repairs extend the existing root, search and Tokio test owners;
+no execution lane, profile, timeout or discovery filter changes. Root autocommit
+coverage pins a data writer before execution, publishes a new graph label, then
+checks catalog/data preservation through checkpoint and reopen; UUID predicate
+locks use the storage column type, and constraint/configuration changes reject
+stale preparation. Embedded and Tokio cases cover execution that fits capacity
+only after retained preparation is released. Search cases cover admitted lazy
+resident RaBitQ reuse and refusal before allocation. Mem incremental maintenance
+retains its reader/configuration after a descriptor refusal and retries on the
+same handle. Query profiles count delivered SKIP/LIMIT rows once. Migrated route
+fixtures execute repeated MERGE and missing/NULL assignments; parameter-only
+normalization tests are named explicitly and are not database coverage.
+
+These regressions run in the existing required Cargo/Bazel root/crate CI suites.
+Local-only verification remains the Shiro regression/smoke targets and the short
+MVCC campaign documented above.

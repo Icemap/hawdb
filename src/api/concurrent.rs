@@ -1508,14 +1508,14 @@ fn select_lock_requests(
         None => Some(vec![(Bound::Unbounded, Bound::Unbounded)]),
         Some(predicate) if schema.primary_key.len() == 1 => single_key_ranges(
             predicate,
-            &schema.primary_key[0],
+            schema,
             select.from_table(),
             select.from_alias.as_deref(),
             parameters,
         ),
         Some(predicate) => composite_key_point(
             predicate,
-            &schema.primary_key,
+            schema,
             select.from_table(),
             select.from_alias.as_deref(),
             parameters,
@@ -1597,10 +1597,9 @@ fn mutation_target_lock_requests(
         )];
     };
     let ranges = if schema.primary_key.len() == 1 {
-        single_key_ranges(selection, &schema.primary_key[0], table, alias, parameters)
+        single_key_ranges(selection, schema, table, alias, parameters)
     } else {
-        composite_key_point(selection, &schema.primary_key, table, alias, parameters)
-            .map(|range| vec![range])
+        composite_key_point(selection, schema, table, alias, parameters).map(|range| vec![range])
     };
     let Some(ranges) = ranges else {
         return vec![LockRequest::relational_table(
@@ -1754,7 +1753,7 @@ fn relational_row_key(
 
 fn single_key_ranges(
     predicate: &SqlPredicate,
-    primary_key: &str,
+    schema: &RelationalTableSchema,
     table: &SqlTableName,
     alias: Option<&str>,
     parameters: &[Value],
@@ -1764,8 +1763,8 @@ fn single_key_ranges(
             kind: ExprKind::And(left, right),
             ..
         } => {
-            let left = single_key_ranges(left, primary_key, table, alias, parameters);
-            let right = single_key_ranges(right, primary_key, table, alias, parameters);
+            let left = single_key_ranges(left, schema, table, alias, parameters);
+            let right = single_key_ranges(right, schema, table, alias, parameters);
             match (left, right) {
                 (Some(left), Some(right)) => Some(
                     left.into_iter()
@@ -1786,14 +1785,8 @@ fn single_key_ranges(
             kind: ExprKind::Or(left, right),
             ..
         } => {
-            let mut ranges = single_key_ranges(left, primary_key, table, alias, parameters)?;
-            ranges.extend(single_key_ranges(
-                right,
-                primary_key,
-                table,
-                alias,
-                parameters,
-            )?);
+            let mut ranges = single_key_ranges(left, schema, table, alias, parameters)?;
+            ranges.extend(single_key_ranges(right, schema, table, alias, parameters)?);
             Some(ranges)
         }
         Expr {
@@ -1801,9 +1794,13 @@ fn single_key_ranges(
             ..
         } if left
             .as_column()
-            .is_some_and(|left| column_matches(left, primary_key, table, alias)) =>
+            .is_some_and(|left| column_matches(left, &schema.primary_key[0], table, alias)) =>
         {
-            let key = RelationalKey(vec![bind_sql_lock_value(right.as_value()?, parameters)?]);
+            let key = RelationalKey(vec![bind_sql_lock_value(
+                right.as_value()?,
+                parameters,
+                schema.columns[schema.column_position(&schema.primary_key[0])?].scalar_type,
+            )?]);
             match op {
                 SqlComparisonOp::Eq => {
                     Some(vec![(Bound::Included(key.clone()), Bound::Included(key))])
@@ -1825,13 +1822,16 @@ fn single_key_ranges(
             ..
         } if left
             .as_column()
-            .is_some_and(|left| column_matches(left, primary_key, table, alias)) =>
+            .is_some_and(|left| column_matches(left, &schema.primary_key[0], table, alias)) =>
         {
             values
                 .iter()
                 .map(|value| {
-                    let key =
-                        RelationalKey(vec![bind_sql_lock_value(value.as_value()?, parameters)?]);
+                    let key = RelationalKey(vec![bind_sql_lock_value(
+                        value.as_value()?,
+                        parameters,
+                        schema.columns[schema.column_position(&schema.primary_key[0])?].scalar_type,
+                    )?]);
                     Some((Bound::Included(key.clone()), Bound::Included(key)))
                 })
                 .collect()
@@ -1842,22 +1842,16 @@ fn single_key_ranges(
 
 fn composite_key_point(
     predicate: &SqlPredicate,
-    primary_key: &[String],
+    schema: &RelationalTableSchema,
     table: &SqlTableName,
     alias: Option<&str>,
     parameters: &[Value],
 ) -> Option<(Bound<RelationalKey>, Bound<RelationalKey>)> {
     let mut values = BTreeMap::new();
-    collect_composite_equalities(
-        predicate,
-        primary_key,
-        table,
-        alias,
-        parameters,
-        &mut values,
-    )?;
+    collect_composite_equalities(predicate, schema, table, alias, parameters, &mut values)?;
     let key = RelationalKey(
-        primary_key
+        schema
+            .primary_key
             .iter()
             .map(|column| values.remove(column))
             .collect::<Option<Vec<_>>>()?,
@@ -1867,7 +1861,7 @@ fn composite_key_point(
 
 fn collect_composite_equalities(
     predicate: &SqlPredicate,
-    primary_key: &[String],
+    schema: &RelationalTableSchema,
     table: &SqlTableName,
     alias: Option<&str>,
     parameters: &[Value],
@@ -1878,8 +1872,8 @@ fn collect_composite_equalities(
             kind: ExprKind::And(left, right),
             ..
         } => {
-            collect_composite_equalities(left, primary_key, table, alias, parameters, values)?;
-            collect_composite_equalities(right, primary_key, table, alias, parameters, values)
+            collect_composite_equalities(left, schema, table, alias, parameters, values)?;
+            collect_composite_equalities(right, schema, table, alias, parameters, values)
         }
         Expr {
             kind:
@@ -1889,7 +1883,7 @@ fn collect_composite_equalities(
                     right,
                 },
             ..
-        } if primary_key.iter().any(|column| {
+        } if schema.primary_key.iter().any(|column| {
             left.as_column()
                 .is_some_and(|left| column_matches(left, column, table, alias))
         }) =>
@@ -1900,7 +1894,11 @@ fn collect_composite_equalities(
             }
             values.insert(
                 left.name.clone(),
-                bind_sql_lock_value(right.as_value()?, parameters)?,
+                bind_sql_lock_value(
+                    right.as_value()?,
+                    parameters,
+                    schema.columns[schema.column_position(&left.name)?].scalar_type,
+                )?,
             );
             Some(())
         }
@@ -1908,8 +1906,13 @@ fn collect_composite_equalities(
     }
 }
 
-fn bind_sql_lock_value(value: &SqlValue, parameters: &[Value]) -> Option<RelationalValue> {
-    crate::relational_sql::bind_relational_value(value.clone(), parameters).ok()
+fn bind_sql_lock_value(
+    value: &SqlValue,
+    parameters: &[Value],
+    scalar_type: hawdb_storage::relational::RelationalScalarType,
+) -> Option<RelationalValue> {
+    let value = crate::relational_sql::bind_relational_value(value.clone(), parameters).ok()?;
+    hawdb_relational::coerce_relational_value(value, scalar_type).ok()
 }
 
 fn column_matches(

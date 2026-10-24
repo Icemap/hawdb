@@ -127,6 +127,55 @@ struct RaBitQDocumentIdMap {
 }
 
 impl RaBitQCandidateProjection {
+    /// Conservative peak for all retained segments, ID maps and the one
+    /// serialized build workspace. Includes vector growth and manifest copies;
+    /// overflow or an invalid configuration refuses admission before allocation.
+    pub(crate) fn in_memory_capacity_bound(
+        documents: &impl crate::resident_documents::DocumentView,
+        identity: ProjectionIdentity,
+        options: RaBitQCandidateProjectionBuildOptions,
+    ) -> usize {
+        let mut count = 0usize;
+        let mut ids = 0usize;
+        let mut dimension = 0;
+        for document in documents.values() {
+            if let Some(embedding) = &document.embedding {
+                count = count.saturating_add(1);
+                dimension = dimension.max(embedding.len());
+                ids = ids.saturating_add(document.id.len().saturating_mul(2));
+            }
+        }
+        if count == 0 {
+            return 0;
+        }
+        let identity_bytes = identity
+            .embedding_model
+            .as_ref()
+            .map_or(0, String::capacity)
+            .saturating_add(
+                identity
+                    .embedding_version
+                    .as_ref()
+                    .map_or(0, String::capacity),
+            );
+        let Ok(admission) = build_config(dimension, identity, options).resource_admission() else {
+            return usize::MAX;
+        };
+        let segments = count.div_ceil(admission.admitted_segment_rows);
+        ids.saturating_add(identity_bytes.saturating_mul(2))
+            .saturating_add(documents.len().saturating_mul(
+                crate::build_memory::MAP_ENTRY_BYTES + std::mem::size_of::<String>(),
+            ))
+            .saturating_add(
+                segments.saturating_add(1).saturating_mul(
+                    admission
+                        .peak_working_bytes
+                        .saturating_add(4096)
+                        .saturating_mul(2),
+                ),
+            )
+    }
+
     pub(crate) fn retained_capacity_bytes(&self) -> usize {
         let storage = match &self.storage {
             RaBitQCandidateProjectionStorage::InMemory(value) => value.retained_capacity_bytes(),

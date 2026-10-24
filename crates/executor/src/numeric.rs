@@ -370,14 +370,13 @@ pub fn try_stream_native_projection(
             // The source owns the payload. The emitter owns an admitted schema;
             // no transient row-map or cloned payload reservation is necessary.
             context.observer.record_operator_output(projection, 1);
-            context.observer.record_native_projection_row(payload);
             if skipped < offset {
                 skipped += 1;
                 return Ok(BatchControl::Continue);
             }
+            context.observer.record_native_projection_row(payload);
             if has_limit {
                 context.observer.record_operator_output(plan, 1);
-                context.observer.record_pipeline_batch_shape(1, payload);
             }
             let control = emit(row)?;
             runtime_checkpoint(context.task_context)?;

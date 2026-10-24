@@ -290,3 +290,45 @@ fn ddl_and_append_stage_privately_without_reparsing_the_template() {
         .query_sql("SELECT id FROM counters WHERE id = 1 FOR UPDATE")
         .is_err());
 }
+
+#[test]
+fn textual_and_typed_uuid_predicates_lock_the_same_primary_key() {
+    let database = Database::new().into_concurrent();
+    database
+        .query_sql("CREATE TABLE uuids (id UUID PRIMARY KEY, value BIGINT NOT NULL)")
+        .unwrap();
+    let id = hawdb_core::generate_uuidv7().unwrap();
+    database
+        .query_sql_with_params(
+            "INSERT INTO uuids (id, value) VALUES ($1, 0)",
+            &[Value::Uuid(id)],
+        )
+        .unwrap();
+    let (ready, resume) =
+        database.pause_next_autocommit_mutation(AutocommitMutationPhase::BeforeExecution);
+    let other = database.clone();
+    let writer = thread::spawn(move || {
+        other.query_sql(&format!("UPDATE uuids SET value = 1 WHERE id = '{id}'"))
+    });
+    ready.recv_timeout(Duration::from_secs(5)).unwrap();
+    let mut competing = database
+        .begin_transaction(ConcurrentTransactionOptions::pessimistic(
+            Duration::from_millis(20),
+        ))
+        .unwrap();
+    let result = competing.query_sql_with_params(
+        "UPDATE uuids SET value = 2 WHERE id = $1",
+        &[Value::Uuid(id)],
+    );
+    drop(competing);
+    resume.send(()).unwrap();
+    writer.join().unwrap().unwrap();
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains("lock wait timed out"));
+    assert_eq!(
+        database.query_sql("SELECT value FROM uuids").unwrap().rows[0]["value"],
+        Value::Int(1)
+    );
+}

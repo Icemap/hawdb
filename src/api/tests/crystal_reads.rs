@@ -328,7 +328,7 @@ fn reads_crystal_communities_for_topic_ranking_and_okf_mapping() {
 }
 
 #[test]
-fn crystal_community_read_rejects_invalid_scope() {
+fn crystal_community_parameter_normalization_rejects_invalid_scope() {
     for (ids, message) in [
         (vec![], "non-empty community ids"),
         (vec![Value::Null], "non-null community ids"),
@@ -341,7 +341,7 @@ fn crystal_community_read_rejects_invalid_scope() {
 }
 
 #[test]
-fn crystal_source_visibility_rejects_invalid_scope() {
+fn crystal_source_visibility_parameter_normalization_rejects_invalid_scope() {
     for (ids, message) in [
         (vec![], "non-empty community ids"),
         (vec![Value::Null], "non-null community ids"),

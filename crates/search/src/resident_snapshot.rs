@@ -164,10 +164,11 @@ impl ReadGeneration {
         }
         #[cfg(feature = "vector-search")]
         if captured.rabitq_build_options != live.rabitq_build_options
-            || !same_owner(
-                captured.rabitq_projection().as_ref(),
-                live.rabitq_projection().as_ref(),
-            )
+            || (live.path.is_some()
+                && !same_owner(
+                    captured.rabitq_projection().as_ref(),
+                    live.rabitq_projection().as_ref(),
+                ))
         {
             return false;
         }
@@ -451,6 +452,100 @@ mod tests {
         );
         drop(next);
         assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    }
+
+    #[cfg(feature = "vector-search")]
+    #[test]
+    fn resident_vector_generation_funds_and_reuses_one_lazy_projection() {
+        use hawdb_qos::{
+            IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeMemorySnapshot,
+            RuntimeResourceBudget, RuntimeResourceSnapshot, RuntimeWorkKind, RuntimeWorkPriority,
+            RuntimeWorkRequest,
+        };
+        let mut index = SearchIndex::in_memory();
+        for id in 0..17 {
+            let mut value = document(&format!("vector-{id}"), "body", "space");
+            value.embedding = Some(vec![1.0, 0.5, 0.25, 0.0]);
+            index.upsert(value).unwrap();
+        }
+        let snapshot = index.read_snapshot();
+        let capacity = snapshot.retained_capacity_bytes() as u64;
+        let resources = RuntimeResourceSnapshot::from_parts(
+            RuntimeResourceBudget::from_limits(std::num::NonZeroUsize::MIN, None, None),
+            RuntimeMemorySnapshot::from_limits(Some(1 << 30), Some(1 << 30), None, None, None),
+        );
+        for fits in [false, true] {
+            let governor = RuntimeGovernor::new(
+                RuntimeGovernorConfig {
+                    memory_budget_bytes: Some(capacity - u64::from(!fits)),
+                    ..RuntimeGovernorConfig::shared_host()
+                },
+                resources,
+                IoConcurrencyBudget::new(2, 1),
+            );
+            let permit = governor
+                .try_admit(RuntimeWorkRequest::new(
+                    RuntimeWorkPriority::Foreground,
+                    RuntimeWorkKind::Control,
+                ))
+                .unwrap();
+            let lease = snapshot.retain_with_permit(&permit);
+            if !fits {
+                assert!(lease.is_err());
+                assert!(snapshot.generation.index.rabitq_projection().is_none());
+                continue;
+            }
+            let lease = lease.unwrap();
+            let search = |source: &SearchIndexReadSnapshot| {
+                let output = source
+                    .try_search_with_options_adaptive_vector_projection_context(
+                        "",
+                        Some(&[1.0, 0.5, 0.25, 0.0]),
+                        SearchMode::Vector,
+                        SearchQueryOptions {
+                            limit: 3,
+                            offset: 0,
+                            rank_window: None,
+                            fusion_weights: Default::default(),
+                            metadata_filters: BTreeMap::new(),
+                            policy_epoch: None,
+                        },
+                        AdaptiveVectorSearchOptions::new(CompressedVectorSearchMode::Required),
+                        VectorSearchExecutionOptions::default(),
+                    )
+                    .unwrap();
+                assert_eq!(output.hits.len(), 3);
+                source
+                    .generation
+                    .index
+                    .rabitq_projection()
+                    .expect("query must build the projection")
+            };
+            let first = search(lease.snapshot());
+            let second = search(&snapshot);
+            assert!(Arc::ptr_eq(&first, &second));
+            assert!(Arc::ptr_eq(
+                &snapshot.generation,
+                &index.read_snapshot().generation
+            ));
+            assert!(
+                first.retained_capacity_bytes()
+                    <= capacity as usize - snapshot.document_retained_capacity_bytes()
+            );
+            assert_eq!(governor.snapshot().admitted_memory_bytes, capacity);
+            let mut replacement = document("vector-0", "updated", "space");
+            replacement.embedding = Some(vec![0.0, 0.0, 0.5, 1.0]);
+            index.upsert(replacement).unwrap();
+            let current = index.read_snapshot();
+            assert!(!Arc::ptr_eq(&snapshot.generation, &current.generation));
+            assert!(current.generation.index.rabitq_projection().is_none());
+            assert!(Arc::ptr_eq(
+                &first,
+                &snapshot.generation.index.rabitq_projection().unwrap()
+            ));
+            drop(lease);
+            assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+        }
     }
 
     #[cfg(feature = "full-text-search")]

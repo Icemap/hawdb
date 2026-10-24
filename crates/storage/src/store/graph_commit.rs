@@ -37,6 +37,7 @@ impl GraphStore {
     pub fn begin_mutation_transaction(&self, catalog: &Catalog) -> GraphMutationTransaction {
         GraphMutationTransaction {
             base_commit_epoch: self.commit_epoch,
+            base_catalog: catalog.clone(),
             catalog: catalog.clone(),
             store: self.snapshot(),
             ops: Vec::new(),
@@ -114,10 +115,24 @@ impl GraphStore {
             && append_transaction.writes.is_empty();
         let mvcc_read_epoch =
             (!read_only && !allow_stale_rebase).then_some(transaction.base_commit_epoch);
+        // A data-only transaction must not replace symbols or constraints
+        // published by another writer after its snapshot. Catalog edits cannot
+        // be rebased by name: staged operations may already contain numeric IDs.
+        let working_catalog = if transaction.catalog == transaction.base_catalog {
+            catalog.clone()
+        } else if *catalog == transaction.base_catalog {
+            transaction.catalog
+        } else {
+            return Err(HawDBError::TransactionConflict {
+                read_epoch: transaction.base_commit_epoch,
+                committed_epoch: self.commit_epoch,
+                key: "catalog".into(),
+            });
+        };
         let ops = compact_transaction_graph_ops(transaction.ops);
         self.commit_prepared_mutation_ops(
             catalog,
-            transaction.catalog,
+            working_catalog,
             ops,
             transaction.rows,
             limits,

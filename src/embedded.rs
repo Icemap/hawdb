@@ -488,21 +488,27 @@ impl HawDBEmbedded {
                     .expect("control work owns a fixed memory reservation"),
             )
         };
-        let admission = prepared.admission();
+        let admission = prepared.admission().clone();
         self.check_admitted_query_context(task_context)?;
         // Logical payload limits do not estimate the compact result owner's
         // retained capacity. Keep admission and output validation independent.
         let result_budget_bytes = self.admitted_result_budget_bytes();
-        let request = admission.runtime_work_request_for_snapshot(
-            result_budget_bytes,
-            self.runtime_governor.snapshot(),
-        );
-        let request = request
-            .with_memory_bytes(request.memory_bytes.max(planning_request.memory_bytes))
-            .with_retained_memory_bytes(prepared.planning_memory_bytes());
         let is_mutation = admission.is_mutation;
         let streaming_eligible = admission.streaming_eligible;
-        let permit = self.try_admit_query(request)?;
+        let (prepared, permit) = self.try_admit_prepared(prepared, |snapshot, prepared| {
+            let request =
+                admission.runtime_work_request_for_snapshot(result_budget_bytes, snapshot);
+            request
+                .with_memory_bytes(request.memory_bytes.max(planning_request.memory_bytes))
+                .with_retained_memory_bytes(
+                    prepared.map_or(0, |value| value.planning_memory_bytes()),
+                )
+        })?;
+        let request = permit.request();
+        let prepared = match prepared {
+            Some(prepared) => prepared,
+            None => self.database.prepare_runtime_request(query)?,
+        };
         let execution_task_context = permit.bind_task_context(task_context.clone());
         let _permit = permit;
         let query = query.with_task_context(&execution_task_context);
@@ -561,10 +567,21 @@ impl HawDBEmbedded {
                 )
         };
         let uses_snapshot = prepared.uses_snapshot();
-        let request = prepared
-            .work_request(self.admitted_result_budget_bytes())
-            .with_retained_memory_bytes(prepared.planning_memory_bytes());
-        let permit = self.try_admit_query(request)?;
+        let request = prepared.work_request(self.admitted_result_budget_bytes());
+        let request =
+            request.with_memory_bytes(request.memory_bytes.max(planning_request.memory_bytes));
+        let (prepared, permit) = self.try_admit_prepared(prepared, |_, prepared| {
+            request.with_retained_memory_bytes(
+                prepared.map_or(0, |value| value.planning_memory_bytes()),
+            )
+        })?;
+        let prepared = match prepared {
+            Some(prepared) => prepared,
+            None => self
+                .database
+                .runtime_sql_planning_snapshot()
+                .prepare(query.sql)?,
+        };
         let context = permit.bind_task_context(context.clone());
         self.check_admitted_query_context(&context)?;
         let (prepared, _planning_memory) = prepared.into_statement(&self.database)?;
@@ -581,6 +598,28 @@ impl HawDBEmbedded {
             self.check_admitted_query_context(&context)?;
         }
         result.map_err(EmbeddedQueryError::Database)
+    }
+
+    fn try_admit_prepared<T>(
+        &self,
+        prepared: T,
+        request: impl Fn(
+            hawdb_qos::RuntimeGovernorSnapshot,
+            Option<&T>,
+        ) -> hawdb_qos::RuntimeWorkRequest,
+    ) -> std::result::Result<(Option<T>, hawdb_qos::RuntimePermit), EmbeddedQueryError> {
+        match self.try_admit_query(request(self.runtime_governor.snapshot(), Some(&prepared))) {
+            Ok(permit) => Ok((Some(prepared), permit)),
+            Err(_) => {
+                // Rebuild only after admission, under the execution reservation.
+                // Retained preparation must not turn a fitting query into a
+                // hard-capacity refusal or survive a synchronous busy result.
+                drop(prepared);
+                let permit =
+                    self.try_admit_query(request(self.runtime_governor.snapshot(), None))?;
+                Ok((None, permit))
+            }
+        }
     }
 
     fn try_admit_query(
@@ -1401,6 +1440,69 @@ mod tests {
         let governor = engine.runtime_governor().snapshot();
         assert_eq!(governor.admissions, governor.completions);
         assert_eq!(governor.admitted_memory_bytes, 0);
+    }
+
+    #[test]
+    fn sync_queries_rebuild_preparation_when_only_execution_fits() {
+        for sql in [false, true] {
+            let mut engine = HawDBEmbedded::open_in_memory_with_config(DatabaseConfig {
+                max_read_result_payload_bytes: Some(4096),
+                ..DatabaseConfig::default()
+            });
+            engine
+                .database_mut()
+                .query("CREATE (:Item {value: 7})")
+                .unwrap();
+            engine
+                .database_mut()
+                .query_sql("CREATE TABLE rows (id BIGINT PRIMARY KEY)")
+                .unwrap();
+            engine
+                .database_mut()
+                .query_sql("INSERT INTO rows (id) VALUES (7)")
+                .unwrap();
+            let cypher = "MATCH (n:Item) RETURN n.value AS value";
+            let sql_text = "SELECT id AS value FROM rows";
+            let request = if sql {
+                engine
+                    .database
+                    .runtime_sql_planning_snapshot()
+                    .prepare(sql_text)
+                    .unwrap()
+                    .work_request(engine.admitted_result_budget_bytes())
+            } else {
+                engine
+                    .database
+                    .prepare_runtime_request(crate::QueryRequest::new(cypher))
+                    .unwrap()
+                    .admission()
+                    .runtime_work_request_for_snapshot(
+                        engine.admitted_result_budget_bytes(),
+                        engine.runtime_governor.snapshot(),
+                    )
+            };
+            let capacity = request.memory_bytes.max(1024 * 1024) + request.result_bytes;
+            engine.runtime_governor = RuntimeGovernor::new(
+                RuntimeGovernorConfig {
+                    memory_budget_bytes: Some(capacity),
+                    ..RuntimeGovernorConfig::shared_host()
+                },
+                engine.runtime_governor.snapshot().resources,
+                hawdb_qos::IoConcurrencyBudget::new(2, 1),
+            );
+            engine
+                .database
+                .set_runtime_governor(engine.runtime_governor.clone());
+            let output = if sql {
+                engine.query_sql_request_admitted(crate::SqlQueryRequest::new(sql_text))
+            } else {
+                engine.query_admitted(cypher)
+            }
+            .unwrap();
+            assert_eq!(output.rows[0]["value"], Value::Int(7));
+            assert_eq!(engine.runtime_governor.snapshot().admitted_memory_bytes, 0);
+            assert_eq!(engine.runtime_governor.snapshot().active_cpu_slots, 0);
+        }
     }
 
     #[test]

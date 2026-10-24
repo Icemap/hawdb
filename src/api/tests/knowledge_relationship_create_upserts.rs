@@ -116,7 +116,7 @@ fn knowledge_relationship_create_rejects_invalid_identifiers() {
 }
 
 #[test]
-fn knowledge_relationship_create_does_not_write_projected_idless_identity() {
+fn knowledge_relationship_create_does_not_resolve_an_internal_id_as_an_external_identity() {
     let mut db = Database::new();
     db.query("CREATE (:Memory {title: 'Idless memory'})")
         .unwrap();
@@ -195,7 +195,7 @@ fn upserts_knowledge_relationship_through_bounded_query() {
 }
 
 #[test]
-fn knowledge_relationship_upsert_does_not_write_projected_idless_endpoint() {
+fn knowledge_relationship_upsert_does_not_resolve_an_internal_id_as_an_external_endpoint() {
     let mut db = Database::new();
     db.query("CREATE (:Memory {title: 'Idless memory'})")
         .unwrap();

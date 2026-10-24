@@ -138,7 +138,7 @@ fn knowledge_relationship_batch_create_rejects_invalid_identifiers() {
 }
 
 #[test]
-fn knowledge_relationship_batch_create_does_not_write_projected_idless_identity() {
+fn knowledge_relationship_batch_create_does_not_resolve_an_internal_id_as_an_external_identity() {
     let mut db = Database::new();
     db.query("CREATE (:Memory {title: 'Idless memory'})")
         .unwrap();

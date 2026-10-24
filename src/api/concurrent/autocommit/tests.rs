@@ -334,3 +334,108 @@ fn out_of_core_unique_candidate_lookup_uses_the_complete_published_source() {
     drop(database);
     std::fs::remove_dir_all(path).unwrap();
 }
+
+#[test]
+fn stale_data_writers_preserve_concurrently_created_labels_across_reopen() {
+    for sql in [false, true] {
+        let path = std::env::temp_dir().join(format!(
+            "hawdb-autocommit-catalog-{}",
+            hawdb_core::generate_uuidv7().unwrap()
+        ));
+        let database = ConcurrentDatabase::open(&path).unwrap();
+        database.query("CREATE (:Existing {value: 1})").unwrap();
+        database
+            .query_sql("CREATE TABLE rows (id BIGINT PRIMARY KEY)")
+            .unwrap();
+        let (ready, resume) =
+            database.pause_next_autocommit_mutation(AutocommitMutationPhase::BeforeExecution);
+        let other = database.clone();
+        let writer = thread::spawn(move || {
+            if sql {
+                other.query_sql("INSERT INTO rows (id) VALUES (1)")
+            } else {
+                other.query("MATCH (n:Existing) WHERE id(n) = 0 SET n.value = 2")
+            }
+        });
+        ready.recv_timeout(Duration::from_secs(5)).unwrap();
+        let created = database.query("CREATE (:NewLabel {value: 3})");
+        resume.send(()).unwrap();
+        created.unwrap();
+        writer.join().unwrap().unwrap();
+        let read = || {
+            assert_eq!(
+                database
+                    .query("MATCH (n:NewLabel) RETURN n.value AS value")
+                    .unwrap()
+                    .rows[0]["value"],
+                Value::Int(3)
+            );
+            assert_eq!(
+                database
+                    .query("MATCH (n:Existing) RETURN n.value AS value")
+                    .unwrap()
+                    .rows[0]["value"],
+                Value::Int(if sql { 1 } else { 2 })
+            );
+            if sql {
+                assert_eq!(
+                    database.query_sql("SELECT id FROM rows").unwrap().rows[0]["id"],
+                    Value::Int(1)
+                );
+            }
+        };
+        read();
+        database.inner.commits.lock().unwrap().checkpoint().unwrap();
+        read();
+        drop(database);
+        let mut reopened = Database::open(&path).unwrap();
+        assert_eq!(
+            reopened
+                .query("MATCH (n:NewLabel) RETURN n.value AS value")
+                .unwrap()
+                .rows[0]["value"],
+            Value::Int(3)
+        );
+        assert_eq!(
+            reopened
+                .query("MATCH (n:Existing) RETURN n.value AS value")
+                .unwrap()
+                .rows[0]["value"],
+            Value::Int(if sql { 1 } else { 2 })
+        );
+        reopened.query("CREATE (:ThirdLabel {value: 4})").unwrap();
+        assert_eq!(
+            reopened
+                .query("MATCH (n:NewLabel) RETURN n.value AS value")
+                .unwrap()
+                .rows[0]["value"],
+            Value::Int(3)
+        );
+        drop(reopened);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+}
+
+#[test]
+fn a_new_unique_constraint_invalidates_a_prepared_narrow_graph_scope() {
+    let database = fixture();
+    database.query_with_params(UPDATE, &params(2, 2)).unwrap();
+    let (ready, resume) =
+        database.pause_next_autocommit_mutation(AutocommitMutationPhase::BeforeLocks);
+    let other = database.clone();
+    let writer = thread::spawn(move || other.query_with_params(UPDATE, &params(1, 2)));
+    ready.recv_timeout(Duration::from_secs(5)).unwrap();
+    database
+        .query("CREATE CONSTRAINT ON :Counter(score) ASSERT UNIQUE")
+        .unwrap();
+    let epoch = database.commit_epoch().unwrap();
+    resume.send(()).unwrap();
+    assert!(writer
+        .join()
+        .unwrap()
+        .unwrap_err()
+        .to_string()
+        .contains("prepare and admit again"));
+    assert_eq!(database.commit_epoch().unwrap(), epoch);
+    assert_eq!(score(&database, 1), Value::Int(0));
+}

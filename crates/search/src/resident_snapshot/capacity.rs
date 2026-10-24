@@ -120,7 +120,15 @@ pub(super) fn generation(generation: &ReadGeneration) -> usize {
         bytes = bytes.saturating_add(reader.retained_capacity_bytes());
     }
     #[cfg(feature = "vector-search")]
-    if let Some(projection) = index.rabitq_projection() {
+    if index.path.is_none() {
+        // Fixed before the first query, including the lazy build's transient
+        // buffers. This charge does not grow after a lease has been admitted.
+        bytes = bytes.saturating_add(RaBitQCandidateProjection::in_memory_capacity_bound(
+            &index.documents,
+            index.rabitq_projection_identity(0),
+            index.rabitq_build_options,
+        ));
+    } else if let Some(projection) = index.rabitq_projection() {
         bytes = bytes.saturating_add(projection.retained_capacity_bytes());
     }
     bytes

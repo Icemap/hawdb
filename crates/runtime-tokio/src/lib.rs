@@ -425,7 +425,7 @@ impl TokioRuntimeAdapter {
 
     /// Reuses owned preparation when execution can be admitted immediately.
     ///
-    /// On a retryable refusal, drops the rebuildable state before waiting. This
+    /// On any refusal, drops the rebuildable state before retrying admission. This
     /// prevents several queued preparations from retaining all memory while each
     /// waits for execution capacity. The operation receives `None` in that case
     /// and must rebuild under its execution reservation. The factory must include
@@ -512,17 +512,20 @@ impl TokioRuntimeAdapter {
                     self.finish_admission_wait(request, wait.take());
                     return Ok(permit);
                 }
+                Err(_) if state.is_some() => {
+                    // Retained preparation can itself make the request exceed
+                    // hard capacity. Rebuild under the execution reservation
+                    // before treating that refusal as terminal.
+                    drop(state.take());
+                    request = request_for_snapshot(self.governor.snapshot(), None);
+                    continue;
+                }
                 Err(error) if !error.is_retryable() => {
                     self.finish_admission_wait(request, wait.take());
                     return Err(TokioTaskError::Admission(error));
                 }
                 Err(error) => {
                     wait.get_or_insert_with(|| (Instant::now(), error.code));
-                    if let Some(rebuildable) = state.take() {
-                        drop(rebuildable);
-                        request = request_for_snapshot(self.governor.snapshot(), None);
-                        continue;
-                    }
                 }
             }
             if let Err(reason) = self.wait_for_admission_event(&mut waiter, context).await {
@@ -787,6 +790,61 @@ mod tests {
             .unwrap();
         assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
         assert_eq!(governor.snapshot().active_cpu_slots, 0);
+    }
+
+    #[test]
+    fn retained_preparation_is_released_before_a_hard_capacity_refusal() {
+        for execution_bytes in [80, 101] {
+            let governor = RuntimeGovernor::new(
+                RuntimeGovernorConfig {
+                    memory_budget_bytes: Some(100),
+                    ..RuntimeGovernorConfig::shared_host()
+                },
+                runtime_resources(1),
+                IoConcurrencyBudget::new(1, 1),
+            );
+            let adapter = TokioRuntimeAdapter::owned(
+                governor.clone(),
+                TokioRuntimeConfig::from_governor(&governor),
+            )
+            .unwrap();
+            let result = adapter
+                .block_on(async {
+                    let (_, state) = adapter
+                        .prepare_blocking(
+                            RuntimeWorkPriority::Foreground,
+                            40,
+                            RuntimeTaskContext::default(),
+                            |_| Ok::<_, Infallible>(()),
+                        )
+                        .await
+                        .unwrap();
+                    adapter
+                        .execute_blocking_with_reusable_state(
+                            state,
+                            |_, state| {
+                                RuntimeWorkRequest::foreground_query(execution_bytes, 0)
+                                    .with_retained_memory_bytes(
+                                        state.map_or(0, |state| state.bytes()),
+                                    )
+                            },
+                            RuntimeTaskContext::with_timeout(Duration::from_secs(5)),
+                            |state, _| {
+                                assert!(state.is_none());
+                                Ok::<_, Infallible>(())
+                            },
+                        )
+                        .await
+                })
+                .unwrap();
+            if execution_bytes <= 100 {
+                result.unwrap();
+            } else {
+                assert!(matches!(result, Err(TokioTaskError::Admission(_))));
+            }
+            assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+            assert_eq!(governor.snapshot().queued_admission_waiters, 0);
+        }
     }
 
     #[test]
