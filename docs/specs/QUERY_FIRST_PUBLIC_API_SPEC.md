@@ -495,6 +495,10 @@ without the cleanup adapter, three DTOs or graph-scan candidate collection.
 Crystal source association fixtures use bounded MERGE and same-transaction
 reads with external-id predicates, retaining finite numeric input checks and
 idempotent durable outcomes without the business adapter or its two DTOs.
+Entity create/update fixtures use fixed bounded MERGE and SET statements with
+external-id predicates. Creation/match fields, first-input duplicate handling,
+identity checks, read-only refusal and one-batch recovery remain explicit without
+the four business adapters, ten DTOs or dynamic statement builders.
 Remaining legacy business adapters still require migration; this removal does
 not complete issue #1193.
 

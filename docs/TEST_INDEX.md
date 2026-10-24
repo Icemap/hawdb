@@ -953,3 +953,15 @@ MERGE and same-transaction reads. The cases preserve numeric finite input checks
 missing endpoints, exact relationship identity/properties, create versus retry
 outcomes, unchanged epoch/WAL on retry and one-batch durable reopen. Two DTOs
 and the business mutation adapter are removed without changing the CI owner.
+
+### Entity creation and update queries
+
+`api::tests::entity_writes` retains thirteen root general scenarios using bounded
+fixed MERGE, SET and exact projections. The tests distinguish ON CREATE from ON
+MATCH, preserve existing identity and properties, deduplicate batch inputs, reject
+invalid syntax/identity before WAL, refuse read-only mutations and retain one
+transaction batch with exact reopen values. The idless case exercises the
+external-id predicate on an update; internal projected identifiers cannot select
+that mutation. Four adapters, ten DTOs and dynamic statement factories disappear.
+The obsolete compile-only identity assertion for the removed entity-create DTO
+is removed separately from the thirteen runtime scenarios.
