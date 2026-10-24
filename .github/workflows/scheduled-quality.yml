@@ -1,280 +1,140 @@
-name: Scheduled Quality
+name: Archive PR 1217 Evidence
 
 on:
-  schedule:
-    - cron: "17 2 * * 6"
   workflow_dispatch:
-    inputs:
-      run_async_io_spike:
-        description: Run only the portable async segment I/O benchmark
-        required: false
-        type: boolean
-        default: false
-      run_writer_gate:
-        description: Run only the fixed 40-pair reader/writer qualification
-        required: false
-        type: boolean
-        default: false
-      writer_baseline_revision:
-        description: Full baseline SHA for paired attribution; defaults to the original acceptance baseline
-        required: false
-        type: string
-        default: "a703cc0f18f549918c73f454cda521edb4f0fb13"
-      writer_include_captured_wal:
-        description: Also measure a separate fixed cohort with captured WAL ownership restored by reopen
-        required: false
-        type: boolean
-        default: false
-      writer_concurrency_matrix:
-        description: Include multiple writers/readers using physical cores, affinity and cgroup CPU limits
-        required: false
-        type: boolean
-        default: true
-      writer_counts:
-        description: Optional comma-separated writer counts overriding the automatic CPU bound
-        required: false
-        type: string
-        default: ""
-      reader_counts:
-        description: Optional comma-separated reader counts; otherwise use 0, W and 2W
-        required: false
-        type: string
-        default: ""
-      soak_node_count:
-        description: Synthetic nodes in the mixed runtime soak
-        required: false
-        default: "4096"
-      soak_payload_bytes:
-        description: Payload bytes per synthetic soak node
-        required: false
-        default: "4096"
 
 permissions:
-  contents: read
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  contents: write
+  actions: read
 
 jobs:
-  supply-chain:
-    if: ${{ github.event_name == 'schedule' || (!inputs.run_async_io_spike && !inputs.run_writer_gate) }}
-    name: Supply Chain Refresh
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Check current advisories and licenses
-        uses: EmbarkStudios/cargo-deny-action@v2
-        with:
-          rust-version: "1.97.1"
-          command: check advisories licenses
-
-  vector-kernel-sanitizer:
-    if: ${{ github.event_name == 'schedule' || (!inputs.run_async_io_spike && !inputs.run_writer_gate) }}
-    name: Vector Kernel Address Sanitizer
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Install nightly Rust with standard library sources
-        uses: dtolnay/rust-toolchain@nightly
-        with:
-          components: rust-src
-
-      - name: Run RaBitQ scalar reference corpus under ASan
-        env:
-          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
-          RUSTFLAGS: -Zsanitizer=address
-        run: >-
-          cargo +nightly test -p hawdb-vector-projection
-          -Zbuild-std
-          --target x86_64-unknown-linux-gnu
-          kernel::tests
-
-  mixed-runtime-soak:
-    if: ${{ github.event_name == 'schedule' || (!inputs.run_async_io_spike && !inputs.run_writer_gate) }}
-    name: Larger Than Memory Mixed Runtime Soak
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    env:
-      HAWDB_SOAK_NODE_COUNT: ${{ inputs.soak_node_count || '4096' }}
-      HAWDB_SOAK_PAYLOAD_BYTES: ${{ inputs.soak_payload_bytes || '4096' }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.97.1
-
-      - name: Run admitted mixed workload
-        id: soak
-        continue-on-error: true
-        shell: bash
-        run: |
-          set -uo pipefail
-          mkdir -p artifacts/soak
-          database_root="$(mktemp -d)"
-          soak_status=0
-          if ! cargo run --release -p hawdb-qualification --bin hawdb-soak --quiet -- \
-            --path "$database_root/database" \
-            --revision "$GITHUB_SHA" \
-            --dataset-id "scheduled-synthetic-v1" \
-            --node-count "$HAWDB_SOAK_NODE_COUNT" \
-            --payload-bytes "$HAWDB_SOAK_PAYLOAD_BYTES" \
-            > artifacts/soak/report.json \
-            2> artifacts/soak/run.log; then
-            soak_status=1
-          fi
-          if ! jq -e \
-            --arg revision "$GITHUB_SHA" \
-            '.protocol == "hawdb-mixed-runtime-soak-v1" and
-             .evidence_kind == "synthetic_scheduled_soak" and
-             .fixture_setup_path == "controlled_raw_fixture" and
-             .production_eligible == false and
-             .identity.source_revision == $revision and
-             .identity.dataset_id == "scheduled-synthetic-v1" and
-             (.identity.dataset_fingerprint | startswith("sha256:")) and
-             (.identity.configuration_digest | startswith("sha256:")) and
-             .identity.graph_commit_epoch > 0 and
-             .identity.workload == "foreground-point-read+background-distinct-cartesian+background-checkpoint-v2" and
-             .ready == true and
-             .storage.out_of_core == true and
-             .storage.raw_dataset_exceeds_runtime_memory == true and
-             .storage.canonical_exceeds_cache == true and
-             .background.spilled_bytes > 0 and
-             .background.spill_run_count > 0 and
-             .checkpoint.completed == true and
-             .checkpoint.canonical_generation_advanced == true and
-             .runtime.final_admitted_memory_bytes == 0 and
-             .runtime.final_overcommitted == false' \
-            artifacts/soak/report.json > /dev/null; then
-            soak_status=1
-          fi
-          exit "$soak_status"
-
-      - name: Retain typed soak report
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: mixed-runtime-soak-${{ github.sha }}-${{ github.run_attempt }}
-          path: artifacts/soak
-          if-no-files-found: error
-          retention-days: 30
-
-      - name: Enforce soak result
-        if: always()
-        shell: bash
-        run: test "${{ steps.soak.outcome }}" = "success"
-
-  async-segment-io-spike:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_async_io_spike }}
-    name: Portable Async Segment I/O Spike
+  archive:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.97.1
-
-      - name: Capture benchmark evidence
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p artifacts/async-segment-io
-          cargo bench --bench storage_async_segment_read --features tokio-runtime 2>&1 \
-            | tee artifacts/async-segment-io/run.log
-          sed -n 's/^storage_async_segment_read //p' \
-            artifacts/async-segment-io/run.log \
-            | tail -n 1 > artifacts/async-segment-io/report.json
-          jq -e '
-            .protocol == "hawdb-storage-async-segment-read-spike-v1" and
-            .production_eligible == false and
-            .fixture_bytes >= 536870912 and
-            .range_bytes == 4096 and
-            .range_count >= 8192 and
-            .samples_per_backend_and_depth >= 3 and
-            (.summaries | length) == 6 and
-            all(.samples[]; .cold_cache_requested == true) and
-            all(.summaries[];
-              .wall_time_ns_p50 != null and
-              .cpu_time_ns_p50 != null and
-              .peak_thread_count_p50 != null and
-              .peak_resident_bytes_p50 != null)
-          ' artifacts/async-segment-io/report.json > /dev/null
-
-      - name: Upload async I/O evidence
-        if: always()
-        uses: actions/upload-artifact@v7
+      - uses: actions/checkout@v7
         with:
-          name: async-segment-io-${{ github.sha }}-${{ github.run_attempt }}
-          path: artifacts/async-segment-io
-          if-no-files-found: error
-          retention-days: 30
-
-
-  strict-writer-gate:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_writer_gate }}
-    name: Concurrent Reader and Writer Qualification
-    runs-on: ubuntu-24.04
-    timeout-minutes: 120
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.97.1
-
-      - name: Install separate syscall tracing tool
-        if: ${{ inputs.writer_include_captured_wal }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          if ! command -v strace >/dev/null; then
-            sudo apt-get update
-            sudo apt-get install -y strace
-          fi
-
-      - name: Build both revisions and measure the fixed protocol
-        shell: bash
+          ref: ef38a62742ac705b862e194b25757fb166b53423
+          path: source
+          persist-credentials: false
+      - name: Archive, upload and independently download every asset
         env:
-          WRITER_BASELINE_REVISION: ${{ inputs.writer_baseline_revision }}
-          WRITER_INCLUDE_CAPTURED_WAL: ${{ inputs.writer_include_captured_wal }}
-          WRITER_CONCURRENCY_MATRIX: ${{ inputs.writer_concurrency_matrix }}
-          WRITER_COUNTS: ${{ inputs.writer_counts }}
-          READER_COUNTS: ${{ inputs.reader_counts }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
         run: |
           set -euo pipefail
-          options=()
-          if [[ "$WRITER_INCLUDE_CAPTURED_WAL" == "true" ]]; then
-            options+=(--include-captured-wal)
-          fi
-          if [[ "$WRITER_CONCURRENCY_MATRIX" == "true" ]]; then
-            options+=(--concurrency-matrix)
-          fi
-          if [[ -n "$WRITER_COUNTS" ]]; then
-            options+=(--writer-counts "$WRITER_COUNTS")
-          fi
-          if [[ -n "$READER_COUNTS" ]]; then
-            options+=(--reader-counts "$READER_COUNTS")
-          fi
-          python3 scripts/run-concurrent-writer-gate.py \
-            "${options[@]}" \
-            --baseline-revision "$WRITER_BASELINE_REVISION" \
-            --work "$RUNNER_TEMP/writer-gate" \
-            --fixture-parent "$RUNNER_TEMP/writer-fixtures" \
-            --output artifacts/strict-writer-gate
+          python3 - <<'PYTHON'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+          import tarfile
 
-      - name: Retain build and measurement evidence
+          repo = "nowledge-co/hawdb"
+          source = "ef38a62742ac705b862e194b25757fb166b53423"
+          tag_target = "720d98f8640105add1007040ac608df1e643fc3e"
+          tag = "evidence-pr-1217-2026-10-24"
+          root = Path("source/docs/benchmarks/publication_qualification_2026_10_23")
+          out = Path("evidence")
+          out.mkdir()
+          actual = subprocess.check_output(["git", "-C", "source", "rev-parse", "HEAD"], text=True).strip()
+          assert actual == source
+          files = sorted(p for p in root.rglob("*") if p.is_file())
+          assert len(files) == 1231
+          assert sum(p.stat().st_size for p in files) == 372641221
+          assert all(not p.is_symlink() for p in files)
+          suffixes = (".gz", ".tar", ".jsonl", ".log", ".stdout", ".stderr")
+          raw = [p for p in files if p.name.endswith(suffixes)]
+
+          def sha256(path):
+              with path.open("rb") as stream:
+                  return hashlib.file_digest(stream, "sha256").hexdigest()
+
+          archive = out / "publication-raw-ef38a627.tar"
+          entries = []
+          with tarfile.open(archive, "w", format=tarfile.PAX_FORMAT) as tar:
+              for path in raw:
+                  relative = path.relative_to(root).as_posix()
+                  entries.append({"path": relative, "bytes": path.stat().st_size, "sha256": sha256(path)})
+                  info = tarfile.TarInfo(relative)
+                  info.size = path.stat().st_size
+                  info.mode = 0o644
+                  with path.open("rb") as stream:
+                      tar.addfile(info, stream)
+          manifest = {
+              "format_version": 1,
+              "source_revision": source,
+              "original_tree_files": len(files),
+              "original_tree_bytes": sum(p.stat().st_size for p in files),
+              "release_tag": tag,
+              "tag_target": tag_target,
+              "archive": {
+                  "name": archive.name,
+                  "url": f"https://github.com/{repo}/releases/download/{tag}/{archive.name}",
+                  "bytes": archive.stat().st_size,
+                  "sha256": sha256(archive),
+              },
+              "files": entries,
+          }
+          manifest_path = out / "raw-manifest.json"
+          manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
+          artifact = out / "publication-resource-40049133474.zip"
+          with artifact.open("wb") as stream:
+              subprocess.run(["gh", "api", f"repos/{repo}/actions/artifacts/12544412288/zip"], stdout=stream, check=True)
+          assert sha256(artifact) == "769de7476d6f13fe67ebd58d3b5aceaa4df60b071dd3f6519040c3dbe2a999f0"
+          assets = [archive, artifact, manifest_path]
+          checksums = out / "SHA256SUMS"
+          checksums.write_text("".join(f"{sha256(p)}  {p.name}\n" for p in assets))
+          assets.append(checksums)
+          notes = out / "release-notes.md"
+          notes.write_text(
+              "# PR #1217 qualification evidence\n\n"
+              "Evidence only; this is not a software release or a performance acceptance. "
+              "The tag points to the existing main commit to avoid retaining raw evidence in a source tag.\n\n"
+              f"Source snapshot: `{source}`. Raw paths and per-file SHA-256 values are in `raw-manifest.json`. "
+              "The tar contains every selected raw archive, JSONL trace and log, including rejected and adverse runs.\n\n"
+              "The dedicated 126-case publication/resource artifact is retained unchanged. "
+              "It does not waive the separate reader/writer performance gate.\n\n"
+              f"Archival verification: https://github.com/{repo}/actions/runs/{os.environ['GITHUB_RUN_ID']}\n"
+          )
+          subprocess.run(["gh", "release", "create", tag, "--repo", repo, "--target", tag_target,
+                          "--title", "PR #1217 qualification evidence (2026-10-24)", "--notes-file", str(notes),
+                          "--draft", "--prerelease", "--latest=false"], check=True)
+          subprocess.run(["gh", "release", "upload", tag, "--repo", repo, *map(str, assets)], check=True)
+          downloaded = out / "downloaded"
+          subprocess.run(["gh", "release", "download", tag, "--repo", repo, "--dir", str(downloaded)], check=True)
+          for path in assets:
+              assert sha256(downloaded / path.name) == sha256(path), path.name
+          with tarfile.open(downloaded / archive.name, "r") as tar:
+              members = tar.getmembers()
+              assert [m.name for m in members] == [entry["path"] for entry in entries]
+              for member, entry in zip(members, entries):
+                  assert member.isfile() and member.size == entry["bytes"]
+                  with tar.extractfile(member) as stream:
+                      assert hashlib.file_digest(stream, "sha256").hexdigest() == entry["sha256"]
+          subprocess.run(["gh", "release", "edit", tag, "--repo", repo, "--draft=false", "--prerelease", "--latest=false"], check=True)
+          receipt = {
+              "source_revision": source,
+              "release": f"https://github.com/{repo}/releases/tag/{tag}",
+              "raw_files": len(entries),
+              "raw_bytes": sum(entry["bytes"] for entry in entries),
+              "original_tree_files": len(files),
+              "original_tree_bytes": sum(p.stat().st_size for p in files),
+              "roundtrip_download_and_all_member_hashes_verified": True,
+              "assets": [{"name": p.name, "bytes": p.stat().st_size, "sha256": sha256(p)} for p in assets],
+          }
+          (out / "archive-receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
+          print(json.dumps(receipt, indent=2))
+          PYTHON
+      - name: Retain compact archival verification
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: strict-writer-gate-${{ github.sha }}-${{ github.run_attempt }}
-          path: artifacts/strict-writer-gate
+          name: pr-1217-evidence-archive-receipt
+          path: |
+            evidence/archive-receipt.json
+            evidence/raw-manifest.json
+            evidence/SHA256SUMS
+            evidence/release-notes.md
           if-no-files-found: error
-          retention-days: 30
