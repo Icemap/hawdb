@@ -63,7 +63,12 @@ pub fn nowledge_graph_route_evidence_json(
         route_parity,
         |query| {
             graph
-                .query_with_params_with_report_options(&query.cypher, &query.parameters, options)
+                .query_request_with_report(
+                    crate::QueryRequest::new(&query.cypher)
+                        .with_params(&query.parameters)
+                        .with_output_limits(queries::ROUTE_STATEMENT_OUTPUT_LIMITS),
+                    options,
+                )
                 .map(|output| output.report.json())
         },
     )

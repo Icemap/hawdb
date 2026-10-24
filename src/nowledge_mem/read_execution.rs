@@ -12,7 +12,7 @@ use crate::{
     Value,
 };
 use hawdb_core::RuntimeTaskContext;
-use hawdb_qos::{RuntimeGovernor, RuntimeWorkPriority, RuntimeWorkRequest};
+use hawdb_qos::{RuntimeGovernor, RuntimePermit, RuntimeWorkPriority, RuntimeWorkRequest};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
@@ -71,19 +71,7 @@ impl NowledgeMemEmbeddedStoreHandle {
             &source.governor,
             crate::api::runtime_planning_request(cypher.len(), RuntimeWorkPriority::Foreground),
         )?;
-        let prepared = {
-            let view = {
-                let publication = self.lock_published_read()?;
-                let publication = publication.as_ref().ok_or_else(source_changed)?;
-                if publication.instance_identity != source.identity
-                    || publication.view.snapshot.config() != &source.config
-                {
-                    return Err(source_changed());
-                }
-                Arc::clone(&publication.view)
-            };
-            view.prepare(QueryRequest::new(cypher).with_params(parameters))?
-        };
+        let prepared = self.prepare_query_from_source(source, cypher, parameters)?;
         // Keep preparation memory charged, but release the source view and
         // planning CPU/task slots before execution admission or host callbacks.
         Ok(prepared.with_planning_memory(
@@ -91,6 +79,25 @@ impl NowledgeMemEmbeddedStoreHandle {
                 .into_retained_memory()
                 .expect("planning owns a fixed memory reservation"),
         ))
+    }
+
+    fn prepare_query_from_source(
+        &self,
+        source: &AdmissionSource,
+        cypher: &str,
+        parameters: &BTreeMap<String, Value>,
+    ) -> Result<PreparedRuntimeQuery> {
+        let view = {
+            let publication = self.lock_published_read()?;
+            let publication = publication.as_ref().ok_or_else(source_changed)?;
+            if publication.instance_identity != source.identity
+                || publication.view.snapshot.config() != &source.config
+            {
+                return Err(source_changed());
+            }
+            Arc::clone(&publication.view)
+        };
+        view.prepare(QueryRequest::new(cypher).with_params(parameters))
     }
 
     pub(super) fn with_admitted_graph_read<T>(
@@ -126,16 +133,16 @@ impl NowledgeMemEmbeddedStoreHandle {
                     "admitted streaming query must be read-only".into(),
                 ));
             }
-            let permit = try_admit_runtime(
-                governor,
-                prepared
-                    .admission()
-                    .runtime_work_request_for_snapshot(
-                        result_memory_budget(&source.config, governor),
-                        governor.snapshot(),
-                    )
-                    .with_retained_memory_bytes(prepared.planning_memory_bytes()),
-            )?;
+            let request = prepared
+                .admission()
+                .runtime_work_request_for_snapshot(
+                    result_memory_budget(&source.config, governor),
+                    governor.snapshot(),
+                )
+                .with_retained_memory_bytes(prepared.planning_memory_bytes());
+            let (permit, prepared) = admit_reusable_prepared(prepared, governor, request, || {
+                self.prepare_query_from_source(&source, cypher, parameters)
+            })?;
             let context = permit.bind_task_context(task_context.clone());
             let (view, mode) = {
                 let publication = self.lock_published_read()?;
@@ -177,10 +184,12 @@ impl NowledgeMemEmbeddedStoreHandle {
             let result_budget =
                 materialized_result_budget(&source.config, &source.governor, is_mutation)?;
             let uses_external_seed = prepared.uses_external_seed();
-            let permit = Arc::new(try_admit_runtime(
-                &source.governor,
-                source.execution_request(&prepared, result_budget),
-            )?);
+            let request = source.execution_request(&prepared, result_budget);
+            let (permit, prepared) =
+                admit_reusable_prepared(prepared, &source.governor, request, || {
+                    self.prepare_query_from_source(&source, cypher, parameters)
+                })?;
+            let permit = Arc::new(permit);
             let context = permit.bind_task_context(task_context.clone());
             let (snapshot, mode) = {
                 let publication = self.lock_published_read()?;
@@ -267,15 +276,14 @@ impl NowledgeMemEmbeddedStoreHandle {
                     out_of_core_projection: out_of_core_search_projection.as_ref(),
                     vector_seed_execution_count: 0,
                 };
-                let result = graph
-                    .db
-                    .query_prepared_with_params_trace_and_external_context(
-                        prepared,
-                        parameters,
-                        options.capture_physical_plan,
-                        &mut external,
-                        &context,
-                    )?;
+                let result = graph.db.query_prepared_request_with_trace_and_external(
+                    prepared,
+                    QueryRequest::new(cypher)
+                        .with_params(parameters)
+                        .with_task_context(&context),
+                    options.capture_physical_plan,
+                    &mut external,
+                )?;
                 (graph.mode, result)
             };
             if !is_mutation {
@@ -301,6 +309,32 @@ impl NowledgeMemEmbeddedStoreHandle {
             source.governor.record_cancellation(reason);
         }
         result
+    }
+}
+
+pub(super) fn admit_reusable_prepared(
+    prepared: PreparedRuntimeQuery,
+    governor: &RuntimeGovernor,
+    request: RuntimeWorkRequest,
+    reprepare: impl FnOnce() -> Result<PreparedRuntimeQuery>,
+) -> Result<(RuntimePermit, PreparedRuntimeQuery)> {
+    let request =
+        request.with_memory_bytes(request.memory_bytes.max(prepared.planning_memory_bytes()));
+    match try_admit_runtime(governor, request) {
+        Ok(permit) => Ok((permit, prepared)),
+        Err(_) => {
+            let admission = prepared.admission().clone();
+            let external = prepared.uses_external_seed();
+            drop(prepared);
+            let permit = try_admit_runtime(governor, request.with_retained_memory_bytes(0))?;
+            let prepared = reprepare()?;
+            // A writer can change the source while admission invokes the host.
+            // Never execute a newly bound plan under an older resource request.
+            if prepared.admission() != &admission || prepared.uses_external_seed() != external {
+                return Err(source_changed());
+            }
+            Ok((permit, prepared))
+        }
     }
 }
 
@@ -387,6 +421,74 @@ mod tests {
         let handle = app_read_handle();
         handle.write_store().unwrap().search_projection = None;
         handle
+    }
+
+    #[test]
+    fn report_and_stream_admission_release_preparation_when_execution_alone_fits() {
+        for report in [false, true] {
+            let handle = graph_only_handle();
+            let source = handle.query_admission_source().unwrap();
+            let prepared = handle
+                .prepare_query_from_source(&source, READ, &BTreeMap::new())
+                .unwrap();
+            let budget = if report {
+                materialized_result_budget(&source.config, &source.governor, false).unwrap()
+            } else {
+                result_memory_budget(&source.config, &source.governor)
+            };
+            let request = source.execution_request(&prepared, budget);
+            let capacity = request.memory_bytes.max(1024 * 1024) + request.result_bytes;
+            drop(prepared);
+            let governor = RuntimeGovernor::new(
+                hawdb_qos::RuntimeGovernorConfig {
+                    memory_budget_bytes: Some(capacity),
+                    ..hawdb_qos::RuntimeGovernorConfig::shared_host()
+                },
+                source.governor.snapshot().resources,
+                hawdb_qos::IoConcurrencyBudget::new(4, 1),
+            );
+            {
+                let mut store = handle.write_store().unwrap();
+                store.graph.runtime_governor = governor.clone();
+                store.graph.db.set_runtime_governor(governor.clone());
+            }
+            if report {
+                assert_eq!(handle.query_with_report(READ).unwrap().output.rows.len(), 1);
+                let store = handle.read_store().unwrap();
+                let (permit, prepared) = store
+                    .graph
+                    .admit_materialized_query(READ, &BTreeMap::new())
+                    .unwrap();
+                assert_eq!(prepared.planning_memory_bytes(), 0);
+                drop((prepared, permit));
+            } else {
+                handle
+                    .with_admitted_graph_read(
+                        READ,
+                        &BTreeMap::new(),
+                        &options(),
+                        &RuntimeTaskContext::default(),
+                        |read, prepared, _, context, _| {
+                            assert_eq!(prepared.planning_memory_bytes(), 0);
+                            let output = read.query_prepared_request(
+                                prepared,
+                                QueryRequest::new(READ).with_task_context(context),
+                            )?;
+                            assert_eq!(output.output.rows.len(), 1);
+                            Ok(())
+                        },
+                    )
+                    .unwrap();
+                let store = handle.read_store().unwrap();
+                let (permit, prepared) = store
+                    .graph
+                    .admit_streaming_query(READ, &BTreeMap::new(), budget)
+                    .unwrap();
+                assert_eq!(prepared.planning_memory_bytes(), 0);
+                drop((prepared, permit));
+            }
+            assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+        }
     }
 
     fn resource_profile_identity(

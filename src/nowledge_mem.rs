@@ -1426,20 +1426,49 @@ impl NowledgeMemGraph {
         external: &mut dyn crate::executor::ExternalReadOperator,
         task_context: &RuntimeTaskContext,
     ) -> Result<NowledgeMemQueryOutput> {
+        self.query_request_with_report_and_external(
+            crate::QueryRequest::new(cypher)
+                .with_params(parameters)
+                .with_task_context(task_context),
+            options,
+            external,
+        )
+    }
+
+    pub(crate) fn query_request_with_report(
+        &mut self,
+        request: crate::QueryRequest<'_>,
+        options: NowledgeMemQueryReportOptions,
+    ) -> Result<NowledgeMemQueryOutput> {
+        self.query_request_with_report_and_external(
+            request,
+            options,
+            &mut crate::executor::NoExternalReadOperator,
+        )
+    }
+
+    fn query_request_with_report_and_external(
+        &mut self,
+        request: crate::QueryRequest<'_>,
+        options: NowledgeMemQueryReportOptions,
+        external: &mut dyn crate::executor::ExternalReadOperator,
+    ) -> Result<NowledgeMemQueryOutput> {
+        let default_context = RuntimeTaskContext::default();
+        let task_context = request.task_context.unwrap_or(&default_context);
+        let empty = BTreeMap::new();
+        let parameters = request.parameters.unwrap_or(&empty);
+        let cypher = request.cypher;
         self.check_runtime_context(task_context)?;
         let (permit, prepared) = self.admit_materialized_query(cypher, parameters)?;
         let is_mutation = prepared.admission().is_mutation;
         let execution_task_context = permit.bind_task_context(task_context.clone());
         let started = Instant::now();
-        let result = self
-            .db
-            .query_prepared_with_params_trace_and_external_context(
-                prepared,
-                parameters,
-                options.capture_physical_plan,
-                external,
-                &execution_task_context,
-            );
+        let result = self.db.query_prepared_request_with_trace_and_external(
+            prepared,
+            request.with_task_context(&execution_task_context),
+            options.capture_physical_plan,
+            external,
+        );
         self.record_runtime_cancellation(result.as_ref().err(), task_context);
         let (output, execution_trace) = result?;
         if !is_mutation {
@@ -1471,12 +1500,13 @@ impl NowledgeMemGraph {
             &self.runtime_governor,
             admission.is_mutation,
         )?;
-        self.try_admit_runtime(
-            admission
-                .runtime_work_request_for_snapshot(result_budget, self.runtime_governor.snapshot())
-                .with_retained_memory_bytes(prepared.planning_memory_bytes()),
-        )
-        .map(|permit| (permit, prepared))
+        let request = admission
+            .runtime_work_request_for_snapshot(result_budget, self.runtime_governor.snapshot())
+            .with_retained_memory_bytes(prepared.planning_memory_bytes());
+        read_execution::admit_reusable_prepared(prepared, &self.runtime_governor, request, || {
+            self.db
+                .prepare_runtime_query(cypher.to_string(), parameters)
+        })
     }
 
     fn prepare_admitted_query(
@@ -1512,15 +1542,16 @@ impl NowledgeMemGraph {
                 "admitted streaming query must be read-only".to_string(),
             ));
         }
-        self.try_admit_runtime(
-            admission
-                .runtime_work_request_for_snapshot(
-                    result_memory_bytes,
-                    self.runtime_governor.snapshot(),
-                )
-                .with_retained_memory_bytes(prepared.planning_memory_bytes()),
-        )
-        .map(|permit| (permit, prepared))
+        let request = admission
+            .runtime_work_request_for_snapshot(
+                result_memory_bytes,
+                self.runtime_governor.snapshot(),
+            )
+            .with_retained_memory_bytes(prepared.planning_memory_bytes());
+        read_execution::admit_reusable_prepared(prepared, &self.runtime_governor, request, || {
+            self.db
+                .prepare_runtime_query(cypher.to_string(), parameters)
+        })
     }
 
     fn try_admit_runtime(&self, request: hawdb_qos::RuntimeWorkRequest) -> Result<RuntimePermit> {

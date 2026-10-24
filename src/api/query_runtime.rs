@@ -704,30 +704,30 @@ impl Database {
         .map(|(output, _)| output)
     }
 
-    pub(crate) fn query_prepared_with_params_trace_and_external_context(
+    pub(crate) fn query_prepared_request_with_trace_and_external(
         &mut self,
         prepared: PreparedRuntimeQuery,
-        parameters: &BTreeMap<String, Value>,
+        request: QueryRequest<'_>,
         capture_trace: bool,
         external: &mut dyn executor::ExternalReadOperator,
-        task_context: &hawdb_core::RuntimeTaskContext,
     ) -> Result<(QueryOutput, QueryExecutionTrace)> {
+        if !prepared.matches_request(request) || !self.accepts_prepared_query(&prepared)? {
+            return Err(HawDBError::Execution(
+                "prepared execution context changed; prepare and admit again".into(),
+            ));
+        }
         self.validate_prepared_branch(&prepared)?;
         let runtime = self.runtime.get()?;
         let (cypher_text, prepared) = prepared.into_execution(&runtime.catalog, &runtime.store);
         drop(runtime);
+        let mut options = QueryExecutionOptions::for_request(request, None);
+        options.capture_trace = capture_trace;
         self.query_with_params_trace_and_external_prepared(
             &cypher_text,
             prepared,
-            parameters,
+            request.parameters.unwrap_or(&BTreeMap::new()),
             external,
-            QueryExecutionOptions {
-                capture_trace,
-                access_control: None,
-                task_context: Some(task_context),
-                scoring: None,
-                output_limits: QueryStreamOptions::default(),
-            },
+            options,
         )
     }
 

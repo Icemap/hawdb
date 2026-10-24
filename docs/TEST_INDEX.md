@@ -1159,3 +1159,9 @@ normalization tests are named explicitly and are not database coverage.
 These regressions run in the existing required Cargo/Bazel root/crate CI suites.
 Local-only verification remains the Shiro regression/smoke targets and the short
 MVCC campaign documented above.
+
+The query-first review regressions also cover Mem report/stream admission when
+execution fits but retained preparation does not, and route qualification
+statements that exceed explicit row or payload ceilings. These live in
+`src/nowledge_mem/read_execution.rs` and `src/graph_route_evidence_tests.rs` under
+the existing root library test targets.

@@ -1,5 +1,5 @@
 // Copyright 2026 Nowledge
-// Licensed under the Apache License, Version 2.0.
+// SPDX-License-Identifier: Apache-2.0
 
 //! Private parameterized statements used by route qualification fixtures.
 //! Hosts own their application queries; these are not embedded database APIs.
@@ -7,6 +7,14 @@
 use super::{RouteCypherQuery, RouteQuery};
 use crate::{HawDBError, Result, Value};
 use std::collections::BTreeMap;
+
+// Qualification runs each statement with these independent ceilings. Query LIMIT
+// still bounds graph work; exceeding an output ceiling fails the evidence run.
+pub(super) const ROUTE_STATEMENT_OUTPUT_LIMITS: crate::QueryStreamOptions =
+    crate::QueryStreamOptions {
+        max_rows: Some(16_384),
+        max_payload_bytes: Some(16 * 1024 * 1024),
+    };
 
 const NOWLEDGE_MEM_GRAPH_OVERVIEW_ROUTE: &str = "/graph/overview";
 const NOWLEDGE_MEM_GRAPH_OVERVIEW_MEMORY_RANKING_QUERY: &str = "\
