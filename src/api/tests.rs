@@ -23,12 +23,12 @@ use super::{
     KnowledgeCommunityMemoryRowSource, KnowledgeCommunityMemorySource,
     KnowledgeCrystalCommunityListOrder, KnowledgeCrystalCommunityListRequest,
     KnowledgeCrystalCommunityScope, KnowledgeCrystalListOrder, KnowledgeCrystalListRequest,
-    KnowledgeCrystalSourceMergeRequest, KnowledgeCrystalSourceVisibilityRequest,
-    KnowledgeEntityBatchRequest, KnowledgeEntityCreateBatchRequest, KnowledgeEntityCreateRequest,
-    KnowledgeEntityRequest, KnowledgeEntityUpsertBatchRequest, KnowledgeEntityUpsertRequest,
-    KnowledgeFallbackReasonCode, KnowledgeFanoutReasonCode, KnowledgeGraphPathDirection,
-    KnowledgeInducedEdgeListRequest, KnowledgeNeighborDirection, KnowledgeNeighborsRequest,
-    KnowledgePathRequest, KnowledgePropertyBatchRequest, KnowledgeRelationshipCreateBatchRequest,
+    KnowledgeCrystalSourceVisibilityRequest, KnowledgeEntityBatchRequest,
+    KnowledgeEntityCreateBatchRequest, KnowledgeEntityCreateRequest, KnowledgeEntityRequest,
+    KnowledgeEntityUpsertBatchRequest, KnowledgeEntityUpsertRequest, KnowledgeFallbackReasonCode,
+    KnowledgeFanoutReasonCode, KnowledgeGraphPathDirection, KnowledgeInducedEdgeListRequest,
+    KnowledgeNeighborDirection, KnowledgeNeighborsRequest, KnowledgePathRequest,
+    KnowledgePropertyBatchRequest, KnowledgeRelationshipCreateBatchRequest,
     KnowledgeRelationshipCreateRequest, KnowledgeRelationshipDeleteBatchRequest,
     KnowledgeRelationshipDeleteRequest, KnowledgeRelationshipUpdateBatchRequest,
     KnowledgeRelationshipUpdateRequest, KnowledgeRelationshipUpsertBatchRequest,
@@ -79,6 +79,7 @@ mod community_lifecycle;
 mod community_memberships;
 mod community_reads;
 mod concurrent_transactions;
+mod crystal_source;
 mod default_pipeline;
 mod delete_mutations;
 mod descriptor_capacity;
@@ -724,169 +725,6 @@ fn crystal_reads_use_query_runtime_plan_cache() {
     assert_eq!(stats.entries, 1);
     assert_eq!(stats.misses, 1);
     assert_eq!(stats.hits, 1);
-}
-
-#[test]
-fn merges_crystal_source_for_mcp_create_crystal_shape() {
-    let path = unique_test_dir("crystal_source_merge_wal_replay");
-    {
-        let mut db = Database::open(&path).unwrap();
-        db.query("CREATE (:Memory {id: 'crystal-source-1', is_crystal: true, crystal_title: 'Crystal Source'})")
-            .unwrap();
-        db.query(
-            "CREATE (:Memory {id: 'source-memory-1', is_crystal: false, title: 'Source Memory'})",
-        )
-        .unwrap();
-
-        let output = db
-            .merge_knowledge_crystal_source(&KnowledgeCrystalSourceMergeRequest {
-                crystal_memory_id: "crystal-source-1".to_string(),
-                source_memory_id: "source-memory-1".to_string(),
-                weight: Value::Float(0.75),
-                created_at: Value::Int(100),
-            })
-            .unwrap();
-        assert_eq!(output.crystal_memory_id, "crystal-source-1");
-        assert_eq!(output.source_memory_id, "source-memory-1");
-        assert!(output.matched);
-        assert!(output.created);
-        assert!(!output.already_exists);
-        assert!(!output.missing_endpoint);
-        assert!(!output.non_writable);
-        assert!(output.crystal_node_id.is_some());
-        assert!(output.source_node_id.is_some());
-        assert!(output.relationship_id.is_some());
-        assert_eq!(output.created_relationship_count, 1);
-        assert!(output.graph_commit_epoch_after > output.graph_commit_epoch_before);
-
-        let count = db
-            .query("MATCH (:Memory {id: 'crystal-source-1'})-[r:SYNTHESIZED_FROM]->(:Memory {id: 'source-memory-1'}) RETURN count(r) AS total")
-            .unwrap();
-        assert_eq!(count.rows[0].get("total"), Some(&Value::Int(1)));
-        let properties = db
-            .query("MATCH (:Memory {id: 'crystal-source-1'})-[r:SYNTHESIZED_FROM]->(:Memory {id: 'source-memory-1'}) RETURN r.weight AS weight, r.occasion_key AS occasion_key, r.created_at AS created_at")
-            .unwrap();
-        assert_eq!(properties.rows[0].get("weight"), Some(&Value::Float(0.75)));
-        assert_eq!(
-            properties.rows[0].get("occasion_key"),
-            Some(&Value::String(String::new()))
-        );
-        assert_eq!(properties.rows[0].get("created_at"), Some(&Value::Int(100)));
-
-        let commit_epoch_after_create = db.runtime.get().unwrap().store.commit_epoch();
-        let second = db
-            .merge_knowledge_crystal_source(&KnowledgeCrystalSourceMergeRequest {
-                crystal_memory_id: "crystal-source-1".to_string(),
-                source_memory_id: "source-memory-1".to_string(),
-                weight: Value::Float(0.25),
-                created_at: Value::Int(200),
-            })
-            .unwrap();
-        assert!(second.matched);
-        assert!(!second.created);
-        assert!(second.already_exists);
-        assert_eq!(second.relationship_id, output.relationship_id);
-        assert_eq!(second.created_relationship_count, 0);
-        assert_eq!(second.graph_commit_epoch_after, commit_epoch_after_create);
-        assert_eq!(
-            db.runtime.get().unwrap().store.commit_epoch(),
-            commit_epoch_after_create
-        );
-
-        let unchanged = db
-            .query("MATCH (:Memory {id: 'crystal-source-1'})-[r:SYNTHESIZED_FROM]->(:Memory {id: 'source-memory-1'}) RETURN r.weight AS weight, r.occasion_key AS occasion_key, r.created_at AS created_at")
-            .unwrap();
-        assert_eq!(unchanged.rows[0].get("weight"), Some(&Value::Float(0.75)));
-        assert_eq!(
-            unchanged.rows[0].get("occasion_key"),
-            Some(&Value::String(String::new()))
-        );
-        assert_eq!(unchanged.rows[0].get("created_at"), Some(&Value::Int(100)));
-    }
-    {
-        let mut db = Database::open(&path).unwrap();
-        let count = db
-            .query("MATCH (:Memory {id: 'crystal-source-1'})-[r:SYNTHESIZED_FROM]->(:Memory {id: 'source-memory-1'}) RETURN count(r) AS total")
-            .unwrap();
-        assert_eq!(count.rows[0].get("total"), Some(&Value::Int(1)));
-        let properties = db
-            .query("MATCH (:Memory {id: 'crystal-source-1'})-[r:SYNTHESIZED_FROM]->(:Memory {id: 'source-memory-1'}) RETURN r.weight AS weight, r.occasion_key AS occasion_key, r.created_at AS created_at")
-            .unwrap();
-        assert_eq!(properties.rows[0].get("weight"), Some(&Value::Float(0.75)));
-        assert_eq!(
-            properties.rows[0].get("occasion_key"),
-            Some(&Value::String(String::new()))
-        );
-        assert_eq!(properties.rows[0].get("created_at"), Some(&Value::Int(100)));
-    }
-
-    std::fs::remove_dir_all(path).unwrap();
-}
-
-#[test]
-fn crystal_source_merge_reports_missing_endpoint_and_rejects_invalid_inputs() {
-    let mut db = Database::new();
-
-    let empty_crystal = db
-        .merge_knowledge_crystal_source(&KnowledgeCrystalSourceMergeRequest {
-            crystal_memory_id: String::new(),
-            source_memory_id: "source-memory-1".to_string(),
-            weight: Value::Float(1.0),
-            created_at: Value::Int(100),
-        })
-        .unwrap_err();
-    assert!(empty_crystal
-        .to_string()
-        .contains("non-empty crystal memory id"));
-
-    let empty_source = db
-        .merge_knowledge_crystal_source(&KnowledgeCrystalSourceMergeRequest {
-            crystal_memory_id: "crystal-source-1".to_string(),
-            source_memory_id: String::new(),
-            weight: Value::Float(1.0),
-            created_at: Value::Int(100),
-        })
-        .unwrap_err();
-    assert!(empty_source
-        .to_string()
-        .contains("non-empty source memory id"));
-
-    let invalid_weight = db
-        .merge_knowledge_crystal_source(&KnowledgeCrystalSourceMergeRequest {
-            crystal_memory_id: "crystal-source-1".to_string(),
-            source_memory_id: "source-memory-1".to_string(),
-            weight: Value::String("heavy".to_string()),
-            created_at: Value::Int(100),
-        })
-        .unwrap_err();
-    assert!(invalid_weight.to_string().contains("numeric finite weight"));
-
-    db.query("CREATE (:Memory {id: 'crystal-source-1', is_crystal: true})")
-        .unwrap();
-    let graph_commit_epoch = db.runtime.get().unwrap().store.commit_epoch();
-    let missing = db
-        .merge_knowledge_crystal_source(&KnowledgeCrystalSourceMergeRequest {
-            crystal_memory_id: "crystal-source-1".to_string(),
-            source_memory_id: "missing-source-memory".to_string(),
-            weight: Value::Int(1),
-            created_at: Value::Int(100),
-        })
-        .unwrap();
-    assert!(!missing.matched);
-    assert!(!missing.created);
-    assert!(!missing.already_exists);
-    assert!(missing.missing_endpoint);
-    assert!(!missing.non_writable);
-    assert!(missing.crystal_node_id.is_some());
-    assert_eq!(missing.source_node_id, None);
-    assert_eq!(missing.relationship_id, None);
-    assert_eq!(missing.created_relationship_count, 0);
-    assert_eq!(missing.graph_commit_epoch_before, graph_commit_epoch);
-    assert_eq!(missing.graph_commit_epoch_after, graph_commit_epoch);
-    assert_eq!(
-        db.runtime.get().unwrap().store.commit_epoch(),
-        graph_commit_epoch
-    );
 }
 
 #[test]

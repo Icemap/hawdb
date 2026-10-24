@@ -446,31 +446,6 @@ pub struct KnowledgeCrystalListOutput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeCrystalSourceMergeRequest {
-    pub crystal_memory_id: String,
-    pub source_memory_id: String,
-    pub weight: Value,
-    pub created_at: Value,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeCrystalSourceMergeOutput {
-    pub graph_commit_epoch_before: u64,
-    pub graph_commit_epoch_after: u64,
-    pub crystal_memory_id: String,
-    pub source_memory_id: String,
-    pub crystal_node_id: Option<u64>,
-    pub source_node_id: Option<u64>,
-    pub relationship_id: Option<u64>,
-    pub matched: bool,
-    pub created: bool,
-    pub already_exists: bool,
-    pub missing_endpoint: bool,
-    pub non_writable: bool,
-    pub created_relationship_count: usize,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum KnowledgeCrystalCommunityScope {
     CommunityIds(Vec<Value>),
     NonNullCommunity,

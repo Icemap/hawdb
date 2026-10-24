@@ -945,3 +945,11 @@ reference isolation and retained nodes. Empty/whitespace references refuse
 before WAL changes; setup-close/reopen-cleanup preserves one delete batch and
 exact durable recovery. Existing pinned read/cache and delete-guard cases stay
 in the same module and CI owner.
+
+### Crystal source association queries
+
+`api::tests::crystal_source` retains two root general cases through fixed bounded
+MERGE and same-transaction reads. The cases preserve numeric finite input checks,
+missing endpoints, exact relationship identity/properties, create versus retry
+outcomes, unchanged epoch/WAL on retry and one-batch durable reopen. Two DTOs
+and the business mutation adapter are removed without changing the CI owner.
