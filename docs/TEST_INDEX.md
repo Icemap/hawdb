@@ -1006,3 +1006,24 @@ checkpoint, cache/spill and exact-statistics assertions retain their CI owners.
 The last eight business mutation methods and fourteen DTOs are removed, along
 with the test-only analytics DTO module and handwritten mutation graph inspection.
 Read adapter migration and final runtime qualification remain separate work.
+
+### Entity and property query fixtures
+
+The four entity-read cases and six former root batch/property cases now share
+`src/api/tests/knowledge_entity_reads.rs`. Scope predicates and property
+projection execute in fixed parameterized statements. Separate candidate and
+visible phases share one snapshot and explicit cumulative output budgets;
+caller-slot shaping does not filter or traverse the graph. Cache cases inspect
+the snapshot cache (one template per statement), including separate exact and
+scoped templates. Missing identities, filtered identities, null properties,
+request order and exclusion of unselected payloads remain covered.
+
+The entity-detail case moves from the removed legacy lookup helper into that
+module, retaining exact distinct-neighbor and relationship counts. Its obsolete
+malformed legacy-DTO decoder unit is removed with the decoder. The navigation
+cases retain missing-identity and idless-node coverage through explicit external
+or internal identity queries; the implicit facade fallback is removed. Two
+existing out-of-core cases retain checkpointed entity/property reads and digest
+corruption refusal. These cases remain in the existing root general CI lane.
+Six read extension methods, eleven DTOs and the test-only mutation DTO module
+are removed; fourteen other read wrappers still require migration.

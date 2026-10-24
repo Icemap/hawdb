@@ -15,28 +15,7 @@
 use crate::api::*;
 use crate::error::Result;
 
-mod entities;
-mod properties;
-
-use entities::{
-    knowledge_entity_batch_via_query_runtime, knowledge_entity_via_query_runtime,
-    knowledge_scoped_entity_batch_via_query_runtime, knowledge_scoped_entity_via_query_runtime,
-};
-use properties::{
-    knowledge_property_batch_via_query_runtime, knowledge_scoped_property_batch_via_query_runtime,
-};
-
 pub(super) trait QueryFirstTestExt {
-    fn query_entity_via_cypher(
-        &self,
-        request: &KnowledgeEntityRequest,
-    ) -> Result<KnowledgeEntityOutput>;
-
-    fn query_entity_batch_via_cypher(
-        &self,
-        request: &KnowledgeEntityBatchRequest,
-    ) -> Result<KnowledgeEntityBatchOutput>;
-
     fn query_community_entity_visibility_via_cypher(
         &self,
         request: &KnowledgeCommunityEntityVisibilityRequest,
@@ -61,26 +40,6 @@ pub(super) trait QueryFirstTestExt {
         &self,
         request: &KnowledgeCrystalSourceVisibilityRequest,
     ) -> Result<KnowledgeCrystalSourceVisibilityOutput>;
-
-    fn query_scoped_entity_via_cypher(
-        &self,
-        request: &KnowledgeScopedEntityRequest,
-    ) -> Result<KnowledgeEntityOutput>;
-
-    fn query_scoped_entity_batch_via_cypher(
-        &self,
-        request: &KnowledgeScopedEntityBatchRequest,
-    ) -> Result<KnowledgeEntityBatchOutput>;
-
-    fn query_property_batch_via_cypher(
-        &self,
-        request: &KnowledgePropertyBatchRequest,
-    ) -> Result<KnowledgePropertyBatchOutput>;
-
-    fn query_scoped_property_batch_via_cypher(
-        &self,
-        request: &KnowledgeScopedPropertyBatchRequest,
-    ) -> Result<KnowledgePropertyBatchOutput>;
 
     fn query_neighbors_via_cypher(
         &self,
@@ -127,20 +86,6 @@ pub(super) trait QueryFirstTestExt {
 }
 
 impl QueryFirstTestExt for Database {
-    fn query_entity_via_cypher(
-        &self,
-        request: &KnowledgeEntityRequest,
-    ) -> Result<KnowledgeEntityOutput> {
-        knowledge_entity_via_query_runtime(self, request)
-    }
-
-    fn query_entity_batch_via_cypher(
-        &self,
-        request: &KnowledgeEntityBatchRequest,
-    ) -> Result<KnowledgeEntityBatchOutput> {
-        knowledge_entity_batch_via_query_runtime(self, request)
-    }
-
     fn query_community_entity_visibility_via_cypher(
         &self,
         request: &KnowledgeCommunityEntityVisibilityRequest,
@@ -174,34 +119,6 @@ impl QueryFirstTestExt for Database {
         request: &KnowledgeCrystalSourceVisibilityRequest,
     ) -> Result<KnowledgeCrystalSourceVisibilityOutput> {
         super::super::knowledge_crystal_source_visibility_via_query_runtime(self, request)
-    }
-
-    fn query_scoped_entity_via_cypher(
-        &self,
-        request: &KnowledgeScopedEntityRequest,
-    ) -> Result<KnowledgeEntityOutput> {
-        knowledge_scoped_entity_via_query_runtime(self, request)
-    }
-
-    fn query_scoped_entity_batch_via_cypher(
-        &self,
-        request: &KnowledgeScopedEntityBatchRequest,
-    ) -> Result<KnowledgeEntityBatchOutput> {
-        knowledge_scoped_entity_batch_via_query_runtime(self, request)
-    }
-
-    fn query_property_batch_via_cypher(
-        &self,
-        request: &KnowledgePropertyBatchRequest,
-    ) -> Result<KnowledgePropertyBatchOutput> {
-        knowledge_property_batch_via_query_runtime(self, request)
-    }
-
-    fn query_scoped_property_batch_via_cypher(
-        &self,
-        request: &KnowledgeScopedPropertyBatchRequest,
-    ) -> Result<KnowledgePropertyBatchOutput> {
-        knowledge_scoped_property_batch_via_query_runtime(self, request)
     }
 
     fn query_neighbors_via_cypher(

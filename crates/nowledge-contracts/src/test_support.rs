@@ -16,5 +16,3 @@
 
 #[path = "graph_read.rs"]
 pub mod graph_read;
-#[path = "mutation.rs"]
-pub mod mutation;

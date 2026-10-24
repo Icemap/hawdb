@@ -427,30 +427,24 @@ fn typed_reads_and_mutations_include_checkpointed_canonical_rows() {
         assert_eq!(residency.delta_node_count, 0);
         assert_eq!(residency.delta_relationship_count, 0);
 
-        let entity = db
-            .query_entity_via_cypher(&KnowledgeEntityRequest {
-                label: "Memory".to_string(),
-                external_id: "memory:one".to_string(),
-            })
+        let mut snapshot = db.begin_read_transaction().unwrap();
+        let entity = snapshot
+            .query_request(bounded_batch_query(
+                "MATCH (m:Memory {id: $id}) RETURN m.title AS title",
+                &BTreeMap::from([("id".into(), Value::String("memory:one".into()))]),
+            ))
             .unwrap();
-        assert_eq!(
-            entity.entity.unwrap().properties.get("title"),
-            Some(&Value::String("One".to_string()))
-        );
-
-        let properties = db
-            .query_property_batch_via_cypher(&KnowledgePropertyBatchRequest {
-                entities: vec![KnowledgeEntityRequest {
-                    label: "Entity".to_string(),
-                    external_id: "entity:rust".to_string(),
-                }],
-                property_names: vec!["name".to_string()],
-            })
+        assert_eq!(entity.rows.len(), 1);
+        assert_eq!(entity.rows[0]["title"], Value::String("One".into()));
+        let properties = snapshot
+            .query_request(bounded_batch_query(
+                "MATCH (e:Entity {id: $id}) RETURN e.name AS name",
+                &BTreeMap::from([("id".into(), Value::String("entity:rust".into()))]),
+            ))
             .unwrap();
-        assert_eq!(
-            properties.rows[0].properties.get("name"),
-            Some(&Some(Value::String("Rust".to_string())))
-        );
+        assert_eq!(properties.rows.len(), 1);
+        assert_eq!(properties.rows[0]["name"], Value::String("Rust".into()));
+        drop(snapshot);
 
         let neighbors = db
             .query_neighbors_via_cypher(&KnowledgeNeighborsRequest {
@@ -539,16 +533,16 @@ fn typed_read_fails_closed_when_an_out_of_core_segment_is_corrupted() {
     std::fs::write(&canonical_path, bytes).unwrap();
 
     let error = db
-        .query_entity_via_cypher(&KnowledgeEntityRequest {
-            label: "Memory".to_string(),
-            external_id: "memory:one".to_string(),
-        })
+        .query_request(bounded_batch_query(
+            "MATCH (m:Memory {id: $id}) RETURN m AS entity",
+            &BTreeMap::from([("id".into(), Value::String("memory:one".into()))]),
+        ))
         .unwrap_err();
     assert!(
         error
             .to_string()
             .contains("failed content digest verification"),
-        "unexpected typed read error: {error}"
+        "unexpected query read error: {error}"
     );
     assert_eq!(
         db.storage_residency_report()

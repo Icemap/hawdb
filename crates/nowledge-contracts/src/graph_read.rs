@@ -265,52 +265,6 @@ pub struct KnowledgeEntityRequest {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeScopedEntityRequest {
-    pub entity: KnowledgeEntityRequest,
-    pub metadata_filters: BTreeMap<String, String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeEntityBatchRequest {
-    pub entities: Vec<KnowledgeEntityRequest>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeScopedEntityBatchRequest {
-    pub entities: Vec<KnowledgeEntityRequest>,
-    pub metadata_filters: BTreeMap<String, String>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct KnowledgeEntityOutput {
-    pub graph_commit_epoch: u64,
-    pub entity: Option<KnowledgeEntity>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeEntityDetailsRequest {
-    pub label: String,
-    pub external_id: String,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct KnowledgeEntityDetailsOutput {
-    pub graph_commit_epoch: u64,
-    pub entity: Option<KnowledgeEntity>,
-    pub neighbor_count: u64,
-    pub relationship_count: u64,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct KnowledgeEntityBatchOutput {
-    pub graph_commit_epoch: u64,
-    pub entities: Vec<Option<KnowledgeEntity>>,
-    pub found_count: usize,
-    pub missing_count: usize,
-    pub filtered_out_count: usize,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KnowledgeCommunityEntityVisibilityRequest {
     pub community_ids: Vec<Value>,
     pub limit: usize,

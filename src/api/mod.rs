@@ -8002,40 +8002,6 @@ pub(super) fn sort_crystal_source_visibility_rows(rows: &mut [KnowledgeCrystalSo
 }
 
 #[cfg(test)]
-pub(super) fn dedup_property_names(property_names: &[String]) -> Vec<String> {
-    let mut seen = BTreeSet::new();
-    property_names
-        .iter()
-        .filter(|name| seen.insert((*name).clone()))
-        .cloned()
-        .collect()
-}
-
-#[cfg(test)]
-pub(super) fn empty_property_projection(property_names: &[String]) -> BTreeMap<String, Option<Value>> {
-    property_names
-        .iter()
-        .cloned()
-        .map(|name| (name, None))
-        .collect()
-}
-
-#[cfg(test)]
-pub(super) fn project_knowledge_entity_properties(
-    entity: &KnowledgeEntity,
-    property_names: &[String],
-) -> BTreeMap<String, Option<Value>> {
-    property_names
-        .iter()
-        .cloned()
-        .map(|name| {
-            let value = entity.properties.get(&name).cloned();
-            (name, value)
-        })
-        .collect()
-}
-
-#[cfg(test)]
 pub(super) fn value_to_non_negative_usize(value: &Value) -> Option<usize> {
     match value {
         Value::Int(value) if *value >= 0 => usize::try_from(*value).ok(),

@@ -15,42 +15,38 @@
 use super::*;
 
 #[test]
-fn knowledge_entity_returns_none_for_missing_seed() {
+fn knowledge_entity_returns_no_rows_for_missing_seed() {
     let mut db = Database::new();
     db.query("CREATE (:Entity {id: 'entity_1', name: 'HawDB'})")
         .unwrap();
-
-    let output = db
-        .query_entity_via_cypher(&KnowledgeEntityRequest {
-            label: "Entity".to_string(),
-            external_id: "missing".to_string(),
-        })
+    let mut snapshot = db.begin_read_transaction().unwrap();
+    let output = snapshot
+        .query_request(bounded_batch_query(
+            "MATCH (e:Entity {id: $id}) RETURN e AS entity",
+            &BTreeMap::from([("id".into(), Value::String("missing".into()))]),
+        ))
         .unwrap();
-
-    assert_eq!(output.graph_commit_epoch, 1);
-    assert!(output.entity.is_none());
+    assert_eq!(snapshot.commit_epoch(), 1);
+    assert!(output.rows.is_empty());
 }
 
 #[test]
-fn knowledge_entity_uses_projected_identity_for_idless_nodes() {
+fn knowledge_entity_reads_idless_nodes_by_internal_identity() {
     let mut db = Database::new();
     db.query("CREATE (:Entity {name: 'Anonymous entity', kind: 'concept'})")
         .unwrap();
-
-    let output = db
-        .query_entity_via_cypher(&KnowledgeEntityRequest {
-            label: "Entity".to_string(),
-            external_id: "0".to_string(),
-        })
-        .unwrap();
-
-    let entity = output.entity.expect("expected entity");
-    assert_eq!(output.graph_commit_epoch, 1);
-    assert_eq!(entity.node_id, 0);
-    assert_eq!(entity.external_id.as_deref(), Some("0"));
+    let mut snapshot = db.begin_read_transaction().unwrap();
+    let output = snapshot.query_request(bounded_batch_query(
+        "MATCH (e:Entity) WHERE id(e) = $node_id RETURN id(e) AS node_id, e.id AS id, e.name AS name",
+        &BTreeMap::from([("node_id".into(), Value::Int(0))]),
+    )).unwrap();
+    assert_eq!(snapshot.commit_epoch(), 1);
+    assert_eq!(output.rows.len(), 1);
+    assert_eq!(output.rows[0]["node_id"], Value::Int(0));
+    assert_eq!(output.rows[0]["id"], Value::Null);
     assert_eq!(
-        entity.properties.get("name"),
-        Some(&Value::String("Anonymous entity".to_string()))
+        output.rows[0]["name"],
+        Value::String("Anonymous entity".into())
     );
 }
 

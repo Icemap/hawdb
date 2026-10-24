@@ -15,15 +15,11 @@
 mod analytics;
 #[cfg(test)]
 mod graph_read;
-#[cfg(test)]
-mod mutation;
 mod relational;
 mod retrieval;
 
 pub(crate) use analytics::QueryExecutionTrace;
 #[cfg(test)]
 pub use graph_read::*;
-#[cfg(test)]
-pub use mutation::*;
 pub use relational::*;
 pub use retrieval::*;

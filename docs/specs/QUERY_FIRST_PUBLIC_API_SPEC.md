@@ -439,8 +439,7 @@ mutations share an explicit transaction; repeated counter updates observe its
 private workspace. These fixtures retain exact field values, missing/idless
 target protection, omitted-field behavior, no-op epochs and single-batch
 WAL/reopen assertions. Their business adapters and request/result DTOs are
-removed. The shared property-statement helper remains only for legacy fixtures
-that have not yet migrated.
+removed, including the former shared property-statement helper.
 Memory lifecycle/latest flags and EVOLVES relationship fixtures also use bounded
 parameterized statements and explicit transactions. Space predicates and exact
 endpoint matching stay in Cypher; host helpers only normalize input. Their three
@@ -509,7 +508,10 @@ builder disappear while assignment, idless, read-only and recovery cases remain.
 Relationship CREATE/MERGE fixtures and out-of-core statistics setup now execute
 bounded parameterized queries. The last eight business mutation methods, their
 fourteen DTOs, test-only analytics DTO module and graph-inspection mutation
-helpers are removed. Read adapters and final qualification remain unfinished;
+helpers are removed. Entity/property reads now use fixed bounded statements
+on read snapshots.
+Their six read wrappers and eleven request/response types are removed.
+The remaining fourteen read wrappers and final qualification remain unfinished;
 this mutation cleanup alone does not complete issue #1193.
 
 ## Stable typed boundaries
