@@ -1,445 +1,63 @@
-name: Weekly Platform CI
+name: Review Linux reproduction
 
 on:
   workflow_dispatch:
-    inputs:
-      scope:
-        description: Qualification lanes to run; partial scopes do not qualify other lanes
-        type: choice
-        options: [all, runtime, power-loss]
-        default: all
-  schedule:
-    # Scheduled workflows run the latest revision of the default branch (main).
-    - cron: "37 3 * * 1"
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}${{ inputs.scope && inputs.scope != 'all' && format('-{0}', inputs.scope) || '' }}
-  cancel-in-progress: true
-
-defaults:
-  run:
-    # Stop at the first failed native command on Windows as well as Unix.
-    shell: bash
+permissions:
+  contents: read
 
 jobs:
-  runtime-platform:
-    if: ${{ inputs.scope != 'power-loss' }}
-    name: Runtime Platform (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
+  reproduce:
+    name: Review Linux (${{ matrix.suite }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        # Linux coverage is authoritative in the Prow Bazel build and crate-test jobs.
-        os: [macos-latest, windows-latest]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.97.1
-
-      - name: Check Tokio facade
-        run: cargo check -p hawdb --features tokio-runtime
-
-      - name: Check qualification workload
-        run: cargo check -p hawdb-qualification
-
-      - name: Test resource detection
-        run: cargo test -p hawdb-qos resource::tests
-
-      - name: Test cgroup v2 detection
-        run: cargo test -p hawdb-cgroup
-
-      - name: Test expression IR
-        run: cargo test -p hawdb-expression
-
-      - name: Test telemetry contract
-        run: cargo test -p hawdb-telemetry
-
-      - name: Test process memory metrics
-        run: cargo test -p hawdb-qos process_memory::tests
-
-      - name: Test embedded process RSS admission and native recovery
-        run: |
-          cargo clippy --locked -p hawdb --features tokio-runtime --test process_memory_policy_contract -- -D warnings
-          cargo test --locked -p hawdb --features tokio-runtime --test process_memory_policy_contract -- --nocapture
-
-      - name: Test Tokio adapter
-        run: cargo test -p hawdb-runtime-tokio
-
-      - name: Test admitted planning
-        run: cargo test -p hawdb --features tokio-runtime --lib api::query_runtime::tests
-
-      - name: Test synchronous query entrypoints
-        run: cargo test -p hawdb --features tokio-runtime --lib embedded::tests
-
-      - name: Test native indexed node view ownership
-        run: cargo test --locked -p hawdb --features tokio-runtime --lib api::retained_query::node::tests -- --nocapture
-
-      - name: Test immutable catalog symbol ownership
-        run: cargo test --locked -p hawdb-core --lib schema::tests
-
-      - name: Test request context constraints
-        run: |
-          cargo test --locked -p hawdb-core --lib cancellation::
-
-      - name: Test shared query request contracts
-        run: |
-          cargo test --locked -p hawdb --lib api::query_request::
-          cargo test --locked -p hawdb --features acl --lib api::query_request::
-
-      - name: Test prepared source admission and private query fixtures
-        run: |
-          bash scripts/cargo-test-required.sh --locked -p hawdb --lib api::dependency_read::tests::prepared_source_queries_preserve_task_result_limits_and_cancellation
-          bash scripts/cargo-test-required.sh --locked -p hawdb --lib api::sql_runtime::tests::
-          bash scripts/cargo-test-required.sh --locked -p hawdb --lib api::tests::knowledge_entity_deletes::
-          bash scripts/cargo-test-required.sh --locked -p hawdb --lib graph_route_evidence::
-          bash scripts/cargo-test-required.sh --locked -p hawdb-readiness --lib graph_route_catalog::tests::
-
-      - name: Test borrowed result delivery
-        run: |
-          cargo test --locked -p hawdb-executor --lib result_delivery::tests::borrowed::
-          cargo test --locked -p hawdb-executor --lib numeric::
-          cargo test --locked -p hawdb --lib api::tests::query_execution::read_transaction_exposes_validated_compact_borrowed_rows
-          cargo test --locked -p hawdb --lib api::tests::query_execution::read_transaction_borrowed_stream_refuses_limits_without_delivering_a_prefix
-          cargo test --locked -p hawdb --lib api::tests::query_execution::native_numeric_results_preserve_borrowing_validation_and_owned_parity
-
-      - name: Test Tokio query entrypoints
-        run: |
-          cargo test --locked -p hawdb --features tokio-runtime --lib embedded_tokio::
-          cargo test --locked -p hawdb --features tokio-runtime,acl --lib embedded_tokio::request_tests
-
-      - name: Test Mem shared publication ownership
-        run: |
-          cargo test --locked -p hawdb --features tokio-runtime --lib api::concurrent::autocommit::tests::
-          bash scripts/cargo-test-required.sh --locked -p hawdb --features tokio-runtime --lib api::concurrent::autocommit::sql::tests::
-          cargo test --locked -p hawdb --features tokio-runtime --lib api::concurrent::graph_preparation_tests::
-          cargo test --locked -p hawdb --features tokio-runtime --lib nowledge_mem::concurrent_owner::
-          cargo test --locked -p hawdb --features tokio-runtime --lib nowledge_mem::read_execution::
-          cargo test --locked -p hawdb --features tokio-runtime --lib nowledge_mem::app_read_snapshot_tests
-
-  vector-projection-platform:
-    if: ${{ !inputs.scope || inputs.scope == 'all' }}
-    name: Vector Projection (${{ matrix.target }})
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
+        suite: [root, crates]
         include:
-          - target: linux-x86_64
-            runner: ubuntu-24.04
-          - target: linux-aarch64
-            runner: ubuntu-24.04-arm
-          - target: macos-aarch64
-            runner: macos-15
-          - target: windows-x86_64
-            runner: windows-2025
+          - suite: root
+            target: //:hawdb_unit_tests
+          - suite: crates
+            target: //:hawdb_presubmit_crate_tests
+    env:
+      USE_BAZEL_VERSION: "9.3.0"
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.97.1
-
-      - name: Check default and minimal feature sets
-        run: |
-          cargo check -p hawdb
-          cargo check -p hawdb --no-default-features
-
-      - name: Test search capability feature combinations
-        shell: bash
-        run: |
-          set -euo pipefail
-          # Preserve native Windows namespace/handle qualification isolation.
-          # Changing this lane's concurrency requires separate native evidence.
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-            export RUST_TEST_THREADS=1
-          fi
-          cargo test -p hawdb-search
-          cargo test -p hawdb-search --no-default-features
-          cargo test -p hawdb-search --no-default-features --features full-text-search
-          cargo test -p hawdb-search --no-default-features --features vector-search
-          cargo test -p hawdb-search --no-default-features --features background-maintenance
-          cargo test -p hawdb-search --no-default-features --features full-text-search,vector-search
-          cargo test -p hawdb-search --no-default-features --features full-text-search,background-maintenance
-          cargo test -p hawdb-search --no-default-features --features vector-search,background-maintenance
-
-      - name: Test RaBitQ projection
-        run: cargo test -p hawdb-vector-projection
-
-      - name: Test admitted RaBitQ artifact IO
-        shell: bash
-        run: |
-          cargo test --locked -p hawdb-vector-projection --features storage-io
-          bash scripts/cargo-test-required.sh --locked -p hawdb-vector-projection --features storage-io --lib artifact::descriptor_tests::
-
-      - name: Test RaBitQ search projection
-        shell: bash
-        run: |
-          bash scripts/cargo-test-required.sh --locked -p hawdb-search --lib rabitq_projection::tests
-
-      - name: Test vector qualification protocol
-        run: cargo test -p hawdb-qualification production_vector
-
-  storage-platform:
-    if: ${{ !inputs.scope || inputs.scope == 'all' }}
-    name: Storage Platform (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-latest, windows-latest]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.97.1
-
-      - name: Test storage artifacts and ownership
-        run: cargo test -p hawdb-storage
-
-      - name: Test ordinary project opening and pending recovery
-        shell: bash
-        run: |
-          set -euo pipefail
-          # Until #819 isolates Windows alias probes, exhausted project fixtures
-          # must not overlap unrelated existing-project admission.
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-            export RUST_TEST_THREADS=1
-          fi
-          bash scripts/cargo-test-required.sh --locked -p hawdb --test branch_project_open
-          bash scripts/cargo-test-required.sh --locked -p hawdb --no-default-features --test branch_project_open
-
-      - name: Test branch lifecycle and creation retries
-        shell: bash
-        run: |
-          bash scripts/cargo-test-required.sh --locked -p hawdb --features acl --lib api::branch_lifecycle::tests::
-
-      - name: Test durable storage recovery
-        run: cargo test -p hawdb --features acl --lib api::tests::storage_recovery
-
-      - name: Test row-page compaction and reclamation
-        shell: bash
-        run: bash scripts/cargo-test-required.sh --locked -p hawdb --features acl --test row_page_compaction
-
-      - name: Test out-of-core search projection I/O
-        shell: bash
-        run: |
-          set -euo pipefail
-          # Until #819 isolates Windows alias probes, exhausted project fixtures
-          # must not overlap unrelated existing-project admission.
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-            export RUST_TEST_THREADS=1
-          fi
-          bash scripts/cargo-test-required.sh --locked -p hawdb-search --features acl --lib out_of_core::
-          bash scripts/cargo-test-required.sh --locked -p hawdb-search --features acl --test generation_source_policy
-
-      - name: Capture Windows storage lifecycle evidence
-        if: matrix.os == 'windows-latest'
-        shell: bash
-        env:
-          HAWDB_TEST_RUST_TOOLCHAIN: "1.97.1"
-          HAWDB_TEST_STORAGE_RESOURCE_EVIDENCE_PATH: storage-resource-results/report.json
-        run: |
-          set -euo pipefail
-          mkdir -p storage-resource-results
-          set +e
-          cargo test -p hawdb --features acl --lib \
-            api::tests::storage_recovery::platform_storage_resource_profile_emits_bound_evidence \
-            -- --exact --nocapture 2>&1 \
-            | tee storage-resource-results/resource-profile-test-output.txt
-          resource_status=${PIPESTATUS[0]}
-          cargo test -p hawdb --features acl --lib \
-            api::tests::storage_recovery::canonical_row_overflow_backup_reopen_and_reclaim_follow_physical_closure \
-            -- --exact --nocapture 2>&1 \
-            | tee storage-resource-results/row-overflow-lifecycle-test-output.txt
-          lifecycle_status=${PIPESTATUS[0]}
-          set -e
-          printf '{"protocol":"hawdb-windows-storage-lifecycle-evidence-v1","source_revision":"%s","runner_os":"%s","resource_profile_test_status":%s,"row_overflow_lifecycle_test_status":%s}\n' \
-            "$GITHUB_SHA" "$RUNNER_OS" "$resource_status" "$lifecycle_status" \
-            > storage-resource-results/manifest.json
-          test "$resource_status" -eq 0
-          test "$lifecycle_status" -eq 0
-
-      - name: Upload Windows storage lifecycle evidence
-        if: always() && matrix.os == 'windows-latest'
-        uses: actions/upload-artifact@v7
+      - uses: actions/checkout@v7
         with:
-          name: storage-resource-windows-latest-${{ github.sha }}
-          path: storage-resource-results
-          if-no-files-found: error
-
-  branch-power-loss:
-    if: ${{ inputs.scope != 'runtime' }}
-    name: Branch Power Loss (${{ matrix.os }}, ${{ matrix.shard }})
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 120
-    strategy:
-      fail-fast: false
-      matrix:
-        # Native execution checks the implementation under explicit barrier
-        # assumptions; it does not certify Windows directory-flush semantics.
-        include:
-          - os: ubuntu-24.04
-            shard: full
-          - os: macos-latest
-            shard: full
-          - os: windows-latest
-            shard: head
-          - os: windows-latest
-            shard: manifest
-          - os: windows-latest
-            shard: root
-          - os: windows-latest
-            shard: wal-sync
-          - os: windows-latest
-            shard: remaining
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.97.1
-
-      - name: Run branch power-loss qualification
-        shell: bash
-        env:
-          POWER_LOSS_SHARD: ${{ matrix.shard }}
-        run: |
-          set -euo pipefail
-          python3 scripts/branch-power-loss-shard.test.py
-          mkdir -p branch-power-loss-results
-          git rev-parse HEAD > branch-power-loss-results/source-revision.txt
-          rustc --version --verbose > branch-power-loss-results/toolchain.txt
-          uname -a > branch-power-loss-results/platform.txt
-          df -Pk . "${TMPDIR:-/tmp}" > branch-power-loss-results/disk-before.txt
-          cargo test --locked -p hawdb-storage --all-features --lib \
-            power_loss:: -- --list 2>&1 \
-            | tee branch-power-loss-results/recorder-discovery.txt
-          cargo test --locked -p hawdb --all-features --lib \
-            api::tests::power_loss:: -- --list 2>&1 \
-            | tee branch-power-loss-results/discovery.txt
-          python3 scripts/branch-power-loss-shard.py \
-            --discovery branch-power-loss-results/discovery.txt \
-            --shard "$POWER_LOSS_SHARD" --output-dir branch-power-loss-results
-          test_filter=$(cat branch-power-loss-results/test-filter.txt)
-          test_arguments=(--nocapture --test-threads=1)
-          while IFS= read -r argument; do
-            test_arguments+=("$argument")
-          done < branch-power-loss-results/test-arguments.txt
-          set +e
-          bash scripts/cargo-test-required.sh --locked -p hawdb-storage --all-features --lib \
-            power_loss:: -- --nocapture --test-threads=1 2>&1 \
-            | tee branch-power-loss-results/recorder-output.txt
-          recorder_status=$?
-          if [[ "$RUNNER_OS" == Windows ]]; then
-            # Surface configuration failures before the long publication matrix.
-            bash scripts/cargo-test-required.sh --locked -p hawdb --all-features --lib \
-              api::tests::power_loss::schema_indexes_and_nested_data_survive_power_loss_in_configured_residencies \
-              -- --exact --nocapture --test-threads=1 2>&1 \
-              | tee branch-power-loss-results/configuration-output.txt
-            configuration_status=$?
-            if (( configuration_status != 0 )); then
-              exit "$configuration_status"
-            fi
-          fi
-          bash scripts/cargo-test-required.sh --locked -p hawdb --all-features --lib \
-            "$test_filter" -- "${test_arguments[@]}" 2>&1 \
-            | tee branch-power-loss-results/test-output.txt
-          test_status=$?
-          set -e
-          df -Pk . "${TMPDIR:-/tmp}" > branch-power-loss-results/disk-after.txt
-          namespace_assumption=posix-directory-sync
-          if [[ "$RUNNER_OS" == Windows ]]; then
-            namespace_assumption=windows-directory-flush-unqualified
-          fi
-          printf '{"protocol":"hawdb-branch-power-loss-ci-v1","source_revision":"%s","runner_os":"%s","test_status":%s,"recorder_status":%s,"namespace_assumption":"%s","physical_device_test":false}\n' \
-            "$GITHUB_SHA" "$RUNNER_OS" "$test_status" "$recorder_status" "$namespace_assumption" \
-            > branch-power-loss-results/manifest.json
-          if (( recorder_status != 0 )); then
-            exit "$recorder_status"
-          fi
-          exit "$test_status"
-
-      - name: Record Windows filesystem context
-        if: always() && matrix.os == 'windows-latest'
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force branch-power-loss-results | Out-Null
-          $roots = @{
-            workspace = $env:GITHUB_WORKSPACE
-            temporary = [System.IO.Path]::GetTempPath()
-          }
-          $volumes = foreach ($entry in $roots.GetEnumerator()) {
-            $directory = Get-Item -LiteralPath $entry.Value -ErrorAction Stop
-            $volume = Get-Volume -DriveLetter $directory.PSDrive.Name -ErrorAction Stop
-            [ordered]@{
-              scope = $entry.Key
-              path = $directory.FullName
-              filesystem = $volume.FileSystem
-              drive_type = "$($volume.DriveType)"
-              allocation_unit_size = $volume.AllocationUnitSize
-              size = $volume.Size
-              size_remaining = $volume.SizeRemaining
-            }
-          }
-          [ordered]@{
-            source_revision = $env:GITHUB_SHA
-            os = Get-CimInstance Win32_OperatingSystem |
-              Select-Object Caption, Version, BuildNumber, OSArchitecture
-            volumes = @($volumes)
-            namespace_semantics_qualified = $false
-          } | ConvertTo-Json -Depth 4 |
-            Set-Content -Encoding utf8 branch-power-loss-results/windows-filesystems.json
-
-      - name: Upload branch power-loss evidence
-        if: always()
-        uses: actions/upload-artifact@v7
+          ref: d713e08807c1da8167ca9d3b8bc63f7bae368adb
+      - uses: bazel-contrib/setup-bazel@0.19.1
         with:
-          name: branch-power-loss-${{ matrix.os }}-${{ matrix.shard }}-${{ github.sha }}
-          path: branch-power-loss-results
-          if-no-files-found: error
-
-  storage-crash-recovery:
-    if: ${{ !inputs.scope || inputs.scope == 'all' }}
-    name: Storage Crash Recovery (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        # Linux crash evidence is owned by Prow.
-        os: [macos-latest, windows-latest]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.97.1
-
-      - name: Run subprocess crash matrix
-        shell: bash
-        env:
-          HAWDB_TEST_RUST_TOOLCHAIN: "1.97.1"
-          HAWDB_TEST_STORAGE_CRASH_EVIDENCE_PATH: storage-crash-results/report.json
+          bazelisk-cache: true
+          disk-cache: review-linux-${{ matrix.suite }}
+          repository-cache: true
+          external-cache: true
+      - name: Record source
+        run: |
+          mkdir -p review-evidence
+          git rev-parse HEAD > review-evidence/source.txt
+          git status --porcelain > review-evidence/worktree.txt
+      - name: Run the existing test suite
         run: |
           set -o pipefail
-          mkdir -p storage-crash-results
-          set +e
-          cargo test -p hawdb --features acl --lib \
-            api::tests::storage_recovery::subprocess_crash_matrix_recovers_whole_batches_and_artifact_generations \
-            -- --nocapture 2>&1 | tee storage-crash-results/test-output.txt
-          test_status=${PIPESTATUS[0]}
-          set -e
-          printf '{"source_revision":"%s","runner_os":"%s","test_status":%s}\n' \
-            "$GITHUB_SHA" "$RUNNER_OS" "$test_status" \
-            > storage-crash-results/manifest.json
-          exit "$test_status"
-
-      - name: Upload crash recovery evidence
+          bazel test --keep_going --test_output=errors \
+            ${{ matrix.target }} 2>&1 | tee review-evidence/build-log.txt
+      - name: Collect complete native test logs
         if: always()
-        uses: actions/upload-artifact@v7
+        run: |
+          python3 - <<'PYTHON'
+          from pathlib import Path
+          import tarfile
+          root = Path("bazel-testlogs").resolve()
+          with tarfile.open("review-evidence/test-logs.tar.gz", "w:gz") as archive:
+              if root.exists():
+                  for path in sorted(root.rglob("*")):
+                      if path.is_file() and path.name in {"test.log", "test.xml"}:
+                          archive.add(path, arcname=str(path.relative_to(root)), recursive=False)
+          PYTHON
+      - uses: actions/upload-artifact@v7
+        if: always()
         with:
-          name: storage-crash-recovery-${{ matrix.os }}-${{ github.sha }}
-          path: storage-crash-results
+          name: review-linux-${{ matrix.suite }}-d713e088
+          path: review-evidence/
           if-no-files-found: error
