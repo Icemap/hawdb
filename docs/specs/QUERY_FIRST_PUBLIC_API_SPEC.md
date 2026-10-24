@@ -458,6 +458,12 @@ Timestamp eligibility, endpoint matching, graph traversal and cascade selection
 remain in query predicates; input helpers do not inspect graph state. The
 fifteen runtime cases preserve transaction/WAL and reopen assertions while
 removing five business methods, fifteen DTOs and four test read wrappers.
+Label lifecycle, Memory label deletion and both label-transfer fixture families
+use ordinary bounded queries. Candidate selection, filtering and deduplication
+stay in Cypher; each selected identity is passed to an exact MERGE in the same
+explicit transaction. Their twelve runtime cases preserve idless/space refusal,
+existing relationship properties, no-op and one-batch recovery semantics while
+removing four business methods, twelve DTOs and handwritten graph scans.
 Remaining legacy business adapters still require migration; this removal does
 not complete issue #1193.
 

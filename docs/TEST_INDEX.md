@@ -845,3 +845,16 @@ selection. Predicates and graph traversal remain in Cypher. Explicit transaction
 and bounded reads verify affected counts, no-op epochs, unchanged survivors,
 single WAL batches and exact reopen. Five business methods, fifteen DTOs, their
 graph-inspection helpers and four old test read wrappers are removed.
+
+### Label lifecycle and transfer queries
+
+`api::tests::label_lifecycle` retains twelve root general cases through ordinary
+bounded parameterized requests. Fixed SET/DELETE statements cover omitted
+fields, duplicate input, missing/idless targets, exact/all label deletion and
+surviving endpoints. Transfer candidates are selected, filtered and deduplicated
+by Cypher; the host only binds each selected identity into an exact MERGE within
+the same explicit transaction. Coverage preserves duplicate source edges,
+space refusal, protected idless memories, existing relationship identity and
+properties, retry no-op epoch/WAL, single-batch recovery and exact reopen. Four
+business methods, twelve DTOs and their graph-scan helpers are removed. The
+remaining entity-label read wrappers are separate migration work.
