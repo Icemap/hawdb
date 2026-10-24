@@ -160,33 +160,6 @@ pub struct KnowledgeRelationshipUpsertBatchOutput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeRelationshipDeleteRequest {
-    pub source: KnowledgeEntityRequest,
-    pub target: KnowledgeEntityRequest,
-    pub relationship_type: String,
-    pub relationship_properties: BTreeMap<String, Value>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeScopedRelationshipDeleteRequest {
-    pub delete: KnowledgeRelationshipDeleteRequest,
-    pub source_metadata_filters: BTreeMap<String, String>,
-    pub target_metadata_filters: BTreeMap<String, String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeRelationshipDeleteOutput {
-    pub graph_commit_epoch_before: u64,
-    pub graph_commit_epoch_after: u64,
-    pub source_node_id: Option<u64>,
-    pub target_node_id: Option<u64>,
-    pub matched: bool,
-    pub source_filtered_out: bool,
-    pub target_filtered_out: bool,
-    pub deleted_relationship_count: usize,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KnowledgeRelationshipUpdateRequest {
     pub source: KnowledgeEntityRequest,
     pub target: KnowledgeEntityRequest,
@@ -253,42 +226,4 @@ pub struct KnowledgeRelationshipUpdateBatchOutput {
     pub non_writable_count: usize,
     pub updated_relationship_count: usize,
     pub updated_property_count: usize,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeRelationshipDeleteBatchRequest {
-    pub deletes: Vec<KnowledgeRelationshipDeleteRequest>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeScopedRelationshipDeleteBatchRequest {
-    pub deletes: Vec<KnowledgeRelationshipDeleteRequest>,
-    pub source_metadata_filters: BTreeMap<String, String>,
-    pub target_metadata_filters: BTreeMap<String, String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeRelationshipDeleteBatchRow {
-    pub source: KnowledgeEntityRequest,
-    pub target: KnowledgeEntityRequest,
-    pub relationship_type: String,
-    pub source_node_id: Option<u64>,
-    pub target_node_id: Option<u64>,
-    pub matched: bool,
-    pub source_filtered_out: bool,
-    pub target_filtered_out: bool,
-    pub non_writable: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeRelationshipDeleteBatchOutput {
-    pub graph_commit_epoch_before: u64,
-    pub graph_commit_epoch_after: u64,
-    pub rows: Vec<KnowledgeRelationshipDeleteBatchRow>,
-    pub matched_count: usize,
-    pub missing_endpoint_count: usize,
-    pub source_filtered_out_count: usize,
-    pub target_filtered_out_count: usize,
-    pub non_writable_count: usize,
-    pub deleted_relationship_count: usize,
 }

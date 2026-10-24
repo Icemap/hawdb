@@ -499,6 +499,10 @@ Entity create/update fixtures use fixed bounded MERGE and SET statements with
 external-id predicates. Creation/match fields, first-input duplicate handling,
 identity checks, read-only refusal and one-batch recovery remain explicit without
 the four business adapters, ten DTOs or dynamic statement builders.
+Single and batch relationship deletion fixtures use bounded DELETE statements
+with endpoint, relationship-property and scope predicates. They preserve idless
+protection, nodes and WAL/reopen boundaries without four mutation adapters,
+seven DTOs or a dynamic statement builder.
 Remaining legacy business adapters still require migration; this removal does
 not complete issue #1193.
 

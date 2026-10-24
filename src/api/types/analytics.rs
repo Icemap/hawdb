@@ -34,14 +34,3 @@ impl QueryExecutionTrace {
         }
     }
 }
-
-#[cfg(test)]
-mod facade_tests {
-    use super::*;
-
-    #[test]
-    fn facade_reexports_analytics_protocol_models_without_conversion() {
-        let _: fn(KnowledgeRelationshipDeleteRequest) -> hawdb_nowledge_contracts::test_support::analytics::KnowledgeRelationshipDeleteRequest =
-            |value| value;
-    }
-}

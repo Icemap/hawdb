@@ -965,3 +965,15 @@ external-id predicate on an update; internal projected identifiers cannot select
 that mutation. Four adapters, ten DTOs and dynamic statement factories disappear.
 The obsolete compile-only identity assertion for the removed entity-create DTO
 is removed separately from the thirteen runtime scenarios.
+
+### Relationship deletion queries
+
+`api::tests::{knowledge_relationship_deletes,knowledge_relationship_batch_deletes}`
+retain six autocommit and seven explicit-transaction scenarios through fixed
+bounded DELETE and projection queries. Endpoint/property/scope predicates stay
+in Cypher; missing endpoints, preserved nodes, partial scope matches, read-only
+refusal, invalid syntax before WAL and one-batch reopen remain covered. The
+idless fixture retains a real edge to prove an internal projected identifier
+cannot delete it. Four mutation adapters, seven DTOs and the dynamic deletion
+statement builder are removed. The obsolete compile-only identity assertion for
+the deleted DTO disappears separately; runtime root general ownership is unchanged.
