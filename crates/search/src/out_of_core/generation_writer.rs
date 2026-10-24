@@ -335,8 +335,8 @@ impl SearchOutOfCoreGenerationWriter {
     /// The caller owns shared host admission: copying a numeric reservation does
     /// not reserve additional process capacity. This is not a process RSS cap.
     ///
-    /// Input failure after phase admission poisons the writer. A pre-effect I/O
-    /// admission refusal leaves input untouched. Dropping an unfinished writer discards
+    /// Input processing failures poison the writer. Refusal before starting an
+    /// input phase leaves input untouched. Dropping an unfinished writer discards
     /// its private stage. Cancellation before publication preserves the active
     /// generation; after successful publication it can defer optional cleanup
     /// but does not undo the commit. Native calls are not internally preempted.

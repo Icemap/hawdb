@@ -353,3 +353,89 @@ fn input_build_and_publish_wait_before_native_changes_and_cancel_cleanly() {
         assert!(result.is_err(), "cancelled phase completed: {phase}");
     }
 }
+
+#[test]
+fn streamed_input_yields_output_wave_to_a_governed_reader_at_depth_one() {
+    use std::io::{self, Cursor, Read};
+    struct GovernedBody {
+        task: RuntimeTaskContext,
+        input: Cursor<&'static [u8]>,
+    }
+    impl Read for GovernedBody {
+        fn read(&mut self, bytes: &mut [u8]) -> io::Result<usize> {
+            let _wave = self
+                .task
+                .acquire_io_wave(NonZeroUsize::MIN)
+                .map_err(io::Error::other)?;
+            self.input.read(bytes)
+        }
+    }
+    for task_scope in [false, true] {
+        let root = test_dir("streamed-source-wave");
+        let governor = governor();
+        let request = RuntimeWorkRequest::background_maintenance(64 << 20);
+        let request = if task_scope {
+            request.with_io_slots(1)
+        } else {
+            request.with_io_wave_slots(1)
+        };
+        let permit = Arc::new(governor.try_admit(request).unwrap());
+        let task = permit.bind_task_context(RuntimeTaskContext::new(
+            hawdb_core::RuntimeCancellationToken::new(),
+            Some(std::time::Instant::now() + Duration::from_secs(20)),
+        ));
+        let mut memory = BuildMemory::new(&task).unwrap();
+        memory.host_admission = Some(permit.clone());
+        let options = context_memory::Options::new(Default::default(), &memory, &task).unwrap();
+        let mut writer = SearchOutOfCoreGenerationWriter::create_with_memory(
+            &root,
+            options,
+            task.clone(),
+            memory.clone(),
+        )
+        .unwrap();
+        // Wave requests can use an independently admitted source. Task requests
+        // already own the sole lifetime reservation, so their source shares it.
+        let source = (!task_scope).then(|| {
+            governor
+                .try_admit(
+                    RuntimeWorkRequest::io(RuntimeWorkPriority::Background, 0, 0)
+                        .with_io_wave_slots(1),
+                )
+                .unwrap()
+        });
+        let source_task = source.as_ref().map_or_else(
+            || task.clone(),
+            |permit| permit.bind_task_context(task.clone()),
+        );
+        let reader = GovernedBody {
+            task: source_task,
+            input: Cursor::new(b"graph"),
+        };
+        writer
+            .push_reader(
+                crate::SearchDocumentHeader {
+                    id: "a".into(),
+                    title: "a".into(),
+                    embedding: None,
+                    metadata: Default::default(),
+                },
+                reader,
+                crate::SearchDocumentBody {
+                    bytes: 5,
+                    expected_checksum: None,
+                },
+            )
+            .unwrap();
+        assert_eq!(writer.finish().unwrap().document_count, 1);
+        assert_eq!(memory.ledger.snapshot().used_bytes, 0);
+        drop(task.acquire_io_wave(NonZeroUsize::MIN).unwrap());
+        let reader = super::super::super::SearchOutOfCoreReader::open(&root).unwrap();
+        assert_eq!(
+            reader.hydrate_documents(&["a".into()]).unwrap().documents[0].content,
+            "graph"
+        );
+        drop(reader);
+        fs::remove_dir_all(root).unwrap();
+    }
+}

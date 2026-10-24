@@ -17,12 +17,15 @@ use crate::analyzer_stream::Control;
 use crate::build_memory::AdmittedHeader;
 use crate::document_encoding::streamed;
 use crate::{SearchDocumentBody, SearchDocumentHeader};
-use std::io::Read;
+use std::cell::RefCell;
+use std::io::{self, Read, Seek};
 
 impl SearchOutOfCoreGenerationWriter {
     /// Captures one UTF-8 body exactly once into this private generation.
     ///
-    /// The caller pins the source version until return. Declared length and the
+    /// The caller pins the source version and owns source-reader I/O admission.
+    /// Output releases its wave before invoking the reader, so a governed source
+    /// can share a one-slot governor. Declared length and the
     /// optional CRC32c checksum are verified before accepting the record. Input,
     /// cancellation or admission failures poison the writer; no partial record
     /// can be published. The caller retains no body-sized allocation obligation.
@@ -51,15 +54,6 @@ impl SearchOutOfCoreGenerationWriter {
     pub(super) fn push_admitted_reader(
         &mut self,
         header: AdmittedHeader,
-        body: impl Read,
-        source: SearchDocumentBody,
-    ) -> Result<()> {
-        self.io_phase()?.push_reader_in_wave(header, body, source)
-    }
-
-    fn push_reader_in_wave(
-        &mut self,
-        header: AdmittedHeader,
         mut body: impl Read,
         source: SearchDocumentBody,
     ) -> Result<()> {
@@ -83,18 +77,30 @@ impl SearchOutOfCoreGenerationWriter {
             let spool = self.spool.as_mut().ok_or_else(|| {
                 HawDBError::Storage("search generation spool is already closed".into())
             })?;
-            let receipt = streamed::write_frame(
-                spool,
-                header.header(),
-                &mut body,
-                source,
-                self.options.max_record_bytes.get(),
-                Control {
-                    memory: Some(crate::analyzer_memory::Memory::Build(&self.memory)),
-                    task: Some(&self.task_context),
-                    ..Control::default()
-                },
-            )?;
+            let receipt = {
+                let io = StreamIo {
+                    task: &self.task_context,
+                    governed: self.memory.host_admission.is_some(),
+                    wave: RefCell::new(StreamWave::Idle),
+                };
+                let mut output = Output { spool, io: &io };
+                let mut input = Input {
+                    body: &mut body,
+                    io: &io,
+                };
+                streamed::write_frame(
+                    &mut output,
+                    header.header(),
+                    &mut input,
+                    source,
+                    self.options.max_record_bytes.get(),
+                    Control {
+                        memory: Some(crate::analyzer_memory::Memory::Build(&self.memory)),
+                        task: Some(&self.task_context),
+                        ..Control::default()
+                    },
+                )?
+            };
             checkpoint(&self.task_context)?;
             self.documents_digest
                 .add_record(receipt.checksum, receipt.bytes);
@@ -111,5 +117,65 @@ impl SearchOutOfCoreGenerationWriter {
             self.poisoned = true;
         }
         result
+    }
+}
+
+// Header, payload and checksum writes share admission between reader calls.
+// The source reader is host code and may acquire its own wave, including from
+// this same one-slot governor; it must never run while output occupies it.
+enum StreamWave {
+    Idle,
+    Admitted {
+        _permit: Option<Box<dyn hawdb_core::RuntimeIoWavePermit>>,
+    },
+}
+struct StreamIo<'task> {
+    task: &'task RuntimeTaskContext,
+    governed: bool,
+    wave: RefCell<StreamWave>,
+}
+impl StreamIo<'_> {
+    fn enter(&self) -> io::Result<()> {
+        let mut wave = self.wave.borrow_mut();
+        if matches!(*wave, StreamWave::Idle) {
+            *wave = StreamWave::Admitted {
+                _permit: crate::out_of_core::scratch_directory::io_scope(self.task, self.governed)
+                    .map_err(io::Error::other)?,
+            };
+        }
+        Ok(())
+    }
+    fn leave(&self) {
+        *self.wave.borrow_mut() = StreamWave::Idle;
+    }
+}
+struct Output<'a, 'task> {
+    spool: &'a mut io_phase::Spool,
+    io: &'a StreamIo<'task>,
+}
+impl Write for Output<'_, '_> {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        self.io.enter()?;
+        self.spool.write(bytes)
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        self.io.enter()?;
+        self.spool.flush()
+    }
+}
+impl Seek for Output<'_, '_> {
+    fn seek(&mut self, position: io::SeekFrom) -> io::Result<u64> {
+        self.io.enter()?;
+        self.spool.seek(position)
+    }
+}
+struct Input<'a, 'task, R> {
+    body: &'a mut R,
+    io: &'a StreamIo<'task>,
+}
+impl<R: Read> Read for Input<'_, '_, R> {
+    fn read(&mut self, bytes: &mut [u8]) -> io::Result<usize> {
+        self.io.leave();
+        self.body.read(bytes)
     }
 }

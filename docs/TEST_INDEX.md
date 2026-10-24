@@ -126,7 +126,8 @@ vector_only, background_only, text_vector, text_background and vector_background
 The existing Search crate unit target owns
 `out_of_core::generation_writer::tests::io_waves`: original-governor contention
 before native creation, cancellation, zero-slot refusal, idle token release,
-Task/Wave depth-one partition builds, and nonflushing Drop/deferred cleanup with
+Task/Wave depth-one partition builds, same-governor streamed source/output
+handoff, and nonflushing Drop/deferred cleanup with
 fresh admitted retry. Existing prepared/FD cleanup fixtures explicitly declare
 I/O capacity while preserving memory/FD limits and assertions. Replay with
 `cargo test --locked -p hawdb-search --lib generation_writer` and
