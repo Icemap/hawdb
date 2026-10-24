@@ -912,3 +912,14 @@ default fields. Pure input validation rejects missing fields, negative size and
 nonpositive version before WAL changes. Explicit transactions preserve one WAL
 batch, creation flags and complete durable-reopen contents. One business method,
 four DTOs and the typed entity-create factory are removed.
+
+### Source label relationship queries
+
+`api::tests::source_labels` retains six root general cases through bounded
+parameterized MERGE/ON CREATE and DELETE. Exact endpoint predicates protect
+missing/idless sources and labels; repeated/existing associations retain
+relationship identity and original properties. Staged pair reads, commit counts
+and exact readback cover selection and survivors. Invalid inputs leave WAL and
+epoch unchanged; both write families preserve one batch and durable reopen,
+including retained endpoint nodes. Two business methods and eight DTOs are
+removed with their typed relationship factories and validators.

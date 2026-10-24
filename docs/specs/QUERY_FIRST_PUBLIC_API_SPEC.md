@@ -482,6 +482,9 @@ DTOs or relationship-request factory.
 Parsed Source creation fixtures use fixed MERGE/ON CREATE queries with bounded
 readback, preserving repeated/existing identities and exact ingest/default
 fields without the adapter, four DTOs or typed entity-create factory.
+Source label assignment/deletion fixtures use bounded MERGE/ON CREATE and
+DELETE with endpoint predicates, retaining existing properties, missing/idless
+guards and recovery assertions without two business methods or eight DTOs.
 Remaining legacy business adapters still require migration; this removal does
 not complete issue #1193.
 
