@@ -175,8 +175,11 @@ impl Scope {
     }
     pub(super) fn install(&self, writer: &mut SearchOutOfCoreGenerationWriter) {
         writer.task_context = self.task();
+        self.install_stage(&mut writer.stage);
+    }
+    pub(super) fn install_stage(&self, stage: &mut StageDirectory) {
         if let Some(cleanup) = &self.cleanup {
-            writer.stage.set_io_task(cleanup);
+            stage.set_io_task(cleanup);
         }
     }
 }

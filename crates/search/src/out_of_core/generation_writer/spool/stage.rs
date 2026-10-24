@@ -465,6 +465,10 @@ impl StageDirectory {
         self.io_task = Some(task.clone());
     }
 
+    pub(in crate::out_of_core) fn inherit_io_task(&mut self, parent: &Self) {
+        self.io_task = parent.io_task.clone();
+    }
+
     pub(in crate::out_of_core) fn cleanup_working_bytes(&self) -> u64 {
         self.cleanup_memory
             .as_ref()

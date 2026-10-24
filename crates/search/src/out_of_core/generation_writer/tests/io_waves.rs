@@ -439,3 +439,159 @@ fn streamed_input_yields_output_wave_to_a_governed_reader_at_depth_one() {
         fs::remove_dir_all(root).unwrap();
     }
 }
+
+#[test]
+fn post_create_refusal_cleans_the_stage_inside_the_original_wave() {
+    for task_scope in [false, true] {
+        let root = test_dir("standalone-post-create-cleanup");
+        let governor = governor();
+        let request = RuntimeWorkRequest::background_maintenance(64 << 20);
+        let request = if task_scope {
+            request.with_io_slots(1)
+        } else {
+            request.with_io_wave_slots(1)
+        };
+        let permit = Arc::new(governor.try_admit(request).unwrap());
+        let task = permit.bind_task_context(Default::default());
+        let mut memory = BuildMemory::new(&task).unwrap();
+        memory.host_admission = Some(permit);
+        let options = context_memory::Options::new(
+            SearchOutOfCoreGenerationBuildOptions {
+                max_metadata_fields: NonZeroUsize::MIN,
+                ..Default::default()
+            },
+            &memory,
+            &task,
+        )
+        .unwrap();
+        let error = SearchOutOfCoreGenerationWriter::create_with_memory(
+            &root,
+            options,
+            task.clone(),
+            memory.clone(),
+        )
+        .unwrap_err();
+        assert!(
+            error.to_string().contains("descriptor field admission"),
+            "{error}"
+        );
+        assert!(root.is_dir(), "refusal must happen after native creation");
+        let cleanup = SearchOutOfCoreGenerationWriter::retry_staging_cleanup(&root, 0).unwrap();
+        assert_eq!(cleanup.pending_stages, 0, "{cleanup:?}");
+        assert_eq!(stage_directories(&root), 0);
+        assert_eq!(memory.ledger.snapshot().used_bytes, 0);
+        drop(task.acquire_io_wave(NonZeroUsize::MIN).unwrap());
+        drop(memory);
+        drop(task);
+        assert_eq!(governor.snapshot().active_background_io_slots, 0);
+        fs::remove_dir_all(root).unwrap();
+    }
+}
+
+#[test]
+#[ignore = "manual input admission measurement; no throughput gate"]
+fn manual_bulk_input_admission_profile() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    #[derive(Debug)]
+    struct CountedIo {
+        task: RuntimeTaskContext,
+        acquisitions: Arc<AtomicUsize>,
+    }
+    impl RuntimeIoWaveController for CountedIo {
+        fn try_acquire(
+            &self,
+            slots: NonZeroUsize,
+            _: &RuntimeTaskContext,
+        ) -> std::result::Result<Option<Box<dyn RuntimeIoWavePermit>>, RuntimeIoWaveError> {
+            match self.task.try_acquire_io_wave(slots)? {
+                hawdb_core::RuntimeIoWaveTryAcquire::Acquired(permit) => {
+                    self.acquisitions
+                        .fetch_add(usize::from(permit.is_some()), Ordering::Relaxed);
+                    Ok(permit)
+                }
+                hawdb_core::RuntimeIoWaveTryAcquire::Pending => Ok(None),
+            }
+        }
+        fn acquire(
+            &self,
+            slots: NonZeroUsize,
+            _: &RuntimeTaskContext,
+        ) -> std::result::Result<Box<dyn RuntimeIoWavePermit>, RuntimeIoWaveError> {
+            let permit = self.task.acquire_io_wave(slots)?.unwrap();
+            self.acquisitions.fetch_add(1, Ordering::Relaxed);
+            Ok(permit)
+        }
+    }
+    const DOCUMENTS: usize = 256;
+    let body = "word ".repeat(6554);
+    for governed in [false, true] {
+        for streamed in [false, true] {
+            let root = test_dir("manual-input-admission");
+            let governor = governor();
+            let acquisitions = Arc::new(AtomicUsize::new(0));
+            let (task, permit) = if governed {
+                let permit = Arc::new(
+                    governor
+                        .try_admit(
+                            RuntimeWorkRequest::background_maintenance(64 << 20)
+                                .with_io_wave_slots(1),
+                        )
+                        .unwrap(),
+                );
+                let task = permit.bind_task_context(Default::default());
+                (
+                    task.clone().with_io_wave_controller(Arc::new(CountedIo {
+                        task,
+                        acquisitions: acquisitions.clone(),
+                    })),
+                    Some(permit),
+                )
+            } else {
+                (RuntimeTaskContext::default(), None)
+            };
+            let mut memory = BuildMemory::new(&task).unwrap();
+            memory.host_admission = permit;
+            let options = context_memory::Options::new(Default::default(), &memory, &task).unwrap();
+            let mut writer = SearchOutOfCoreGenerationWriter::create_with_memory(
+                &root,
+                options,
+                task,
+                memory.clone(),
+            )
+            .unwrap();
+            acquisitions.store(0, Ordering::Relaxed);
+            let started = std::time::Instant::now();
+            for number in 0..DOCUMENTS {
+                let mut source = document(number);
+                if streamed {
+                    let header = crate::SearchDocumentHeader {
+                        id: source.id,
+                        title: source.title,
+                        embedding: source.embedding,
+                        metadata: source.metadata,
+                    };
+                    writer
+                        .push_reader(
+                            header,
+                            std::io::Cursor::new(body.as_bytes()),
+                            crate::SearchDocumentBody {
+                                bytes: body.len() as u64,
+                                expected_checksum: None,
+                            },
+                        )
+                        .unwrap();
+                } else {
+                    source.content = body.clone();
+                    writer.push(source).unwrap();
+                }
+            }
+            writer.io_phase().unwrap().seal_input_spool().unwrap();
+            eprintln!("input_profile governed={governed} streamed={streamed} documents={DOCUMENTS} body_bytes={} wave_acquisitions={} elapsed_us={}",
+                DOCUMENTS * body.len(), acquisitions.load(Ordering::Relaxed), started.elapsed().as_micros());
+            assert_eq!(writer.document_count, DOCUMENTS);
+            drop(writer);
+            assert_eq!(memory.ledger.snapshot().used_bytes, 0);
+            fs::remove_dir_all(root).unwrap();
+        }
+    }
+}

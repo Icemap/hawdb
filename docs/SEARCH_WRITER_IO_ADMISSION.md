@@ -36,3 +36,20 @@ Successful selector publication retains its durability boundary. Cancellation
 after that barrier may defer cleanup and cannot undo the selected generation.
 The existing Consumer producer also uses the phase scope, avoiding a second
 acquisition of a depth-one originating reservation.
+
+This contract covers standalone generation creation, input, preparation and
+publication, plus the existing Consumer producer's use of that writer. Governed
+update/mutation preparation, target input and mutation spool flushes are not
+made phase-complete by this change and remain follow-up work under #1161.
+Per-document pushes reacquire admission; streamed bodies yield on each source
+read (currently up to 8 KiB per analyzer read), so large input adds governor
+acquisitions. No bulk-ingest throughput improvement is claimed.
+
+The local ignored input probe uses 256 documents totaling 8,389,120 body bytes.
+It reports original-governor acquisitions separately from elapsed input time,
+includes the final admitted spool flush, and excludes generation artifacts and
+publication. On one contended macOS run, owned input used 257 acquisitions and
+streamed input used 1,793; raw controls used zero. Those counts describe the
+current admission granularity. Single-run timings are not a throughput result.
+Pending I/O refusals currently remain in the cleanup report's non-descriptor
+`blocked_stages` count; the retained ticket is retryable with fresh admission.

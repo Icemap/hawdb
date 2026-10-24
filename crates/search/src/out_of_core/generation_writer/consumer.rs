@@ -95,6 +95,7 @@ impl SearchOutOfCoreGenerationWriter {
         let options = context_memory::Options::new(options, &memory, &task)?;
         drop(options_memory);
         let mut writer = Self::create_with_memory(root, options, task, memory)?;
+        scope.install(&mut writer);
         for document in index.documents.values() {
             checkpoint(&writer.task_context)?;
             let lease = writer

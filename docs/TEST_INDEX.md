@@ -124,7 +124,7 @@ vector_only, background_only, text_vector, text_background and vector_background
 ### Standalone Search writer I/O waves
 
 The existing Search crate unit target owns
-`out_of_core::generation_writer::tests::io_waves`: original-governor contention
+`out_of_core::generation_writer::tests::io_waves`: post-create refusal cleanup with no retained stage debt under one-slot Task/Wave reservations, original-governor contention
 before native creation, cancellation, zero-slot refusal, idle token release,
 Task/Wave depth-one partition builds, same-governor streamed source/output
 handoff, and nonflushing Drop/deferred cleanup with
@@ -132,8 +132,15 @@ fresh admitted retry. Existing prepared/FD cleanup fixtures explicitly declare
 I/O capacity while preserving memory/FD limits and assertions. Replay with
 `cargo test --locked -p hawdb-search --lib generation_writer` and
 `--no-default-features`; the vector Consumer positive control also runs in the
-normal default-feature Search target. No CI lane/profile/timeout/fixture scope
-changes. See [the admission contract](SEARCH_WRITER_IO_ADMISSION.md).
+normal default-feature Search target; its one-slot Task/Wave success controls
+assert zero pending stages, retained cleanup metadata and disk debt before
+fixture removal. The ignored `manual_bulk_input_admission_profile` measures
+256 owned/streamed documents (about 8 MiB) with raw/governed controls, counts
+original-governor wave acquisitions, includes final spool flush and excludes
+artifact build/publication. Replay with `cargo test --locked -p hawdb-search
+--lib manual_bulk_input_admission_profile -- --ignored --nocapture
+--test-threads=1`; it has no throughput threshold and is not an extra CI job.
+No CI lane/profile/timeout/fixture scope changes. See [the admission contract](SEARCH_WRITER_IO_ADMISSION.md).
 
 ## CI benchmark smoke owners
 

@@ -300,6 +300,9 @@ impl SearchOutOfCoreGenerationWriter {
     /// Retries retained private-stage cleanup without bypassing descriptor limits.
     /// Pass zero attempts to inspect pending ownership. Root aliases resolve to
     /// the same canonical directory; retry work uses fresh descriptor admission.
+    /// Governed tickets require `retry_staging_cleanup_with_context` with fresh
+    /// caller memory and I/O admission; this ungoverned entrypoint can inspect
+    /// their debt but cannot remove it.
     /// Writer creation, including scheduled compaction, also retries up to four
     /// stages with a bounded number of directory batches per attempt.
     pub fn retry_staging_cleanup(
@@ -424,7 +427,9 @@ impl SearchOutOfCoreGenerationWriter {
         io.native(&[&root], || {
             hawdb_storage::durability::sync_directory_ancestors(&root)
         })??;
-        let stage = StageDirectory::create(staging_root.unwrap_or(&root), &memory, &task_context)?;
+        let mut stage =
+            StageDirectory::create(staging_root.unwrap_or(&root), &memory, &task_context)?;
+        scope.install_stage(&mut stage);
         let mut writer =
             Self::create_in_stage(root, options, task_context, memory, stage, creation_memory)?;
         writer.set_io_task(original);
