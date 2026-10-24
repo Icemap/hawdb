@@ -318,6 +318,26 @@ impl Database {
         Ok(())
     }
 
+    fn validate_prepared_request(
+        &self,
+        prepared: &PreparedRuntimeQuery,
+        request: QueryRequest<'_>,
+    ) -> Result<()> {
+        self.validate_prepared_branch(prepared)?;
+        if let Some(access) = request.access_control {
+            self.config
+                .runtime_capabilities
+                .require(hawdb_core::RuntimeCapability::AccessControl)?;
+            access.validate()?;
+        }
+        if !prepared.matches_request(request) || !self.accepts_prepared_query(prepared)? {
+            return Err(HawDBError::Execution(
+                "prepared execution context changed; prepare and admit again".into(),
+            ));
+        }
+        Ok(())
+    }
+
     #[cfg_attr(not(feature = "tokio-runtime"), allow(dead_code))]
     pub(crate) fn runtime_planning_snapshot(&self) -> Result<RuntimePlanningSnapshot> {
         let runtime = self.runtime.get()?;
@@ -660,12 +680,7 @@ impl Database {
         prepared: PreparedRuntimeQuery,
         request: QueryRequest<'_>,
     ) -> Result<QueryOutput> {
-        if !prepared.matches_request(request) || !self.accepts_prepared_query(&prepared)? {
-            return Err(HawDBError::Execution(
-                "prepared execution context changed; prepare and admit again".into(),
-            ));
-        }
-        self.validate_prepared_branch(&prepared)?;
+        self.validate_prepared_request(&prepared, request)?;
         let runtime = self.runtime.get()?;
         let (cypher_text, prepared) = prepared.into_execution(&runtime.catalog, &runtime.store);
         drop(runtime);
@@ -711,12 +726,7 @@ impl Database {
         capture_trace: bool,
         external: &mut dyn executor::ExternalReadOperator,
     ) -> Result<(QueryOutput, QueryExecutionTrace)> {
-        if !prepared.matches_request(request) || !self.accepts_prepared_query(&prepared)? {
-            return Err(HawDBError::Execution(
-                "prepared execution context changed; prepare and admit again".into(),
-            ));
-        }
-        self.validate_prepared_branch(&prepared)?;
+        self.validate_prepared_request(&prepared, request)?;
         let runtime = self.runtime.get()?;
         let (cypher_text, prepared) = prepared.into_execution(&runtime.catalog, &runtime.store);
         drop(runtime);

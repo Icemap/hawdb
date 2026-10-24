@@ -71,7 +71,9 @@ requests across database, pinned-read, explicit-write, concurrent optimistic and
 pessimistic, and Embedded transaction paths. Cases include parameters, scoring,
 ACL availability, zero/output limits, parent/request cancellation, prepared-policy
 invalidation, SQL RETURNING and Cypher SET RETURN refusal before private staging
-or publication. Cypher cases retain earlier successful statements through refused
+or publication. A changed ACL requires fresh preparation; a missing ACL capability
+retains its typed error. Branch-switch cases retain the distinct branch error.
+Cypher cases retain earlier successful statements through refused
 updates in both locking modes, enforce exact/zero row and payload limits, and
 distinguish aggregate result size from affected-node count and zero matches.
 Persistent coverage reopens a database after refused SET RETURN statements and
@@ -208,6 +210,8 @@ The App snapshot family also exercises out-of-core generation replacement throug
 the actual Mem maintenance entrypoint while a snapshot callback remains active.
 It checks the old graph/projection pair, the newer pair, generation advancement,
 release of the old reader after callback completion, and refunded admission.
+The FD-pressure retry case holds descriptor reservations on another thread so
+refresh cannot borrow them; it checks the old pinned reader and same-handle retry.
 This covers `SearchOutOfCoreReader::refresh_shared` through its embedded host;
 the resident fixture now applies three graph/projection updates while an old
 snapshot remains active and checks fresh/old pairs plus final refund. Resident

@@ -13358,15 +13358,26 @@ mod tests {
             .as_ref()
             .unwrap()
             .read_snapshot();
-        let metrics = files.metrics();
-        let pressure = files
-            .reserve(metrics.limit - metrics.open - metrics.reserved)
-            .unwrap();
-        let error = handle
-            .catch_up_search_projection_with_batch_hydrator(4, 4, 1, |_, _| {
-                Ok(SearchProjectionRelationalDelta::default())
-            })
-            .unwrap_err();
+        let (held_tx, held_rx) = mpsc::sync_channel(0);
+        let (release_tx, release_rx) = mpsc::sync_channel(0);
+        let pressured_files = files.clone();
+        let pressure = thread::spawn(move || {
+            // Reservations are borrowed by nested IO on the reserving thread.
+            // Hold pressure elsewhere so refresh cannot consume these slots.
+            let metrics = pressured_files.metrics();
+            let _reservation = pressured_files
+                .reserve(metrics.limit - metrics.open - metrics.reserved)
+                .unwrap();
+            held_tx.send(()).unwrap();
+            release_rx.recv().unwrap();
+        });
+        held_rx.recv().unwrap();
+        let result = handle.catch_up_search_projection_with_batch_hydrator(4, 4, 1, |_, _| {
+            Ok(SearchProjectionRelationalDelta::default())
+        });
+        release_tx.send(()).unwrap();
+        pressure.join().unwrap();
+        let error = result.unwrap_err();
         assert!(
             matches!(
                 error,
@@ -13374,7 +13385,14 @@ mod tests {
             ),
             "{error}"
         );
-        drop(pressure);
+        assert_eq!(
+            pinned
+                .hydrate_documents(&["memory:a".into()])
+                .unwrap()
+                .documents[0]
+                .title,
+            "original"
+        );
         drop(pinned);
         handle
             .query_with_report("CREATE (:Memory {id: 'm', title: 'Recovered'})")

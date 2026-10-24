@@ -162,7 +162,18 @@ fn prepared_requests_rebind_scoring_and_reject_cross_policy_reuse() {
     let access = crate::QueryAccessControlContext::visibility_scope(99, "space_id", "b");
     let result = database.query_prepared_request(prepared, request.with_access_control(&access));
     #[cfg(feature = "acl")]
-    assert_eq!(result.unwrap().rows[0]["id"], Value::String("late".into()));
+    {
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("prepare and admit again"));
+        // A different ACL changes the plan and requires its own admission.
+        let scoped = request.with_access_control(&access);
+        let prepared = database.prepare_runtime_request(scoped).unwrap();
+        let output = database.query_prepared_request(prepared, scoped).unwrap();
+        assert_eq!(output.rows.len(), 1);
+        assert_eq!(output.rows[0]["id"], Value::String("late".into()));
+    }
     #[cfg(not(feature = "acl"))]
     assert!(matches!(
         result,
