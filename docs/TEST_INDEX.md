@@ -55,6 +55,24 @@ execution lane, fixture size, isolation or known failure mode.
 Brace notation describes several concrete labels; expand it before invoking
 Bazel. A family description does not imply every leaf belongs to every lane.
 
+### Automatic-checkpoint frontend deadline controls
+
+`api::automatic_checkpoint::tests::headroom` retains its existing root unit
+owner, checked profile, 320-row write/reopen fixtures and
+target timeout ceilings. Functional idle/retiring/prepared-prefix tests freeze
+only the private test clock for frontend capacity/backoff policy, so compiler
+contention cannot consume a deliberately paused owner's production deadline.
+Synthetic Preparing/Discarding/Releasing capacity and preparation-backoff cases
+advance to one nanosecond before and exactly at the original deadlines, with
+repeated notifications proving that wakes do not renew a deadline. Production
+uses `Instant::now()` and keeps the 10 ms backoff and 5 s capacity policy.
+Replay with `cargo test --locked -p hawdb --lib
+api::automatic_checkpoint::tests::headroom`; also check
+`--no-default-features --features background-maintenance`. The ordinary minimal
+feature matrix remains unchanged.
+This change does not establish a remote speedup or fix every #1116 stall;
+joined-read sharding is owned by PR #1217.
+
 ## Component regression owners
 
 The manual `concurrent_writers` benchmark accepts
