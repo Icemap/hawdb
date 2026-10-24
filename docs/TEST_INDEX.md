@@ -902,3 +902,13 @@ no provisional rows, and commit/readback verifies the exact edge count and
 properties. Input rejection preserves WAL/epoch, while two valid creates retain
 one WAL batch and exact endpoints, timestamps and default properties on reopen.
 One business adapter, four DTOs and its relationship-request factory are removed.
+
+### Parsed Source creation queries
+
+`api::tests::source_parsed_create` retains three root general cases through fixed
+bounded MERGE/ON CREATE statements. Existing identities and repeated batch input
+preserve original nodes/properties; three source formats retain exact input and
+default fields. Pure input validation rejects missing fields, negative size and
+nonpositive version before WAL changes. Explicit transactions preserve one WAL
+batch, creation flags and complete durable-reopen contents. One business method,
+four DTOs and the typed entity-create factory are removed.

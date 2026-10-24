@@ -479,6 +479,9 @@ Source revision fixtures use ordinary bounded CREATE with exact external-id
 endpoint predicates. Staged readback, committed edge counts and recovery retain
 missing/idless guards and default properties without the business adapter, four
 DTOs or relationship-request factory.
+Parsed Source creation fixtures use fixed MERGE/ON CREATE queries with bounded
+readback, preserving repeated/existing identities and exact ingest/default
+fields without the adapter, four DTOs or typed entity-create factory.
 Remaining legacy business adapters still require migration; this removal does
 not complete issue #1193.
 

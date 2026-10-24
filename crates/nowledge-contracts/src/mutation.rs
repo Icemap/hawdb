@@ -178,49 +178,6 @@ pub struct KnowledgeSourceMemoryCountBatchOutput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeSourceParsedCreate {
-    pub source_id: String,
-    pub source_type: String,
-    pub original_name: String,
-    pub mime_type: String,
-    pub file_path: String,
-    pub parsed_path: String,
-    pub source_url: String,
-    pub sha256: String,
-    pub size_bytes: i64,
-    pub version: i64,
-    pub space_id: String,
-    pub section_tree: String,
-    pub summary: String,
-    pub created_at: Value,
-    pub updated_at: Value,
-    pub metadata: Value,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeSourceParsedCreateBatchRequest {
-    pub creates: Vec<KnowledgeSourceParsedCreate>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeSourceParsedCreateBatchRow {
-    pub source_id: String,
-    pub node_id: Option<u64>,
-    pub created: bool,
-    pub already_exists: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeSourceParsedCreateBatchOutput {
-    pub graph_commit_epoch_before: u64,
-    pub graph_commit_epoch_after: u64,
-    pub rows: Vec<KnowledgeSourceParsedCreateBatchRow>,
-    pub created_count: usize,
-    pub already_exists_count: usize,
-    pub created_node_count: usize,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KnowledgeSourceLabelAssignment {
     pub source_id: String,
     pub label_id: String,
