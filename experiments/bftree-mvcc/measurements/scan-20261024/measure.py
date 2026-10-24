@@ -16,6 +16,11 @@ import subprocess
 import time
 
 
+def compiler_count():
+    commands = subprocess.check_output(["ps", "-axo", "comm="], text=True)
+    return sum(Path(command.strip()).name in ("rustc", "clippy-driver") for command in commands.splitlines())
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--baseline", type=Path, required=True)
@@ -43,6 +48,7 @@ def main():
             for name, path in binaries.items()
         },
         "limits": "Shared host, five pairs, memory index; no production or power-loss qualification",
+        "compiler_observation": "Counts before/after each child; boundary observations do not prove continuous host quiescence",
     }
     (args.output / "protocol.json").write_text(json.dumps(protocol, indent=2) + "\n")
     samples = {}
@@ -60,6 +66,7 @@ def main():
                         command = [str(binaries[name]), "bench-one", str(path), layout, str(keys), str(rounds)]
                         started = time.monotonic_ns()
                         load = os.getloadavg()
+                        compilers_before = compiler_count()
                         result = subprocess.run(command, capture_output=True, text=True, timeout=240)
                         receipt = {
                             "pair": pair, "revision": name, "layout": layout, "keys": keys,
@@ -67,6 +74,8 @@ def main():
                             "elapsed_ns": time.monotonic_ns() - started,
                             "returncode": result.returncode, "stderr": result.stderr,
                             "stdout": result.stdout,
+                            "rust_compilers_before": compilers_before,
+                            "rust_compilers_after": compiler_count(),
                         }
                         raw.write(json.dumps(receipt) + "\n")
                         raw.flush()

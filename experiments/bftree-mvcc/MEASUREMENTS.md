@@ -171,3 +171,15 @@ Small old point p99 improves about 12%; index-installation maximum improves
 about 21%. Tiny samples and sub-microsecond timer granularity remain limits.
 Concurrent group commit and storage/platform durability-policy changes remain
 outside this follow-up.
+
+## Scan-buffer and version-run continuation (2026-10-24)
+
+The [source-bound paired report](measurements/scan-20261024/README.md) records
+the next continuation on main 720d98f86 and runtime commit 4c8e93e4c. It uses
+identical benchmark/journal sources on an Apple M3 Max, separate from the M5
+observations above. Both complete five-pair cohorts, all three layouts and all
+small/retained/larger workloads are retained, including adverse tails and
+compiler observations. Versioned and Hybrid scans improve in the qualified
+cases; synchronization variance prevents a stable commit-tail claim, and COW
+still scans faster. The full local 98-target aggregate and final dev/release
+adapter tests passed; full-tree historical license debt remains disclosed.

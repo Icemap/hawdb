@@ -145,6 +145,7 @@ The manual paired comparison driver is
 [`measurements/scan-20261024/measure.py`](measurements/scan-20261024/measure.py).
 It uses the unchanged native benchmark with five alternating pairs across all
 three layouts and small, retained-history and larger workloads. Every paired
-journal must have identical bytes. Source-bound performance results are recorded
-separately from the earlier observations above; an exploratory run during
-compilation is not final performance qualification.
+journal must have identical bytes. The [source-bound paired report](measurements/scan-20261024/README.md)
+retains both five-pair cohorts and their adverse controls separately from the
+earlier observations above. An exploratory run during compilation is not final
+performance qualification.
