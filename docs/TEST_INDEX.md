@@ -357,3 +357,12 @@ Go test results; the Unix native binding jobs retain their existing profile.
 The native feature inventory audit also requires the independent telemetry
 Bazel spec and lock to match the workspace Cargo.lock package version, source
 and checksum. Update them together when upgrading the optional dependency.
+
+### Pinned full-scan input cost
+
+The optimizer relational unit target (`//crates/optimizer-relational:hawdb_optimizer_relational_tests`;
+`cargo test --locked -p hawdb-optimizer-relational --lib`) owns candidate-cap
+independence, snapshot-size monotonicity, selective covering-index selection,
+and unchanged point/default-context controls. These are checked-profile unit
+cases in the existing crate lane; no fixture, feature matrix, timeout or
+execution lane changes. See [the cost model](OPTIMIZER_COST_MODEL.md).
