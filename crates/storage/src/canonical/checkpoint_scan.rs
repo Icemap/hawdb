@@ -163,7 +163,7 @@ impl<T: CheckpointCanonicalRecord> CheckpointCanonicalCursor<T> {
         }
     }
 
-    fn next_descriptor(
+    pub(super) fn next_descriptor(
         &mut self,
         reader: &CanonicalSegmentReader,
         work: &CheckpointWorkContext,
@@ -428,7 +428,8 @@ impl<T: CheckpointCanonicalRecord> SegmentLoad<T> {
     }
 }
 
-struct AdmittedDescriptor {
+#[derive(Debug)]
+pub(super) struct AdmittedDescriptor {
     descriptor: CanonicalSegmentDescriptor,
     _memory: CheckpointAllocationOwner,
 }

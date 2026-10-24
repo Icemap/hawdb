@@ -3,8 +3,9 @@
 
 //! Snapshot-owned label enumeration without decoding node property values.
 
+use super::checkpoint_scan::AdmittedDescriptor;
 use super::*;
-use crate::background::CheckpointWorkError;
+use crate::background::{CheckpointWorkContext, CheckpointWorkError};
 use crate::cache::SegmentBytes;
 use hawdb_core::{RuntimeMemoryPermit, RuntimeTaskContext};
 
@@ -18,26 +19,36 @@ pub(crate) enum CanonicalLabelAction {
 #[derive(Debug)]
 struct LabelSegment {
     bytes: SegmentBytes,
-    descriptor: CanonicalSegmentDescriptor,
+    descriptor: AdmittedDescriptor,
     records: SegmentRecordCursor,
     // Data drops before its additional retained-source admission.
     _memory: Option<Box<dyn RuntimeMemoryPermit>>,
 }
 
-#[derive(Debug)]
 pub(crate) struct CanonicalNodeLabelCursor {
     reader: CanonicalSegmentReader,
-    descriptors: CanonicalDescriptorCursor,
+    descriptors: CheckpointCanonicalCursor<NodeRecord>,
     segment: Option<LabelSegment>,
     ended: bool,
 }
 
+impl std::fmt::Debug for CanonicalNodeLabelCursor {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("CanonicalNodeLabelCursor")
+            .field("reader", &self.reader)
+            .field("segment", &self.segment)
+            .field("ended", &self.ended)
+            .finish_non_exhaustive()
+    }
+}
+
 impl CanonicalNodeLabelCursor {
     pub(crate) fn new(reader: CanonicalSegmentReader) -> Self {
-        let expected = reader.manifest.node_segment_count;
+        let descriptors = CheckpointCanonicalCursor::new(&reader);
         Self {
             reader,
-            descriptors: CanonicalDescriptorCursor::new(CanonicalSegmentKind::Nodes, expected),
+            descriptors,
             segment: None,
             ended: false,
         }
@@ -75,14 +86,7 @@ impl CanonicalNodeLabelCursor {
         labels: &[LabelId],
         task: &RuntimeTaskContext,
     ) -> Result<(), CanonicalSegmentError> {
-        let result = (|| {
-            // Both the descriptor decision and an optional segment fetch belong
-            // to one sequential wave of the original maintenance admission.
-            let _io = task
-                .acquire_io_wave(std::num::NonZeroUsize::MIN)
-                .map_err(CheckpointWorkError::Io)?;
-            self.load_segment_inner(labels, task)
-        })();
+        let result = self.load_segment_inner(labels, task);
         self.reader.poison_on_physical_failure(&result);
         result
     }
@@ -92,7 +96,11 @@ impl CanonicalNodeLabelCursor {
         labels: &[LabelId],
         task: &RuntimeTaskContext,
     ) -> Result<(), CanonicalSegmentError> {
-        let Some(descriptor) = self.descriptors.next(&self.reader)? else {
+        // Reuse the private admitted traversal: page buffers, decoded page
+        // metadata and owned Bloom words are reserved before allocation.
+        // Serving descriptor caches never bypass this task's admission.
+        let work = CheckpointWorkContext::new(task.clone());
+        let Some(descriptor) = self.descriptors.next_descriptor(&self.reader, &work)? else {
             self.ended = true;
             return Ok(());
         };
@@ -103,20 +111,21 @@ impl CanonicalNodeLabelCursor {
         }) {
             return Ok(());
         }
-        let descriptor_bytes = [
-            &descriptor.source_endpoint_bloom,
-            &descriptor.target_endpoint_bloom,
-            &descriptor.node_property_bloom,
-            &descriptor.node_label_bloom,
-        ]
-        .iter()
-        .fold(
-            std::mem::size_of::<LabelSegment>() as u64,
-            |bytes, bloom| bytes.saturating_add((bloom.words.len() as u64).saturating_mul(8)),
-        );
+        // The admitted descriptor guard retains its own decoded-Bloom leases.
+        // This lease covers the selected payload for as long as the cursor
+        // retains it, including cache hits. Descriptor reads have already
+        // released their waves; the segment uses a fresh original-task wave.
         let memory = task
-            .reserve_working_memory(descriptor.length.get().saturating_add(descriptor_bytes))
+            .reserve_working_memory(
+                descriptor
+                    .length
+                    .get()
+                    .saturating_add(std::mem::size_of::<LabelSegment>() as u64),
+            )
             .map_err(CheckpointWorkError::Memory)?;
+        let _io = task
+            .acquire_io_wave(std::num::NonZeroUsize::MIN)
+            .map_err(CheckpointWorkError::Io)?;
         let bytes = self.reader.read_segment_with_report(&descriptor)?.payload;
         let records =
             SegmentRecordCursor::new(&bytes, self.reader.manifest.generation, &descriptor)?;
@@ -348,6 +357,159 @@ mod tests {
         assert!(cursor.segment.is_none());
         assert!(reader.get_node(NodeId(0)).unwrap().is_some());
         std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn label_cursor_exhausted_ledger_and_descriptor_lifetime_cover_positive_and_pruned_paths() {
+        use hawdb_core::RuntimeMemoryError;
+        use hawdb_qos::{
+            IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeMemorySnapshot,
+            RuntimeResourceBudget, RuntimeResourceSnapshot, RuntimeWorkRequest,
+        };
+        use std::num::NonZeroUsize;
+        const CEILING: u64 = 1 << 20;
+        fn used(task: &RuntimeTaskContext) -> u64 {
+            match task.reserve_working_memory(CEILING) {
+                Err(RuntimeMemoryError::ReservationExceeded {
+                    available_bytes, ..
+                }) => CEILING - available_bytes,
+                result => panic!("expected concrete ledger probe: {result:?}"),
+            }
+        }
+        for warm in [false, true] {
+            for selected in [false, true] {
+                let (path, reader) = fixture();
+                if warm {
+                    let mut serving = CanonicalDescriptorCursor::new(
+                        CanonicalSegmentKind::Nodes,
+                        reader.manifest.node_segment_count,
+                    );
+                    while serving.next(&reader).unwrap().is_some() {}
+                }
+                let governor = RuntimeGovernor::new(
+                    RuntimeGovernorConfig {
+                        memory_budget_bytes: Some(CEILING),
+                        background_task_limit: Some(NonZeroUsize::MIN),
+                        ..RuntimeGovernorConfig::shared_host()
+                    },
+                    RuntimeResourceSnapshot::from_parts(
+                        RuntimeResourceBudget::from_limits(NonZeroUsize::MIN, None, None),
+                        RuntimeMemorySnapshot::from_limits(
+                            Some(1 << 30),
+                            Some(1 << 30),
+                            None,
+                            None,
+                            None,
+                        ),
+                    ),
+                    IoConcurrencyBudget::new(2, 1),
+                );
+                let permit = governor
+                    .try_admit(
+                        RuntimeWorkRequest::background_maintenance(CEILING).with_io_wave_slots(1),
+                    )
+                    .unwrap();
+                let task = permit.bind_task_context(RuntimeTaskContext::default());
+                let probe = task.reserve_working_memory(1).unwrap();
+                let lease_metadata = used(&task) - 1;
+                drop(probe);
+                let blocker = task
+                    .reserve_working_memory(CEILING - lease_metadata)
+                    .unwrap();
+                let label = if selected { LabelId(1) } else { LabelId(999) };
+                let mut cursor = CanonicalNodeLabelCursor::new(reader.clone());
+                assert!(matches!(
+                    cursor.load_segment(&[label], &task),
+                    Err(CanonicalSegmentError::Work(CheckpointWorkError::Memory(_)))
+                ));
+                assert!(cursor.segment.is_none());
+                drop(blocker);
+                assert_eq!(used(&task), 0);
+                cursor.load_segment(&[label], &task).unwrap();
+                assert_eq!(
+                    governor.snapshot().active_background_io_slots,
+                    0,
+                    "all descriptor and segment waves must end before returning"
+                );
+                if selected {
+                    let segment = cursor.segment.as_ref().unwrap();
+                    let bloom_bytes = (segment.descriptor.node_property_bloom.words.len()
+                        + segment.descriptor.node_label_bloom.words.len())
+                        * 8;
+                    assert!(
+                        used(&task) >= segment.bytes.len() as u64 + bloom_bytes as u64,
+                        "descriptor and payload must both retain their concrete leases"
+                    );
+                } else {
+                    assert!(cursor.segment.is_none());
+                    assert_eq!(used(&task), 0, "pruned descriptor leases must be released");
+                }
+                drop(task);
+                drop(permit);
+                assert_eq!(governor.snapshot().active_background_tasks, 0);
+                assert_eq!(
+                    governor.snapshot().admitted_memory_bytes,
+                    if selected { CEILING } else { 0 }
+                );
+                if selected {
+                    assert!(matches!(
+                        cursor.action().unwrap(),
+                        CanonicalLabelAction::Record { id: NodeId(0), .. }
+                    ));
+                }
+                drop(cursor);
+                assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+                assert!(reader.get_node(NodeId(0)).unwrap().is_some());
+                std::fs::remove_file(path).unwrap();
+            }
+        }
+    }
+
+    fn memory_refusal_matrix(refuse_io: bool) {
+        for warm in [false, true] {
+            for label in [LabelId(999), LabelId(1)] {
+                let (path, reader) = fixture();
+                if warm {
+                    let mut serving = CanonicalDescriptorCursor::new(
+                        CanonicalSegmentKind::Nodes,
+                        reader.manifest.node_segment_count,
+                    );
+                    while serving.next(&reader).unwrap().is_some() {}
+                }
+                let mut cursor = CanonicalNodeLabelCursor::new(reader.clone());
+                let mut task = RuntimeTaskContext::default()
+                    .with_memory_reservation(hawdb_core::RuntimeMemoryReservation::new(1, 0));
+                if refuse_io {
+                    task = task.with_io_wave_controller(Arc::new(RefuseIo));
+                }
+                assert!(matches!(
+                    cursor.load_segment(&[label], &task),
+                    Err(CanonicalSegmentError::Work(CheckpointWorkError::Memory(_)))
+                ), "descriptor admission must precede decode/pruning and IO; warm={warm}, label={label:?}, refuse_io={refuse_io}");
+                assert!(cursor.segment.is_none());
+                // No denied traversal can consume a descriptor. An admitted
+                // retry must still observe the first complete source record.
+                cursor
+                    .load_segment(&[LabelId(1)], &RuntimeTaskContext::default())
+                    .unwrap();
+                assert!(matches!(
+                    cursor.action().unwrap(),
+                    CanonicalLabelAction::Record { id: NodeId(0), .. }
+                ));
+                assert!(reader.get_node(NodeId(0)).unwrap().is_some());
+                std::fs::remove_file(path).unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn label_cursor_memory_admission_includes_pruned_cold_and_warm_descriptors() {
+        memory_refusal_matrix(false);
+    }
+
+    #[test]
+    fn label_cursor_memory_admission_precedes_descriptor_io_even_when_serving_cache_is_warm() {
+        memory_refusal_matrix(true);
     }
 
     #[test]

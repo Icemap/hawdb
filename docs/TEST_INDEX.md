@@ -1296,3 +1296,14 @@ execution lane changes. See [the cost model](OPTIMIZER_COST_MODEL.md).
   outside measured transaction/preparation/construction intervals; it adds no
   rate limiter and changes no progress threshold. See the [source-bound
   controls](benchmarks/architecture_2026_10_24/README.md). No fuzz lane is added.
+
+
+PR #1240 descriptor-admission follow-up retains the existing storage owner.
+The label cursor reuses admitted checkpoint descriptor traversal; three new Rust
+cases cover cold/warm serving caches and Bloom-positive/negative decisions under
+tiny and exhausted concrete memory. They also check memory-before-IO refusal,
+no denied descriptor progress, no shared-reader poison, prompt pruned-lease
+release and selected descriptor/payload ownership after task closure. Original
+production reproductions fail the new admission oracles; corrected cursor tests
+and affected checkpoint/source tests pass. No target, fixture budget, timeout or
+CI/fuzz lane is weakened.

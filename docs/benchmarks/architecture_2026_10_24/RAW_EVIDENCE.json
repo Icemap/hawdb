@@ -1,0 +1,19 @@
+{
+  "schema": "hawdb-architecture-evidence-location-v1",
+  "repository": "nowledge-co/hawdb",
+  "release_tag": "evidence-pr-1240-2026-10-24",
+  "release_url": "https://github.com/nowledge-co/hawdb/releases/tag/evidence-pr-1240-2026-10-24",
+  "note": "Evidence-only prerelease, not software/latest. Every archive member is checked before source-copy deletion. Historical source controls do not qualify the descriptor-memory correction.",
+  "groups": {
+    "pre-admission": {
+      "archive": "architecture-pre-admission-9bb71b8.tar.gz",
+      "archive_sha256": "dd743e24a3799028460cf3e35ba7ee3cd51da6b52ed225150c81143f12b4ed0f",
+      "archive_bytes": 926719,
+      "manifest": "pre-admission-manifest.json",
+      "manifest_sha256": "6ea0f2d2350bf55659aa60aa5e8a228ca6b01398f62f9cd02cb76b8df184010b",
+      "files": 55,
+      "raw_bytes": 2830882,
+      "download_and_every_member_verified": true
+    }
+  }
+}

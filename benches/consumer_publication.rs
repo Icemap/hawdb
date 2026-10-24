@@ -395,6 +395,11 @@ fn run(case: Case) -> Json {
             )
         });
     let concurrent_observation = probe.finish(concurrent_phase);
+    #[cfg(feature = "qualification")]
+    let concurrent_owner_locks = Some(owner.lock_metrics());
+    #[cfg(not(feature = "qualification"))]
+    let concurrent_owner_locks: Option<()> = None;
+
     let read_results = probes::summarize(read_workers, &attempts);
     assert_eq!(
         read_results["requests"].as_u64().unwrap() as usize,
@@ -485,8 +490,17 @@ fn run(case: Case) -> Json {
         })
         .count();
     let publisher_cap_reached = sustained && publisher_exit_active > 0;
+
+    #[cfg(feature = "qualification")]
+    let completed_owner_locks = Some(owner.lock_metrics());
+    #[cfg(not(feature = "qualification"))]
+    let completed_owner_locks: Option<()> = None;
     let mut result = json!({
         "schema": "consumer-publication-qualification-v2", "mode": mode.name(),
+        "owner_lock_metrics": {"available": cfg!(feature = "qualification"),
+            "concurrent_phase": concurrent_owner_locks, "through_quiet_and_validation": completed_owner_locks,
+            "scope": "Actual outer owner lock wait/hold histograms for all completed read/write guards, including foreground, capture, reservation, publication and cleanup. Snapshots follow worker joins. Qualification-feature observations are a separate diagnostic cohort, not pooled with ordinary default-feature latency."},
+
         "capture_before_writers": capture_before_writers,
         "documents": documents, "payload_bytes_per_document": payload, "writers": writers, "writes": writes,
         "durability": "SyncOnEveryWrite", "automatic_checkpoint_max_age_seconds": 3600,

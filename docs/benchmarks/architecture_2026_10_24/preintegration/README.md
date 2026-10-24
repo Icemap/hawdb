@@ -141,7 +141,7 @@ property decoding; sparse cases avoid over a million ID probes. End is included
 in input counts, and the candidate's work accounting charges full label checks.
 Complete mapping/comparison and native generation costs remain additional.
 
-Raw [baseline](scan-baseline.json), [candidate](scan-candidate.json),
-[summary](summary.json), and [source/binary manifest](uncontrolled_start/measurement-source.json)
-retain every repetition. These samples do not waive any historical strict
-performance acceptance gate.
+The [compact summary](summary.json) remains in Git. All raw repetitions,
+source/binary manifests and interrupted controls are retained in the [verified
+raw archive](../RAW_EVIDENCE.md); restore their original paths to inspect them.
+These historical samples do not waive any strict performance acceptance gate.

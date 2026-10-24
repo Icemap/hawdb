@@ -183,3 +183,8 @@ preparation, and retains the returned original owner after preparation or
 completion failure. The existing resolver retries or retires that same native
 operation with fresh admission; idle recovery owners retain no construction
 execution permit.
+
+Descriptor enumeration reuses the task-admitted private checkpoint traversal,
+including Bloom-negative and serving-cache-warm decisions. Page/Bloom allocations
+precede decoding, and selected descriptor leases survive until cursor buffers
+drop. Descriptor pages and selected payloads use separate fresh task I/O waves.
