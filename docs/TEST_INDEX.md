@@ -892,3 +892,13 @@ preserve full versus omitted fields, empty file paths, missing/idless targets,
 first-input duplicates, exact timestamps/content, validation before WAL and
 one-batch durable reopen. One business adapter, four DTOs and the assignment
 factory disappear; no executor feature or runtime test ownership changes.
+
+### Source revision edge queries
+
+`api::tests::source_revisions` retains three root general cases using bounded
+parameterized endpoint reads and CREATE statements. Missing and idless source
+identities create no relationship; ordinary explicit-transaction CREATE returns
+no provisional rows, and commit/readback verifies the exact edge count and
+properties. Input rejection preserves WAL/epoch, while two valid creates retain
+one WAL batch and exact endpoints, timestamps and default properties on reopen.
+One business adapter, four DTOs and its relationship-request factory are removed.

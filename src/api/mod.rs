@@ -4908,13 +4908,6 @@ impl Database {
         create_knowledge_source_parsed_batch_for(self, request)
     }
 
-    pub fn create_knowledge_source_revision_batch(
-        &mut self,
-        request: &KnowledgeSourceRevisionCreateBatchRequest,
-    ) -> Result<KnowledgeSourceRevisionCreateBatchOutput> {
-        create_knowledge_source_revision_batch_for(self, request)
-    }
-
     pub fn assign_knowledge_source_labels_batch(
         &mut self,
         request: &KnowledgeSourceLabelAssignmentBatchRequest,
@@ -9333,87 +9326,6 @@ pub(super) fn knowledge_source_parsed_entity_create(
             ("created_at".to_string(), create.created_at.clone()),
             ("updated_at".to_string(), create.updated_at.clone()),
             ("metadata".to_string(), create.metadata.clone()),
-        ]),
-    }
-}
-
-pub(super) fn create_knowledge_source_revision_batch_for(
-    db: &mut Database,
-    request: &KnowledgeSourceRevisionCreateBatchRequest,
-) -> Result<KnowledgeSourceRevisionCreateBatchOutput> {
-    for create in &request.creates {
-        if create.newer_source_id.is_empty() {
-            return Err(HawDBError::Semantic(
-                "knowledge source revision create requires a non-empty newer source id".to_string(),
-            ));
-        }
-        if create.older_source_id.is_empty() {
-            return Err(HawDBError::Semantic(
-                "knowledge source revision create requires a non-empty older source id".to_string(),
-            ));
-        }
-    }
-
-    let creates = request
-        .creates
-        .iter()
-        .map(knowledge_source_revision_relationship_create)
-        .collect::<Vec<_>>();
-    let output = create_knowledge_relationship_batch_for(
-        db,
-        &KnowledgeRelationshipCreateBatchRequest { creates },
-    )?;
-
-    Ok(KnowledgeSourceRevisionCreateBatchOutput {
-        graph_commit_epoch_before: output.graph_commit_epoch_before,
-        graph_commit_epoch_after: output.graph_commit_epoch_after,
-        rows: output
-            .rows
-            .into_iter()
-            .map(|row| KnowledgeSourceRevisionCreateBatchRow {
-                newer_source_id: row.source.external_id,
-                older_source_id: row.target.external_id,
-                newer_node_id: row.source_node_id,
-                older_node_id: row.target_node_id,
-                matched: row.matched,
-                non_writable: row.non_writable,
-            })
-            .collect(),
-        matched_count: output.matched_count,
-        missing_endpoint_count: output.missing_endpoint_count,
-        non_writable_count: output.non_writable_count,
-        created_relationship_count: output.created_relationship_count,
-    })
-}
-
-pub(super) fn knowledge_source_revision_relationship_create(
-    create: &KnowledgeSourceRevisionCreate,
-) -> KnowledgeRelationshipCreateRequest {
-    KnowledgeRelationshipCreateRequest {
-        source: KnowledgeEntityRequest {
-            label: "Source".to_string(),
-            external_id: create.newer_source_id.clone(),
-        },
-        target: KnowledgeEntityRequest {
-            label: "Source".to_string(),
-            external_id: create.older_source_id.clone(),
-        },
-        relationship_type: "REVISED_AS".to_string(),
-        properties: BTreeMap::from([
-            ("diff_summary".to_string(), Value::String(String::new())),
-            (
-                "sections_changed".to_string(),
-                Value::String("[]".to_string()),
-            ),
-            (
-                "revision_type".to_string(),
-                Value::String("update".to_string()),
-            ),
-            (
-                "detected_by".to_string(),
-                Value::String("filename_match".to_string()),
-            ),
-            ("created_at".to_string(), create.created_at.clone()),
         ]),
     }
 }

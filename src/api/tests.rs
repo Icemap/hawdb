@@ -45,7 +45,6 @@ use super::{
     KnowledgeSourceLabelDeleteBatchRequest, KnowledgeSourceMemoryCountAdjustment,
     KnowledgeSourceMemoryCountBatchRequest, KnowledgeSourceParsedCreate,
     KnowledgeSourceParsedCreateBatchRequest, KnowledgeSourceReferenceRelationshipCleanupRequest,
-    KnowledgeSourceRevisionCreate, KnowledgeSourceRevisionCreateBatchRequest,
     KnowledgeSubgraphRequest, KnowledgeTraversalFallbackReasonCode, KnowledgeTruncationReasonCode,
     NowledgeGraphAdapter, NowledgeGraphStatement, PlanCacheBypassReason, PlanCacheLookup,
     QueryOutput, QueryStreamOptions, RecoveryMode, SearchProjectionGraphDeltaRequest,
@@ -180,6 +179,7 @@ mod source_lifecycle;
 mod source_parsed_metadata;
 mod source_reads;
 mod source_reference;
+mod source_revisions;
 mod statistics;
 mod storage_recovery;
 mod synthesized_source_reads;
@@ -4352,161 +4352,6 @@ fn source_latest_version_query_uses_plan_cache() {
         )
         .unwrap();
     assert_eq!(summary.rows[0].get("execution_count"), Some(&Value::Int(2)));
-}
-
-#[test]
-fn creates_source_revision_batch_for_nowledge_revision_edges() {
-    let mut db = Database::new();
-    db.query("CREATE (:Source {id: 'newer', version: 2})")
-        .unwrap();
-    db.query("CREATE (:Source {id: 'older', version: 1})")
-        .unwrap();
-    db.query("CREATE (:Source {original_name: 'Idless Source'})")
-        .unwrap();
-    let idless = db
-        .query("MATCH (s:Source) WHERE s.original_name = 'Idless Source' RETURN id(s) AS id")
-        .unwrap();
-    let idless_source_id = match idless.rows[0].get("id").unwrap() {
-        Value::Int(id) => id.to_string(),
-        other => panic!("expected projected id int, got {other:?}"),
-    };
-
-    let output = db
-        .create_knowledge_source_revision_batch(&KnowledgeSourceRevisionCreateBatchRequest {
-            creates: vec![
-                KnowledgeSourceRevisionCreate {
-                    newer_source_id: "newer".to_string(),
-                    older_source_id: "older".to_string(),
-                    created_at: Value::String("2026-07-19T12:00:00Z".to_string()),
-                },
-                KnowledgeSourceRevisionCreate {
-                    newer_source_id: "newer".to_string(),
-                    older_source_id: "missing".to_string(),
-                    created_at: Value::String("2026-07-19T12:01:00Z".to_string()),
-                },
-                KnowledgeSourceRevisionCreate {
-                    newer_source_id: idless_source_id,
-                    older_source_id: "older".to_string(),
-                    created_at: Value::String("2026-07-19T12:02:00Z".to_string()),
-                },
-            ],
-        })
-        .unwrap();
-
-    assert_eq!(output.graph_commit_epoch_before, 3);
-    assert_eq!(output.graph_commit_epoch_after, 4);
-    assert_eq!(output.rows.len(), 3);
-    assert_eq!(output.matched_count, 1);
-    assert_eq!(output.missing_endpoint_count, 1);
-    assert_eq!(output.non_writable_count, 1);
-    assert_eq!(output.created_relationship_count, 1);
-    assert!(output.rows[0].matched);
-    assert!(!output.rows[1].matched);
-    assert!(output.rows[2].non_writable);
-
-    let rows = db
-        .query("MATCH (newer:Source)-[r:REVISED_AS]->(older:Source) RETURN newer.id, older.id, r.diff_summary, r.sections_changed, r.revision_type, r.detected_by, r.created_at")
-        .unwrap();
-    assert_eq!(rows.rows.len(), 1);
-    assert_eq!(
-        rows.rows[0].get("newer.id"),
-        Some(&Value::String("newer".to_string()))
-    );
-    assert_eq!(
-        rows.rows[0].get("older.id"),
-        Some(&Value::String("older".to_string()))
-    );
-    assert_eq!(
-        rows.rows[0].get("r.diff_summary"),
-        Some(&Value::String(String::new()))
-    );
-    assert_eq!(
-        rows.rows[0].get("r.sections_changed"),
-        Some(&Value::String("[]".to_string()))
-    );
-    assert_eq!(
-        rows.rows[0].get("r.revision_type"),
-        Some(&Value::String("update".to_string()))
-    );
-    assert_eq!(
-        rows.rows[0].get("r.detected_by"),
-        Some(&Value::String("filename_match".to_string()))
-    );
-    assert_eq!(
-        rows.rows[0].get("r.created_at"),
-        Some(&Value::String("2026-07-19T12:00:00Z".to_string()))
-    );
-}
-
-#[test]
-fn source_revision_create_batch_rejects_empty_ids_before_wal() {
-    let mut db = Database::new();
-    db.query("CREATE (:Source {id: 'newer'})").unwrap();
-    let graph_commit_epoch_before = db.runtime.get().unwrap().store.commit_epoch();
-
-    let error = db
-        .create_knowledge_source_revision_batch(&KnowledgeSourceRevisionCreateBatchRequest {
-            creates: vec![KnowledgeSourceRevisionCreate {
-                newer_source_id: "newer".to_string(),
-                older_source_id: String::new(),
-                created_at: Value::String("2026-07-19T12:00:00Z".to_string()),
-            }],
-        })
-        .unwrap_err();
-
-    assert!(error.to_string().contains("older source id"));
-    assert_eq!(
-        db.runtime.get().unwrap().store.commit_epoch(),
-        graph_commit_epoch_before
-    );
-}
-
-#[test]
-fn typed_source_revision_batch_persists_as_one_wal_batch_and_replays() {
-    let path = unique_test_dir("typed_source_revision_batch_wal_replay");
-    {
-        let mut db = Database::open(&path).unwrap();
-        db.query("CREATE (:Source {id: 'newer-1'})").unwrap();
-        db.query("CREATE (:Source {id: 'older-1'})").unwrap();
-        db.query("CREATE (:Source {id: 'newer-2'})").unwrap();
-        db.query("CREATE (:Source {id: 'older-2'})").unwrap();
-        let batch_count_before_create = read_test_wal(&path).unwrap().matches("\tbatch\t").count();
-        db.create_knowledge_source_revision_batch(&KnowledgeSourceRevisionCreateBatchRequest {
-            creates: vec![
-                KnowledgeSourceRevisionCreate {
-                    newer_source_id: "newer-1".to_string(),
-                    older_source_id: "older-1".to_string(),
-                    created_at: Value::String("2026-07-19T12:00:00Z".to_string()),
-                },
-                KnowledgeSourceRevisionCreate {
-                    newer_source_id: "newer-2".to_string(),
-                    older_source_id: "older-2".to_string(),
-                    created_at: Value::String("2026-07-19T12:01:00Z".to_string()),
-                },
-            ],
-        })
-        .unwrap();
-        let batch_count_after_create = read_test_wal(&path).unwrap().matches("\tbatch\t").count();
-        assert_eq!(batch_count_after_create, batch_count_before_create + 1);
-    }
-    let wal = read_test_wal(&path).unwrap();
-    assert!(wal.contains("\tbatch\t"));
-    {
-        let mut db = Database::open(&path).unwrap();
-        let rows = db
-            .query("MATCH (newer:Source)-[r:REVISED_AS]->(older:Source) RETURN newer.id, older.id, r.created_at ORDER BY newer.id")
-            .unwrap();
-        assert_eq!(rows.rows.len(), 2);
-        assert_eq!(
-            rows.rows[0].get("newer.id"),
-            Some(&Value::String("newer-1".to_string()))
-        );
-        assert_eq!(
-            rows.rows[1].get("older.id"),
-            Some(&Value::String("older-2".to_string()))
-        );
-    }
-    std::fs::remove_dir_all(path).unwrap();
 }
 
 #[test]

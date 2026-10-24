@@ -221,39 +221,6 @@ pub struct KnowledgeSourceParsedCreateBatchOutput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeSourceRevisionCreate {
-    pub newer_source_id: String,
-    pub older_source_id: String,
-    pub created_at: Value,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeSourceRevisionCreateBatchRequest {
-    pub creates: Vec<KnowledgeSourceRevisionCreate>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeSourceRevisionCreateBatchRow {
-    pub newer_source_id: String,
-    pub older_source_id: String,
-    pub newer_node_id: Option<u64>,
-    pub older_node_id: Option<u64>,
-    pub matched: bool,
-    pub non_writable: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeSourceRevisionCreateBatchOutput {
-    pub graph_commit_epoch_before: u64,
-    pub graph_commit_epoch_after: u64,
-    pub rows: Vec<KnowledgeSourceRevisionCreateBatchRow>,
-    pub matched_count: usize,
-    pub missing_endpoint_count: usize,
-    pub non_writable_count: usize,
-    pub created_relationship_count: usize,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KnowledgeSourceLabelAssignment {
     pub source_id: String,
     pub label_id: String,

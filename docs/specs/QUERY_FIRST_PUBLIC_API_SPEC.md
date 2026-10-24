@@ -475,6 +475,10 @@ one-batch WAL and reopen assertions without two business methods or eight DTOs.
 Source parsed-metadata fixtures likewise use separate base and optional-detail
 statements in one transaction, preserving omitted fields, idless protection and
 recovery coverage without the old adapter, four DTOs or assignment factory.
+Source revision fixtures use ordinary bounded CREATE with exact external-id
+endpoint predicates. Staged readback, committed edge counts and recovery retain
+missing/idless guards and default properties without the business adapter, four
+DTOs or relationship-request factory.
 Remaining legacy business adapters still require migration; this removal does
 not complete issue #1193.
 
