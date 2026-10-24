@@ -923,3 +923,14 @@ and exact readback cover selection and survivors. Invalid inputs leave WAL and
 epoch unchanged; both write families preserve one batch and durable reopen,
 including retained endpoint nodes. Two business methods and eight DTOs are
 removed with their typed relationship factories and validators.
+
+### Source memory-count queries
+
+`api::tests::source_memory_count` retains three root general cases with bounded
+point calculations followed by fixed SET in the same explicit transaction.
+Cypher computes increments and floor decrements; the host only binds computed
+values. Repeated inputs observe earlier staged counts, NULL starts at zero and
+missing identities produce no candidate. A nonnumeric stored count refuses its
+query while prior staged changes remain committable. Invalid input preserves
+WAL/epoch; two source updates retain one batch and exact reopen. One business
+method, four DTOs and the graph-side aggregation helpers are removed.

@@ -485,6 +485,10 @@ fields without the adapter, four DTOs or typed entity-create factory.
 Source label assignment/deletion fixtures use bounded MERGE/ON CREATE and
 DELETE with endpoint predicates, retaining existing properties, missing/idless
 guards and recovery assertions without two business methods or eight DTOs.
+Source memory-count fixtures use bounded point calculations and fixed SET in
+one transaction. The host binds query-computed counts; sequential/floor and
+NULL behavior, nonnumeric refusal and one-batch recovery remain covered without
+the business adapter, four DTOs or handwritten graph-side aggregation.
 Remaining legacy business adapters still require migration; this removal does
 not complete issue #1193.
 

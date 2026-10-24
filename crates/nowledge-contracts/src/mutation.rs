@@ -141,38 +141,3 @@ pub struct KnowledgePropertyBatchOutput {
     pub filtered_out_count: usize,
     pub property_names: Vec<String>,
 }
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeSourceMemoryCountAdjustment {
-    pub source_id: String,
-    pub delta: i64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeSourceMemoryCountBatchRequest {
-    pub adjustments: Vec<KnowledgeSourceMemoryCountAdjustment>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeSourceMemoryCountBatchRow {
-    pub source_id: String,
-    pub node_id: Option<u64>,
-    pub matched: bool,
-    pub adjusted: bool,
-    pub non_writable: bool,
-    pub invalid_current_count: bool,
-    pub old_count: Option<i64>,
-    pub new_count: Option<i64>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeSourceMemoryCountBatchOutput {
-    pub graph_commit_epoch_before: u64,
-    pub graph_commit_epoch_after: u64,
-    pub rows: Vec<KnowledgeSourceMemoryCountBatchRow>,
-    pub matched_count: usize,
-    pub missing_count: usize,
-    pub non_writable_count: usize,
-    pub invalid_current_count_count: usize,
-    pub adjusted_count: usize,
-}
