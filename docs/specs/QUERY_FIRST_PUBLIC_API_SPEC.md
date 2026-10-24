@@ -519,7 +519,11 @@ and ordering statements. Their two wrappers, ten DTOs and host joins/filters/sor
 are removed. Induced-edge fixtures use separate identity, count and ordered-page
 statements, removing another wrapper and three DTOs. Relationship seed, scope
 and page phases also use ordinary queries, removing two wrappers and four DTOs.
-The remaining six navigation read wrappers and final qualification remain unfinished;
+Neighbor fixtures now use fixed hop/direction/scope queries and explicit output
+budgets, removing two wrappers and three DTOs. Dense adjacency is checked through
+storage layout statistics and ordinary profiled reads, rather than retired
+facade reason DTOs. The remaining four path/subgraph wrappers and final
+qualification remain unfinished;
 this mutation cleanup alone does not complete issue #1193.
 
 ## Stable typed boundaries

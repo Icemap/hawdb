@@ -33,34 +33,6 @@ pub enum KnowledgeNeighborDirection {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeNeighborsRequest {
-    pub label: String,
-    pub external_id: String,
-    pub relationship_type: Option<String>,
-    #[doc(hidden)]
-    pub direction: KnowledgeNeighborDirection,
-    pub limit: usize,
-    pub max_hops: usize,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeScopedNeighborsRequest {
-    pub navigation: KnowledgeNeighborsRequest,
-    pub metadata_filters: BTreeMap<String, String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeNeighborsOutput {
-    pub graph_commit_epoch: u64,
-    pub seed_node_id: Option<u64>,
-    pub paths: Vec<KnowledgeGraphContextPath>,
-    pub fanout_reason_codes: Vec<KnowledgeFanoutReasonCode>,
-    pub fanout_reason_details: Vec<KnowledgeFanoutReasonDetail>,
-    pub fanout_reasons: Vec<String>,
-    pub diagnostics: KnowledgeTraversalDiagnostics,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KnowledgePathRequest {
     pub source_label: String,
     pub source_external_id: String,

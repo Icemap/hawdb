@@ -19,12 +19,11 @@ use super::{
     ExternalContentArtifactJobCompletion, ExternalContentArtifactRuntimeManifest,
     KnowledgeCandidateScoringPolicy, KnowledgeCandidateSource, KnowledgeFallbackReasonCode,
     KnowledgeFanoutReasonCode, KnowledgeGraphPathDirection, KnowledgeNeighborDirection,
-    KnowledgeNeighborsRequest, KnowledgePathRequest, KnowledgeRetrievalEmptyReasonCode,
-    KnowledgeRetrievalRequest, KnowledgeRetrievalStage, KnowledgeScopedNeighborsRequest,
-    KnowledgeScopedPathRequest, KnowledgeScopedSubgraphRequest, KnowledgeSubgraphRequest,
-    KnowledgeTraversalFallbackReasonCode, KnowledgeTruncationReasonCode, NowledgeGraphAdapter,
-    NowledgeGraphStatement, PlanCacheBypassReason, PlanCacheLookup, QueryOutput,
-    QueryStreamOptions, RecoveryMode, SearchProjectionGraphDeltaRequest,
+    KnowledgePathRequest, KnowledgeRetrievalEmptyReasonCode, KnowledgeRetrievalRequest,
+    KnowledgeRetrievalStage, KnowledgeScopedPathRequest, KnowledgeScopedSubgraphRequest,
+    KnowledgeSubgraphRequest, KnowledgeTraversalFallbackReasonCode, KnowledgeTruncationReasonCode,
+    NowledgeGraphAdapter, NowledgeGraphStatement, PlanCacheBypassReason, PlanCacheLookup,
+    QueryOutput, QueryStreamOptions, RecoveryMode, SearchProjectionGraphDeltaRequest,
     HAWDB_LIGHTNING_BOOTSTRAP_PROTOCOL_VERSION, NOWLEDGE_DEEP_SEARCH_FILTERED_RANK_WINDOW,
     NOWLEDGE_DEEP_SEARCH_GRAPH_CONTEXT_MAX_HOPS, NOWLEDGE_DEEP_SEARCH_MIN_GRAPH_SEED_LIMIT,
     NOWLEDGE_DEEP_SEARCH_MIN_RANK_WINDOW,
@@ -123,6 +122,7 @@ mod merge_nodes;
 mod merge_relationships;
 mod mutation_guards;
 mod mutation_persistence;
+mod neighbor_reads;
 mod nowledge_graph_adapter;
 mod optional_match;
 mod ordered_composite;

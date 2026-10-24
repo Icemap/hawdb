@@ -16,16 +16,6 @@ use crate::api::*;
 use crate::error::Result;
 
 pub(super) trait QueryFirstTestExt {
-    fn query_neighbors_via_cypher(
-        &self,
-        request: &KnowledgeNeighborsRequest,
-    ) -> Result<KnowledgeNeighborsOutput>;
-
-    fn query_scoped_neighbors_via_cypher(
-        &self,
-        request: &KnowledgeScopedNeighborsRequest,
-    ) -> Result<KnowledgeNeighborsOutput>;
-
     fn query_paths_via_cypher(&self, request: &KnowledgePathRequest)
         -> Result<KnowledgePathOutput>;
 
@@ -46,20 +36,6 @@ pub(super) trait QueryFirstTestExt {
 }
 
 impl QueryFirstTestExt for Database {
-    fn query_neighbors_via_cypher(
-        &self,
-        request: &KnowledgeNeighborsRequest,
-    ) -> Result<KnowledgeNeighborsOutput> {
-        super::super::knowledge_neighbors_via_query_runtime(self, request)
-    }
-
-    fn query_scoped_neighbors_via_cypher(
-        &self,
-        request: &KnowledgeScopedNeighborsRequest,
-    ) -> Result<KnowledgeNeighborsOutput> {
-        super::super::knowledge_scoped_neighbors_via_query_runtime(self, request)
-    }
-
     fn query_paths_via_cypher(
         &self,
         request: &KnowledgePathRequest,

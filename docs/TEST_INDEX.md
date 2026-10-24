@@ -1079,3 +1079,24 @@ seed counters. An existing out-of-core case additionally checks both exact edge
 types and targets before checkpoint. The same root general CI lane owns these
 cases. Two wrappers, four DTOs and legacy empty-group synthesis are removed;
 shared traversal internals remain until neighbor/path/subgraph migration.
+
+### Neighbor and dense navigation query fixtures
+
+Five existing navigation cases move to `neighbor_reads.rs`, retaining explicit
+internal identity for idless nodes, one/two-hop edge identities and properties,
+incoming/outgoing matching, unknown types, normalized scope, missing seeds,
+LIMIT 0 and deterministic limited pages with cache reuse. Fixed hop statements
+replace the old host traversal; the main traversal phases share a cumulative
+snapshot budget. An empty unknown-type result remains valid after the delivered
+row quota is consumed. Fixture creation now uses ordinary queries.
+
+The dense fixture still creates exactly the dense-adjacency threshold and
+checks the physical group's layout, node, degree and untyped group enumeration.
+Typed/untyped ordinary profiled reads return every exact relationship and target
+under explicit output limits; distinct-neighbor count plus the seed retain the
+subgraph cardinality check. The deleted facade's reason DTO/string fields are
+not claimed as ordinary query-report fields. Existing out-of-core checkpoint
+and reopen neighbor reads now use fixed statements, including exact target and
+weight checks. These cases remain in the root general CI lane. Two wrappers,
+three DTOs, their traversal helpers and one obsolete compile-only DTO re-export
+identity assertion are removed; path/subgraph fixtures remain to migrate.

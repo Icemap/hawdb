@@ -408,7 +408,7 @@ fn forced_out_of_core_checkpoint_reopen_and_mutation_are_equivalent() {
 }
 
 #[test]
-fn typed_reads_and_mutations_include_checkpointed_canonical_rows() {
+fn query_reads_and_mutations_include_checkpointed_canonical_rows() {
     let path = unique_test_dir("out_of_core_typed_canonical_rows");
     let config = DatabaseConfig {
         storage_residency_mode: StorageResidencyMode::OutOfCore,
@@ -447,19 +447,15 @@ fn typed_reads_and_mutations_include_checkpointed_canonical_rows() {
         drop(snapshot);
 
         let neighbors = db
-            .query_neighbors_via_cypher(&KnowledgeNeighborsRequest {
-                label: "Memory".to_string(),
-                external_id: "memory:one".to_string(),
-                relationship_type: Some("LINKS".to_string()),
-                direction: KnowledgeNeighborDirection::Outgoing,
-                limit: 4,
-                max_hops: 1,
-            })
+            .query_request(bounded_batch_query(
+                "MATCH (m:Memory {id: $id})-[:LINKS]->(e:Entity) RETURN e.id AS target LIMIT 4",
+                &BTreeMap::from([("id".into(), Value::String("memory:one".into()))]),
+            ))
             .unwrap();
-        assert_eq!(neighbors.paths.len(), 1);
+        assert_eq!(neighbors.rows.len(), 1);
         assert_eq!(
-            neighbors.paths[0].target_external_id.as_deref(),
-            Some("entity:rust")
+            neighbors.rows[0]["target"],
+            Value::String("entity:rust".into())
         );
 
         let created = db
@@ -493,27 +489,23 @@ fn typed_reads_and_mutations_include_checkpointed_canonical_rows() {
 
     {
         let db = Database::open_with_config(&path, config).unwrap();
-        let neighbors = db
-            .query_neighbors_via_cypher(&KnowledgeNeighborsRequest {
-                label: "Memory".to_string(),
-                external_id: "memory:one".to_string(),
-                relationship_type: Some("MENTIONS".to_string()),
-                direction: KnowledgeNeighborDirection::Outgoing,
-                limit: 4,
-                max_hops: 1,
-            })
-            .unwrap();
-        assert_eq!(neighbors.paths.len(), 1);
+        let mut snapshot = db.begin_read_transaction().unwrap();
+        let neighbors = snapshot.query_request(bounded_batch_query(
+            "MATCH (m:Memory {id: $id})-[r:MENTIONS]->(e:Entity) RETURN e.id AS target, r.weight AS weight LIMIT 4",
+            &BTreeMap::from([("id".into(), Value::String("memory:one".into()))]),
+        )).unwrap();
+        assert_eq!(neighbors.rows.len(), 1);
         assert_eq!(
-            neighbors.paths[0].relationship_properties.get("weight"),
-            Some(&Value::Int(2))
+            neighbors.rows[0]["target"],
+            Value::String("entity:rust".into())
         );
+        assert_eq!(neighbors.rows[0]["weight"], Value::Int(2));
     }
     std::fs::remove_dir_all(path).unwrap();
 }
 
 #[test]
-fn typed_read_fails_closed_when_an_out_of_core_segment_is_corrupted() {
+fn entity_query_fails_closed_when_an_out_of_core_segment_is_corrupted() {
     let path = unique_test_dir("out_of_core_typed_read_corruption");
     let mut db = Database::open_with_config(
         &path,
