@@ -340,8 +340,10 @@ A caller's stricter physical reservation MUST remain effective after binding
 the admitted task. This separation does not claim smaller reservations or a
 concurrency improvement from admission alone.
 
-Remaining mutation and qualification/diagnostic entrypoints must
-complete the concurrency audit before the overall adapter gate is met.
+Ordinary mutation entrypoints use the concurrent transaction kernel described
+above. Query and resource reports use detached read views. Administrative and
+maintenance controls retain their existing ownership contracts. The adapter
+gate requires the corresponding runtime evidence in issue #1193.
 
 Admission and execution SHOULD reuse one internally prepared statement when its
 execution environment remains compatible. The prepared object MUST NOT retain
@@ -526,9 +528,10 @@ facade reason DTOs. Path/subgraph fixtures now use fixed endpoint, bounded
 expansion, scope and edge-page statements, removing the final four wrappers and
 their DTOs, host traversals, decoders and test-support exports. No business CRUD
 compatibility layer remains under `cfg(test)`. Reusable retrieval, transaction,
-recovery, Consumer and projection lifecycle contracts remain. Final-candidate
-qualification is still pending; source cleanup alone does not complete issue
-#1193.
+recovery, Consumer and projection lifecycle contracts remain. Source cleanup
+alone does not establish acceptance: issue #1193 and its PR must record
+source-bound runtime, platform and local-fuzz results alongside the release
+measurements and their limitations.
 
 ## Stable typed boundaries
 

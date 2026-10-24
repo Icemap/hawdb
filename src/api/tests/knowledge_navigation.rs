@@ -54,12 +54,12 @@ const NAVIGATION_SEED: &str = "MATCH (m:Memory {id: $source}) RETURN id(m) AS no
 const NAVIGATION_TARGET: &str =
     "MATCH (e:Entity {id: $target}) RETURN id(e) AS node_id, e.id AS id";
 const ONE_HOP_PATH: &str = "MATCH (m:Memory {id: $source})-[r]->(e:Entity {id: $target}) \
-    WHERE $max_hops >= 1 RETURN id(m) AS source_node_id, m.id AS source, \
+    WHERE (CASE WHEN $max_hops >= 1 THEN true ELSE false END) = true RETURN id(m) AS source_node_id, m.id AS source, \
     id(e) AS target_node_id, e.id AS target, id(r) AS relationship_id, type(r) AS type \
     ORDER BY relationship_id LIMIT $limit";
 const TWO_HOP_PATH: &str =
     "MATCH (m:Memory {id: $source})-[a:LINKS]->(mid:Entity)-[b:LINKS]->(e:Entity {id: $target}) \
-    WHERE $max_hops >= 2 RETURN id(m) AS source_node_id, m.id AS source, \
+    WHERE (CASE WHEN $max_hops >= 2 THEN true ELSE false END) = true RETURN id(m) AS source_node_id, m.id AS source, \
     id(mid) AS middle_node_id, mid.id AS middle, id(e) AS target_node_id, e.id AS target, \
     id(a) AS first_relationship_id, type(a) AS first_type, a.weight AS first_weight, \
     id(b) AS second_relationship_id, type(b) AS second_type, b.weight AS second_weight \
@@ -272,9 +272,12 @@ fn knowledge_paths_respects_direction_type_limit_and_missing_endpoint() {
             .unwrap()
             .rows
             .is_empty());
-        assert!(snapshot.query_request(bounded_batch_query(
-            "MATCH (m:Memory {id: $source})-[*1..2]-(e:Entity {id: $target}) RETURN id(e) AS node_id LIMIT $limit", &parameters,
-        )).unwrap().rows.is_empty());
+        for query in [
+            "MATCH (m:Memory {id: $source})-[]-(e:Entity {id: $target}) RETURN id(e) AS node_id LIMIT $limit",
+            "MATCH (m:Memory {id: $source})-[]-(a)-[]-(e:Entity {id: $target}) RETURN id(e) AS node_id LIMIT $limit",
+        ] {
+            assert!(snapshot.query_request(bounded_batch_query(query, &parameters)).unwrap().rows.is_empty());
+        }
     }
 }
 

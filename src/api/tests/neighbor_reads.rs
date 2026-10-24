@@ -128,9 +128,12 @@ fn retrieves_knowledge_neighbors_without_search_projection() {
     assert_eq!(incoming.rows[0]["source"], Value::String("mention".into()));
     assert_eq!(incoming.rows[0]["target"], Value::String("root".into()));
     assert_eq!(incoming.rows[0]["type"], Value::String("MENTIONS".into()));
-    assert!(snapshot.query_request(bounded_batch_query(
-        "MATCH (m:Memory {id: $id})-[:DOES_NOT_EXIST*1..2]-(e) RETURN id(e) AS node_id LIMIT $limit", &parameters,
-    )).unwrap().rows.is_empty());
+    for query in [
+        "MATCH (m:Memory {id: $id})-[:DOES_NOT_EXIST]-(e) RETURN id(e) AS node_id LIMIT $limit",
+        "MATCH (m:Memory {id: $id})-[:DOES_NOT_EXIST]-(a)-[:DOES_NOT_EXIST]-(e) RETURN id(e) AS node_id LIMIT $limit",
+    ] {
+        assert!(snapshot.query_request(bounded_batch_query(query, &parameters)).unwrap().rows.is_empty());
+    }
     assert_eq!(snapshot.commit_epoch(), 5);
     assert_eq!(snapshot.usage().output_rows, 4);
 }
