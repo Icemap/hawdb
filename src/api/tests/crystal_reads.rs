@@ -6,13 +6,13 @@ use super::*;
 const KEY_COUNT: &str = "MATCH (m:Memory) WHERE m.is_crystal = true \
     AND m.id CONTAINS $key RETURN count(*) AS count";
 const KEY_DETAIL: &str = "MATCH (m:Memory) WHERE m.is_crystal = true AND m.id CONTAINS $key \
-    WITH m, CASE WHEN m.id = $key THEN 0 WHEN m.id STARTS WITH $key THEN 1 ELSE 2 END AS rank \
+    WITH m, CASE WHEN m.id = $key THEN 0 WHEN left(m.id, $key_chars) = $key THEN 1 ELSE 2 END AS rank \
     RETURN m.id AS id, m.crystal_title AS crystal_title, m.title AS title, \
     COALESCE(m.crystal_title, m.title, '') AS display_title, m.content AS content, \
     m.importance AS importance, m.unit_type AS unit_type, m.created_at AS created_at \
     ORDER BY rank, m.id, id(m) LIMIT $limit";
 const KEY_RANKED: &str = "MATCH (m:Memory) WHERE m.is_crystal = true AND m.id CONTAINS $key \
-    WITH m, CASE WHEN m.id = $key THEN 0 WHEN m.id STARTS WITH $key THEN 1 ELSE 2 END AS rank \
+    WITH m, CASE WHEN m.id = $key THEN 0 WHEN left(m.id, $key_chars) = $key THEN 1 ELSE 2 END AS rank \
     RETURN m.id AS id, m.importance AS importance, m.created_at AS created_at \
     ORDER BY rank, importance DESC, created_at DESC, id, id(m) LIMIT $limit";
 const AFTER_COUNT: &str = "MATCH (m:Memory) WHERE m.is_crystal = true AND m.id > $after \
@@ -63,6 +63,10 @@ fn filter_parameters(
     let mut parameters = BTreeMap::from([("limit".into(), Value::Int(limit))]);
     if let Some(key) = key {
         parameters.insert("key".into(), Value::String(key.into()));
+        parameters.insert(
+            "key_chars".into(),
+            Value::Int(i64::try_from(key.chars().count()).unwrap()),
+        );
     }
     if let Some(after) = after {
         parameters.insert("after".into(), Value::String(after.into()));
@@ -190,6 +194,46 @@ fn crystal_reads_use_query_runtime_plan_cache() {
     assert_eq!(stats.entries, 2);
     assert_eq!(stats.misses, 2);
     assert_eq!(stats.hits, 2);
+}
+
+#[test]
+fn crystal_key_ranking_preserves_exact_prefix_and_contains_order() {
+    let mut db = Database::new();
+    for (id, importance, is_crystal) in [
+        ("é", 1, true),
+        ("é-prefix", 2, true),
+        ("a-é", 3, true),
+        ("é-plain", 99, false),
+    ] {
+        let parameters = BTreeMap::from([
+            ("id".into(), Value::String(id.into())),
+            ("importance".into(), Value::Int(importance)),
+            ("is_crystal".into(), Value::Bool(is_crystal)),
+        ]);
+        db.query_request(bounded_batch_query(
+            "CREATE (:Memory {id: $id, importance: $importance, is_crystal: $is_crystal})",
+            &parameters,
+        ))
+        .unwrap();
+    }
+    let parameters = filter_parameters(Some("é"), None, 3).unwrap();
+    let mut snapshot =
+        db.begin_read_transaction()
+            .unwrap()
+            .into_bounded(crate::ReadSnapshotBudget {
+                max_rows: 6,
+                max_payload_bytes: 4096,
+            });
+    for query in [KEY_DETAIL, KEY_RANKED] {
+        let output = snapshot
+            .query_request(bounded_batch_query(query, &parameters))
+            .unwrap();
+        assert_eq!(output.rows.len(), 3);
+        for (row, expected) in output.rows.iter().zip(["é", "é-prefix", "a-é"]) {
+            assert_eq!(row["id"], Value::String(expected.into()));
+        }
+    }
+    assert_eq!(snapshot.usage().output_rows, 6);
 }
 
 #[test]

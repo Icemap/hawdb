@@ -1100,3 +1100,14 @@ and reopen neighbor reads now use fixed statements, including exact target and
 weight checks. These cases remain in the root general CI lane. Two wrappers,
 three DTOs, their traversal helpers and one obsolete compile-only DTO re-export
 identity assertion are removed; path/subgraph fixtures remain to migrate.
+
+### Crystal key-ranking parser regression
+
+`crystal_key_ranking_preserves_exact_prefix_and_contains_order` exercises both
+Crystal projections with a Unicode key and conflicting importance/lexical
+orders. It keeps exact matches before prefixes before contains matches, excludes
+non-Crystals, and checks the cumulative six-row snapshot budget. Prefix ranking
+uses `left(id, $key_chars) = $key` because `STARTS WITH` is a WHERE predicate,
+not a supported CASE condition. The existing two failing Crystal CI fixtures
+retain their result and cache assertions. The root general CI lane owns these
+ordinary-query runtime checks.
