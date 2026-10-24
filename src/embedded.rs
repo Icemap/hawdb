@@ -509,6 +509,12 @@ impl HawDBEmbedded {
             Some(prepared) => prepared,
             None => self.database.prepare_runtime_request(query)?,
         };
+        if prepared.admission() != &admission {
+            return Err(HawDBError::Execution(
+                "query admission changed during preparation rebuild; retry the query".into(),
+            )
+            .into());
+        }
         let execution_task_context = permit.bind_task_context(task_context.clone());
         let _permit = permit;
         let query = query.with_task_context(&execution_task_context);
@@ -567,9 +573,12 @@ impl HawDBEmbedded {
                 )
         };
         let uses_snapshot = prepared.uses_snapshot();
-        let request = prepared.work_request(self.admitted_result_budget_bytes());
-        let request =
-            request.with_memory_bytes(request.memory_bytes.max(planning_request.memory_bytes));
+        let admitted_request = prepared.work_request(self.admitted_result_budget_bytes());
+        let request = admitted_request.with_memory_bytes(
+            admitted_request
+                .memory_bytes
+                .max(planning_request.memory_bytes),
+        );
         let (prepared, permit) = self.try_admit_prepared(prepared, |_, prepared| {
             request.with_retained_memory_bytes(
                 prepared.map_or(0, |value| value.planning_memory_bytes()),
@@ -582,6 +591,12 @@ impl HawDBEmbedded {
                 .runtime_sql_planning_snapshot()
                 .prepare(query.sql)?,
         };
+        if prepared.work_request(admitted_request.result_bytes) != admitted_request {
+            return Err(HawDBError::Execution(
+                "SQL admission changed during preparation rebuild; retry the query".into(),
+            )
+            .into());
+        }
         let context = permit.bind_task_context(context.clone());
         self.check_admitted_query_context(&context)?;
         let (prepared, _planning_memory) = prepared.into_statement(&self.database)?;

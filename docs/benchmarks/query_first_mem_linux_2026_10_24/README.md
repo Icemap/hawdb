@@ -73,6 +73,28 @@ Per-acquisition p95/p99 lock values are histogram intervals, not exact times. Th
 | `baseline-instrumented` | `cad4c119160d02e20cff31bfabdf2c7d63c449f75ececd4b884c5cd00640b38b` |
 | `candidate-isolated-instrumented` | `bf17a4844f5f36adf019cb1d2d16a8a6e8cd0ee406077b34b0e5bc6fdb4384ac` |
 
+## Raw evidence archive
+
+The [evidence prerelease](https://github.com/nowledge-co/hawdb/releases/tag/evidence-pr-1194-2026-10-24)
+retains all 22 original raw files from both reports (63,055,112 bytes), including
+adverse results. The archive was downloaded and every member checked against
+[the manifest](https://github.com/nowledge-co/hawdb/releases/download/evidence-pr-1194-2026-10-24/raw-manifest.json)
+before removing the copies from Git. Archive source:
+`a2c19825f268a5495e29a1dc21e13b09cdce1545`; this relocation does not qualify later
+code revisions or change the measured revisions above.
+
+From the repository root, restore the original paths with GNU tar before
+running either report's existing analysis commands:
+
+```console
+evidence_dir="$(mktemp -d)"
+gh release download evidence-pr-1194-2026-10-24 --repo nowledge-co/hawdb --pattern query-first-raw-a2c19825.tar --dir "$evidence_dir"
+printf '%s  %s\n' 3a01d317c075ea4110c924d897250f73105c420345dcf12f4c736cb0638285dd "$evidence_dir/query-first-raw-a2c19825.tar" | sha256sum --check && tar --extract --keep-old-files --file "$evidence_dir/query-first-raw-a2c19825.tar"
+```
+
+The existing checksum indexes still apply; restored raw files are ignored.
+This ordinary deletion does not erase blobs retained by historical PR refs.
+
 ## Reproduce the analysis
 
 Extract `raw.tar.gz` into an empty directory, then run `python3 analyze-pairs.py <directory>`. The analysis asserts all 144 process outcomes, exact durable reopen, and fixed-work call counts; it retains every pair. `SHA256SUMS` covers the delivered files. See [the harness contract](../../MEM_QUERY_CONCURRENCY.md) for replay conditions. Build logs and receipts include first-build time and all local artifact provenance. This report describes the v1 benchmark at the candidate commit above; later v2 counters and sustained-reader mode require separate measurements.

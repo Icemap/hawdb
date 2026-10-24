@@ -2,6 +2,10 @@
 
 Issue Number: ref #1193
 
+Raw files are retained in the verified evidence prerelease. Follow the
+[shared restore instructions](../query_first_mem_linux_2026_10_24/README.md#raw-evidence-archive)
+before running the analysis below; all original results and checksums are preserved.
+
 ## Scope and status
 
 Complete v2 matrix: 144 processes, 72 alternating A/B pairs, zero query errors and exact durable-reopen checks. This is measurement evidence; it does not complete issue acceptance. The fixed-work v1 report and its regressions remain valid and are retained separately.

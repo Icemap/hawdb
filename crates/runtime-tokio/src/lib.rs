@@ -512,12 +512,16 @@ impl TokioRuntimeAdapter {
                     self.finish_admission_wait(request, wait.take());
                     return Ok(permit);
                 }
-                Err(_) if state.is_some() => {
+                Err(error) if state.is_some() => {
                     // Retained preparation can itself make the request exceed
                     // hard capacity. Rebuild under the execution reservation
                     // before treating that refusal as terminal.
                     drop(state.take());
                     request = request_for_snapshot(self.governor.snapshot(), None);
+                    if !error.is_retryable() {
+                        // A terminal refusal removes the waiter from the queue.
+                        waiter = self.governor.admission_waiter(request.priority);
+                    }
                     continue;
                 }
                 Err(error) if !error.is_retryable() => {
@@ -840,7 +844,11 @@ mod tests {
             if execution_bytes <= 100 {
                 result.unwrap();
             } else {
-                assert!(matches!(result, Err(TokioTaskError::Admission(_))));
+                let Err(TokioTaskError::Admission(error)) = result else {
+                    panic!("execution exceeding hard capacity must be rejected");
+                };
+                assert_eq!(error.code, RuntimeAdmissionCode::MemorySaturated);
+                assert!(!error.is_retryable());
             }
             assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
             assert_eq!(governor.snapshot().queued_admission_waiters, 0);
