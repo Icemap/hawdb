@@ -90,6 +90,11 @@ filesystem. `report.json` preserves each repetition instead of hiding variance.
 Use both a small workload (`16 2`) and a retained-history workload (`512 24`).
 See [MEASUREMENTS.md](MEASUREMENTS.md) for local evidence and limitations.
 
+The optional [key-comparison probe](simd/README.md) compares original Bf-Tree
+ordering with scalar word and ARM NEON kernels in temporary dependency copies.
+It adds long-key shapes through `bench-shaped` without selecting a patched
+dependency in the default adapter.
+
 ## Bounds and coverage
 
 Keys: 64 bytes; values: 1024 bytes; distinct writes: 128 per transaction;

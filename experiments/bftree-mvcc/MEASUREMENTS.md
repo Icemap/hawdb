@@ -183,3 +183,13 @@ compiler observations. Versioned and Hybrid scans improve in the qualified
 cases; synchronization variance prevents a stable commit-tail claim, and COW
 still scans faster. The full local 98-target aggregate and final dev/release
 adapter tests passed; full-tree historical license debt remains disclosed.
+
+## Manual word/NEON comparison (2026-10-24)
+
+The [three-way Bf-Tree comparison report](measurements/simd-20261024/README.md)
+retains 225 fresh processes across short, common-prefix and spread keys, all
+three layouts, old/current reads, writes, replay and memory. It includes a
+pinned RocksDB source audit, source/binary hashes, all samples and controls.
+Neither explicit NEON nor word comparison is selected by default: this noisy
+shared-host cohort does not establish a consistent advantage across cases.
+The default adapter still uses the unmodified 0.5.6 registry dependency.

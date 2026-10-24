@@ -4,6 +4,9 @@
 mod adapter;
 mod benchmark;
 mod index;
+#[cfg(test)]
+#[path = "../simd/key_compare.rs"]
+mod key_compare;
 
 use adapter::Store;
 use std::path::Path;
@@ -64,7 +67,9 @@ fn main() {
                     .and_then(|rounds| benchmark::compare(Path::new(&args[2]), keys, rounds))
             })
         }
-        Some("bench-one") if args.len() == 6 => {
+        Some(command @ ("bench-one" | "bench-shaped"))
+            if args.len() == if command == "bench-one" { 6 } else { 7 } =>
+        {
             let parsed = args[3]
                 .to_str()
                 .and_then(|s| index::Layout::parse(s).ok())
@@ -72,13 +77,29 @@ fn main() {
                 .zip(args[5].to_str().and_then(|s| s.parse().ok()));
             match parsed {
                 Some(((layout, keys), rounds)) => {
-                    benchmark::one(Path::new(&args[2]), layout, keys, rounds)
+                    if command == "bench-one" {
+                        benchmark::one(Path::new(&args[2]), layout, keys, rounds)
+                    } else {
+                        args[6]
+                            .to_str()
+                            .ok_or(adapter::Error::Invalid("invalid key shape"))
+                            .and_then(benchmark::KeyShape::parse)
+                            .and_then(|shape| {
+                                benchmark::one_shaped(
+                                    Path::new(&args[2]),
+                                    layout,
+                                    keys,
+                                    rounds,
+                                    shape,
+                                )
+                            })
+                    }
                 }
                 None => Err(adapter::Error::Invalid("invalid benchmark arguments")),
             }
         }
         _ => {
-            eprintln!("Usage: hawdb-bftree-mvcc-experiment demo <new-journal> | bench <new-directory> [keys] [rounds]");
+            eprintln!("Usage: hawdb-bftree-mvcc-experiment demo <new-journal> | bench <new-directory> [keys] [rounds] | bench-one <new-journal> <versioned|hybrid|cow> <keys> <rounds> | bench-shaped <new-journal> <versioned|hybrid|cow> <keys> <rounds> <numeric8|prefix64|spread64>");
             std::process::exit(2);
         }
     };
