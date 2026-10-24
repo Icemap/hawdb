@@ -131,14 +131,10 @@ impl<'a, T: CheckpointCanonicalRecord> CheckpointCanonicalIterator<'a, T> {
     }
 }
 
-/// Resume with clones of the same captured reader/manifest. Segment selection
-/// and completed record decoding are retained across safe denial. Individual
-/// record decoding and the initial range read remain atomic attempts.
-pub(crate) struct CheckpointCanonicalCursor<T> {
-    manifest: Arc<CanonicalSegmentManifest>,
-    pending_descriptor: Option<AdmittedDescriptor>,
-    current: Records<T>,
-    loading: SegmentLoad<T>,
+/// Shared task-admitted descriptor traversal for checkpoint and projection scans.
+#[derive(Debug)]
+pub(super) struct CheckpointDescriptorCursor {
+    kind: CanonicalSegmentKind,
     lower_bound: [u8; 17],
     lower_bound_len: Option<usize>,
     descriptors_seen: u64,
@@ -146,24 +142,21 @@ pub(crate) struct CheckpointCanonicalCursor<T> {
     finished: bool,
 }
 
-impl<T: CheckpointCanonicalRecord> CheckpointCanonicalCursor<T> {
-    pub(crate) fn new(reader: &CanonicalSegmentReader) -> Self {
+impl CheckpointDescriptorCursor {
+    pub(super) fn new(reader: &CanonicalSegmentReader, kind: CanonicalSegmentKind) -> Self {
         let mut lower_bound = [0; 17];
-        lower_bound[0] = T::KIND.tag();
+        lower_bound[0] = kind.tag();
         Self {
-            manifest: reader.manifest.clone(),
-            pending_descriptor: None,
-            current: Records::default(),
-            loading: SegmentLoad::default(),
+            kind,
             lower_bound,
             lower_bound_len: Some(1),
             descriptors_seen: 0,
-            expected_descriptors: reader.manifest.segment_count_for_kind(T::KIND),
+            expected_descriptors: reader.manifest.segment_count_for_kind(kind),
             finished: false,
         }
     }
 
-    pub(super) fn next_descriptor(
+    pub(super) fn next(
         &mut self,
         reader: &CanonicalSegmentReader,
         work: &CheckpointWorkContext,
@@ -213,11 +206,11 @@ impl<T: CheckpointCanonicalRecord> CheckpointCanonicalCursor<T> {
             error => CanonicalSegmentError::DescriptorTree(error),
         })?;
         let selected = match selected {
-            Some((key, descriptor)) if descriptor.kind == T::KIND => {
+            Some((key, descriptor)) if descriptor.kind == self.kind => {
                 reader.validate_selected_descriptor(&descriptor)?;
                 Some((key, descriptor))
             }
-            Some((_, descriptor)) if descriptor.kind < T::KIND => {
+            Some((_, descriptor)) if descriptor.kind < self.kind => {
                 return Err(CanonicalSegmentError::Corrupt(
                     "canonical descriptor seek moved backwards across kinds".into(),
                 ));
@@ -229,8 +222,7 @@ impl<T: CheckpointCanonicalRecord> CheckpointCanonicalCursor<T> {
             if selected.is_some() {
                 return Err(CanonicalSegmentError::Corrupt(format!(
                     "canonical descriptor kind {:?} contains more than the declared {} segments",
-                    T::KIND,
-                    self.expected_descriptors
+                    self.kind, self.expected_descriptors
                 )));
             }
             return Ok(None);
@@ -238,9 +230,7 @@ impl<T: CheckpointCanonicalRecord> CheckpointCanonicalCursor<T> {
         let (key, descriptor) = selected.ok_or_else(|| {
             CanonicalSegmentError::Corrupt(format!(
                 "canonical descriptor kind {:?} ended after {} of {} segments",
-                T::KIND,
-                self.descriptors_seen,
-                self.expected_descriptors
+                self.kind, self.descriptors_seen, self.expected_descriptors
             ))
         })?;
         self.descriptors_seen = self.descriptors_seen.checked_add(1).ok_or_else(|| {
@@ -264,6 +254,29 @@ impl<T: CheckpointCanonicalRecord> CheckpointCanonicalCursor<T> {
             descriptor,
             _memory: memory,
         }))
+    }
+}
+
+/// Resume with clones of the same captured reader/manifest. Segment selection
+/// and completed record decoding are retained across safe denial. Individual
+/// record decoding and the initial range read remain atomic attempts.
+pub(crate) struct CheckpointCanonicalCursor<T> {
+    manifest: Arc<CanonicalSegmentManifest>,
+    pending_descriptor: Option<AdmittedDescriptor>,
+    current: Records<T>,
+    loading: SegmentLoad<T>,
+    descriptors: CheckpointDescriptorCursor,
+}
+
+impl<T: CheckpointCanonicalRecord> CheckpointCanonicalCursor<T> {
+    pub(crate) fn new(reader: &CanonicalSegmentReader) -> Self {
+        Self {
+            manifest: reader.manifest.clone(),
+            pending_descriptor: None,
+            current: Records::default(),
+            loading: SegmentLoad::default(),
+            descriptors: CheckpointDescriptorCursor::new(reader, T::KIND),
+        }
     }
 
     fn load(
@@ -311,7 +324,7 @@ impl<T: CheckpointCanonicalRecord> CheckpointCanonicalCursor<T> {
             // Release the exhausted array before admitting the next segment.
             self.current = Records::default();
             if self.pending_descriptor.is_none() {
-                self.pending_descriptor = self.next_descriptor(reader, work)?;
+                self.pending_descriptor = self.descriptors.next(reader, work)?;
             }
             if self.pending_descriptor.is_none() {
                 return Ok(None);

@@ -284,8 +284,8 @@ Bazel. A family description does not imply every leaf belongs to every lane.
 
 ### Automatic-checkpoint frontend deadline controls
 
-`//:hawdb_unit_general_tests` owns
-`api::automatic_checkpoint::tests::headroom` in the default-feature root CI lane
+`//:hawdb_unit_checkpoint_headroom_tests` owns
+`api::automatic_checkpoint::tests::headroom` in the isolated default-feature root CI lane
 (`background-maintenance` required). It retains the checked profile, 320-row
 write/reopen fixtures and
 target timeout ceilings. Functional idle/retiring/prepared-prefix tests freeze
@@ -1282,6 +1282,9 @@ execution lane changes. See [the cost model](OPTIMIZER_COST_MODEL.md).
   sparse IDs, overlapping labels, pinned checkpoint/delta/tombstone membership,
   cancellation, corruption and sticky budget/IO/memory refusals. Existing
   checkpoint accumulator cut/retry tests also cover resumable label inventory.
+  Descriptor admission is checked before both matching and Bloom-negative
+  decisions with cold and warm serving caches. Resident batches retain one
+  pinned COW iterator per step and check cancellation between every delivered row.
 - Existing default/minimal `hawdb_mvcc_staging_session` targets own the four
   `registered_consumer_defin` cases: canonical version/scope identity, graph/SQL
   catch-up and complete rebuild equality, target-version refusal/reopen, original

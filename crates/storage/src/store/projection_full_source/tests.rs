@@ -241,3 +241,39 @@ fn scoped_full_source_cancellation_between_steps_cannot_complete_or_poison_stora
     assert!(matches!(source.finish(), Err(ProjectionFeedError::Failed)));
     store.ensure_usable().unwrap();
 }
+
+#[test]
+fn scoped_full_source_checks_cancellation_between_rows_in_one_step() {
+    let mut catalog = Catalog::default();
+    let mut store = GraphStore::default();
+    for _ in 0..4 {
+        store
+            .create_node(&mut catalog, "Memory", BTreeMap::new())
+            .unwrap();
+    }
+    let token = hawdb_core::RuntimeCancellationToken::new();
+    let mut source = store
+        .capture_projection_source_domains(
+            budget(100, 16, 4096),
+            ProjectionFullSourceLimits::default(),
+            RuntimeTaskContext::without_deadline(token.clone()),
+            Some(vec![catalog.label_id("Memory").unwrap()]),
+            Some(vec![]),
+        )
+        .unwrap();
+    let mut delivered = 0;
+    let result = source.visit_next(budget(100, 16, 4096), |item| {
+        assert!(matches!(
+            item,
+            ProjectionFullSourceItem::GraphNodeCandidate { .. }
+        ));
+        delivered += 1;
+        token.cancel();
+        Ok(())
+    });
+    assert!(matches!(result, Err(ProjectionFeedError::Source(_))));
+    assert_eq!(delivered, 1);
+    assert!(!source.is_complete());
+    assert!(matches!(source.finish(), Err(ProjectionFeedError::Failed)));
+    store.ensure_usable().unwrap();
+}

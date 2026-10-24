@@ -615,44 +615,41 @@ impl ProjectionFullSourceCursor {
                 CanonicalLabelAction::End => self.label_base = None,
             }
         }
-        let next = self
-            .source
-            .nodes
-            .first_after(self.label_delta_after.as_ref())
-            .map(|(id, node)| (*id, node.labels.len()));
-        let Some((id, labels)) = next else {
-            self.label_nodes_complete = true;
-            return Ok(true);
-        };
-        let work = self.label_membership_work(labels);
-        if !self.charge(
-            step,
-            used,
-            work,
-            1,
-            8usize.saturating_add(labels.saturating_mul(4)),
-        )? {
-            return Ok(false);
-        }
-        let selected = self
-            .source
-            .nodes
-            .get(&id)
-            .expect("captured node")
-            .labels
-            .iter()
-            .any(|label| {
+        // One cheap COW owner keeps row borrows independent of mutable budget
+        // accounting. Seek once per step, then walk the captured pages directly.
+        let nodes = self.source.nodes.clone();
+        for (id, node) in nodes.iter_after(self.label_delta_after) {
+            self.source
+                .ensure_usable()
+                .map_err(ProjectionFeedError::Source)?;
+            self.task.checkpoint().map_err(|error| {
+                ProjectionFeedError::Source(HawDBError::Execution(error.to_string()))
+            })?;
+            let labels = node.labels.len();
+            let work = self.label_membership_work(labels);
+            if !self.charge(
+                step,
+                used,
+                work,
+                1,
+                8usize.saturating_add(labels.saturating_mul(4)),
+            )? {
+                return Ok(false);
+            }
+            let selected = node.labels.iter().any(|label| {
                 self.labels
                     .as_ref()
                     .expect("label scope")
                     .binary_search(label)
                     .is_ok()
             });
-        self.label_delta_after = Some(id);
-        if selected && !self.source.node_tombstones.contains(&id) {
-            visitor(ProjectionFullSourceItem::GraphNodeCandidate { node_id: id.0 })
-                .map_err(ProjectionFeedError::Callback)?;
+            self.label_delta_after = Some(*id);
+            if selected && !self.source.node_tombstones.contains(id) {
+                visitor(ProjectionFullSourceItem::GraphNodeCandidate { node_id: id.0 })
+                    .map_err(ProjectionFeedError::Callback)?;
+            }
         }
+        self.label_nodes_complete = true;
         Ok(true)
     }
 
