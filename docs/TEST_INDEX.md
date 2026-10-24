@@ -821,3 +821,15 @@ validation covers empty identifiers/state/relation and non-finite confidence
 before any database effect. The three database mutation adapters, twelve DTOs
 and final two Mem business forwarding methods are removed. Transaction and
 maintenance admission remain independent typed capabilities.
+
+### Skill lifecycle and source queries
+
+`api::tests::skill_lifecycle` retains eleven runtime cases from the root API
+module in the general Prow partition. Fixed bounded SET statements cover usage,
+optional success rate, metadata and lifecycle field groups. MATCH/MERGE/ON CREATE
+keeps source relationships idempotent, including stable identities/timestamps
+and unchanged WAL/epoch on retry or missing endpoints. Explicit transactions
+retain the single WAL batch and exact durable-reopen checks. Input normalization
+checks identifiers, lifecycle fields, nonnegative use count and finite bounded
+success rates. Four business adapters and fourteen DTOs are removed; their
+obsolete compile-only Skill DTO re-export identity assertion is removed too.

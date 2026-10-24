@@ -447,6 +447,11 @@ endpoint matching stay in Cypher; host helpers only normalize input. Their three
 database adapters, twelve DTOs and the last two Mem business forwarding methods
 are removed, including the now-unused business-mutation admission helper. Typed
 transaction, recovery, Consumer and projection lifecycle capabilities remain.
+Skill usage, metadata, lifecycle and source association fixtures also use fixed
+parameterized queries. Optional assignments remain separate statements; source
+MERGE/ON CREATE retains original relationship properties and identity on retry.
+These eleven runtime cases retain their CI owner, transaction/WAL boundaries
+and reopen assertions without the four business methods or fourteen DTOs.
 Remaining legacy business adapters still require migration; this removal does
 not complete issue #1193.
 
