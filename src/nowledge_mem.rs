@@ -2901,6 +2901,7 @@ impl NowledgeMemEmbeddedStoreHandle {
             .database()
             .columnar_shadow_admission_bytes()?;
         let _permit = self.admit_typed_maintenance(
+            RuntimeWorkPriority::Foreground,
             usize::try_from(shadow_admission_bytes).unwrap_or(usize::MAX),
             1,
         )?;
@@ -3209,7 +3210,11 @@ impl NowledgeMemEmbeddedStoreHandle {
                     .map(|identity| identity.document_id.len())
                     .sum::<usize>(),
             );
-        let _permit = self.admit_typed_maintenance(estimated_input_bytes, 1)?;
+        let _permit = self.admit_typed_maintenance(
+            RuntimeWorkPriority::Background,
+            estimated_input_bytes,
+            1,
+        )?;
         self.write_store()?
             .graph_mut()
             .database_mut()
@@ -3250,7 +3255,11 @@ impl NowledgeMemEmbeddedStoreHandle {
         delta: SearchProjectionDelta,
         import_source_graph_commit_epoch: u64,
     ) -> Result<SearchProjectionDeltaReport> {
-        let _permit = self.admit_typed_maintenance(search_projection_delta_bytes(&delta), 1)?;
+        let _permit = self.admit_typed_maintenance(
+            RuntimeWorkPriority::Background,
+            search_projection_delta_bytes(&delta),
+            1,
+        )?;
         self.write_store()?
             .apply_initial_import_projection_delta_and_checkpoint(
                 delta,
@@ -3674,7 +3683,11 @@ impl NowledgeMemEmbeddedStoreHandle {
         let estimated_operations = max_operations_per_batch.saturating_mul(max_batches);
         let estimated_input_bytes =
             estimated_operations.saturating_mul(SEARCH_PROJECTION_CHANGEFEED_OPERATION_BYTES);
-        let _permit = self.admit_typed_maintenance(estimated_input_bytes, 1)?;
+        let _permit = self.admit_typed_maintenance(
+            RuntimeWorkPriority::Background,
+            estimated_input_bytes,
+            1,
+        )?;
         self.write_store()?
             .catch_up_search_projection(max_operations_per_batch, max_batches)
     }
@@ -3696,7 +3709,11 @@ impl NowledgeMemEmbeddedStoreHandle {
         let estimated_operations = max_operations_per_batch.saturating_mul(max_batches);
         let estimated_input_bytes =
             estimated_operations.saturating_mul(SEARCH_PROJECTION_CHANGEFEED_OPERATION_BYTES);
-        let _permit = self.admit_typed_maintenance(estimated_input_bytes, 1)?;
+        let _permit = self.admit_typed_maintenance(
+            RuntimeWorkPriority::Background,
+            estimated_input_bytes,
+            1,
+        )?;
         self.write_store()?
             .catch_up_search_projection_with_relational(
                 max_operations_per_batch,
@@ -3823,7 +3840,11 @@ impl NowledgeMemEmbeddedStoreHandle {
         let estimated_operations = max_operations_per_batch.saturating_mul(max_batches);
         let estimated_input_bytes =
             estimated_operations.saturating_mul(SEARCH_PROJECTION_CHANGEFEED_OPERATION_BYTES);
-        let _permit = self.admit_typed_maintenance(estimated_input_bytes, 1)?;
+        let _permit = self.admit_typed_maintenance(
+            RuntimeWorkPriority::Background,
+            estimated_input_bytes,
+            1,
+        )?;
         self.write_store()?
             .catch_up_search_projection_scheduled(max_operations_per_batch, max_batches)
     }
@@ -4005,6 +4026,7 @@ impl NowledgeMemEmbeddedStoreHandle {
 
     fn admit_typed_maintenance(
         &self,
+        priority: RuntimeWorkPriority,
         estimated_input_bytes: usize,
         io_slots: usize,
     ) -> Result<RuntimePermit> {
@@ -4015,11 +4037,11 @@ impl NowledgeMemEmbeddedStoreHandle {
                 .unwrap_or(u64::MAX);
         let estimated_input_bytes = u64::try_from(estimated_input_bytes).unwrap_or(u64::MAX);
         store.graph.try_admit_runtime(
-            RuntimeWorkRequest::background_maintenance(
-                working_memory_bytes.saturating_add(estimated_input_bytes),
-            )
-            .with_io_slots(io_slots)
-            .with_blocking(true),
+            RuntimeWorkRequest::new(priority, RuntimeWorkKind::Maintenance)
+                .with_cpu_slots(1)
+                .with_memory_bytes(working_memory_bytes.saturating_add(estimated_input_bytes))
+                .with_io_slots(io_slots)
+                .with_blocking(true),
         )
     }
 

@@ -240,6 +240,7 @@ the cumulative snapshot ledger; ordinary reads keep their 8 KiB snapshot cap.
 
 | Target / family | What it detects | Notes |
 | --- | --- | --- |
+| `//:hawdb_manual_checkpoint_tests`, `//:hawdb_manual_checkpoint_minimal_tests` | Explicit ordinary/concurrent/embedded checkpoints preserve durable publication independently of background support/admission. Embedded controls retain one same-governor background or foreground I/O permit, distinguish allowed foreground work from legitimate refusal, and check reopen and refunds. | Existing default/minimal public-consumer carriers and profiles; replay `cargo test --locked --test manual_checkpoint`, adding `--no-default-features` for minimal. The existing root automatic-checkpoint `publication_io` family also pauses the actual owner with its acquired wave, observes manual suspension, and checks durable completion/refunds under [#1219](https://github.com/nowledge-co/hawdb/issues/1219). |
 | `//:hawdb_unit_general_tests` | Embedded API, schema/query and general facade regressions | Shared unit executable; partition script assigns each discovered case an owner. |
 | `//:hawdb_unit_concurrent_tests` | Transaction locks, read observation, commit admission and concurrent publication races | Known long target: [#972](https://github.com/nowledge-co/hawdb/issues/972). Preserve barriers and observations; a deadline is not a substitute for a deterministic schedule. |
 | Covered pessimistic graph mutations (`covered_graph`) and concurrent metrics (`api::concurrent::metrics::tests`) | Retained staged results under existing locks, new-target/upgrade replay, stale-epoch refusal, lock timeout/retry, rollback, failed-statement atomicity, durable reopen, disabled-by-default instrumentation and explicit metrics inspection during writer ownership | Owned by `//:hawdb_unit_concurrent_tests`; local replay with `--test_arg=covered_graph` or `--test_arg=api::concurrent::metrics::tests`. Assertions use work counts and final rows rather than timing thresholds. |
@@ -576,6 +577,14 @@ does not retain a reader pin. Embedded template-cache tests require one lookup p
 request, including disabled caches and non-deterministic bypasses. The
 `HawDBPreparedAdmission` model and four negative controls cover the ownership
 transition independently of query execution.
+## Windows native contract ownership
+
+The native workflow runs seven independent Bazel shards and a separate strict
+Cargo Clippy job. The original `Windows native contracts` check requires every
+result to pass. See [Windows native CI](WINDOWS_NATIVE_CI.md) for the complete
+selection/profile/count matrix, cache policy, cold-build costs and local replay.
+The daily/manual abandonment lane remains separate and requires eight passing
+cases with the selected 1/2/4/8-thread setting. No fuzz campaign is added.
 
 ## Strict append preparation
 
@@ -771,3 +780,32 @@ CASE-normalized source predicates, target exclusions and identity-property
 matching. They preserve duplicate/missing/filtered targets, unchanged storage
 identities, optional timestamps, retry no-op epochs, invalid property syntax and
 one-batch WAL/reopen in the existing root API partition.
+## License hook and subprocess lease handshake
+
+- `scripts/check-license-headers.test.py` is a local pinned-HawkEye fixture
+  check for full/SPDX forms, Python/Shell shebangs, excluded/unsupported files,
+  mixed valid/invalid batches, wrong owners/licenses and byte preservation.
+  The staged-file hook uses the same HawkEye rules for both header templates.
+- `//crates/storage:hawdb_storage_tests` owns the cross-process directory lease
+  case `ownership::tests::rejects_lease_held_by_another_process`. The child keeps
+  the lease until a parent pipe notification, avoiding its former ten-second
+  self-expiry under CPU contention. Parent exit closes the pipe; the ordinary
+  finite test deadline remains the outer bound. Native Cargo/Windows ownership
+  lanes retain the same exclusion assertion.
+
+## Native Go shared-library runfiles
+
+`//bindings/go:hawdb_go_tests` resolves the single runtime file exposed by
+`//bindings/ffi:hawdb_ffi_runtime`. The projection reuses the existing Rust
+cdylib output and preserves its runtime runfiles; it creates no compilation or
+copy action. The original `//bindings/ffi:hawdb_ffi` still provides the complete
+linker outputs, including the Windows `.dll.lib` import library. Passing that
+multi-file target to `rlocationpath` fails Windows analysis before Go executes.
+Existing Go TestMain resolves the path through the runfiles API (including
+Windows manifests) and actual bindings tests exercise dynamic loading on all
+three native CI platforms. Windows uses the bindings feature profile and fresh
+Go test results; the Unix native binding jobs retain their existing profile.
+
+The native feature inventory audit also requires the independent telemetry
+Bazel spec and lock to match the workspace Cargo.lock package version, source
+and checksum. Update them together when upgrading the optional dependency.

@@ -1,6 +1,8 @@
 load("@crate_index//:defs.bzl", "aliases", "all_crate_deps")
 load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
 
+load("//:windows_native_features.bzl", "windows_native_features")
+
 package(default_visibility = ["//visibility:public"])
 
 test_suite(
@@ -9,6 +11,7 @@ test_suite(
 
 rust_library(
     name = "hawdb_system_sql",
+    crate_features = windows_native_features("hawdb-system-sql", []),
     crate_name = "hawdb_system_sql",
     crate_root = "src/lib.rs",
     srcs = glob(["src/**/*.rs"]),

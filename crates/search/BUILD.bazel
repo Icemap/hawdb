@@ -1,6 +1,8 @@
 load("@crate_index//:defs.bzl", "aliases", "all_crate_deps")
 load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
 
+load("//:windows_native_features.bzl", "windows_native_features")
+
 package(default_visibility = ["//visibility:public"])
 
 filegroup(
@@ -73,7 +75,7 @@ rust_library(
     name = "hawdb_search",
     crate_name = "hawdb_search",
     crate_root = "src/lib.rs",
-    crate_features = _SEARCH_DEFAULT_FEATURES,
+    crate_features = windows_native_features("hawdb-search", _SEARCH_DEFAULT_FEATURES),
     srcs = glob(["src/**/*.rs"]) + ["tests/support/live_allocation.rs"],
     edition = "2024",
     aliases = aliases(),
@@ -145,7 +147,7 @@ rust_test(
     # Streamed document lifecycle coverage includes 128 MiB fixtures.
     timeout = "long",
     crate = ":hawdb_search",
-    crate_features = _SEARCH_DEFAULT_FEATURES,
+    crate_features = windows_native_features("hawdb-search", _SEARCH_DEFAULT_FEATURES),
     edition = "2024",
     aliases = aliases(normal_dev = True, proc_macro_dev = True),
     deps = all_crate_deps(normal_dev = True),

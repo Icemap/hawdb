@@ -70,6 +70,7 @@
 
 ## Required Pre-commit Lint Checks
 
+- The pinned HawkEye 7.2.0 pre-commit hook checks staged license headers against `licenserc.toml` before the Rust checks. The read-only wrapper also accepts canonical Nowledge Apache-2.0 SPDX short headers through HawkEye, without requiring unrelated header rewrites. It is read-only and uses an isolated environment. Preserve existing copyright evidence; full-tree historical header debt is distinct from staged-file validation.
 - Enable the repository's `prek.toml` hooks with `prek install`. Use `prek run --all-files` to run the formatting and native Clippy checks explicitly; the hooks also run automatically at pre-commit. Target-specific checks remain additional requirements.
 - Before every commit, run `cargo fmt --all -- --check` and `cargo clippy --locked --workspace --all-targets --all-features -- -D warnings` with the repository's pinned Rust toolchain. Both checks must pass on the final changes before committing.
 - Fix all formatting and Clippy diagnostics found by these checks, including problems in existing code outside the current diff. Do not dismiss a failure as pre-existing, disable a lint, add suppression attributes, or weaken the check to obtain a pass.
@@ -106,6 +107,8 @@
   by an explicit required CI step when excluded from ordinary checked suites.
 - Report first-build cost as well as execution time. Local improvements do not
   establish remote CI speedup; record final-head CI evidence before that claim.
+
+- Windows native contracts run as seven independent Bazel shards plus independent Cargo Clippy; the original required check aggregates their results. See [Windows native CI](docs/WINDOWS_NATIVE_CI.md) for feature ownership, cache layout and evidence. Keep disk/repository/external cache roots disjoint and preserve default/minimal/all-feature and daily qualification selections.
 
 ## Consumer Failure Recovery
 

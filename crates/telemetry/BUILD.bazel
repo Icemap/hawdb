@@ -1,6 +1,8 @@
 load("@crate_index//:defs.bzl", "aliases", "all_crate_deps")
 load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
 
+load("//:windows_native_features.bzl", "windows_native_feature_dependencies", "windows_native_features")
+
 package(default_visibility = ["//visibility:public"])
 
 test_suite(
@@ -9,12 +11,13 @@ test_suite(
 
 rust_library(
     name = "hawdb_telemetry",
+    crate_features = windows_native_features("hawdb-telemetry", []),
     crate_name = "hawdb_telemetry",
     crate_root = "src/lib.rs",
     srcs = glob(["src/**/*.rs"]),
     edition = "2024",
     aliases = aliases(),
-    deps = all_crate_deps(normal = True) + [
+    deps = windows_native_feature_dependencies("hawdb-telemetry", "opentelemetry", ["@telemetry_crates//:opentelemetry"]) + all_crate_deps(normal = True) + [
         "//crates/qos:hawdb_qos",
     ],
     proc_macro_deps = all_crate_deps(proc_macro = True),

@@ -12,7 +12,7 @@ entry = "cargo fmt --all -- --check"
 language = "system"
 pass_filenames = false
 always_run = true
-priority = 0
+priority = 1
 
 [[repos.hooks]]
 id = "cargo-clippy"
@@ -21,4 +21,14 @@ entry = "cargo clippy --locked --workspace --all-targets --all-features -- -D wa
 language = "system"
 pass_filenames = false
 always_run = true
-priority = 1
+priority = 2
+
+[[repos]]
+repo = "https://github.com/fast/hawkeye"
+rev = "12072370b89c4472ff8074e9e99582de1bfb696e" # v7.2.0
+
+[[repos.hooks]]
+id = "hawkeye-format"
+name = "HawkEye license header check (7.2.0)"
+entry = "python scripts/check-license-headers.py"
+priority = 0
