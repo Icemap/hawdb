@@ -452,6 +452,12 @@ parameterized queries. Optional assignments remain separate statements; source
 MERGE/ON CREATE retains original relationship properties and identity on retry.
 These eleven runtime cases retain their CI owner, transaction/WAL boundaries
 and reopen assertions without the four business methods or fourteen DTOs.
+Thread metadata/message counts, contained-message deletion, compaction links
+and identity deletion fixtures use fixed bounded parameterized statements.
+Timestamp eligibility, endpoint matching, graph traversal and cascade selection
+remain in query predicates; input helpers do not inspect graph state. The
+fifteen runtime cases preserve transaction/WAL and reopen assertions while
+removing five business methods, fifteen DTOs and four test read wrappers.
 Remaining legacy business adapters still require migration; this removal does
 not complete issue #1193.
 

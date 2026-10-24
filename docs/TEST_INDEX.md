@@ -833,3 +833,15 @@ retain the single WAL batch and exact durable-reopen checks. Input normalization
 checks identifiers, lifecycle fields, nonnegative use count and finite bounded
 success rates. Four business adapters and fourteen DTOs are removed; their
 obsolete compile-only Skill DTO re-export identity assertion is removed too.
+
+### Thread lifecycle and cleanup queries
+
+`api::tests::thread_lifecycle` moves fifteen existing runtime cases from the root
+API module into the same general Prow owner. Fixed bounded queries preserve
+optional metadata timestamps, first-input duplicate handling, message counts
+with newer-timestamp protection, repeated CONTAINS edges versus distinct deleted
+messages, compaction endpoint/idless protection and exact/cascade identity
+selection. Predicates and graph traversal remain in Cypher. Explicit transactions
+and bounded reads verify affected counts, no-op epochs, unchanged survivors,
+single WAL batches and exact reopen. Five business methods, fifteen DTOs, their
+graph-inspection helpers and four old test read wrappers are removed.
