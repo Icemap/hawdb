@@ -21,14 +21,24 @@ fn pause() -> (Arc<OwnerPauseProbe>, Receiver<()>, Sender<()>) {
 }
 
 fn create(db: &mut Database, id: i64) -> Result<()> {
-    db.query_with_params(
+    let control = db.runtime.checkpoint_control_for_test();
+    let initial_progress = control.work_progress.load(Ordering::Relaxed);
+    let started = Instant::now();
+    let result = db.query_with_params(
         "CREATE (:Memory {id: $id, body: $body})",
         &std::collections::BTreeMap::from([
             ("id".into(), crate::Value::Int(id)),
             ("body".into(), crate::Value::String("b".repeat(512))),
         ]),
-    )?;
-    Ok(())
+    );
+    if let Err(error) = &result {
+        let diagnostics = {
+            let state = control.state.try_lock().ok();
+            wait_diagnostics(&control, state.as_deref(), started, initial_progress)
+        };
+        eprintln!("headroom CREATE id={id} failed: {error:?}; {diagnostics}");
+    }
+    result.map(|_| ())
 }
 
 fn seeded(fixture: &Fixture) -> (Database, Suspension, i64) {

@@ -1,0 +1,210 @@
+{
+  "schema": "concurrent-writer-strict-gate-v2",
+  "created_utc": "2026-10-23T13:53:44.060506+00:00",
+  "baseline_revision": "a703cc0f18f549918c73f454cda521edb4f0fb13",
+  "candidate_head": "0f641a98f17898a8ea3dae6ddaaa46d641604ae3",
+  "candidate_status": "?? artifacts/\n?? scripts/__pycache__/\n",
+  "candidate_source_manifest_sha256": "2dff6307f444912f4e41e4d6a0378ff5ddd281363f433ef5d9a0f2e0e36a1cc4",
+  "candidate_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "harness_sha256": "802a8f19ef71ff149fb4a5a4c21b2d810d2b0d2b25eef07941792a38e562a498",
+  "reader_harness_sha256": "4b844fa1d028f509a29a7f272995fc36e4d41db3a2cb596cd17b6aa1a41e3c85",
+  "binary_sha256": {
+    "baseline": "db54e2747062dd68d322f808d472a27bcea87a29fefe1ad3ab1bcf8e013ee2ea",
+    "candidate": "2def3e2180ee209dae51ce8b3207e9c19fea9d931e69de8120ea01cabf455a57"
+  },
+  "binary_paths": {
+    "baseline": "/home/runner/work/hawdb/hawdb/artifacts/strict-writer-gate/baseline-concurrent-writers",
+    "candidate": "/home/runner/work/hawdb/hawdb/artifacts/strict-writer-gate/candidate-concurrent-writers"
+  },
+  "cargo_lock_sha256": {
+    "baseline": "70b29b5fa5552b3657e8fcf49a1f2f49b9d0a1b7aaec2210e6f46bfbb69bc575",
+    "candidate": "d06d2c813a3ff92fbc0216b241943049a9652c2c26440d87cf09f5c73db8b019"
+  },
+  "effective_cargo_config_sha256": "06c7ca26d39223bd90a6412acd8609c380ce2d1650a72b70c90171656ca89819",
+  "build_profile": "bench; opt-level=3, codegen-units=1, thin LTO, strip=none; both builds invoked from candidate repository",
+  "toolchain": "Rust 1.97.1",
+  "default_features": true,
+  "baseline_overlay": "identical writer harness and Cargo benchmark registration only",
+  "measured_pairs": 40,
+  "warm_up_pairs": 1,
+  "interval_ranks_one_based": [
+    11,
+    30
+  ],
+  "writers": 1,
+  "readers": 2,
+  "cpu_topology": {
+    "cpu": {
+      "schema": "writer-cpu-topology-v1",
+      "affinity_cpus": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "allowed_logical_cpus": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "physical_cores": [
+        {
+          "package": 0,
+          "core": 0,
+          "logical_cpus": [
+            0,
+            1
+          ]
+        },
+        {
+          "package": 0,
+          "core": 1,
+          "logical_cpus": [
+            2,
+            3
+          ]
+        }
+      ],
+      "cpuset_masks": [
+        {
+          "path": "/sys/fs/cgroup/system.slice/hosted-compute-agent.service/cpuset.cpus.effective",
+          "cpus": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "path": "/sys/fs/cgroup/system.slice/cpuset.cpus.effective",
+          "cpus": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "path": "/sys/fs/cgroup/cpuset.cpus.effective",
+          "cpus": [
+            0,
+            1,
+            2,
+            3
+          ]
+        }
+      ],
+      "quota_limits": [
+        {
+          "path": "/sys/fs/cgroup/system.slice/hosted-compute-agent.service/cpu.max",
+          "quota": "max",
+          "period": "100000",
+          "cores": null
+        },
+        {
+          "path": "/sys/fs/cgroup/system.slice/cpu.max",
+          "quota": "max",
+          "period": "100000",
+          "cores": null
+        }
+      ],
+      "effective_cpu_cores": "2",
+      "maximum_writers": 1,
+      "writer_counts": [
+        1
+      ],
+      "multi_writer_coverage": false,
+      "rule": "max(1, floor(min(allowed physical cores, visible ancestor quota/period) / 2))",
+      "visibility": "visible cgroup mount ancestors only; physical topology as exposed by the host or VM"
+    },
+    "cohorts": [
+      [
+        1,
+        0
+      ],
+      [
+        1,
+        1
+      ],
+      [
+        1,
+        2
+      ],
+      [
+        4,
+        0
+      ],
+      [
+        4,
+        4
+      ],
+      [
+        4,
+        8
+      ],
+      [
+        8,
+        0
+      ],
+      [
+        8,
+        8
+      ],
+      [
+        8,
+        16
+      ]
+    ],
+    "writer_counts_override": [
+      1,
+      4,
+      8
+    ],
+    "reader_counts_override": null,
+    "manual_override": true,
+    "exceeds_auto_writer_limit": true,
+    "multi_writer_coverage": true,
+    "mixed_coverage": true
+  },
+  "fixture_profile": "post-checkpoint-control",
+  "reopen_before_measure": false,
+  "primary_endpoints": [
+    [
+      "commit_latency",
+      "p50_ns"
+    ],
+    [
+      "commit_latency",
+      "p95_ns"
+    ],
+    [
+      "commit_latency",
+      "p99_ns"
+    ],
+    [
+      "workload",
+      "elapsed_ns"
+    ],
+    [
+      "read_latency",
+      "p50_ns"
+    ],
+    [
+      "read_latency",
+      "p95_ns"
+    ],
+    [
+      "read_latency",
+      "p99_ns"
+    ]
+  ],
+  "primary_endpoint_count": 21,
+  "primary_cases": "non-serialized API in memory, durable ungrouped, durable grouped",
+  "pass_rule": "all unrounded upper ratio endpoints <= 1.0; no adaptive stopping or sample removal",
+  "coverage": "95% simultaneous intervals within this cohort only; no joint matrix claim",
+  "order": "baseline first for even pairs, candidate first for odd pairs; alternate --round 0/1",
+  "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+  "filesystem": "Filesystem     Type 1K-blocks     Used Available Use% Mounted on\n/dev/root      ext4 151263856 63986680  87260792  43% /\n",
+  "limitations": "shared host; no exclusive machine, affinity, cache flush, or power-loss claim; median-ratio intervals assume independent pairs from continuous distributions"
+}

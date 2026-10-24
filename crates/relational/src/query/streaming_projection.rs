@@ -64,6 +64,7 @@ pub(super) fn execute_ordered_index_projection<'a>(
             .min(pipeline.batch_rows),
     );
     let mut payload_bytes = 0usize;
+    let copies = super::projection_memory::copy_account(memory_ledger);
     let mut locator_batch = AccountedRelationalLocatorBatch::new(
         execution_memory.batch_rows.get(),
         execution_memory.batch_payload_bytes,
@@ -110,6 +111,14 @@ pub(super) fn execute_ordered_index_projection<'a>(
                     row: Some(row),
                 }],
             };
+            let _copies = super::projection_memory::admit_ordinary(
+                select,
+                &bound,
+                parameters,
+                &copies,
+                usize::MAX,
+                false,
+            )?;
             let projected = project_bound_row(&bound, &select.projection, parameters)?;
             payload_bytes = payload_bytes.saturating_add(map_payload_bytes(&projected));
             if payload_bytes > limits.max_output_payload_bytes {
@@ -187,6 +196,7 @@ pub(super) fn execute_streaming_projection<'a>(
     >,
     row_runtime: &RelationalRowRuntime<'a>,
     limits: RelationalQueryLimits,
+    memory_ledger: &QueryMemoryLedger,
 ) -> Result<StreamingProjectionOutput> {
     if tree_execution.is_none_or(|execution| execution.tree.root.relation_count() == 1)
         && joins.is_empty()
@@ -197,10 +207,10 @@ pub(super) fn execute_streaming_projection<'a>(
             select,
             parameters,
             base_schema,
-            base_qualifier,
             pipeline,
             row_runtime,
             limits,
+            memory_ledger,
         );
     }
     let mut offset = usize::try_from(bind_bound(select.offset, parameters, "OFFSET")?.unwrap_or(0))
@@ -228,6 +238,7 @@ pub(super) fn execute_streaming_projection<'a>(
     };
     let mut output = Vec::with_capacity(capacity);
     let mut payload_bytes = 0usize;
+    let copies = super::projection_memory::copy_account(memory_ledger);
     if requested != 0 {
         visit_relational_rows(
             select,
@@ -259,6 +270,14 @@ pub(super) fn execute_streaming_projection<'a>(
                         ),
                     ));
                 }
+                let _copies = super::projection_memory::admit_ordinary(
+                    select,
+                    &row,
+                    parameters,
+                    &copies,
+                    usize::MAX,
+                    false,
+                )?;
                 let projected = project_bound_row(&row, &select.projection, parameters)?;
                 payload_bytes = payload_bytes.saturating_add(map_payload_bytes(&projected));
                 if payload_bytes > limits.max_output_payload_bytes {
@@ -286,11 +305,15 @@ pub(super) fn execute_borrowed_streaming_full_scan(
     select: &SelectStatement,
     parameters: &[Value],
     schema: &RelationalTableSchema,
-    qualifier: &str,
     pipeline: &mut RelationalPipelineState<'_>,
     row_runtime: &RelationalRowRuntime<'_>,
     limits: RelationalQueryLimits,
+    memory_ledger: &QueryMemoryLedger,
 ) -> Result<StreamingProjectionOutput> {
+    let qualifier = select
+        .from_alias
+        .as_deref()
+        .unwrap_or(&select.from_table().name);
     let predicate = select
         .selection
         .as_ref()
@@ -327,6 +350,7 @@ pub(super) fn execute_borrowed_streaming_full_scan(
     );
     let mut output_rows = 0usize;
     let mut payload_bytes = 0usize;
+    let copies = super::projection_memory::copy_account(memory_ledger);
     if requested != 0 {
         pipeline.begin_operator_pipeline();
         let fully_consumed = row_runtime.visit_all_ref(&select.from_table().name, |row| {
@@ -356,6 +380,7 @@ pub(super) fn execute_borrowed_streaming_full_scan(
                     ),
                 ));
             }
+            let _copies = projection.admit_copy(row, &copies)?;
             projection.project_into(
                 row,
                 &mut output,

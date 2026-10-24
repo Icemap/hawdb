@@ -1,0 +1,56 @@
+[
+    {
+        "Id": "sha256:77fac8b98f9f46062bb680b6d25d5bcaabfc400143952ebc572e924bcbedc3fa",
+        "RepoTags": [
+            "rust:1.97.1-bookworm"
+        ],
+        "RepoDigests": [
+            "rust@sha256:77fac8b98f9f46062bb680b6d25d5bcaabfc400143952ebc572e924bcbedc3fa"
+        ],
+        "Comment": "buildkit.dockerfile.v0",
+        "Created": "2026-07-16T18:38:38.018400353Z",
+        "Config": {
+            "Env": [
+                "PATH=/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "RUSTUP_HOME=/usr/local/rustup",
+                "CARGO_HOME=/usr/local/cargo",
+                "RUST_VERSION=1.97.1"
+            ],
+            "Cmd": [
+                "bash"
+            ],
+            "Labels": {
+                "org.opencontainers.image.source": "https://github.com/rust-lang/docker-rust"
+            }
+        },
+        "Architecture": "arm64",
+        "Variant": "v8",
+        "Os": "linux",
+        "Size": 2088538611,
+        "RootFS": {
+            "Type": "layers",
+            "Layers": [
+                "sha256:e18c028dc018533df422ccc01673b0c502b71c91718e329fc32823cd987c35b1",
+                "sha256:8efeade7480506727e403a70a6af55ff20fcbf157ba333a276f11bc9148f641c",
+                "sha256:18fcbe5c6364b23bfa01fef8ecf474d48921f9640ceffe5b8bc1d996f138eb63",
+                "sha256:74fa347ddf885f5ed8841f5084c0e1026cb887eb2e49d33fcf6c97cb054a286f",
+                "sha256:39c56722cff760f90da847c641be3465feed9785aa7c830f8cf8057a81e72089"
+            ]
+        },
+        "Metadata": {
+            "LastTagTime": "2026-07-28T07:42:15.976593008Z"
+        },
+        "Descriptor": {
+            "mediaType": "application/vnd.oci.image.index.v1+json",
+            "digest": "sha256:77fac8b98f9f46062bb680b6d25d5bcaabfc400143952ebc572e924bcbedc3fa",
+            "size": 7752
+        },
+        "Identity": {
+            "Pull": [
+                {
+                    "Repository": "docker.io/library/rust"
+                }
+            ]
+        }
+    }
+]

@@ -1,0 +1,8 @@
+{
+  "source_verified_files": 4927,
+  "source_clean": true,
+  "local_bazel_exit": 0,
+  "mvcc_exit": 0,
+  "docker_build_exit": 0,
+  "started_utc": "2026-10-23T19:46:13.378126+00:00"
+}

@@ -1,0 +1,6 @@
+{
+  "head": "823e8e9c735050dcafb3e0bf024e12f0a46ea140",
+  "verified_files": 4927,
+  "source_clean": true,
+  "prototype_overlays_retained_in": "read-probe-gated-v1/source.patch plus probes.rs.txt"
+}

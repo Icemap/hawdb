@@ -1,0 +1,22 @@
+{
+  "command": [
+    "/build/release/deps/consumer_publication-ee5e1a723b428eea",
+    "--mode",
+    "detached",
+    "--writers",
+    "1",
+    "--documents",
+    "32",
+    "--payload",
+    "128",
+    "--writes",
+    "64",
+    "--quiet-samples",
+    "1",
+    "--root",
+    "/fixtures/default-smoke-qs_kffr0/database"
+  ],
+  "returncode": 0,
+  "seconds_including_setup": 0.9423368759999999,
+  "scope": "correctness only, not qualified timing"
+}

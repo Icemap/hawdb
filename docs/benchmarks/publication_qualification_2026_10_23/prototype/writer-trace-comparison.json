@@ -1,0 +1,86 @@
+{
+  "before": [
+    {
+      "case": 2,
+      "thread": 323,
+      "statx": 7937,
+      "openat": 256,
+      "close": 256,
+      "write": 256,
+      "fdatasync": 256,
+      "fsync": 1
+    },
+    {
+      "case": 3,
+      "thread": 327,
+      "statx": 7937,
+      "openat": 256,
+      "close": 256,
+      "write": 256,
+      "fdatasync": 256,
+      "fsync": 1
+    },
+    {
+      "case": 4,
+      "thread": 331,
+      "statx": 8449,
+      "openat": 256,
+      "close": 256,
+      "write": 256,
+      "fdatasync": 256,
+      "fsync": 1
+    },
+    {
+      "case": 5,
+      "thread": 335,
+      "statx": 8449,
+      "openat": 256,
+      "close": 256,
+      "write": 256,
+      "fdatasync": 256,
+      "fsync": 1
+    }
+  ],
+  "after": [
+    {
+      "case": 2,
+      "thread": 17,
+      "statx": 1537,
+      "openat": 0,
+      "close": 0,
+      "write": 256,
+      "fdatasync": 256,
+      "fsync": 1
+    },
+    {
+      "case": 3,
+      "thread": 21,
+      "statx": 1537,
+      "openat": 0,
+      "close": 0,
+      "write": 256,
+      "fdatasync": 256,
+      "fsync": 1
+    },
+    {
+      "case": 4,
+      "thread": 25,
+      "statx": 2049,
+      "openat": 0,
+      "close": 0,
+      "write": 256,
+      "fdatasync": 256,
+      "fsync": 1
+    },
+    {
+      "case": 5,
+      "thread": 29,
+      "statx": 2049,
+      "openat": 0,
+      "close": 0,
+      "write": 256,
+      "fdatasync": 256,
+      "fsync": 1
+    }
+  ]
+}

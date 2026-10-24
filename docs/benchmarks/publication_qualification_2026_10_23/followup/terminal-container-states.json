@@ -1,0 +1,54 @@
+{
+  "hawdb-1119-budget-correction-build-1": {
+    "Status": "exited",
+    "Running": false,
+    "Paused": false,
+    "Restarting": false,
+    "OOMKilled": false,
+    "Dead": false,
+    "Pid": 0,
+    "ExitCode": 0,
+    "Error": "",
+    "StartedAt": "2026-10-23T16:05:09.217164292Z",
+    "FinishedAt": "2026-10-23T16:07:12.408893627Z"
+  },
+  "hawdb-1119-budget-correction-measure-1": {
+    "Status": "exited",
+    "Running": false,
+    "Paused": false,
+    "Restarting": false,
+    "OOMKilled": false,
+    "Dead": false,
+    "Pid": 0,
+    "ExitCode": 0,
+    "Error": "",
+    "StartedAt": "2026-10-23T16:08:18.526515129Z",
+    "FinishedAt": "2026-10-23T16:40:41.297976334Z"
+  },
+  "hawdb-1119-staging-budget-proof-1": {
+    "Status": "exited",
+    "Running": false,
+    "Paused": false,
+    "Restarting": false,
+    "OOMKilled": false,
+    "Dead": false,
+    "Pid": 0,
+    "ExitCode": 0,
+    "Error": "",
+    "StartedAt": "2026-10-23T15:43:15.676984046Z",
+    "FinishedAt": "2026-10-23T15:51:42.30505217Z"
+  },
+  "hawdb-1119-fixed-helper-proof-1": {
+    "Status": "exited",
+    "Running": false,
+    "Paused": false,
+    "Restarting": false,
+    "OOMKilled": false,
+    "Dead": false,
+    "Pid": 0,
+    "ExitCode": 0,
+    "Error": "",
+    "StartedAt": "2026-10-23T16:54:35.203723084Z",
+    "FinishedAt": "2026-10-23T16:58:12.63123517Z"
+  }
+}

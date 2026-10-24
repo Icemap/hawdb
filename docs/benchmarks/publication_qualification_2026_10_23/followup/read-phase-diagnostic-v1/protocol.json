@@ -1,0 +1,49 @@
+{
+  "revisions": {
+    "baseline": "8e9eab185ef880794d216d99ac6cd57442c511aa",
+    "candidate": "823e8e9c735050dcafb3e0bf024e12f0a46ea140"
+  },
+  "harness_sha256": {
+    "benches/concurrent_writers.rs": "bb339b6a53eb1a615e23eaa51c50c232c13b516f86aafed6df1b17829c1a46ca",
+    "benches/concurrent_writers/readers.rs": "b88432bd539de8b925055cbd4bcf4d56835ee6dc799544ad29ab40a98f97fc31"
+  },
+  "scope": "diagnostic only; not acceptance and no replacement of strict gate",
+  "cases": "full original six-case harness, 256 writes, 64 reads per reader, exact 256-row query and all assertions retained",
+  "cohorts": [
+    {
+      "writers": 1,
+      "readers": 2,
+      "reopen": false
+    },
+    {
+      "writers": 8,
+      "readers": 16,
+      "reopen": false
+    },
+    {
+      "writers": 1,
+      "readers": 2,
+      "reopen": true
+    },
+    {
+      "writers": 8,
+      "readers": 16,
+      "reopen": true
+    }
+  ],
+  "pairs": 4,
+  "order": "alternate baseline/candidate; all builds complete before first measurement; fresh fixtures per process",
+  "phases": {
+    "capture": "begin_read_transaction",
+    "query": "commit_epoch plus original full query",
+    "drop": "drop read transaction"
+  },
+  "perturbation": "two extra Instant calls per request; vector writes after total timestamp. Instrumented latency must not be pooled with the original gate.",
+  "interpretation": "Linux arm64 local Docker VM, four CPU quota / six GiB; cannot prove cause of remote x86_64 regression by itself",
+  "accepted_build_labels": {
+    "baseline": "baseline-isolated",
+    "candidate": "candidate"
+  },
+  "baseline_target_directory": "/build/read-phase-baseline-v1",
+  "invalid_build_retained": "invalid-baseline-build.json"
+}

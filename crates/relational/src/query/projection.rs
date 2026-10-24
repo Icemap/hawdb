@@ -108,6 +108,7 @@ impl<R: crate::index_runtime::RelationalIndexStoreReader> BindingBatchSource<()>
             self.batch_memory,
             self.memory_ledger,
         );
+        let copies = super::projection_memory::copy_account(self.memory_ledger);
         let mut control = BatchControl::Continue;
         visit_relational_rows(
             self.select,
@@ -129,6 +130,11 @@ impl<R: crate::index_runtime::RelationalIndexStoreReader> BindingBatchSource<()>
                 if matches!(value, RelationalValue::Null) {
                     return Ok(true);
                 }
+                let _copies = super::projection_memory::admit_distinct_value(
+                    value,
+                    &copies,
+                    self.batch_memory.get(),
+                )?;
                 control = batch.push(
                     ExecutorBinding::scalar("value", relational_sort_value(value)?),
                     emit,
@@ -161,6 +167,12 @@ impl<R: crate::index_runtime::RelationalIndexStoreReader> BindingBatchSource<()>
             self.batch_memory,
             self.memory_ledger,
         );
+        let account = self.memory_ledger.account(
+            super::QueryMemoryClass::PipelineBatch,
+            "relational projection copies",
+            NonZeroUsize::new(self.memory_ledger.snapshot().budget_bytes)
+                .expect("query budget is non-zero"),
+        );
         let mut control = BatchControl::Continue;
         visit_relational_rows(
             self.select,
@@ -175,6 +187,14 @@ impl<R: crate::index_runtime::RelationalIndexStoreReader> BindingBatchSource<()>
             self.index_runtime,
             self.row_runtime,
             &mut |row| {
+                let _copies = super::projection_memory::admit_ordinary(
+                    self.select,
+                    &row,
+                    self.parameters,
+                    &account,
+                    self.batch_memory.get(),
+                    self.add_order_keys,
+                )?;
                 let mut projected =
                     project_bound_row(&row, &self.select.projection, self.parameters)?;
                 if self.add_order_keys {
@@ -230,6 +250,8 @@ impl BindingBatchSource<()> for DistinctBatchSource<'_> {
 pub(super) struct ProjectedSortKeyBatchSource<'a> {
     pub(super) input: &'a mut dyn BindingBatchSource<()>,
     pub(super) order_columns: &'a [(String, hawdb_sql::SqlOrderItem)],
+    pub(super) memory: &'a hawdb_executor::ExecutionMemoryConfig,
+    pub(super) memory_ledger: &'a QueryMemoryLedger,
 }
 
 impl BindingBatchSource<()> for ProjectedSortKeyBatchSource<'_> {
@@ -239,9 +261,34 @@ impl BindingBatchSource<()> for ProjectedSortKeyBatchSource<'_> {
         execution_limit: ExecutionLimit,
         emit: &mut dyn FnMut(BindingBatch) -> Result<BatchControl>,
     ) -> Result<BatchControl> {
-        self.input
-            .execute(input_plan, execution_limit, &mut |mut batch| {
-                for binding in &mut batch {
+        let account = self.memory_ledger.account(
+            super::QueryMemoryClass::PipelineBatch,
+            "relational DISTINCT ordering copies",
+            self.memory.query_memory_bytes,
+        );
+        let mut output = AccountedBindingBatch::with_ledger(
+            "RelationalDistinctOrderingExec",
+            self.memory.batch_rows.get(),
+            self.memory.batch_payload_bytes,
+            self.memory_ledger,
+        );
+        let control = self
+            .input
+            .execute(input_plan, execution_limit, &mut |batch| {
+                let mut incoming = account.reserve(
+                    batch
+                        .iter()
+                        .map(hawdb_executor::binding::binding_memory_bytes)
+                        .fold(0usize, usize::saturating_add),
+                )?;
+                for mut binding in batch {
+                    let original_bytes = hawdb_executor::binding::binding_memory_bytes(&binding);
+                    let _copies = super::projection_memory::admit_projected_order_keys(
+                        &binding,
+                        self.order_columns,
+                        &account,
+                        self.memory.batch_payload_bytes.get(),
+                    )?;
                     for (ordinal, (column, item)) in self.order_columns.iter().enumerate() {
                         let value = binding.values.get(column).cloned().ok_or_else(|| {
                             HawDBError::Semantic(format!(
@@ -257,9 +304,18 @@ impl BindingBatchSource<()> for ProjectedSortKeyBatchSource<'_> {
                             postgres_sort_key(value, item.direction, item.nulls),
                         );
                     }
+                    let control = output.push(binding, emit)?;
+                    incoming.shrink(original_bytes);
+                    if control == BatchControl::Stop {
+                        return Ok(control);
+                    }
                 }
-                emit(batch)
-            })
+                Ok(BatchControl::Continue)
+            })?;
+        if control == BatchControl::Stop {
+            return Ok(control);
+        }
+        output.emit(emit)
     }
 }
 
@@ -379,6 +435,8 @@ pub(super) fn execute_blocking_projection<'a>(
             let mut keyed = ProjectedSortKeyBatchSource {
                 input: &mut distinct,
                 order_columns: &order_columns,
+                memory,
+                memory_ledger,
             };
             execute_relational_order(
                 &input_plan,
@@ -442,6 +500,11 @@ pub(super) fn execute_blocking_projection<'a>(
             },
         )?;
     } else {
+        let copies = memory_ledger.account(
+            super::QueryMemoryClass::PipelineBatch,
+            "relational ordering copies",
+            memory.query_memory_bytes,
+        );
         let locator_layout = match tree_execution {
             Some(execution) => relational_physical_join_plan_locator_layout(state, execution.tree)?,
             None => relational_locator_layout(
@@ -473,6 +536,12 @@ pub(super) fn execute_blocking_projection<'a>(
             index_runtime,
             row_runtime,
             &mut |row| {
+                let _copies = super::projection_memory::admit_sort_input(
+                    select,
+                    &row,
+                    &copies,
+                    memory.blocking_operator_bytes.get(),
+                )?;
                 let sort_keys = select
                     .order_by
                     .iter()
@@ -505,6 +574,8 @@ pub(super) fn execute_blocking_projection<'a>(
                 select,
                 parameters,
                 row_runtime,
+                &copies,
+                usize::MAX,
             )?;
             push_relational_output(row, &mut output, &mut payload_bytes, limits)?;
             Ok(output.len() < detection_limit)

@@ -1,0 +1,54 @@
+[
+  {
+    "case": "one-writer",
+    "command": [
+      "/build/release/deps/consumer_publication-ee5e1a723b428eea",
+      "--root",
+      "/fixtures/read-probe-proof-1-one-writer",
+      "--mode",
+      "detached",
+      "--writers",
+      "1",
+      "--documents",
+      "32",
+      "--payload",
+      "128",
+      "--writes",
+      "256",
+      "--quiet-samples",
+      "1",
+      "--readers",
+      "1",
+      "--reads-per-reader",
+      "16"
+    ],
+    "returncode": 0,
+    "read_overlap_qualified": false
+  },
+  {
+    "case": "eight-writers",
+    "command": [
+      "/build/release/deps/consumer_publication-ee5e1a723b428eea",
+      "--root",
+      "/fixtures/read-probe-proof-1-eight-writers",
+      "--mode",
+      "detached",
+      "--writers",
+      "8",
+      "--documents",
+      "512",
+      "--payload",
+      "1024",
+      "--writes",
+      "256",
+      "--quiet-samples",
+      "1",
+      "--readers",
+      "8",
+      "--reads-per-reader",
+      "16"
+    ],
+    "returncode": 0,
+    "read_overlap_qualified": true
+  }
+]

@@ -1,0 +1,29 @@
+{
+  "refs": {
+    "org": "nowledge-co",
+    "repo": "hawdb",
+    "repo_link": "https://github.com/nowledge-co/hawdb",
+    "base_ref": "main",
+    "base_sha": "8e9eab185ef880794d216d99ac6cd57442c511aa",
+    "base_link": "https://github.com/nowledge-co/hawdb/commit/8e9eab185ef880794d216d99ac6cd57442c511aa",
+    "pulls": [
+      {
+        "number": 1217,
+        "author": "hawkingrei",
+        "sha": "a4eea1cc85bbf6635399a191907000a1b5b109be",
+        "title": "perf(storage): avoid unused generation inventory in WAL admission",
+        "head_ref": "bench/1119-sustained-publication",
+        "link": "https://github.com/nowledge-co/hawdb/pull/1217",
+        "commit_link": "https://github.com/nowledge-co/hawdb/pull/1217/commits/a4eea1cc85bbf6635399a191907000a1b5b109be",
+        "author_link": "https://github.com/hawkingrei"
+      }
+    ]
+  },
+  "events_retained": 926,
+  "test_result_actions": 84,
+  "test_summary_targets": 70,
+  "original_sha256": "691f25b01975b794f1cbfdf3bbedee623f069875dccf829a2a646dcf01310755",
+  "published_sha256": "d68f375c49533a177bec7be8d1ba08201806118772d2c1b6c14e631dfa861fd0",
+  "transformation": "Remove client_env/test_env/repo_env options only; preserve every event and result.",
+  "original_uri": "gs://ci-cd-503413-prow-public/artifacts/native/pr-logs/pull/nowledge-co_hawdb/1217/pull-skein-bazel-test-root/2113692414249013248/artifacts/bepless-events.json"
+}

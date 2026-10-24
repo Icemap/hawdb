@@ -1,0 +1,626 @@
+{
+  "receipt": {
+    "timing_complete": true,
+    "cohorts": [
+      [
+        "measurement/1w-0r",
+        false,
+        1,
+        0
+      ],
+      [
+        "measurement/1w-1r",
+        false,
+        1,
+        1
+      ],
+      [
+        "measurement/1w-2r",
+        false,
+        1,
+        2
+      ],
+      [
+        "measurement/4w-0r",
+        false,
+        4,
+        0
+      ],
+      [
+        "measurement/4w-4r",
+        false,
+        4,
+        4
+      ],
+      [
+        "measurement/4w-8r",
+        false,
+        4,
+        8
+      ],
+      [
+        "measurement/8w-0r",
+        false,
+        8,
+        0
+      ],
+      [
+        "measurement/8w-8r",
+        false,
+        8,
+        8
+      ],
+      [
+        "measurement/8w-16r",
+        false,
+        8,
+        16
+      ],
+      [
+        "captured-measurement/1w-0r",
+        true,
+        1,
+        0
+      ],
+      [
+        "captured-measurement/1w-1r",
+        true,
+        1,
+        1
+      ],
+      [
+        "captured-measurement/1w-2r",
+        true,
+        1,
+        2
+      ],
+      [
+        "captured-measurement/4w-0r",
+        true,
+        4,
+        0
+      ],
+      [
+        "captured-measurement/4w-4r",
+        true,
+        4,
+        4
+      ],
+      [
+        "captured-measurement/4w-8r",
+        true,
+        4,
+        8
+      ],
+      [
+        "captured-measurement/8w-0r",
+        true,
+        8,
+        0
+      ],
+      [
+        "captured-measurement/8w-8r",
+        true,
+        8,
+        8
+      ],
+      [
+        "captured-measurement/8w-16r",
+        true,
+        8,
+        16
+      ]
+    ],
+    "strict_gate_passed": false,
+    "multi_writer_coverage": true,
+    "mixed_coverage": true,
+    "acceptance_passed": false,
+    "measured_cases": 8640,
+    "measured_commits": 2211840,
+    "measured_reads": 2396160,
+    "measured_reopens": 5760,
+    "coverage": "intervals apply separately within cohorts; no joint matrix confidence claim"
+  },
+  "cohorts": [
+    {
+      "cohort": "measurement/1w-0r",
+      "endpoints": {
+        "pass": 10,
+        "inconclusive": 2
+      },
+      "regressions": []
+    },
+    {
+      "cohort": "measurement/1w-1r",
+      "endpoints": {
+        "pass": 19,
+        "inconclusive": 2
+      },
+      "regressions": []
+    },
+    {
+      "cohort": "measurement/1w-2r",
+      "endpoints": {
+        "pass": 20,
+        "inconclusive": 1
+      },
+      "regressions": []
+    },
+    {
+      "cohort": "measurement/4w-0r",
+      "endpoints": {
+        "pass": 12
+      },
+      "regressions": []
+    },
+    {
+      "cohort": "measurement/4w-4r",
+      "endpoints": {
+        "pass": 18,
+        "inconclusive": 3
+      },
+      "regressions": []
+    },
+    {
+      "cohort": "measurement/4w-8r",
+      "endpoints": {
+        "pass": 11,
+        "inconclusive": 8,
+        "regression": 2
+      },
+      "regressions": [
+        {
+          "durable": false,
+          "grouped": false,
+          "family": "commit_latency",
+          "metric": "p99_ns",
+          "median_ratio": 1.4741268076047875,
+          "ratio_interval": [
+            1.1463529705033302,
+            1.710412971830841
+          ],
+          "disposition": "regression"
+        },
+        {
+          "durable": true,
+          "grouped": false,
+          "family": "read_latency",
+          "metric": "p50_ns",
+          "median_ratio": 1.3090002752421044,
+          "ratio_interval": [
+            1.1764176212046895,
+            1.3853397655584903
+          ],
+          "disposition": "regression"
+        }
+      ]
+    },
+    {
+      "cohort": "measurement/8w-0r",
+      "endpoints": {
+        "pass": 12
+      },
+      "regressions": []
+    },
+    {
+      "cohort": "measurement/8w-8r",
+      "endpoints": {
+        "pass": 12,
+        "regression": 5,
+        "inconclusive": 4
+      },
+      "regressions": [
+        {
+          "durable": false,
+          "grouped": false,
+          "family": "commit_latency",
+          "metric": "p95_ns",
+          "median_ratio": 1.156373170291797,
+          "ratio_interval": [
+            1.030486683870392,
+            1.2540240117857393
+          ],
+          "disposition": "regression"
+        },
+        {
+          "durable": false,
+          "grouped": false,
+          "family": "commit_latency",
+          "metric": "p99_ns",
+          "median_ratio": 1.5658538561254027,
+          "ratio_interval": [
+            1.3113623580473786,
+            1.9625011157134367
+          ],
+          "disposition": "regression"
+        },
+        {
+          "durable": false,
+          "grouped": false,
+          "family": "read_latency",
+          "metric": "p50_ns",
+          "median_ratio": 1.3990688460232708,
+          "ratio_interval": [
+            1.327320654724116,
+            1.451422651557147
+          ],
+          "disposition": "regression"
+        },
+        {
+          "durable": true,
+          "grouped": false,
+          "family": "read_latency",
+          "metric": "p50_ns",
+          "median_ratio": 1.3631840655219731,
+          "ratio_interval": [
+            1.2763537941979266,
+            1.4191996138355483
+          ],
+          "disposition": "regression"
+        },
+        {
+          "durable": true,
+          "grouped": true,
+          "family": "read_latency",
+          "metric": "p50_ns",
+          "median_ratio": 1.1813862511832143,
+          "ratio_interval": [
+            1.070468754272856,
+            1.2146018534888536
+          ],
+          "disposition": "regression"
+        }
+      ]
+    },
+    {
+      "cohort": "measurement/8w-16r",
+      "endpoints": {
+        "pass": 7,
+        "inconclusive": 7,
+        "regression": 7
+      },
+      "regressions": [
+        {
+          "durable": false,
+          "grouped": false,
+          "family": "commit_latency",
+          "metric": "p99_ns",
+          "median_ratio": 2.0339358066646587,
+          "ratio_interval": [
+            1.7640025885125123,
+            2.419657898841258
+          ],
+          "disposition": "regression"
+        },
+        {
+          "durable": false,
+          "grouped": false,
+          "family": "workload",
+          "metric": "elapsed_ns",
+          "median_ratio": 1.0355864975185023,
+          "ratio_interval": [
+            1.0244366003215617,
+            1.0538211455068633
+          ],
+          "disposition": "regression"
+        },
+        {
+          "durable": false,
+          "grouped": false,
+          "family": "read_latency",
+          "metric": "p50_ns",
+          "median_ratio": 1.441158871530719,
+          "ratio_interval": [
+            1.4158851827034888,
+            1.4662400600865533
+          ],
+          "disposition": "regression"
+        },
+        {
+          "durable": false,
+          "grouped": false,
+          "family": "read_latency",
+          "metric": "p95_ns",
+          "median_ratio": 1.1032834134820295,
+          "ratio_interval": [
+            1.0499128341845279,
+            1.205990564082034
+          ],
+          "disposition": "regression"
+        },
+        {
+          "durable": true,
+          "grouped": false,
+          "family": "read_latency",
+          "metric": "p50_ns",
+          "median_ratio": 1.4594477059671904,
+          "ratio_interval": [
+            1.4203951674137396,
+            1.478806760024494
+          ],
+          "disposition": "regression"
+        },
+        {
+          "durable": true,
+          "grouped": true,
+          "family": "commit_latency",
+          "metric": "p50_ns",
+          "median_ratio": 1.4264457213631632,
+          "ratio_interval": [
+            1.2850657941539667,
+            1.688632240055827
+          ],
+          "disposition": "regression"
+        },
+        {
+          "durable": true,
+          "grouped": true,
+          "family": "read_latency",
+          "metric": "p50_ns",
+          "median_ratio": 1.2156601918129293,
+          "ratio_interval": [
+            1.1935555656412005,
+            1.231286616723366
+          ],
+          "disposition": "regression"
+        }
+      ]
+    },
+    {
+      "cohort": "captured-measurement/1w-0r",
+      "endpoints": {
+        "pass": 9,
+        "inconclusive": 3
+      },
+      "regressions": []
+    },
+    {
+      "cohort": "captured-measurement/1w-1r",
+      "endpoints": {
+        "pass": 17,
+        "inconclusive": 4
+      },
+      "regressions": []
+    },
+    {
+      "cohort": "captured-measurement/1w-2r",
+      "endpoints": {
+        "pass": 18,
+        "inconclusive": 3
+      },
+      "regressions": []
+    },
+    {
+      "cohort": "captured-measurement/4w-0r",
+      "endpoints": {
+        "pass": 12
+      },
+      "regressions": []
+    },
+    {
+      "cohort": "captured-measurement/4w-4r",
+      "endpoints": {
+        "pass": 16,
+        "inconclusive": 5
+      },
+      "regressions": []
+    },
+    {
+      "cohort": "captured-measurement/4w-8r",
+      "endpoints": {
+        "pass": 11,
+        "inconclusive": 8,
+        "regression": 2
+      },
+      "regressions": [
+        {
+          "durable": false,
+          "grouped": false,
+          "family": "commit_latency",
+          "metric": "p99_ns",
+          "median_ratio": 1.4273354399260216,
+          "ratio_interval": [
+            1.2181598097462634,
+            1.7317319122485755
+          ],
+          "disposition": "regression"
+        },
+        {
+          "durable": true,
+          "grouped": false,
+          "family": "read_latency",
+          "metric": "p50_ns",
+          "median_ratio": 1.2663295961861987,
+          "ratio_interval": [
+            1.1812926320356818,
+            1.3749641906798307
+          ],
+          "disposition": "regression"
+        }
+      ]
+    },
+    {
+      "cohort": "captured-measurement/8w-0r",
+      "endpoints": {
+        "pass": 12
+      },
+      "regressions": []
+    },
+    {
+      "cohort": "captured-measurement/8w-8r",
+      "endpoints": {
+        "pass": 14,
+        "regression": 5,
+        "inconclusive": 2
+      },
+      "regressions": [
+        {
+          "durable": false,
+          "grouped": false,
+          "family": "commit_latency",
+          "metric": "p95_ns",
+          "median_ratio": 1.2227993118197527,
+          "ratio_interval": [
+            1.1238678715892039,
+            1.345276835379544
+          ],
+          "disposition": "regression"
+        },
+        {
+          "durable": false,
+          "grouped": false,
+          "family": "commit_latency",
+          "metric": "p99_ns",
+          "median_ratio": 1.5788869327504682,
+          "ratio_interval": [
+            1.2355079793683523,
+            1.8006401566025592
+          ],
+          "disposition": "regression"
+        },
+        {
+          "durable": false,
+          "grouped": false,
+          "family": "read_latency",
+          "metric": "p50_ns",
+          "median_ratio": 1.4060843345834613,
+          "ratio_interval": [
+            1.2755382301725502,
+            1.440600091345957
+          ],
+          "disposition": "regression"
+        },
+        {
+          "durable": true,
+          "grouped": false,
+          "family": "read_latency",
+          "metric": "p50_ns",
+          "median_ratio": 1.3234879319505788,
+          "ratio_interval": [
+            1.268078561067441,
+            1.4106480342914562
+          ],
+          "disposition": "regression"
+        },
+        {
+          "durable": true,
+          "grouped": true,
+          "family": "read_latency",
+          "metric": "p50_ns",
+          "median_ratio": 1.1729992457863423,
+          "ratio_interval": [
+            1.073416628196155,
+            1.1974930324329132
+          ],
+          "disposition": "regression"
+        }
+      ]
+    },
+    {
+      "cohort": "captured-measurement/8w-16r",
+      "endpoints": {
+        "pass": 7,
+        "inconclusive": 6,
+        "regression": 8
+      },
+      "regressions": [
+        {
+          "durable": false,
+          "grouped": false,
+          "family": "commit_latency",
+          "metric": "p99_ns",
+          "median_ratio": 1.836462187946267,
+          "ratio_interval": [
+            1.54948838338953,
+            2.2403377002450062
+          ],
+          "disposition": "regression"
+        },
+        {
+          "durable": false,
+          "grouped": false,
+          "family": "workload",
+          "metric": "elapsed_ns",
+          "median_ratio": 1.0397396159761487,
+          "ratio_interval": [
+            1.026224052848419,
+            1.057396120588482
+          ],
+          "disposition": "regression"
+        },
+        {
+          "durable": false,
+          "grouped": false,
+          "family": "read_latency",
+          "metric": "p50_ns",
+          "median_ratio": 1.4475812831276613,
+          "ratio_interval": [
+            1.4312001469432492,
+            1.4660570902257315
+          ],
+          "disposition": "regression"
+        },
+        {
+          "durable": false,
+          "grouped": false,
+          "family": "read_latency",
+          "metric": "p95_ns",
+          "median_ratio": 1.0946633572164144,
+          "ratio_interval": [
+            1.0459846296862696,
+            1.1747227365131103
+          ],
+          "disposition": "regression"
+        },
+        {
+          "durable": true,
+          "grouped": false,
+          "family": "workload",
+          "metric": "elapsed_ns",
+          "median_ratio": 1.0113506047486989,
+          "ratio_interval": [
+            1.0046920004807232,
+            1.0230468670361954
+          ],
+          "disposition": "regression"
+        },
+        {
+          "durable": true,
+          "grouped": false,
+          "family": "read_latency",
+          "metric": "p50_ns",
+          "median_ratio": 1.4379345848290699,
+          "ratio_interval": [
+            1.402759288573252,
+            1.4528735319087116
+          ],
+          "disposition": "regression"
+        },
+        {
+          "durable": true,
+          "grouped": true,
+          "family": "commit_latency",
+          "metric": "p50_ns",
+          "median_ratio": 1.5410002344813218,
+          "ratio_interval": [
+            1.2781589631120522,
+            1.7136381890176169
+          ],
+          "disposition": "regression"
+        },
+        {
+          "durable": true,
+          "grouped": true,
+          "family": "read_latency",
+          "metric": "p50_ns",
+          "median_ratio": 1.21159457487652,
+          "ratio_interval": [
+            1.1958420030819323,
+            1.2194708619991905
+          ],
+          "disposition": "regression"
+        }
+      ]
+    }
+  ]
+}

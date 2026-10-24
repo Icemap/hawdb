@@ -1,0 +1,17 @@
+[package]
+name = "staging-budget-proof"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.97.1"
+publish = false
+
+[workspace]
+
+[[bench]]
+name = "staging_budget_proof"
+path = "main.rs"
+harness = false
+
+[dependencies]
+hawdb = { path = "/work" }
+serde_json = "1"

@@ -1,0 +1,65 @@
+{
+  "revisions": {
+    "baseline": "823e8e9c735050dcafb3e0bf024e12f0a46ea140 plus identical query-stage diagnostic overlay",
+    "candidate": "same anchor plus uncommitted bounded stack projection implementation"
+  },
+  "harness_sha256": {
+    "benches/concurrent_writers.rs": "4cf99da0d024d7cfc4af77c834a78eb7dac32d02091bb1c579e441c559ec050e",
+    "benches/concurrent_writers/readers.rs": "1eb468c67658964ef44d66a7a9acc051e856beed10857c986b98fc1af640b1ec"
+  },
+  "scope": "diagnostic only; not acceptance and no replacement of strict gate",
+  "cases": "full original six-case harness, 256 writes, 64 reads per reader, exact 256-row query and all assertions retained",
+  "cohorts": [
+    {
+      "writers": 1,
+      "readers": 2,
+      "reopen": false
+    },
+    {
+      "writers": 8,
+      "readers": 16,
+      "reopen": false
+    },
+    {
+      "writers": 1,
+      "readers": 2,
+      "reopen": true
+    },
+    {
+      "writers": 8,
+      "readers": 16,
+      "reopen": true
+    }
+  ],
+  "pairs": 4,
+  "order": "alternate baseline/candidate; all builds complete before first measurement; fresh fixtures per process",
+  "phases": {
+    "capture": "begin_read_transaction",
+    "query": "commit_epoch plus original full query",
+    "drop": "drop read transaction"
+  },
+  "perturbation": "Thread-local three-integer side channel, additional Instant calls, and one post-query drain. No additional queries, changed fixtures, limits, output semantics or production code delivery.",
+  "interpretation": "Linux arm64 local Docker VM, four CPU quota / six GiB; cannot prove cause of remote x86_64 regression by itself",
+  "accepted_build_labels": {
+    "baseline": "baseline",
+    "candidate": "candidate"
+  },
+  "diagnostic": "Predeclared compact-vector projection experiment; preceding fixed-stack experiment is retained as adverse and rejected. Same initial 823e control binary, all 32 new timed processes, no pooling/reuse of measurements.",
+  "query_stages": [
+    "parse_runtime_execution",
+    "bounded read checks and optimizer planning before execute_with_request",
+    "execute_with_request plus storage poison/health checks"
+  ],
+  "build": "Reuse the byte-identical preceding query-stage control binary; rebuild executor/root/benchmark for the changed candidate. New measurements for both variants, all builds complete before timing.",
+  "temporary_root_overlay_sha256": {
+    "baseline": "a667d4dae0b81bb74b256e70126ff3192ca61f4eb034ba2def3183bc9bf5cb5f",
+    "candidate": "a667d4dae0b81bb74b256e70126ff3192ca61f4eb034ba2def3183bc9bf5cb5f"
+  },
+  "control_binary_source": "read-query-stages-diagnostic-v1/candidate-diagnostic",
+  "candidate_production_overlay_sha256": {
+    "crates/executor/src/expression.rs": "e5efb1e5b67bfcc1fe786a90220972ad98f2fb739af3c24c577ab2c100fe7c75",
+    "crates/executor/src/expression/projection.rs": "935a2f4c45428dbe13b91a6fc343dac01d9783b039744efaa7a80ed52ac48ce4",
+    "crates/executor/src/scan.rs": "2ff63bec6b0e8866821156cfdc29be089373d92873c62e613c8a1cce7328b15f",
+    "crates/executor/src/expression/projection/tests.rs": "7dda1b8dadef59eebaecfc238dc6474858aa5899e5fac67eb9f6f75b8032b716"
+  }
+}

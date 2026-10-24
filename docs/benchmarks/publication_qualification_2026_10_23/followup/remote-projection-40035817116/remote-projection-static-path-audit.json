@@ -1,0 +1,28 @@
+{
+  "checked_at": "2026-10-23T23:09:43.370860+00:00",
+  "source_root": "/private/tmp/hawdb-optimizer-work",
+  "runtime_plan_not_yet_observed": true,
+  "findings": [
+    {
+      "source": "crates/executor/src/batch.rs:534",
+      "finding": "NodeProjectionScanExec dispatches through stream_node_projection_batches."
+    },
+    {
+      "source": "crates/executor/src/batch/scans.rs:307",
+      "finding": "Label projection first attempts numeric columnar execution, then falls back to projection scan."
+    },
+    {
+      "source": "crates/executor/src/numeric.rs:285",
+      "finding": "Numeric columnar preparation requires predicate via predicate?; the diagnostic full-row READ has no predicate, so this shortcut cannot consume that shape."
+    },
+    {
+      "source": "crates/executor/src/scan.rs:710",
+      "finding": "Borrowed path additionally requires resident scan, no predicate, same-variable simple projections, no work limit, and admitted pointer estimate; runtime borrowed-row counter remains necessary."
+    },
+    {
+      "source": "crates/executor/src/batch.rs:997",
+      "finding": "SortExec is separately dispatched with its child input; source reading alone does not establish the actual selected plan or per-stage sort cost."
+    }
+  ],
+  "decision": "Do not infer optimization exercise or benefit before actual CI preflight plans, borrowed-row counts and full measurements."
+}

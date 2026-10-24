@@ -1,0 +1,35 @@
+{
+  "declared_utc": "2026-10-23T15:11:39.787670+00:00",
+  "base": "0f641a98f17898a8ea3dae6ddaaa46d641604ae3",
+  "overlays": {
+    "benches/consumer_publication.rs": "7a46e780977bd7371379322d108241be390eff99517d6fbf9f5c29f79cbebe1d",
+    "crates/storage/src/store/durable/wal.rs": "1e45de86e81f26317eace4237578e52218620f632b73b9d14215e65c999df350",
+    "scripts/measure-consumer-publication.py": "9d2b67a47575503894a6a46ffa7f156c31692b48220c351e92022f67335c8e1b"
+  },
+  "cases": 18,
+  "rounds": 3,
+  "writes_per_case": 100000,
+  "quiet_samples": 32,
+  "mode": "detached",
+  "writers": [
+    1,
+    4,
+    8
+  ],
+  "shapes": [
+    [
+      32,
+      128
+    ],
+    [
+      512,
+      1024
+    ]
+  ],
+  "cpus": 4,
+  "memory_bytes": 6442450944,
+  "checkpoint_interval": 16384,
+  "publication_attempt_limit": 4096,
+  "retention_bytes": 67108864,
+  "purpose": "separate sustained checkpointed progress cohort; original failed no-checkpoint cohort retained; no latency-improvement claim"
+}

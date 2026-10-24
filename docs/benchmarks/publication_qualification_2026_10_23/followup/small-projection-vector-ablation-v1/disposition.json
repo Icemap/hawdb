@@ -1,0 +1,24 @@
+{
+  "decision": "local timing unqualified; no production implementation accepted",
+  "reason": "Foreign Rust 1.98.1 Cargo/Clippy processes were observed during the measured window, despite an empty launch inventory. Exact checks remain valid; latency must not be used for acceptance or pooled with other allocations.",
+  "observations": [
+    {
+      "unix": 1792794053.7320518,
+      "known_compiler_or_fuzz_processes": [
+        {
+          "pid": 65156,
+          "command": "/Users/hawkingrei/.rustup/toolchains/1.98.1-aarch64-apple-darwin/bin/cargo"
+        },
+        {
+          "pid": 65187,
+          "command": "/Users/hawkingrei/.rustup/toolchains/1.98.1-aarch64-apple-darwin/bin/clippy-driver"
+        },
+        {
+          "pid": 65188,
+          "command": "/Users/hawkingrei/.rustup/toolchains/1.98.1-aarch64-apple-darwin/bin/clippy-driver"
+        }
+      ]
+    }
+  ],
+  "controlled_followup_run": "https://github.com/nowledge-co/hawdb/actions/runs/40035817116"
+}

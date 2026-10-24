@@ -1,0 +1,48 @@
+{
+  "queries": [
+    {
+      "artifact": "bepless-events.json",
+      "buildId": "2113692414249013248",
+      "eventCount": 926,
+      "id": "e7ed76ac-bd7a-49dc-97a7-652651faa4c1:inv:8759d83a-94df-4f8d-bfea-3387094bfbcc",
+      "invocationId": "8759d83a-94df-4f8d-bfea-3387094bfbcc",
+      "job": "pull-skein-bazel-test-root",
+      "prowJob": "e7ed76ac-bd7a-49dc-97a7-652651faa4c1",
+      "pullRequest": 1217,
+      "repository": "nowledge-co/hawdb",
+      "review": {
+        "complete": true,
+        "eventCount": 926,
+        "eventTypes": {
+          "buildFinished": 1,
+          "buildMetadata": 1,
+          "buildMetrics": 1,
+          "buildToolLogs": 1,
+          "configuration": 1,
+          "convenienceSymlinksIdentified": 1,
+          "fetch": 234,
+          "namedSet": 71,
+          "optionsParsed": 1,
+          "pattern": 1,
+          "progress": 310,
+          "started": 1,
+          "structuredCommandLine": 3,
+          "targetCompleted": 71,
+          "targetConfigured": 71,
+          "testResult": 84,
+          "testSummary": 70,
+          "unstructuredCommandLine": 1,
+          "workspace": 1,
+          "workspaceStatus": 1
+        },
+        "finished": true,
+        "malformedEvents": 0,
+        "started": true
+      },
+      "source": "artifact",
+      "spyglassUrl": "https://prow.nowledge.co/view/gs/ci-cd-503413-prow-public/artifacts/native/pr-logs/pull/nowledge-co_hawdb/1217/pull-skein-bazel-test-root/2113692414249013248",
+      "startedAt": "2026-10-23T18:01:56Z",
+      "state": "success"
+    }
+  ]
+}

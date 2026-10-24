@@ -220,6 +220,7 @@ pub(super) fn execute_select<'state>(
             &index_runtime,
             &row_runtime,
             limits,
+            &memory_ledger,
         )?;
         output
             .blocking_operator_memory_reports

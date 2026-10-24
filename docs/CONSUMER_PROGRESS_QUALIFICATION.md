@@ -9,6 +9,38 @@ recorded separately by the final-head Windows native contracts run
 ([39815273863](https://github.com/nowledge-co/hawdb/actions/runs/39815273863)),
 and #1171 is closed.
 
+## Current-main and inventory-admission follow-up
+
+The [2026-10-23 receipts](benchmarks/publication_qualification_2026_10_23/README.md)
+retain clean-main `0f641a98f` qualification and a two-Rust-file prototype.
+Both clean-main and prototype completed all 54 Consumer control cases with
+exact results; neither fixed-work matrix qualifies sustained progress. The
+separate 100,000-write checkpointed prototype stopped at case six with
+`Feed(Incomplete)` and remains incomplete. The original-baseline writer gate
+still failed on clean main, and its mixed matrix stopped on missing concurrent
+overlap. Those failures and every partial/raw sample are preserved.
+
+The bounded WAL-admission repair removes 25 metadata observations per durable
+commit in the separate trace while retaining WAL sync counts. This establishes
+work removal, not a passing latency gate. Final-commit CI, original-baseline and
+current-main paired timing remain separate requirements. Administrative closure
+of #232 does not waive this acceptance under #1119.
+
+## Subsequent source-scoped receipts
+
+The [7546 follow-up and caller correction](benchmarks/publication_qualification_2026_10_23/followup/README.md)
+records 18/18 sustained cases and 54/54 exact controls, plus actual complete-source
+coverage/native publication beyond the old host-call bound. All original failed
+cohorts remain retained. These are finite, frozen-library receipts; main has
+since advanced to `8e9eab185`, requiring integrated-source qualification.
+
+The original-baseline post-checkpoint writer cohort now passes all six endpoints,
+but captured-WAL grouped p50/p95 remain inconclusive. Pinned-main attribution
+shows 17-22% lower durable medians and a 1.7% memory p95 regression. Neither full
+strict gate passes. Current root CI also has two 300-second joined-read execution
+timeouts and one headroom capacity assertion failure. Test isolation/diagnostics
+preserve all fixtures, deadlines and refusal assertions; new-head CI is required.
+
 ## Original-baseline writer gate
 
 [Run 39784901600](https://github.com/nowledge-co/hawdb/actions/runs/39784901600)
@@ -61,8 +93,9 @@ post-E advancement, below the declared two-advancement criterion. That adverse
 sample is retained. The incomplete dataset cannot establish the complete matrix,
 publication callback p95/p99 improvement, or sustained-progress acceptance.
 
-The full final-source 54-case matrix, separately declared sustained workload,
-and current-source writer scaling/sync-count matrix remain outstanding. Quiet
+At the earlier source above, the full 54-case matrix, sustained workload and
+writer scaling/sync-count matrix were outstanding. The dated current-main
+follow-up above supplies later evidence without replacing these failures. Quiet
 publication callback timing is only a lower bound on outer-owner hold time; it
 is not internal selector-mutex timing. A finite progress test is not a general
 starvation-freedom proof.

@@ -1,0 +1,10 @@
+{
+  "concurrent_writers": {
+    "path": "/build/release/deps/concurrent_writers-ba954da0915e1c32",
+    "sha256": "8d622c83d767002d42729b1fa934ccecec077140977c3d57cc781bee073c10ad"
+  },
+  "consumer_publication": {
+    "path": "/build/release/deps/consumer_publication-ee5e1a723b428eea",
+    "sha256": "3f0dfba98827837aa832143d0e3a2cc5886344e56315a15e33132487da61af7f"
+  }
+}

@@ -1,0 +1,47 @@
+[
+  {
+    "cohort": "sustained",
+    "command": [
+      "python3",
+      "/work/scripts/measure-consumer-publication.py",
+      "--binary",
+      "/build/release/deps/consumer_publication-ee5e1a723b428eea",
+      "--build-artifacts",
+      "/evidence/build.jsonl",
+      "--output",
+      "/evidence/sustained",
+      "--fixture-parent",
+      "/fixtures/budget-correction-1-sustained",
+      "--writes",
+      "100000",
+      "--rounds",
+      "3",
+      "--quiet-samples",
+      "32",
+      "--sustained"
+    ],
+    "returncode": 0
+  },
+  {
+    "cohort": "controls",
+    "command": [
+      "python3",
+      "/work/scripts/measure-consumer-publication.py",
+      "--binary",
+      "/build/release/deps/consumer_publication-ee5e1a723b428eea",
+      "--build-artifacts",
+      "/evidence/build.jsonl",
+      "--output",
+      "/evidence/controls",
+      "--fixture-parent",
+      "/fixtures/budget-correction-1-controls",
+      "--writes",
+      "4096",
+      "--rounds",
+      "3",
+      "--quiet-samples",
+      "32"
+    ],
+    "returncode": 0
+  }
+]

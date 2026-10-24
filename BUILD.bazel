@@ -403,19 +403,19 @@ rust_test(
         # Evidence: https://github.com/nowledge-co/hawdb/issues/972 and
         # https://github.com/nowledge-co/hawdb/issues/1027.
         timeout = "eternal" if partition in ["concurrent", "analytics_rss"] else "long",
-        # Dense identity and RSS fixtures must not compete with other test
-        # executables in this invocation. External contention remains possible.
-        tags = ["exclusive"] if partition == "analytics_rss" else [],
+        # Wall-clock capacity and dense RSS fixtures must not compete with other
+        # test executables here. External contention remains possible.
+        tags = ["exclusive"] if partition in ["analytics_rss", "checkpoint_headroom"] else [],
         srcs = ["scripts/run-root-unit-partition.sh"],
         args = [
             "$(rootpath :hawdb_unit_test_binary)",
             partition,
             "--skip",
             _HAWDB_STORAGE_CRASH_MATRIX_TEST,
-        ],
+        ] + (["--test-threads=1"] if partition == "checkpoint_headroom" else []),
         data = [":hawdb_unit_test_binary"],
     )
-    for partition in ["general", "concurrent", "analytics_core_general", "analytics_rss", "recovery"]
+    for partition in ["general", "concurrent", "checkpoint_headroom", "analytics_core_general", "analytics_rss", "recovery"]
 ]
 
 # Identity admission now shares the RSS fixture and its isolated measured child.
@@ -459,6 +459,7 @@ test_suite(
     name = "hawdb_unit_fast_tests",
     tests = [
         ":hawdb_unit_general_tests",
+        ":hawdb_unit_checkpoint_headroom_tests",
         ":hawdb_unit_concurrent_tests",
         ":hawdb_unit_analytics_tests",
         ":hawdb_unit_recovery_tests",
@@ -677,6 +678,7 @@ test_suite(
         ":hawdb_unit_fast_tests",
         ":root_unit_partition_script_test",
         ":power_loss_partition_script_test",
+        ":mvcc_joined_read_shard_script_test",
         ":hawdb_unit_row_page_compaction_tests",
         ":hawdb_unit_storage_crash_matrix_tests",
     ],
@@ -796,9 +798,12 @@ rust_test(
     ]
 ]
 
+# Compile one executable per feature mode; Bazel shards run disjoint exact
+# cases, keeping every persistent fixture and the 300-second action ceiling.
 [
     rust_test(
-        name = "hawdb_mvcc_joined_reads" + suffix + "_tests",
+        name = "hawdb_mvcc_joined_reads" + suffix + "_test_binary",
+        tags = ["manual"],
         crate_root = "tests/mvcc_joined_reads.rs",
         srcs = [
             "tests/mvcc_joined_reads.rs",
@@ -812,6 +817,26 @@ rust_test(
         ("_minimal", ":hawdb_minimal"),
     ]
 ]
+
+[
+    sh_test(
+        name = "hawdb_mvcc_joined_reads" + suffix + "_tests",
+        size = "medium",
+        timeout = "moderate",
+        srcs = ["scripts/run-mvcc-joined-read-shard.sh"],
+        args = ["$(rootpath :hawdb_mvcc_joined_reads" + suffix + "_test_binary)"],
+        data = [":hawdb_mvcc_joined_reads" + suffix + "_test_binary"],
+        shard_count = 8,
+    )
+    for suffix in ["", "_minimal"]
+]
+
+sh_test(
+    name = "mvcc_joined_read_shard_script_test",
+    size = "small",
+    srcs = ["scripts/run-mvcc-joined-read-shard.test.sh"],
+    data = ["scripts/run-mvcc-joined-read-shard.sh"],
+)
 
 # Full-source baseline input is separate from retained-feed and JOIN actions.
 [

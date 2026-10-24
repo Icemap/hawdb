@@ -1,0 +1,22 @@
+{
+  "command": [
+    "/build/release/deps/consumer_publication-ee5e1a723b428eea",
+    "--mode",
+    "detached",
+    "--writers",
+    "1",
+    "--documents",
+    "32",
+    "--payload",
+    "128",
+    "--writes",
+    "100000",
+    "--quiet-samples",
+    "32",
+    "--root",
+    "/fixtures/long-progress-1-0-0"
+  ],
+  "returncode": 101,
+  "stdout": "",
+  "stderr": "\nthread '<unnamed>' (23) panicked at benches/consumer_publication.rs:78:10:\ncalled `Result::unwrap()` on an `Err` value: Storage(\"canonical relational row view rejected commit 100006 before WAL append: relational row live-view admission failed: live row overlay would retain 100001 entries/33000474 resident bytes, exceeding limits 100000/67108864\")\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\nthread 'main' (21) panicked at benches/consumer_publication.rs:251:41:\ncalled `Result::unwrap()` on an `Err` value: Any { .. }\n"
+}
