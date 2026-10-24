@@ -1,0 +1,39 @@
+{
+  "source": "8202d2f50cc057716b47cd4080e5bb56d37ab562",
+  "cohorts": [
+    {
+      "name": "read-resource",
+      "cases": 54,
+      "writes": 4096,
+      "extra": [
+        "--with-readers",
+        "--reads-per-reader",
+        "512"
+      ]
+    },
+    {
+      "name": "sustained",
+      "cases": 18,
+      "writes": 100000,
+      "extra": [
+        "--sustained"
+      ]
+    },
+    {
+      "name": "controls",
+      "cases": 54,
+      "writes": 4096,
+      "extra": []
+    }
+  ],
+  "rounds": 3,
+  "quiet_samples": 32,
+  "readers": "one per writer (1,4,8),512 requests each; same-query preparation/unfinished-writer intersection required",
+  "resources": {
+    "cpus": 4,
+    "memory_bytes": 6442450944,
+    "image": "rust@sha256:77fac8b98f9f46062bb680b6d25d5bcaabfc400143952ebc572e924bcbedc3fa"
+  },
+  "isolation": "Dedicated manual CI runner; all builds complete before timing; known compiler observations and coverage retained. No physical exclusivity claim.",
+  "limits": "No threshold/resource/durability changes; all adverse original records remain"
+}

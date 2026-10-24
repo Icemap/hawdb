@@ -1,0 +1,46 @@
+{
+  "hawdb_executor": {
+    "profile": {
+      "opt_level": "3",
+      "debuginfo": 0,
+      "debug_assertions": false,
+      "overflow_checks": false,
+      "test": false
+    },
+    "features": []
+  },
+  "hawdb": {
+    "profile": {
+      "opt_level": "3",
+      "debuginfo": 0,
+      "debug_assertions": false,
+      "overflow_checks": false,
+      "test": false
+    },
+    "features": [
+      "background-maintenance",
+      "default",
+      "full-text-search",
+      "graph-analytics",
+      "tokio-runtime",
+      "vector-search"
+    ]
+  },
+  "consumer_publication": {
+    "profile": {
+      "opt_level": "3",
+      "debuginfo": 0,
+      "debug_assertions": false,
+      "overflow_checks": false,
+      "test": true
+    },
+    "features": [
+      "background-maintenance",
+      "default",
+      "full-text-search",
+      "graph-analytics",
+      "tokio-runtime",
+      "vector-search"
+    ]
+  }
+}

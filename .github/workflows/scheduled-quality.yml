@@ -11,7 +11,7 @@ on:
         type: boolean
         default: false
       run_writer_gate:
-        description: Run only the fixed 40-pair reader/writer qualification
+        description: Run only this experimental fixed publication/resource qualification
         required: false
         type: boolean
         default: false
@@ -218,63 +218,38 @@ jobs:
           retention-days: 30
 
 
-  strict-writer-gate:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_writer_gate }}
-    name: Concurrent Reader and Writer Qualification
+  publication-resource-qualification:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_writer_gate && startsWith(github.ref_name, 'qualification/1119-publication-') }}
+    name: Manual Publication Resource Qualification
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
-      - name: Checkout
+      - name: Checkout qualification controller
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.97.1
+      - name: Checkout exact measured runtime
+        uses: actions/checkout@v7
+        with:
+          ref: 8202d2f50cc057716b47cd4080e5bb56d37ab562
+          path: runtime-source
+          persist-credentials: false
 
-      - name: Install separate syscall tracing tool
-        if: ${{ inputs.writer_include_captured_wal }}
+      - name: Build once and run the fixed 126-case qualification
         shell: bash
         run: |
           set -euo pipefail
-          if ! command -v strace >/dev/null; then
-            sudo apt-get update
-            sudo apt-get install -y strace
-          fi
+          python3 scripts/run-publication-resource-qualification.py \
+            --source "$GITHUB_WORKSPACE/runtime-source" \
+            --work "$RUNNER_TEMP/publication-resource" \
+            --output "$GITHUB_WORKSPACE/artifacts/publication-resource"
 
-      - name: Build both revisions and measure the fixed protocol
-        shell: bash
-        env:
-          WRITER_BASELINE_REVISION: ${{ inputs.writer_baseline_revision }}
-          WRITER_INCLUDE_CAPTURED_WAL: ${{ inputs.writer_include_captured_wal }}
-          WRITER_CONCURRENCY_MATRIX: ${{ inputs.writer_concurrency_matrix }}
-          WRITER_COUNTS: ${{ inputs.writer_counts }}
-          READER_COUNTS: ${{ inputs.reader_counts }}
-        run: |
-          set -euo pipefail
-          options=()
-          if [[ "$WRITER_INCLUDE_CAPTURED_WAL" == "true" ]]; then
-            options+=(--include-captured-wal)
-          fi
-          if [[ "$WRITER_CONCURRENCY_MATRIX" == "true" ]]; then
-            options+=(--concurrency-matrix)
-          fi
-          if [[ -n "$WRITER_COUNTS" ]]; then
-            options+=(--writer-counts "$WRITER_COUNTS")
-          fi
-          if [[ -n "$READER_COUNTS" ]]; then
-            options+=(--reader-counts "$READER_COUNTS")
-          fi
-          python3 scripts/run-concurrent-writer-gate.py \
-            "${options[@]}" \
-            --baseline-revision "$WRITER_BASELINE_REVISION" \
-            --work "$RUNNER_TEMP/writer-gate" \
-            --fixture-parent "$RUNNER_TEMP/writer-fixtures" \
-            --output artifacts/strict-writer-gate
-
-      - name: Retain build and measurement evidence
+      - name: Retain qualification evidence including failures
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: strict-writer-gate-${{ github.sha }}-${{ github.run_attempt }}
-          path: artifacts/strict-writer-gate
+          name: publication-resource-8202d2f5-${{ github.sha }}-${{ github.run_attempt }}
+          path: artifacts/publication-resource
           if-no-files-found: error
           retention-days: 30
