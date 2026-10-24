@@ -19,6 +19,7 @@ use crate::build_memory::{directory, path::OwnedPath};
 use hawdb_executor::QueryMemoryLease;
 use hawdb_storage::file_descriptors::ProjectFileDescriptors;
 use std::collections::BTreeMap;
+use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
 
 // Bound each canonical root independently. Every map entry is pre-admitted;
@@ -121,6 +122,7 @@ struct TicketFields {
     path: OwnedPath,
     source_root: OwnedPath,
     disk_reservation: u64,
+    governed: bool,
     error: Option<CleanupFailure>,
     captured: Option<Box<captured::Custody>>,
 }
@@ -332,6 +334,10 @@ fn retry_registered(
                         crate::out_of_core::scratch_directory::io_scope(task, native.governed)?;
                     return attempt.ticket().remove_batches(max_batches);
                 }
+                let _io = crate::out_of_core::scratch_directory::io_scope(
+                    task,
+                    attempt.ticket().governed,
+                )?;
                 let _project = ProjectFileDescriptors::acquire_component(
                     attempt
                         .ticket()
@@ -451,9 +457,14 @@ pub(in crate::out_of_core) struct StageDirectory {
     admission: Option<Arc<hawdb_qos::RuntimePermit>>,
     native: Option<Arc<crate::out_of_core::ScratchDirectory>>,
     captured_task: Option<RuntimeTaskContext>,
+    io_task: Option<RuntimeTaskContext>,
 }
 
 impl StageDirectory {
+    pub(in crate::out_of_core) fn set_io_task(&mut self, task: &RuntimeTaskContext) {
+        self.io_task = Some(task.clone());
+    }
+
     pub(in crate::out_of_core) fn cleanup_working_bytes(&self) -> u64 {
         self.cleanup_memory
             .as_ref()
@@ -469,6 +480,7 @@ impl StageDirectory {
         }
         self.admission.take();
         self.captured_task = Some(task.clone());
+        self.io_task = Some(task.clone());
         Ok(())
     }
 
@@ -557,6 +569,7 @@ impl StageDirectory {
                                 path: ticket_path,
                                 source_root,
                                 disk_reservation: 0,
+                                governed: memory.host_admission.is_some(),
                                 error: None,
                                 captured: None,
                             }),
@@ -566,6 +579,7 @@ impl StageDirectory {
                         admission: memory.host_admission.clone(),
                         native: None,
                         captured_task: None,
+                        io_task: Some(super::super::io_phase::cleanup_context(memory, task)),
                     };
                     checkpoint(task)?;
                     return Ok(stage);
@@ -614,10 +628,27 @@ impl StageDirectory {
                 .captured
                 .as_ref()
                 .is_some_and(|native| native.governed);
+            // Drop must not wait behind an unrelated wave or the caller's
+            // own active scope. Keep the original ticket for a fresh retry.
             let _io = self
-                .captured_task
+                .io_task
                 .as_ref()
-                .map(|task| crate::out_of_core::scratch_directory::io_scope(task, governed))
+                .or(self.captured_task.as_ref())
+                .map(|task| {
+                    match task
+                        .try_acquire_io_wave(NonZeroUsize::MIN)
+                        .map_err(|error| HawDBError::Execution(error.to_string()))?
+                    {
+                        hawdb_core::RuntimeIoWaveTryAcquire::Acquired(permit)
+                            if permit.is_some() || (!governed && self.admission.is_none()) =>
+                        {
+                            Ok(permit)
+                        }
+                        _ => Err(HawDBError::Execution(
+                            "stage cleanup awaits I/O capacity".into(),
+                        )),
+                    }
+                })
                 .transpose()?;
             attempt
                 .ticket()
@@ -644,6 +675,7 @@ impl StageDirectory {
         self.project.take();
         self.admission.take();
         self.captured_task.take();
+        self.io_task.take();
         pending
     }
 }

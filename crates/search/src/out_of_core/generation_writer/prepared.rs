@@ -112,7 +112,13 @@ impl SearchOutOfCorePreparedGeneration {
     /// synchronization; this lifecycle split alone does not bound lock-held I/O
     /// independently of artifact size. A successful selector commit cannot be
     /// undone by cancellation arriving during that commit's durability barrier.
+    pub(super) fn restore_io_task(&mut self, task: RuntimeTaskContext) {
+        self.writer.set_io_task(task);
+    }
+
     pub fn publish(mut self) -> Result<SearchOutOfCoreGenerationBuildReport> {
+        let scope = io_phase::Scope::acquire(&self.writer.task_context, &self.writer.memory)?;
+        scope.install(&mut self.writer);
         let mut lease = super::super::SearchProjectionPublishLease::acquire_with_context(
             &self.writer.root,
             &self.writer.memory,

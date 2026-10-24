@@ -51,6 +51,15 @@ impl SearchOutOfCoreGenerationWriter {
     pub(super) fn push_admitted_reader(
         &mut self,
         header: AdmittedHeader,
+        body: impl Read,
+        source: SearchDocumentBody,
+    ) -> Result<()> {
+        self.io_phase()?.push_reader_in_wave(header, body, source)
+    }
+
+    fn push_reader_in_wave(
+        &mut self,
+        header: AdmittedHeader,
         mut body: impl Read,
         source: SearchDocumentBody,
     ) -> Result<()> {

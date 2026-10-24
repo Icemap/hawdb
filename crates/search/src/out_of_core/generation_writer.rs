@@ -59,6 +59,7 @@ mod discovery;
 mod governed;
 mod initial;
 pub(super) mod io;
+mod io_phase;
 pub(super) mod mutations;
 pub(super) mod unordered;
 pub use unordered::{
@@ -239,7 +240,7 @@ pub struct SearchOutOfCoreGenerationWriter {
     root: context_memory::OwnedPath,
     spool_path: context_memory::OwnedPath,
     // Close the spool before stage cleanup, including on Windows.
-    spool: Option<BufWriter<File>>,
+    spool: Option<io_phase::Spool>,
     held_spool: Option<spool::HeldSpool>,
     options: context_memory::Options,
     lexical_term_policy: SearchLexicalTermPolicy,
@@ -334,7 +335,8 @@ impl SearchOutOfCoreGenerationWriter {
     /// The caller owns shared host admission: copying a numeric reservation does
     /// not reserve additional process capacity. This is not a process RSS cap.
     ///
-    /// Failed input poisons the writer. Dropping an unfinished writer discards
+    /// Input failure after phase admission poisons the writer. A pre-effect I/O
+    /// admission refusal leaves input untouched. Dropping an unfinished writer discards
     /// its private stage. Cancellation before publication preserves the active
     /// generation; after successful publication it can defer optional cleanup
     /// but does not undo the commit. Native calls are not internally preempted.
@@ -403,6 +405,9 @@ impl SearchOutOfCoreGenerationWriter {
         task_context: RuntimeTaskContext,
         memory: BuildMemory,
     ) -> Result<Self> {
+        let original = task_context;
+        let scope = io_phase::Scope::acquire(&original, &memory)?;
+        let task_context = scope.task();
         checkpoint(&task_context)?;
         validate_options(&options)?;
         let creation_memory = Self::reserve_creation_memory(&memory)?;
@@ -420,7 +425,10 @@ impl SearchOutOfCoreGenerationWriter {
             hawdb_storage::durability::sync_directory_ancestors(&root)
         })??;
         let stage = StageDirectory::create(staging_root.unwrap_or(&root), &memory, &task_context)?;
-        Self::create_in_stage(root, options, task_context, memory, stage, creation_memory)
+        let mut writer =
+            Self::create_in_stage(root, options, task_context, memory, stage, creation_memory)?;
+        writer.set_io_task(original);
+        Ok(writer)
     }
 
     fn reserve_creation_memory(
@@ -499,7 +507,7 @@ impl SearchOutOfCoreGenerationWriter {
         Ok(Self {
             root,
             spool_path,
-            spool: Some(spool),
+            spool: Some(io_phase::Spool::new(spool)),
             held_spool: None,
             stage,
             options,
@@ -585,11 +593,12 @@ impl SearchOutOfCoreGenerationWriter {
                 "search generation writer is poisoned after an earlier input failure".to_string(),
             ));
         }
-        let result = checkpoint(&self.task_context)
-            .and_then(|()| self.memory.admit_document(document))
-            .and_then(|document| self.push_inner(document));
+        let mut phase = self.io_phase()?;
+        let result = checkpoint(&phase.task_context)
+            .and_then(|()| phase.memory.admit_document(document))
+            .and_then(|document| phase.push_inner(document));
         if result.is_err() {
-            self.poisoned = true;
+            phase.poisoned = true;
         }
         result
     }
@@ -797,9 +806,7 @@ impl SearchOutOfCoreGenerationWriter {
         })?;
         spool.flush()?;
         spool.get_ref().sync_all()?;
-        let file = spool
-            .into_inner()
-            .map_err(|error| HawDBError::from(error.into_error()))?;
+        let file = spool.into_file();
         self.held_spool = Some(spool::HeldSpool::capture(
             file,
             self.spool_bytes,
@@ -810,6 +817,21 @@ impl SearchOutOfCoreGenerationWriter {
     }
 
     fn prepare_publication_with_artifacts(
+        mut self,
+        build: impl FnOnce(&Self, &SpoolSource, u64) -> Result<GenerationArtifacts>,
+        generation_override: Option<u64>,
+        private_partition: bool,
+    ) -> Result<SearchOutOfCorePreparedGeneration> {
+        let original = self.task_context.clone();
+        let scope = io_phase::Scope::acquire(&original, &self.memory)?;
+        scope.install(&mut self);
+        let mut prepared =
+            self.prepare_publication_in_wave(build, generation_override, private_partition)?;
+        prepared.restore_io_task(original);
+        Ok(prepared)
+    }
+
+    fn prepare_publication_in_wave(
         mut self,
         build: impl FnOnce(&Self, &SpoolSource, u64) -> Result<GenerationArtifacts>,
         generation_override: Option<u64>,
