@@ -6,7 +6,16 @@ See the [later source-scoped follow-up](followup/README.md) for the corrected
 complete cohorts, paired writer gains and adverse endpoints, and root-CI evidence.
 The original datasets below remain unchanged.
 
-## Final implementation qualification
+## Current source 8202 evidence
+
+See [the completed 126-case qualification](DEDICATED_8202.md),
+[the one predeclared read-p50 rerun](READ_P50_8202.md) and
+[durable raw archive/restore instructions](RAW_EVIDENCE.md).
+Raw archives, traces and logs are retained in the evidence prerelease, with
+summaries, checksums and scripts in this tree. Historical results below are not
+replaced or waived.
+
+## Historical source 823e qualification
 
 See [the source 823e8e9c report](FINAL_823E.md) for the complete final publication, CI and strict writer/read results. Correctness checks pass, but strict performance acceptance remains failed, including nine durable read-p50 regressions. All historical adverse allocations remain retained.
 

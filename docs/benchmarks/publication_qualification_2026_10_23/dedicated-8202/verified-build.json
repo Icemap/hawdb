@@ -1,0 +1,61 @@
+{
+  "source": "8202d2f50cc057716b47cd4080e5bb56d37ab562",
+  "roles": {
+    "hawdb_executor": {
+      "profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "features": [],
+      "fresh": false,
+      "executable": null
+    },
+    "hawdb": {
+      "profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "features": [
+        "background-maintenance",
+        "default",
+        "full-text-search",
+        "graph-analytics",
+        "tokio-runtime",
+        "vector-search"
+      ],
+      "fresh": false,
+      "executable": null
+    },
+    "consumer_publication": {
+      "profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": true
+      },
+      "features": [
+        "background-maintenance",
+        "default",
+        "full-text-search",
+        "graph-analytics",
+        "tokio-runtime",
+        "vector-search"
+      ],
+      "fresh": false,
+      "executable": "/build/release/deps/consumer_publication-4eda8d9ac18f1694"
+    }
+  },
+  "binary": {
+    "path": "/build/release/deps/consumer_publication-4eda8d9ac18f1694",
+    "sha256": "419ceb1271f706b8cf1bd006341f885fc2f3ec0a8339b000e79b41ea782b236b"
+  },
+  "seconds": 1239.7132869319998,
+  "binary_rehash": "The measurement script rehashes the read-only build binary before cases"
+}

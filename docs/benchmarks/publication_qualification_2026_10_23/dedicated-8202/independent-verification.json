@@ -1,0 +1,68 @@
+{
+  "artifact_id": 12544412288,
+  "run_id": 40049133474,
+  "artifact_sha256": "769de7476d6f13fe67ebd58d3b5aceaa4df60b071dd3f6519040c3dbe2a999f0",
+  "source": "8202d2f50cc057716b47cd4080e5bb56d37ab562",
+  "reconstructed_summary_byte_identical": true,
+  "summary_sha256": "294aa3cd3693e3328e51f2215d67a0f2691f555743aaf7ef6f2be3927a3464d2",
+  "cohorts": {
+    "read-resource": {
+      "cases": 54,
+      "read_requests": 119808,
+      "staging_call_range": [
+        5,
+        7673
+      ],
+      "advances": [],
+      "observed_boundary_rss_kib_range": [
+        30996,
+        70312
+      ],
+      "process_lifetime_hwm_kib_range": [
+        30996,
+        70312
+      ]
+    },
+    "sustained": {
+      "cases": 18,
+      "read_requests": 0,
+      "staging_call_range": [
+        5,
+        7247
+      ],
+      "advances": [
+        1024,
+        954,
+        817,
+        31,
+        35,
+        35,
+        36,
+        36,
+        32,
+        823,
+        962,
+        1023,
+        1048,
+        963,
+        816,
+        32,
+        35,
+        35
+      ],
+      "observed_boundary_rss_kib_range": null,
+      "process_lifetime_hwm_kib_range": null
+    },
+    "controls": {
+      "cases": 54,
+      "read_requests": 0,
+      "staging_call_range": [
+        5,
+        7115
+      ],
+      "advances": [],
+      "observed_boundary_rss_kib_range": null,
+      "process_lifetime_hwm_kib_range": null
+    }
+  }
+}

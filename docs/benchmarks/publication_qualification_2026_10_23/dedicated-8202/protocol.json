@@ -1,0 +1,144 @@
+{
+  "source": "8202d2f50cc057716b47cd4080e5bb56d37ab562",
+  "cohorts": [
+    {
+      "name": "read-resource",
+      "cases": 54,
+      "writes": 4096,
+      "extra": [
+        "--with-readers",
+        "--reads-per-reader",
+        "512"
+      ]
+    },
+    {
+      "name": "sustained",
+      "cases": 18,
+      "writes": 100000,
+      "extra": [
+        "--sustained"
+      ]
+    },
+    {
+      "name": "controls",
+      "cases": 54,
+      "writes": 4096,
+      "extra": []
+    }
+  ],
+  "rounds": 3,
+  "quiet_samples": 32,
+  "readers": "one per writer (1,4,8),512 requests each; same-query preparation/unfinished-writer intersection required",
+  "resources": {
+    "cpus": 4,
+    "memory_bytes": 6442450944,
+    "image": "rust@sha256:77fac8b98f9f46062bb680b6d25d5bcaabfc400143952ebc572e924bcbedc3fa"
+  },
+  "isolation": "Dedicated manual CI runner; all builds complete before timing; known compiler observations and coverage retained. No physical exclusivity claim.",
+  "limits": "No threshold/resource/durability changes; all adverse original records remain",
+  "declared_utc": "2026-10-24T01:18:15.218101+00:00",
+  "architecture": "x86_64",
+  "system": "Linux",
+  "cpu": {
+    "schema": "writer-cpu-topology-v1",
+    "affinity_cpus": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "allowed_logical_cpus": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "physical_cores": [
+      {
+        "package": 0,
+        "core": 0,
+        "logical_cpus": [
+          0,
+          1
+        ]
+      },
+      {
+        "package": 0,
+        "core": 1,
+        "logical_cpus": [
+          2,
+          3
+        ]
+      }
+    ],
+    "cpuset_masks": [
+      {
+        "path": "/sys/fs/cgroup/system.slice/hosted-compute-agent.service/cpuset.cpus.effective",
+        "cpus": [
+          0,
+          1,
+          2,
+          3
+        ]
+      },
+      {
+        "path": "/sys/fs/cgroup/system.slice/cpuset.cpus.effective",
+        "cpus": [
+          0,
+          1,
+          2,
+          3
+        ]
+      },
+      {
+        "path": "/sys/fs/cgroup/cpuset.cpus.effective",
+        "cpus": [
+          0,
+          1,
+          2,
+          3
+        ]
+      }
+    ],
+    "quota_limits": [
+      {
+        "path": "/sys/fs/cgroup/system.slice/hosted-compute-agent.service/cpu.max",
+        "quota": "max",
+        "period": "100000",
+        "cores": null
+      },
+      {
+        "path": "/sys/fs/cgroup/system.slice/cpu.max",
+        "quota": "max",
+        "period": "100000",
+        "cores": null
+      }
+    ],
+    "effective_cpu_cores": "2",
+    "maximum_writers": 1,
+    "writer_counts": [
+      1
+    ],
+    "multi_writer_coverage": false,
+    "rule": "max(1, floor(min(allowed physical cores, visible ancestor quota/period) / 2))",
+    "visibility": "visible cgroup mount ancestors only; physical topology as exposed by the host or VM"
+  },
+  "controller_sha256": "df5f79b79709ad678c39cb84e65b4301b7a0402b88b535e299abf6422a23a63b",
+  "fixture_sha256": {
+    "build.sh": "2177efb3f63477e0154b10d9f952c239ded8d89576fa06daa6f63b708a79a24d",
+    "protocol.json": "68842704ce70df3037a4d720629544dc4e7d441877d68831a1614becc57844a2",
+    "summarize.py": "c7f48701c2cb898b86c4ac5251c9c9ce5a0dba3261d046e7415154e8fbce5204",
+    "expected-build.json": "f19ae0fe50a00667f78257d5de4e34d3f5cfccfd1c593d9bbd7a9e06f0c8d6a1",
+    "README.md": "53a1ce25f320d9f69ff58ce7d5a2dc40785b445379f821914f534429333bf052",
+    "measure.sh": "58842dcd883fffc53221dca98555f6e04ed900e5c23431457108375f969f132a"
+  },
+  "host_monitor": {
+    "interval_seconds": 1,
+    "maximum_gap_seconds": 3,
+    "scope": "Known compiler/fuzz processes only; no physical exclusivity claim"
+  },
+  "container_git": {
+    "safe_directory": "/work",
+    "scope": "Process environment only"
+  }
+}

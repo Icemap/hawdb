@@ -1,0 +1,6 @@
+*.gz
+*.tar
+*.jsonl
+*.log
+*.stdout
+*.stderr

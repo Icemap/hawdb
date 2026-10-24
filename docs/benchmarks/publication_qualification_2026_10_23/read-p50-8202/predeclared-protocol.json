@@ -1,0 +1,17 @@
+{
+  "candidate": "8202d2f50cc057716b47cd4080e5bb56d37ab562",
+  "baseline": "8e9eab185ef880794d216d99ac6cd57442c511aa",
+  "workflow_run": 40060901487,
+  "writer_counts": [
+    1
+  ],
+  "reader_counts": [
+    1
+  ],
+  "pairs_per_profile": 40,
+  "profiles": [
+    "post_checkpoint",
+    "reopened_captured_wal"
+  ],
+  "scope": "One predeclared focused rerun; preserve all original and new endpoints, no optional stopping or selective replacement. Existing protocol intervals and strict gate remain unchanged."
+}

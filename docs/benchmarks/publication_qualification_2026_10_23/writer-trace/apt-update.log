@@ -1,8 +1,0 @@
-Get:1 http://deb.debian.org/debian bookworm InRelease [151 kB]
-Get:2 http://deb.debian.org/debian bookworm-updates InRelease [55.4 kB]
-Get:3 http://deb.debian.org/debian-security bookworm-security InRelease [34.8 kB]
-Get:4 http://deb.debian.org/debian bookworm/main arm64 Packages [8689 kB]
-Get:5 http://deb.debian.org/debian bookworm-updates/main arm64 Packages [6936 B]
-Get:6 http://deb.debian.org/debian-security bookworm-security/main arm64 Packages [355 kB]
-Fetched 9292 kB in 3s (2691 kB/s)
-Reading package lists...
