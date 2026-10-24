@@ -1066,3 +1066,16 @@ shaping only consumes selected identity rows. Exact endpoints/types/strengths,
 outside-node exclusion, total count independent of page size, repeat-cache hits
 and invalid empty input remain covered. One wrapper, three DTOs and the legacy
 host-side graph filtering/sorting helpers are removed.
+
+### Relationship read query fixtures
+
+Three existing navigation cases move to `relationship_reads.rs`. Separate seed,
+scope and bounded relationship-page queries retain caller order, missing and
+filtered seed distinctions, edge properties, unknown relationship-type empty
+results and snapshot cache reuse. The scoped phases share one snapshot and
+cumulative row/payload budget. The unknown-type fixture now asserts an existing
+seed plus an empty edge query rather than the deleted facade's synthetic zero
+seed counters. An existing out-of-core case additionally checks both exact edge
+types and targets before checkpoint. The same root general CI lane owns these
+cases. Two wrappers, four DTOs and legacy empty-group synthesis are removed;
+shared traversal internals remain until neighbor/path/subgraph migration.

@@ -475,18 +475,19 @@ fn typed_reads_and_mutations_include_checkpointed_canonical_rows() {
             .unwrap();
         assert_eq!(created.rows.len(), 1);
 
-        let relationships = db
-            .query_relationships_via_cypher(&KnowledgeRelationshipsRequest {
-                seeds: vec![KnowledgeEntityRequest {
-                    label: "Memory".to_string(),
-                    external_id: "memory:one".to_string(),
-                }],
-                relationship_type: None,
-                direction: KnowledgeNeighborDirection::Outgoing,
-                limit_per_seed: 4,
-            })
-            .unwrap();
-        assert_eq!(relationships.relationship_count, 2);
+        let relationships = db.query_request(bounded_batch_query(
+            "MATCH (m:Memory {id: $id})-[r]->(e:Entity) RETURN type(r) AS type, e.id AS target ORDER BY type LIMIT 4",
+            &BTreeMap::from([("id".into(), Value::String("memory:one".into()))]),
+        )).unwrap();
+        assert_eq!(relationships.rows.len(), 2);
+        assert_eq!(relationships.rows[0]["type"], Value::String("LINKS".into()));
+        assert_eq!(
+            relationships.rows[1]["type"],
+            Value::String("MENTIONS".into())
+        );
+        for row in &relationships.rows {
+            assert_eq!(row["target"], Value::String("entity:rust".into()));
+        }
         db.checkpoint().unwrap();
     }
 

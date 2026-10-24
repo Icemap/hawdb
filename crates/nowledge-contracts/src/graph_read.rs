@@ -61,43 +61,6 @@ pub struct KnowledgeNeighborsOutput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeRelationshipsRequest {
-    pub seeds: Vec<KnowledgeEntityRequest>,
-    pub relationship_type: Option<String>,
-    #[doc(hidden)]
-    pub direction: KnowledgeNeighborDirection,
-    pub limit_per_seed: usize,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeScopedRelationshipsRequest {
-    pub relationships: KnowledgeRelationshipsRequest,
-    pub metadata_filters: BTreeMap<String, String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeRelationshipGroup {
-    pub seed: KnowledgeEntityRequest,
-    pub seed_node_id: Option<u64>,
-    pub filtered_out: bool,
-    pub relationships: Vec<KnowledgeGraphContextPath>,
-    pub fanout_reason_codes: Vec<KnowledgeFanoutReasonCode>,
-    pub fanout_reason_details: Vec<KnowledgeFanoutReasonDetail>,
-    pub fanout_reasons: Vec<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeRelationshipsOutput {
-    pub graph_commit_epoch: u64,
-    pub groups: Vec<KnowledgeRelationshipGroup>,
-    pub relationship_type_found: bool,
-    pub found_seed_count: usize,
-    pub missing_seed_count: usize,
-    pub filtered_out_seed_count: usize,
-    pub relationship_count: usize,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KnowledgePathRequest {
     pub source_label: String,
     pub source_external_id: String,

@@ -7238,100 +7238,6 @@ fn expand_knowledge_neighbors_via_query_runtime(
 }
 
 #[cfg(test)]
-fn knowledge_relationships_via_query_runtime(
-    db: &Database,
-    request: &KnowledgeRelationshipsRequest,
-) -> Result<KnowledgeRelationshipsOutput> {
-    let scoped_request = KnowledgeScopedRelationshipsRequest {
-        relationships: request.clone(),
-        metadata_filters: BTreeMap::new(),
-    };
-    knowledge_scoped_relationships_via_query_runtime(db, &scoped_request)
-}
-
-#[cfg(test)]
-fn knowledge_scoped_relationships_via_query_runtime(
-    db: &Database,
-    request: &KnowledgeScopedRelationshipsRequest,
-) -> Result<KnowledgeRelationshipsOutput> {
-    let relationship_type_name = match request.relationships.relationship_type.as_deref() {
-        Some(name) => match db.runtime.get().unwrap().catalog.rel_type_id(name) {
-            Some(_) => {
-                validate_cypher_identifier(name, "relationship type")?;
-                Some(name.to_string())
-            }
-            None => {
-                return Ok(knowledge_empty_relationship_groups_for_missing_type(
-                    &db.runtime.get().unwrap().store,
-                    request,
-                ));
-            }
-        },
-        None => None,
-    };
-
-    let mut groups = Vec::with_capacity(request.relationships.seeds.len());
-    let mut found_seed_count = 0;
-    let mut missing_seed_count = 0;
-    let mut filtered_out_seed_count = 0;
-    let mut relationship_count = 0;
-    for (index, seed_request) in request.relationships.seeds.iter().enumerate() {
-        let seed = knowledge_relationship_seed_via_query_runtime(db, seed_request)?;
-        let Some(seed) = seed else {
-            missing_seed_count += 1;
-            groups.push(knowledge_empty_relationship_group(
-                seed_request,
-                None,
-                false,
-            ));
-            continue;
-        };
-        if !request.metadata_filters.is_empty()
-            && !knowledge_entity_matches_filters(&seed, &request.metadata_filters)
-        {
-            filtered_out_seed_count += 1;
-            groups.push(knowledge_empty_relationship_group(
-                seed_request,
-                Some(seed.node_id),
-                true,
-            ));
-            continue;
-        }
-
-        found_seed_count += 1;
-        let seed_hit_id = format!("seed_{index}");
-        let (relationships, fanout_reason_details) = knowledge_relationship_rows_via_query_runtime(
-            db,
-            &seed_hit_id,
-            seed.node_id,
-            relationship_type_name.as_deref(),
-            request.relationships.direction,
-            request.relationships.limit_per_seed,
-        )?;
-        relationship_count += relationships.len();
-        groups.push(KnowledgeRelationshipGroup {
-            seed: seed_request.clone(),
-            seed_node_id: Some(seed.node_id),
-            filtered_out: false,
-            relationships,
-            fanout_reason_codes: knowledge_fanout_reason_codes(&fanout_reason_details),
-            fanout_reasons: knowledge_fanout_reason_messages(&fanout_reason_details),
-            fanout_reason_details,
-        });
-    }
-
-    Ok(KnowledgeRelationshipsOutput {
-        graph_commit_epoch: db.runtime.get().unwrap().store.commit_epoch(),
-        groups,
-        relationship_type_found: true,
-        found_seed_count,
-        missing_seed_count,
-        filtered_out_seed_count,
-        relationship_count,
-    })
-}
-
-#[cfg(test)]
 fn knowledge_relationship_seed_via_query_runtime(
     db: &Database,
     seed: &KnowledgeEntityRequest,
@@ -7357,23 +7263,6 @@ fn knowledge_relationship_seed_via_query_runtime(
         .iter()
         .filter_map(|row| row.get("seed").and_then(knowledge_entity_from_value))
         .find(|entity| entity.external_id.as_deref() == Some(seed.external_id.as_str())))
-}
-
-#[cfg(test)]
-fn knowledge_empty_relationship_group(
-    seed: &KnowledgeEntityRequest,
-    seed_node_id: Option<u64>,
-    filtered_out: bool,
-) -> KnowledgeRelationshipGroup {
-    KnowledgeRelationshipGroup {
-        seed: seed.clone(),
-        seed_node_id,
-        filtered_out,
-        relationships: Vec::new(),
-        fanout_reason_codes: Vec::new(),
-        fanout_reason_details: Vec::new(),
-        fanout_reasons: Vec::new(),
-    }
 }
 
 #[cfg(test)]
@@ -7573,36 +7462,6 @@ fn knowledge_context_path_from_query_row(
         target_labels: target.labels,
         target_external_id: target.external_id,
     })
-}
-
-#[cfg(test)]
-fn knowledge_empty_relationship_groups_for_missing_type(
-    store: &GraphStore,
-    request: &KnowledgeScopedRelationshipsRequest,
-) -> KnowledgeRelationshipsOutput {
-    KnowledgeRelationshipsOutput {
-        graph_commit_epoch: store.commit_epoch(),
-        groups: request
-            .relationships
-            .seeds
-            .iter()
-            .cloned()
-            .map(|seed| KnowledgeRelationshipGroup {
-                seed,
-                seed_node_id: None,
-                filtered_out: false,
-                relationships: Vec::new(),
-                fanout_reason_codes: Vec::new(),
-                fanout_reason_details: Vec::new(),
-                fanout_reasons: Vec::new(),
-            })
-            .collect(),
-        relationship_type_found: false,
-        found_seed_count: 0,
-        missing_seed_count: 0,
-        filtered_out_seed_count: 0,
-        relationship_count: 0,
-    }
 }
 
 #[cfg(test)]

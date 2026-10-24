@@ -26,16 +26,6 @@ pub(super) trait QueryFirstTestExt {
         request: &KnowledgeScopedNeighborsRequest,
     ) -> Result<KnowledgeNeighborsOutput>;
 
-    fn query_relationships_via_cypher(
-        &self,
-        request: &KnowledgeRelationshipsRequest,
-    ) -> Result<KnowledgeRelationshipsOutput>;
-
-    fn query_scoped_relationships_via_cypher(
-        &self,
-        request: &KnowledgeScopedRelationshipsRequest,
-    ) -> Result<KnowledgeRelationshipsOutput>;
-
     fn query_paths_via_cypher(&self, request: &KnowledgePathRequest)
         -> Result<KnowledgePathOutput>;
 
@@ -68,20 +58,6 @@ impl QueryFirstTestExt for Database {
         request: &KnowledgeScopedNeighborsRequest,
     ) -> Result<KnowledgeNeighborsOutput> {
         super::super::knowledge_scoped_neighbors_via_query_runtime(self, request)
-    }
-
-    fn query_relationships_via_cypher(
-        &self,
-        request: &KnowledgeRelationshipsRequest,
-    ) -> Result<KnowledgeRelationshipsOutput> {
-        super::super::knowledge_relationships_via_query_runtime(self, request)
-    }
-
-    fn query_scoped_relationships_via_cypher(
-        &self,
-        request: &KnowledgeScopedRelationshipsRequest,
-    ) -> Result<KnowledgeRelationshipsOutput> {
-        super::super::knowledge_scoped_relationships_via_query_runtime(self, request)
     }
 
     fn query_paths_via_cypher(

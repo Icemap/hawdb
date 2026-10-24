@@ -17,12 +17,11 @@ use super::{
     BackgroundMaintenanceKind, BackgroundMaintenanceOptions, CanonicalStableIdMapping, Database,
     DatabaseConfig, DatabaseReadTransaction, DerivedArtifactJobStatus,
     ExternalContentArtifactJobCompletion, ExternalContentArtifactRuntimeManifest,
-    KnowledgeCandidateScoringPolicy, KnowledgeCandidateSource, KnowledgeEntityRequest,
-    KnowledgeFallbackReasonCode, KnowledgeFanoutReasonCode, KnowledgeGraphPathDirection,
-    KnowledgeNeighborDirection, KnowledgeNeighborsRequest, KnowledgePathRequest,
-    KnowledgeRelationshipsRequest, KnowledgeRetrievalEmptyReasonCode, KnowledgeRetrievalRequest,
-    KnowledgeRetrievalStage, KnowledgeScopedNeighborsRequest, KnowledgeScopedPathRequest,
-    KnowledgeScopedRelationshipsRequest, KnowledgeScopedSubgraphRequest, KnowledgeSubgraphRequest,
+    KnowledgeCandidateScoringPolicy, KnowledgeCandidateSource, KnowledgeFallbackReasonCode,
+    KnowledgeFanoutReasonCode, KnowledgeGraphPathDirection, KnowledgeNeighborDirection,
+    KnowledgeNeighborsRequest, KnowledgePathRequest, KnowledgeRetrievalEmptyReasonCode,
+    KnowledgeRetrievalRequest, KnowledgeRetrievalStage, KnowledgeScopedNeighborsRequest,
+    KnowledgeScopedPathRequest, KnowledgeScopedSubgraphRequest, KnowledgeSubgraphRequest,
     KnowledgeTraversalFallbackReasonCode, KnowledgeTruncationReasonCode, NowledgeGraphAdapter,
     NowledgeGraphStatement, PlanCacheBypassReason, PlanCacheLookup, QueryOutput,
     QueryStreamOptions, RecoveryMode, SearchProjectionGraphDeltaRequest,
@@ -147,6 +146,7 @@ mod relational_projection_expressions;
 mod relational_update_delete_outcomes;
 mod relationship_patterns;
 mod relationship_property_mutations;
+mod relationship_reads;
 mod runtime_capabilities;
 mod schema_indexes;
 mod schema_migrations;
