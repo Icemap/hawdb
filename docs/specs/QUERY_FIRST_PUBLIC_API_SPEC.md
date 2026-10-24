@@ -468,6 +468,10 @@ Entity-label fixture reads use a pinned public read transaction with separate
 bounded entity lookup and label-page statements. Ordering, projection and LIMIT
 remain in Cypher; cache and missing/empty distinctions are asserted directly
 without the two business read wrappers or eight lifecycle DTOs.
+Source lifecycle and metadata fixtures use fixed parameterized statements with
+current-state predicates and explicit optional chunk assignments. Their six
+runtime cases retain missing/idless protection, first-input normalization,
+one-batch WAL and reopen assertions without two business methods or eight DTOs.
 Remaining legacy business adapters still require migration; this removal does
 not complete issue #1193.
 

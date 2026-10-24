@@ -870,3 +870,15 @@ epochs. Malformed label/property syntax and empty normalized identities refuse
 without WAL changes. Two business read wrappers, their handwritten result
 shaping and eight DTOs are removed, completing removal of the test-only
 lifecycle DTO module. Runtime execution remains in the root general CI owner.
+
+### Source lifecycle and metadata queries
+
+`api::tests::source_lifecycle` retains six root general runtime cases through
+fixed bounded requests. Cypher predicates enforce current lifecycle state and
+external identity; optional chunk assignments use a separate statement. Host
+normalization validates identifiers, states and nonnegative chunk counts and
+retains first-input duplicates without graph inspection. Assertions preserve
+filtered/missing rows, idless protection, omitted fields, timestamps, one WAL
+batch and exact durable reopen. Two business methods and eight mutation DTOs
+are removed. Source count, parsed/revision and label adapters remain separate
+migration work.
