@@ -57,8 +57,10 @@ Bazel. A family description does not imply every leaf belongs to every lane.
 
 ### Automatic-checkpoint frontend deadline controls
 
-`api::automatic_checkpoint::tests::headroom` retains its existing root unit
-owner, checked profile, 320-row write/reopen fixtures and
+`//:hawdb_unit_general_tests` owns
+`api::automatic_checkpoint::tests::headroom` in the default-feature root CI lane
+(`background-maintenance` required). It retains the checked profile, 320-row
+write/reopen fixtures and
 target timeout ceilings. Functional idle/retiring/prepared-prefix tests freeze
 only the private test clock for frontend capacity/backoff policy, so compiler
 contention cannot consume a deliberately paused owner's production deadline.
