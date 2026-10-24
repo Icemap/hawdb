@@ -469,21 +469,17 @@ fn typed_reads_and_mutations_include_checkpointed_canonical_rows() {
         );
 
         let created = db
-            .create_knowledge_relationship(&KnowledgeRelationshipCreateRequest {
-                source: KnowledgeEntityRequest {
-                    label: "Memory".to_string(),
-                    external_id: "memory:one".to_string(),
-                },
-                target: KnowledgeEntityRequest {
-                    label: "Entity".to_string(),
-                    external_id: "entity:rust".to_string(),
-                },
-                relationship_type: "MENTIONS".to_string(),
-                properties: BTreeMap::from([("weight".to_string(), Value::Int(2))]),
-            })
+            .query_request(bounded_batch_query(
+                "MATCH (s:Memory {id: $source}), (t:Entity {id: $target}) \
+                CREATE (s)-[:MENTIONS {weight: $weight}]->(t)",
+                &BTreeMap::from([
+                    ("source".into(), Value::String("memory:one".into())),
+                    ("target".into(), Value::String("entity:rust".into())),
+                    ("weight".into(), Value::Int(2)),
+                ]),
+            ))
             .unwrap();
-        assert!(created.matched);
-        assert_eq!(created.created_relationship_count, 1);
+        assert_eq!(created.rows.len(), 1);
 
         let relationships = db
             .query_relationships_via_cypher(&KnowledgeRelationshipsRequest {
@@ -900,31 +896,23 @@ fn external_optimizer_statistics_refresh_spills_and_persists_exact_stats() {
             .unwrap();
         db.query("CREATE (:Entity {id: 'entity:hawdb', kind: 'library'})")
             .unwrap();
-        db.create_knowledge_relationship(&KnowledgeRelationshipCreateRequest {
-            source: KnowledgeEntityRequest {
-                label: "Memory".to_string(),
-                external_id: "memory:one".to_string(),
-            },
-            target: KnowledgeEntityRequest {
-                label: "Entity".to_string(),
-                external_id: "entity:rust".to_string(),
-            },
-            relationship_type: "LINKS".to_string(),
-            properties: BTreeMap::from([("weight".to_string(), Value::Int(1))]),
-        })
+        db.query_request(bounded_batch_query(
+            "MATCH (s:Memory {id: $source}), (t:Entity {id: $target}) CREATE (s)-[:LINKS {weight: $weight}]->(t)",
+            &BTreeMap::from([
+                ("source".into(), Value::String("memory:one".into())),
+                ("target".into(), Value::String("entity:rust".into())),
+                ("weight".into(), Value::Int(1)),
+            ]),
+        ))
         .unwrap();
-        db.create_knowledge_relationship(&KnowledgeRelationshipCreateRequest {
-            source: KnowledgeEntityRequest {
-                label: "Entity".to_string(),
-                external_id: "entity:rust".to_string(),
-            },
-            target: KnowledgeEntityRequest {
-                label: "Entity".to_string(),
-                external_id: "entity:hawdb".to_string(),
-            },
-            relationship_type: "LINKS".to_string(),
-            properties: BTreeMap::from([("weight".to_string(), Value::Int(2))]),
-        })
+        db.query_request(bounded_batch_query(
+            "MATCH (s:Entity {id: $source}), (t:Entity {id: $target}) CREATE (s)-[:LINKS {weight: $weight}]->(t)",
+            &BTreeMap::from([
+                ("source".into(), Value::String("entity:rust".into())),
+                ("target".into(), Value::String("entity:hawdb".into())),
+                ("weight".into(), Value::Int(2)),
+            ]),
+        ))
         .unwrap();
         let mut transaction = db.begin_transaction().unwrap();
         for id in 0..128 {
@@ -951,18 +939,14 @@ fn external_optimizer_statistics_refresh_spills_and_persists_exact_stats() {
 
         db.query("CREATE (:Memory {id: 'memory:two', kind: 'task'})")
             .unwrap();
-        db.create_knowledge_relationship(&KnowledgeRelationshipCreateRequest {
-            source: KnowledgeEntityRequest {
-                label: "Memory".to_string(),
-                external_id: "memory:two".to_string(),
-            },
-            target: KnowledgeEntityRequest {
-                label: "Entity".to_string(),
-                external_id: "entity:hawdb".to_string(),
-            },
-            relationship_type: "LINKS".to_string(),
-            properties: BTreeMap::from([("weight".to_string(), Value::Int(3))]),
-        })
+        db.query_request(bounded_batch_query(
+            "MATCH (s:Memory {id: $source}), (t:Entity {id: $target}) CREATE (s)-[:LINKS {weight: $weight}]->(t)",
+            &BTreeMap::from([
+                ("source".into(), Value::String("memory:two".into())),
+                ("target".into(), Value::String("entity:hawdb".into())),
+                ("weight".into(), Value::Int(3)),
+            ]),
+        ))
         .unwrap();
         let source_epoch = db.basic_statistics().unwrap().computed_at_commit_epoch;
         let report = db

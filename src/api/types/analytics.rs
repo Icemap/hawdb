@@ -14,9 +14,6 @@
 
 use super::super::*;
 
-#[cfg(test)]
-pub use hawdb_nowledge_contracts::test_support::analytics::*;
-
 pub(crate) struct QueryExecutionTrace {
     pub(crate) statement: cypher::Statement,
     pub(crate) optimizer_trace: Option<OptimizerTrace>,

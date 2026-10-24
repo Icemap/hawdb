@@ -20,10 +20,7 @@ mod mutation;
 mod relational;
 mod retrieval;
 
-#[cfg(not(test))]
 pub(crate) use analytics::QueryExecutionTrace;
-#[cfg(test)]
-pub use analytics::*;
 #[cfg(test)]
 pub use graph_read::*;
 #[cfg(test)]

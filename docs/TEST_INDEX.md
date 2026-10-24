@@ -993,3 +993,16 @@ filtered no-ops, invalid/empty SET, read-only refusal and one-batch durable reop
 remain covered. The idless case includes a real relationship whose weight must
 remain unchanged. Four adapters, seven DTOs and their dynamic SET builder are
 removed; non-returning SET results are verified through commit and readback.
+
+### Relationship creation and merge queries
+
+`api::tests::{knowledge_relationship_create_upserts,knowledge_relationship_batch_creates}`
+retain ten and six root general cases through bounded CREATE/MERGE and fixed
+readback. The cases preserve exact endpoint/property values, missing/idless
+protection, source/target scope predicates, repeated MERGE identity/properties,
+read-only refusal and one-batch durable reopen. Four fixture calls in two existing
+storage-recovery/statistics cases also use bounded CREATE; their out-of-core,
+checkpoint, cache/spill and exact-statistics assertions retain their CI owners.
+The last eight business mutation methods and fourteen DTOs are removed, along
+with the test-only analytics DTO module and handwritten mutation graph inspection.
+Read adapter migration and final runtime qualification remain separate work.

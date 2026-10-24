@@ -14,65 +14,58 @@
 
 use super::*;
 
+pub(super) const CREATE: &str = "MATCH (m:Memory {id: $source}), (e:Entity {id: $target}) CREATE (m)-[:MENTIONS {confidence: $confidence}]->(e)";
+const CREATE_WITH_COUNT: &str = "MATCH (m:Memory {id: $source}), (e:Entity {id: $target}) CREATE (m)-[:MENTIONS {confidence: $confidence, mention_count: $count}]->(e)";
+pub(super) const SCOPED_CREATE: &str = "MATCH (m:Memory {id: $source, source_id: $scope}), (e:Entity {id: $target, space_id: $space}) CREATE (m)-[:MENTIONS {confidence: $confidence}]->(e)";
+pub(super) const INVALID_CREATE: &str = "MATCH (m:Memory {id: $source}), (e:Entity {id: $target}) CREATE (m)-[:MENTIONS-WITH-DASH]->(e)";
+pub(super) const READ: &str = "MATCH (m:Memory)-[r:MENTIONS]->(e:Entity) RETURN id(m) AS source_node_id, m.id AS source, id(e) AS target_node_id, e.id AS target, id(r) AS relationship_id, r.confidence AS confidence, r.mention_count AS count ORDER BY source, target";
+const LABEL_MERGE: &str = "MATCH (m:Memory {id: $source}), (l:Label {id: $target}) MERGE (m)-[r:HAS_LABEL]->(l) ON CREATE SET r.assigned_by = $assigned_by, r.created_at = $created_at";
+const LABEL_READ: &str = "MATCH (m:Memory)-[r:HAS_LABEL]->(l:Label) RETURN id(m) AS source_node_id, m.id AS source, id(l) AS target_node_id, l.id AS target, id(r) AS relationship_id, r.assigned_by AS assigned_by, r.created_at AS created_at ORDER BY source, target";
+
+pub(super) fn parameters(source: &str, target: &str, confidence: f64) -> BTreeMap<String, Value> {
+    BTreeMap::from([
+        ("source".into(), Value::String(source.into())),
+        ("target".into(), Value::String(target.into())),
+        ("confidence".into(), Value::Float(confidence)),
+        ("count".into(), Value::Int(1)),
+        ("scope".into(), Value::String("thread_1".into())),
+        ("space".into(), Value::String("default".into())),
+    ])
+}
+
+fn label_parameters(source: &str, assigned_by: &str) -> BTreeMap<String, Value> {
+    BTreeMap::from([
+        ("source".into(), Value::String(source.into())),
+        ("target".into(), Value::String("label_1".into())),
+        ("assigned_by".into(), Value::String(assigned_by.into())),
+        ("created_at".into(), Value::String("2026-07-19".into())),
+    ])
+}
+
 #[test]
-fn creates_knowledge_relationship_through_typed_api() {
+fn creates_knowledge_relationship_through_bounded_query() {
     let mut db = Database::new();
     db.query("CREATE (:Memory {id: 'memory_1', title: 'First'})")
         .unwrap();
     db.query("CREATE (:Entity {id: 'entity_1', name: 'HawDB'})")
         .unwrap();
-
-    let output = db
-        .create_knowledge_relationship(&KnowledgeRelationshipCreateRequest {
-            source: KnowledgeEntityRequest {
-                label: "Memory".to_string(),
-                external_id: "memory_1".to_string(),
-            },
-            target: KnowledgeEntityRequest {
-                label: "Entity".to_string(),
-                external_id: "entity_1".to_string(),
-            },
-            relationship_type: "MENTIONS".to_string(),
-            properties: BTreeMap::from([
-                ("confidence".to_string(), Value::Float(0.9)),
-                ("mention_count".to_string(), Value::Int(1)),
-            ]),
-        })
+    let parameters = parameters("memory_1", "entity_1", 0.9);
+    let epoch = db.commit_epoch().unwrap();
+    let created = db
+        .query_request(bounded_batch_query(CREATE_WITH_COUNT, &parameters))
         .unwrap();
-
-    assert_eq!(output.graph_commit_epoch_before, 2);
-    assert_eq!(output.graph_commit_epoch_after, 3);
-    assert_eq!(output.source_node_id, Some(0));
-    assert_eq!(output.target_node_id, Some(1));
-    assert!(output.matched);
-    assert!(!output.source_filtered_out);
-    assert!(!output.target_filtered_out);
-    assert_eq!(output.created_relationship_count, 1);
-
-    let relationships = db
-        .query_relationships_via_cypher(&KnowledgeRelationshipsRequest {
-            seeds: vec![KnowledgeEntityRequest {
-                label: "Memory".to_string(),
-                external_id: "memory_1".to_string(),
-            }],
-            relationship_type: Some("MENTIONS".to_string()),
-            direction: KnowledgeNeighborDirection::Outgoing,
-            limit_per_seed: 4,
-        })
+    assert_eq!(created.rows.len(), 1);
+    assert_eq!(epoch, 2);
+    assert_eq!(db.commit_epoch().unwrap(), epoch + 1);
+    let rows = db
+        .query_request(bounded_batch_query(READ, &parameters))
         .unwrap();
-    assert_eq!(relationships.relationship_count, 1);
-    assert_eq!(
-        relationships.groups[0].relationships[0]
-            .target_external_id
-            .as_deref(),
-        Some("entity_1")
-    );
-    assert_eq!(
-        relationships.groups[0].relationships[0]
-            .relationship_properties
-            .get("mention_count"),
-        Some(&Value::Int(1))
-    );
+    assert_eq!(rows.rows.len(), 1);
+    assert_eq!(rows.rows[0]["source_node_id"], Value::Int(0));
+    assert_eq!(rows.rows[0]["target_node_id"], Value::Int(1));
+    for key in ["source", "target", "confidence", "count"] {
+        assert_eq!(rows.rows[0][key], parameters[key]);
+    }
 }
 
 #[test]
@@ -84,52 +77,26 @@ fn scoped_knowledge_relationship_create_does_not_write_filtered_endpoint() {
     .unwrap();
     db.query("CREATE (:Entity {id: 'entity_1', name: 'HawDB', space_id: 'default'})")
         .unwrap();
-
-    let output = db
-        .create_scoped_knowledge_relationship(&KnowledgeScopedRelationshipCreateRequest {
-            create: KnowledgeRelationshipCreateRequest {
-                source: KnowledgeEntityRequest {
-                    label: "Memory".to_string(),
-                    external_id: "memory_1".to_string(),
-                },
-                target: KnowledgeEntityRequest {
-                    label: "Entity".to_string(),
-                    external_id: "entity_1".to_string(),
-                },
-                relationship_type: "MENTIONS".to_string(),
-                properties: BTreeMap::new(),
-            },
-            source_metadata_filters: BTreeMap::from([(
-                "source_id".to_string(),
-                "thread_2".to_string(),
-            )]),
-            target_metadata_filters: BTreeMap::from([(
-                "space_id".to_string(),
-                "default".to_string(),
-            )]),
-        })
-        .unwrap();
-
-    assert_eq!(output.graph_commit_epoch_before, 2);
-    assert_eq!(output.graph_commit_epoch_after, 2);
-    assert_eq!(output.source_node_id, Some(0));
-    assert_eq!(output.target_node_id, Some(1));
-    assert!(!output.matched);
-    assert!(output.source_filtered_out);
-    assert!(!output.target_filtered_out);
-    assert_eq!(output.created_relationship_count, 0);
-    let relationships = db
-        .query_relationships_via_cypher(&KnowledgeRelationshipsRequest {
-            seeds: vec![KnowledgeEntityRequest {
-                label: "Memory".to_string(),
-                external_id: "memory_1".to_string(),
-            }],
-            relationship_type: Some("MENTIONS".to_string()),
-            direction: KnowledgeNeighborDirection::Outgoing,
-            limit_per_seed: 4,
-        })
-        .unwrap();
-    assert_eq!(relationships.relationship_count, 0);
+    let mut parameters = parameters("memory_1", "entity_1", 0.9);
+    parameters.insert("scope".into(), Value::String("thread_2".into()));
+    let epoch = db.commit_epoch().unwrap();
+    assert!(db
+        .query_request(bounded_batch_query(SCOPED_CREATE, &parameters))
+        .unwrap()
+        .rows
+        .is_empty());
+    assert_eq!(db.commit_epoch().unwrap(), epoch);
+    assert!(db
+        .query_request(bounded_batch_query(READ, &parameters))
+        .unwrap()
+        .rows
+        .is_empty());
+    let endpoints = db.query_request(bounded_batch_query("MATCH (m:Memory {id: $source}), (e:Entity {id: $target}) RETURN id(m) AS source_node_id, id(e) AS target_node_id, m.source_id AS scope, e.space_id AS space", &parameters)).unwrap();
+    assert_eq!(endpoints.rows.len(), 1);
+    assert_eq!(endpoints.rows[0]["source_node_id"], Value::Int(0));
+    assert_eq!(endpoints.rows[0]["target_node_id"], Value::Int(1));
+    assert_eq!(endpoints.rows[0]["scope"], Value::String("thread_1".into()));
+    assert_eq!(endpoints.rows[0]["space"], Value::String("default".into()));
 }
 
 #[test]
@@ -137,24 +104,15 @@ fn knowledge_relationship_create_rejects_invalid_identifiers() {
     let mut db = Database::new();
     db.query("CREATE (:Memory {id: 'memory_1'})").unwrap();
     db.query("CREATE (:Entity {id: 'entity_1'})").unwrap();
-
+    let epoch = db.commit_epoch().unwrap();
     let error = db
-        .create_knowledge_relationship(&KnowledgeRelationshipCreateRequest {
-            source: KnowledgeEntityRequest {
-                label: "Memory".to_string(),
-                external_id: "memory_1".to_string(),
-            },
-            target: KnowledgeEntityRequest {
-                label: "Entity".to_string(),
-                external_id: "entity_1".to_string(),
-            },
-            relationship_type: "MENTIONS-WITH-DASH".to_string(),
-            properties: BTreeMap::new(),
-        })
+        .query_request(bounded_batch_query(
+            INVALID_CREATE,
+            &parameters("memory_1", "entity_1", 0.9),
+        ))
         .unwrap_err();
-
-    assert!(error.to_string().contains("relationship type identifier"));
-    assert_eq!(db.runtime.get().unwrap().store.commit_epoch(), 2);
+    assert!(matches!(error, HawDBError::Parse(_)));
+    assert_eq!(db.commit_epoch().unwrap(), epoch);
 }
 
 #[test]
@@ -163,114 +121,77 @@ fn knowledge_relationship_create_does_not_write_projected_idless_identity() {
     db.query("CREATE (:Memory {title: 'Idless memory'})")
         .unwrap();
     db.query("CREATE (:Entity {id: 'entity_1'})").unwrap();
-
-    let output = db
-        .create_knowledge_relationship(&KnowledgeRelationshipCreateRequest {
-            source: KnowledgeEntityRequest {
-                label: "Memory".to_string(),
-                external_id: "0".to_string(),
-            },
-            target: KnowledgeEntityRequest {
-                label: "Entity".to_string(),
-                external_id: "entity_1".to_string(),
-            },
-            relationship_type: "MENTIONS".to_string(),
-            properties: BTreeMap::new(),
-        })
+    let parameters = parameters("0", "entity_1", 0.9);
+    let epoch = db.commit_epoch().unwrap();
+    assert!(db
+        .query_request(bounded_batch_query(CREATE, &parameters))
+        .unwrap()
+        .rows
+        .is_empty());
+    assert_eq!(db.commit_epoch().unwrap(), epoch);
+    assert!(db
+        .query_request(bounded_batch_query(READ, &parameters))
+        .unwrap()
+        .rows
+        .is_empty());
+    let memory = db
+        .query_request(bounded_batch_query(
+            "MATCH (m:Memory) RETURN id(m) AS node_id, m.id AS id",
+            &parameters,
+        ))
         .unwrap();
-
-    assert_eq!(output.graph_commit_epoch_before, 2);
-    assert_eq!(output.graph_commit_epoch_after, 2);
-    assert_eq!(output.source_node_id, Some(0));
-    assert_eq!(output.target_node_id, Some(1));
-    assert!(!output.matched);
-    assert_eq!(output.created_relationship_count, 0);
+    assert_eq!(memory.rows.len(), 1);
+    assert_eq!(memory.rows[0]["node_id"], Value::Int(0));
+    assert_eq!(memory.rows[0]["id"], Value::Null);
 }
 
 #[test]
-fn upserts_knowledge_relationship_through_typed_api() {
-    let mut db = Database::new();
-    db.query("CREATE (:Memory {id: 'memory_1'})").unwrap();
-    db.query("CREATE (:Label {id: 'label_1'})").unwrap();
-
-    let created = db
-        .upsert_knowledge_relationship(&KnowledgeRelationshipUpsertRequest {
-            source: KnowledgeEntityRequest {
-                label: "Memory".to_string(),
-                external_id: "memory_1".to_string(),
-            },
-            target: KnowledgeEntityRequest {
-                label: "Label".to_string(),
-                external_id: "label_1".to_string(),
-            },
-            relationship_type: "HAS_LABEL".to_string(),
-            create_properties: BTreeMap::from([
-                (
-                    "assigned_by".to_string(),
-                    Value::String("system".to_string()),
-                ),
-                (
-                    "created_at".to_string(),
-                    Value::String("2026-07-19".to_string()),
-                ),
-            ]),
-        })
-        .unwrap();
-
-    assert_eq!(created.graph_commit_epoch_before, 2);
-    assert_eq!(created.graph_commit_epoch_after, 3);
-    assert_eq!(created.source_node_id, Some(0));
-    assert_eq!(created.target_node_id, Some(1));
-    assert!(created.matched);
-    assert!(created.created);
-    assert!(!created.already_exists);
-    assert_eq!(created.created_relationship_count, 1);
-    assert_eq!(created.relationship_id, Some(0));
-
-    let epoch_before_second = db.runtime.get().unwrap().store.commit_epoch();
-    let existing = db
-        .upsert_knowledge_relationship(&KnowledgeRelationshipUpsertRequest {
-            source: KnowledgeEntityRequest {
-                label: "Memory".to_string(),
-                external_id: "memory_1".to_string(),
-            },
-            target: KnowledgeEntityRequest {
-                label: "Label".to_string(),
-                external_id: "label_1".to_string(),
-            },
-            relationship_type: "HAS_LABEL".to_string(),
-            create_properties: BTreeMap::from([(
-                "assigned_by".to_string(),
-                Value::String("ignored".to_string()),
-            )]),
-        })
-        .unwrap();
-
-    assert_eq!(existing.graph_commit_epoch_before, epoch_before_second);
-    assert_eq!(existing.graph_commit_epoch_after, epoch_before_second);
-    assert!(existing.matched);
-    assert!(!existing.created);
-    assert!(existing.already_exists);
-    assert_eq!(existing.relationship_id, Some(0));
-    assert_eq!(existing.created_relationship_count, 0);
-    let relationships = db
-        .query_relationships_via_cypher(&KnowledgeRelationshipsRequest {
-            seeds: vec![KnowledgeEntityRequest {
-                label: "Memory".to_string(),
-                external_id: "memory_1".to_string(),
-            }],
-            relationship_type: Some("HAS_LABEL".to_string()),
-            direction: KnowledgeNeighborDirection::Outgoing,
-            limit_per_seed: 10,
-        })
-        .unwrap();
-    assert_eq!(relationships.relationship_count, 1);
-    assert_eq!(
-        relationships.groups[0].relationships[0]
-            .relationship_properties
-            .get("assigned_by"),
-        Some(&Value::String("system".to_string()))
-    );
+fn upserts_knowledge_relationship_through_bounded_query() {
+    let path = unique_test_dir("relationship_upsert_query_retry");
+    {
+        let mut db = Database::open(&path).unwrap();
+        db.query("CREATE (:Memory {id: 'memory_1'})").unwrap();
+        db.query("CREATE (:Label {id: 'label_1'})").unwrap();
+        let parameters = label_parameters("memory_1", "system");
+        let epoch = db.commit_epoch().unwrap();
+        let created = db
+            .query_request(bounded_batch_query(LABEL_MERGE, &parameters))
+            .unwrap();
+        assert_eq!(created.rows.len(), 1);
+        assert_eq!(created.rows[0]["created"], Value::Bool(true));
+        assert_eq!(created.rows[0]["rel_id"], Value::Int(0));
+        assert_eq!(db.commit_epoch().unwrap(), epoch + 1);
+        let before = db
+            .query_request(bounded_batch_query(LABEL_READ, &parameters))
+            .unwrap();
+        assert_eq!(before.rows.len(), 1);
+        assert_eq!(before.rows[0]["source_node_id"], Value::Int(0));
+        assert_eq!(before.rows[0]["target_node_id"], Value::Int(1));
+        assert_eq!(
+            before.rows[0]["assigned_by"],
+            Value::String("system".into())
+        );
+        assert_eq!(
+            before.rows[0]["created_at"],
+            Value::String("2026-07-19".into())
+        );
+        let wal = read_test_wal(&path).unwrap();
+        let mut second = label_parameters("memory_1", "ignored");
+        second.insert("created_at".into(), Value::Null);
+        let existing = db
+            .query_request(bounded_batch_query(LABEL_MERGE, &second))
+            .unwrap();
+        assert_eq!(existing.rows.len(), 1);
+        assert_eq!(existing.rows[0]["created"], Value::Bool(false));
+        assert_eq!(existing.rows[0]["rel_id"], created.rows[0]["rel_id"]);
+        assert_eq!(db.commit_epoch().unwrap(), epoch + 1);
+        assert_eq!(read_test_wal(&path).unwrap(), wal);
+        let after = db
+            .query_request(bounded_batch_query(LABEL_READ, &parameters))
+            .unwrap();
+        assert_eq!(after.rows, before.rows);
+    }
+    std::fs::remove_dir_all(path).unwrap();
 }
 
 #[test]
@@ -279,202 +200,133 @@ fn knowledge_relationship_upsert_does_not_write_projected_idless_endpoint() {
     db.query("CREATE (:Memory {title: 'Idless memory'})")
         .unwrap();
     db.query("CREATE (:Label {id: 'label_1'})").unwrap();
-
-    let output = db
-        .upsert_knowledge_relationship(&KnowledgeRelationshipUpsertRequest {
-            source: KnowledgeEntityRequest {
-                label: "Memory".to_string(),
-                external_id: "0".to_string(),
-            },
-            target: KnowledgeEntityRequest {
-                label: "Label".to_string(),
-                external_id: "label_1".to_string(),
-            },
-            relationship_type: "HAS_LABEL".to_string(),
-            create_properties: BTreeMap::new(),
-        })
-        .unwrap();
-
-    assert_eq!(output.graph_commit_epoch_before, 2);
-    assert_eq!(output.graph_commit_epoch_after, 2);
-    assert_eq!(output.source_node_id, Some(0));
-    assert_eq!(output.target_node_id, Some(1));
-    assert!(!output.matched);
-    assert!(output.non_writable);
-    assert_eq!(output.created_relationship_count, 0);
+    let parameters = label_parameters("0", "system");
+    let epoch = db.commit_epoch().unwrap();
+    assert!(db
+        .query_request(bounded_batch_query(LABEL_MERGE, &parameters))
+        .unwrap()
+        .rows
+        .is_empty());
+    assert_eq!(db.commit_epoch().unwrap(), epoch);
+    assert!(db
+        .query_request(bounded_batch_query(LABEL_READ, &parameters))
+        .unwrap()
+        .rows
+        .is_empty());
 }
 
 #[test]
-fn upserts_knowledge_relationship_batch_through_typed_api() {
+fn upserts_knowledge_relationship_batch_through_bounded_queries() {
     let mut db = Database::new();
     db.query("CREATE (:Memory {id: 'memory_1'})").unwrap();
     db.query("CREATE (:Memory {id: 'memory_2'})").unwrap();
     db.query("CREATE (:Label {id: 'label_1'})").unwrap();
-    db.query("MATCH (m:Memory {id: 'memory_1'}), (l:Label {id: 'label_1'}) CREATE (m)-[:HAS_LABEL {assigned_by: 'existing'}]->(l)")
-        .unwrap();
-
-    let output = db
-        .upsert_knowledge_relationship_batch(&KnowledgeRelationshipUpsertBatchRequest {
-            upserts: vec![
-                KnowledgeRelationshipUpsertRequest {
-                    source: KnowledgeEntityRequest {
-                        label: "Memory".to_string(),
-                        external_id: "memory_1".to_string(),
-                    },
-                    target: KnowledgeEntityRequest {
-                        label: "Label".to_string(),
-                        external_id: "label_1".to_string(),
-                    },
-                    relationship_type: "HAS_LABEL".to_string(),
-                    create_properties: BTreeMap::from([(
-                        "assigned_by".to_string(),
-                        Value::String("ignored".to_string()),
-                    )]),
-                },
-                KnowledgeRelationshipUpsertRequest {
-                    source: KnowledgeEntityRequest {
-                        label: "Memory".to_string(),
-                        external_id: "memory_2".to_string(),
-                    },
-                    target: KnowledgeEntityRequest {
-                        label: "Label".to_string(),
-                        external_id: "label_1".to_string(),
-                    },
-                    relationship_type: "HAS_LABEL".to_string(),
-                    create_properties: BTreeMap::from([(
-                        "assigned_by".to_string(),
-                        Value::String("created".to_string()),
-                    )]),
-                },
-                KnowledgeRelationshipUpsertRequest {
-                    source: KnowledgeEntityRequest {
-                        label: "Memory".to_string(),
-                        external_id: "memory_2".to_string(),
-                    },
-                    target: KnowledgeEntityRequest {
-                        label: "Label".to_string(),
-                        external_id: "label_1".to_string(),
-                    },
-                    relationship_type: "HAS_LABEL".to_string(),
-                    create_properties: BTreeMap::from([(
-                        "assigned_by".to_string(),
-                        Value::String("duplicate".to_string()),
-                    )]),
-                },
-            ],
-        })
-        .unwrap();
-
-    assert_eq!(output.graph_commit_epoch_before, 4);
-    assert_eq!(output.graph_commit_epoch_after, 5);
-    assert_eq!(output.matched_count, 3);
-    assert_eq!(output.created_count, 1);
-    assert_eq!(output.already_exists_count, 2);
-    assert_eq!(output.created_relationship_count, 1);
-    assert!(output.rows[0].already_exists);
-    assert_eq!(output.rows[0].relationship_id, Some(0));
-    assert!(output.rows[1].created);
-    assert!(output.rows[1].relationship_id.is_some());
-    assert!(output.rows[2].already_exists);
-    assert_eq!(output.rows[2].relationship_id, None);
-
-    for memory_id in ["memory_1", "memory_2"] {
-        let relationships = db
-            .query_relationships_via_cypher(&KnowledgeRelationshipsRequest {
-                seeds: vec![KnowledgeEntityRequest {
-                    label: "Memory".to_string(),
-                    external_id: memory_id.to_string(),
-                }],
-                relationship_type: Some("HAS_LABEL".to_string()),
-                direction: KnowledgeNeighborDirection::Outgoing,
-                limit_per_seed: 10,
-            })
-            .unwrap();
-        assert_eq!(relationships.relationship_count, 1);
+    db.query("MATCH (m:Memory {id: 'memory_1'}), (l:Label {id: 'label_1'}) CREATE (m)-[:HAS_LABEL {assigned_by: 'existing'}]->(l)").unwrap();
+    let epoch = db.commit_epoch().unwrap();
+    let mut transaction = db.begin_transaction().unwrap();
+    for (memory, assigned_by) in [
+        ("memory_1", "ignored"),
+        ("memory_2", "created"),
+        ("memory_2", "duplicate"),
+    ] {
+        assert!(transaction
+            .query_request(bounded_batch_query(
+                LABEL_MERGE,
+                &label_parameters(memory, assigned_by)
+            ))
+            .unwrap()
+            .rows
+            .is_empty());
     }
+    let output = transaction.commit().unwrap();
+    assert_eq!(output.rows.len(), 3);
+    for (row, created) in output.rows.iter().zip([false, true, false]) {
+        assert_eq!(row["created"], Value::Bool(created));
+    }
+    assert_eq!(output.rows[0]["rel_id"], Value::Int(0));
+    assert_eq!(output.rows[1]["rel_id"], output.rows[2]["rel_id"]);
+    assert_eq!(epoch, 4);
+    assert_eq!(db.commit_epoch().unwrap(), epoch + 1);
+    let rows = db
+        .query_request(bounded_batch_query(LABEL_READ, &BTreeMap::new()))
+        .unwrap();
+    assert_eq!(rows.rows.len(), 2);
+    for (index, source, assigned_by) in [(0, "memory_1", "existing"), (1, "memory_2", "created")] {
+        assert_eq!(rows.rows[index]["source"], Value::String(source.into()));
+        assert_eq!(rows.rows[index]["target"], Value::String("label_1".into()));
+        assert_eq!(
+            rows.rows[index]["assigned_by"],
+            Value::String(assigned_by.into())
+        );
+    }
+    assert_eq!(rows.rows[0]["created_at"], Value::Null);
+    assert_eq!(
+        rows.rows[1]["created_at"],
+        Value::String("2026-07-19".into())
+    );
 }
 
 #[test]
-fn typed_knowledge_relationship_batch_upsert_persists_as_one_wal_batch_and_replays() {
-    let path = unique_test_dir("typed_knowledge_relationship_batch_upsert_wal_replay");
+fn knowledge_relationship_batch_upsert_queries_persist_as_one_wal_batch_and_replay() {
+    let path = unique_test_dir("relationship_upsert_batch_query_replay");
     {
         let mut db = Database::open(&path).unwrap();
         db.query("CREATE (:Memory {id: 'memory_1'})").unwrap();
         db.query("CREATE (:Memory {id: 'memory_2'})").unwrap();
         db.query("CREATE (:Label {id: 'label_1'})").unwrap();
-        let batch_count_before_upsert = read_test_wal(&path).unwrap().matches("\tbatch\t").count();
-        db.upsert_knowledge_relationship_batch(&KnowledgeRelationshipUpsertBatchRequest {
-            upserts: vec![
-                KnowledgeRelationshipUpsertRequest {
-                    source: KnowledgeEntityRequest {
-                        label: "Memory".to_string(),
-                        external_id: "memory_1".to_string(),
-                    },
-                    target: KnowledgeEntityRequest {
-                        label: "Label".to_string(),
-                        external_id: "label_1".to_string(),
-                    },
-                    relationship_type: "HAS_LABEL".to_string(),
-                    create_properties: BTreeMap::from([(
-                        "assigned_by".to_string(),
-                        Value::String("system".to_string()),
-                    )]),
-                },
-                KnowledgeRelationshipUpsertRequest {
-                    source: KnowledgeEntityRequest {
-                        label: "Memory".to_string(),
-                        external_id: "memory_2".to_string(),
-                    },
-                    target: KnowledgeEntityRequest {
-                        label: "Label".to_string(),
-                        external_id: "label_1".to_string(),
-                    },
-                    relationship_type: "HAS_LABEL".to_string(),
-                    create_properties: BTreeMap::from([(
-                        "assigned_by".to_string(),
-                        Value::String("system".to_string()),
-                    )]),
-                },
-            ],
-        })
-        .unwrap();
-        let batch_count_after_upsert = read_test_wal(&path).unwrap().matches("\tbatch\t").count();
-        assert_eq!(batch_count_after_upsert, batch_count_before_upsert + 1);
+        let before = read_test_wal(&path).unwrap().matches("\tbatch\t").count();
+        let mut transaction = db.begin_transaction().unwrap();
+        for source in ["memory_1", "memory_2"] {
+            transaction
+                .query_request(bounded_batch_query(
+                    LABEL_MERGE,
+                    &label_parameters(source, "system"),
+                ))
+                .unwrap();
+        }
+        let output = transaction.commit().unwrap();
+        assert_eq!(output.rows.len(), 2);
+        assert!(output
+            .rows
+            .iter()
+            .all(|row| row["created"] == Value::Bool(true)));
+        assert_eq!(
+            read_test_wal(&path).unwrap().matches("\tbatch\t").count(),
+            before + 1
+        );
     }
-    let wal = read_test_wal(&path).unwrap();
-    assert!(wal.contains("create_rel"));
+    assert!(read_test_wal(&path).unwrap().contains("create_rel"));
     {
-        let db = Database::open(&path).unwrap();
-        let relationships = db
-            .query_relationships_via_cypher(&KnowledgeRelationshipsRequest {
-                seeds: vec![
-                    KnowledgeEntityRequest {
-                        label: "Memory".to_string(),
-                        external_id: "memory_1".to_string(),
-                    },
-                    KnowledgeEntityRequest {
-                        label: "Memory".to_string(),
-                        external_id: "memory_2".to_string(),
-                    },
-                ],
-                relationship_type: Some("HAS_LABEL".to_string()),
-                direction: KnowledgeNeighborDirection::Outgoing,
-                limit_per_seed: 10,
-            })
+        let mut db = Database::open(&path).unwrap();
+        let rows = db
+            .query_request(bounded_batch_query(LABEL_READ, &BTreeMap::new()))
             .unwrap();
-        assert_eq!(relationships.relationship_count, 2);
+        assert_eq!(rows.rows.len(), 2);
+        for (index, source) in ["memory_1", "memory_2"].into_iter().enumerate() {
+            assert_eq!(rows.rows[index]["source"], Value::String(source.into()));
+            assert_eq!(rows.rows[index]["target"], Value::String("label_1".into()));
+            assert_eq!(
+                rows.rows[index]["assigned_by"],
+                Value::String("system".into())
+            );
+            assert_eq!(
+                rows.rows[index]["created_at"],
+                Value::String("2026-07-19".into())
+            );
+        }
     }
     std::fs::remove_dir_all(path).unwrap();
 }
 
 #[test]
-fn read_only_database_rejects_typed_knowledge_relationship_create() {
-    let path = unique_test_dir("read_only_typed_knowledge_relationship_create");
+fn read_only_database_rejects_knowledge_relationship_create_query() {
+    let path = unique_test_dir("relationship_create_query_read_only");
     {
         let mut db = Database::open(&path).unwrap();
         db.query("CREATE (:Memory {id: 'memory_1'})").unwrap();
         db.query("CREATE (:Entity {id: 'entity_1'})").unwrap();
     }
+    let wal = read_test_wal(&path).unwrap();
     {
         let mut db = Database::open_with_config(
             &path,
@@ -485,67 +337,47 @@ fn read_only_database_rejects_typed_knowledge_relationship_create() {
         )
         .unwrap();
         let error = db
-            .create_knowledge_relationship(&KnowledgeRelationshipCreateRequest {
-                source: KnowledgeEntityRequest {
-                    label: "Memory".to_string(),
-                    external_id: "memory_1".to_string(),
-                },
-                target: KnowledgeEntityRequest {
-                    label: "Entity".to_string(),
-                    external_id: "entity_1".to_string(),
-                },
-                relationship_type: "MENTIONS".to_string(),
-                properties: BTreeMap::new(),
-            })
+            .query_request(bounded_batch_query(
+                CREATE,
+                &parameters("memory_1", "entity_1", 0.9),
+            ))
             .unwrap_err();
         assert!(error.to_string().contains("read-only"));
+        assert_eq!(read_test_wal(&path).unwrap(), wal);
     }
     std::fs::remove_dir_all(path).unwrap();
 }
 
 #[test]
-fn typed_knowledge_relationship_create_persists_and_replays_from_wal() {
-    let path = unique_test_dir("typed_knowledge_relationship_create_wal_replay");
+fn knowledge_relationship_create_query_persists_and_replays_from_wal() {
+    let path = unique_test_dir("relationship_create_query_replay");
     {
         let mut db = Database::open(&path).unwrap();
         db.query("CREATE (:Memory {id: 'memory_1'})").unwrap();
         db.query("CREATE (:Entity {id: 'entity_1'})").unwrap();
-        db.create_knowledge_relationship(&KnowledgeRelationshipCreateRequest {
-            source: KnowledgeEntityRequest {
-                label: "Memory".to_string(),
-                external_id: "memory_1".to_string(),
-            },
-            target: KnowledgeEntityRequest {
-                label: "Entity".to_string(),
-                external_id: "entity_1".to_string(),
-            },
-            relationship_type: "MENTIONS".to_string(),
-            properties: BTreeMap::from([("confidence".to_string(), Value::Float(0.7))]),
-        })
-        .unwrap();
-    }
-    let wal = read_test_wal(&path).unwrap();
-    assert!(wal.contains("create_rel"));
-    {
-        let db = Database::open(&path).unwrap();
+        let before = read_test_wal(&path).unwrap().matches("\tbatch\t").count();
         let output = db
-            .query_relationships_via_cypher(&KnowledgeRelationshipsRequest {
-                seeds: vec![KnowledgeEntityRequest {
-                    label: "Memory".to_string(),
-                    external_id: "memory_1".to_string(),
-                }],
-                relationship_type: Some("MENTIONS".to_string()),
-                direction: KnowledgeNeighborDirection::Outgoing,
-                limit_per_seed: 4,
-            })
+            .query_request(bounded_batch_query(
+                CREATE,
+                &parameters("memory_1", "entity_1", 0.7),
+            ))
             .unwrap();
-        assert_eq!(output.relationship_count, 1);
+        assert_eq!(output.rows.len(), 1);
         assert_eq!(
-            output.groups[0].relationships[0]
-                .relationship_properties
-                .get("confidence"),
-            Some(&Value::Float(0.7))
+            read_test_wal(&path).unwrap().matches("\tbatch\t").count(),
+            before + 1
         );
+    }
+    assert!(read_test_wal(&path).unwrap().contains("create_rel"));
+    {
+        let mut db = Database::open(&path).unwrap();
+        let rows = db
+            .query_request(bounded_batch_query(READ, &BTreeMap::new()))
+            .unwrap();
+        assert_eq!(rows.rows.len(), 1);
+        assert_eq!(rows.rows[0]["source"], Value::String("memory_1".into()));
+        assert_eq!(rows.rows[0]["target"], Value::String("entity_1".into()));
+        assert_eq!(rows.rows[0]["confidence"], Value::Float(0.7));
     }
     std::fs::remove_dir_all(path).unwrap();
 }

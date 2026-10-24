@@ -506,8 +506,11 @@ seven DTOs or a dynamic statement builder.
 Relationship property updates use bounded SET and readback with endpoint,
 property and scope predicates. Four adapters, seven DTOs and the dynamic SET
 builder disappear while assignment, idless, read-only and recovery cases remain.
-Remaining legacy business adapters still require migration; this removal does
-not complete issue #1193.
+Relationship CREATE/MERGE fixtures and out-of-core statistics setup now execute
+bounded parameterized queries. The last eight business mutation methods, their
+fourteen DTOs, test-only analytics DTO module and graph-inspection mutation
+helpers are removed. Read adapters and final qualification remain unfinished;
+this mutation cleanup alone does not complete issue #1193.
 
 ## Stable typed boundaries
 
