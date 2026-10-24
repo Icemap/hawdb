@@ -25,7 +25,7 @@ use crate::text::{
     encode_string, encode_string_vec, encode_table_kind, encode_value,
 };
 pub use crate::wire;
-use crate::{cow::CowSegmentedMap, NodeId, NodeRecord, RelId, RelRecord};
+use crate::{NodeId, NodeRecord, RelId, RelRecord};
 pub use group_commit::{
     WalGroupCommitActivation, WalGroupCommitAdaptiveColdStartEvidence,
     WalGroupCommitAdaptivePolicyEvidence, WalGroupCommitAdaptiveSteadyStateEvidence,
@@ -1020,7 +1020,7 @@ fn encode_bytes_base64(input: &[u8]) -> String {
 pub fn apply_wal_op_to_snapshot(
     catalog: &Catalog,
     nodes: &mut impl crate::cow::NodeRecordWrite,
-    relationships: &mut CowSegmentedMap<RelId, RelRecord>,
+    relationships: &mut crate::cow::CowRelMap,
     op: &WalOp,
 ) {
     match op {

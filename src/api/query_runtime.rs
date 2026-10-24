@@ -259,6 +259,14 @@ impl PreparedRuntimeQuery {
                 .is_some_and(|optimized| executor::requires_write_access(&optimized.physical_plan))
     }
 
+    pub(crate) fn uses_borrowed_read(&self) -> bool {
+        self.uses_read_snapshot()
+            && !matches!(self.statement, cypher::Statement::Explain(_))
+            && self
+                .physical_plan()
+                .is_some_and(|plan| hawdb_executor::batch::BatchPlanRef::try_new(plan).is_some())
+    }
+
     pub(crate) fn uses_transaction_kernel(&self) -> bool {
         !matches!(
             statement_body(&self.statement),

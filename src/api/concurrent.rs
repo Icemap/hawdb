@@ -36,8 +36,8 @@ use super::transaction_locks::{
     DEFAULT_LOCK_ESCALATION_ENTRIES_PER_TABLE,
 };
 use super::{
-    commit_database_transaction_state, execute_database_transaction_prepared_sql, Database,
-    DatabaseConfig, DatabaseReadTransaction, DatabaseTransactionRuntime,
+    commit_prepared_database_transaction_state, execute_database_transaction_prepared_sql,
+    Database, DatabaseConfig, DatabaseReadTransaction, DatabaseTransactionRuntime,
     DatabaseTransactionSqlOptions, DatabaseTransactionState, PreparedGraphTransactionRequest,
     QueryOutput, StatementExecutionContext, TransactionCommitResult,
 };
@@ -73,6 +73,16 @@ use std::path::Path;
 #[cfg(test)]
 use std::sync::{mpsc::Sender, Barrier, Condvar};
 use std::sync::{Arc, Mutex};
+
+#[cfg(test)]
+thread_local! {
+    static GRAPH_COMMIT_PREPARATION_HOOK: std::cell::RefCell<Option<Box<dyn FnOnce()>>> = const { std::cell::RefCell::new(None) };
+}
+
+#[cfg(test)]
+fn set_graph_commit_preparation_hook(hook: Box<dyn FnOnce()>) {
+    GRAPH_COMMIT_PREPARATION_HOOK.with(|slot| *slot.borrow_mut() = Some(hook));
+}
 
 pub const DEFAULT_PESSIMISTIC_LOCK_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -516,15 +526,12 @@ impl ConcurrentDatabase {
         }
         let statement_kind = prepared.statement_kind();
         let parse_nanos = prepared.parse_nanos();
-        let mut snapshot = view.begin_read_transaction()?;
-
         #[cfg(test)]
         self.wait_after_autocommit_read_snapshot()?;
         let result = self
             .inner
             .commits
-            .finish_read(&view, snapshot.query_prepared_request(prepared, request));
-        drop(snapshot);
+            .finish_read(&view, view.query_prepared_request(prepared, request));
         view.recorder.record_statement_execution(
             "cypher",
             cypher_text,
@@ -973,6 +980,22 @@ impl ConcurrentDatabaseTransaction {
             self.options.mode == ConcurrentTransactionMode::Pessimistic || retry_safe_conflict_noop;
         let inner = Arc::clone(&self.inner);
         let mut state = self.state.take_for_commit();
+        super::query_runtime::query_runtime_checkpoint(self.task_context.as_ref())?;
+        let graph_only = state.relational_transaction.writes.is_empty()
+            && state.append_transaction.writes.is_empty();
+        let mut prepared = state
+            .graph_transaction
+            .take()
+            .expect("concurrent transaction owns a graph workspace")
+            .compact_for_commit(self.runtime.config.mutation_limits)?;
+        #[cfg(test)]
+        GRAPH_COMMIT_PREPARATION_HOOK.with(|hook| {
+            if let Some(hook) = hook.borrow_mut().take() {
+                hook();
+            }
+        });
+        prepared.encode_graph_wal(graph_only)?;
+        super::query_runtime::query_runtime_checkpoint(self.task_context.as_ref())?;
         let committed_result = Arc::new(Mutex::new(None));
         let result_slot = Arc::clone(&committed_result);
         let task_context = self.task_context.clone();
@@ -983,9 +1006,10 @@ impl ConcurrentDatabaseTransaction {
                     // Cancellation before the commit boundary rejects without WAL.
                     // Never turn a durable success into cancellation afterward.
                     super::query_runtime::query_runtime_checkpoint(task_context.as_ref())?;
-                    let result = commit_database_transaction_state(
+                    let result = commit_prepared_database_transaction_state(
                         database,
                         &mut state,
+                        prepared,
                         allow_stale_rebase,
                     )?;
                     let output = result.output.clone();

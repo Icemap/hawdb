@@ -184,6 +184,15 @@ impl Delta<NodeRecord> for crate::cow::CowNodeMap {
     }
 }
 
+impl Delta<RelRecord> for crate::cow::CowRelMap {
+    fn first_after(&self, id: Option<&RelId>) -> Option<(&RelId, &RelRecord)> {
+        self.first_after(id)
+    }
+    fn get(&self, id: &RelId) -> Option<&RelRecord> {
+        self.get(id)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

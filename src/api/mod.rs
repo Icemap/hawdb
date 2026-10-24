@@ -140,6 +140,7 @@ pub use publication::{PublicationLockDurationSnapshot, PublicationLockMetricsSna
 mod query_preparation_metrics;
 mod query_request;
 mod query_runtime;
+mod read_execution;
 #[cfg(feature = "qualification")]
 pub use query_preparation_metrics::{query_preparation_metrics, QueryPreparationMetricsSnapshot};
 mod sql_runtime;
@@ -8673,7 +8674,29 @@ pub(super) fn commit_database_transaction_state(
     state: &mut DatabaseTransactionState,
     allow_stale_rebase: bool,
 ) -> Result<TransactionCommitResult> {
-    let result = commit_database_transaction_state_inner(db, state, allow_stale_rebase);
+    let result = (|| {
+        let prepared = state
+            .graph_transaction
+            .take()
+            .expect("database transaction must own a graph workspace")
+            .prepare_commit(
+                db.config.mutation_limits,
+                state.relational_transaction.writes.is_empty()
+                    && state.append_transaction.writes.is_empty(),
+            )?;
+        commit_database_transaction_state_inner(db, state, prepared, allow_stale_rebase)
+    })();
+    db.poison_on_storage_error(&result);
+    result
+}
+
+pub(super) fn commit_prepared_database_transaction_state(
+    db: &mut Database,
+    state: &mut DatabaseTransactionState,
+    prepared: crate::store::PreparedGraphMutationTransaction,
+    allow_stale_rebase: bool,
+) -> Result<TransactionCommitResult> {
+    let result = commit_database_transaction_state_inner(db, state, prepared, allow_stale_rebase);
     db.poison_on_storage_error(&result);
     result
 }
@@ -8681,6 +8704,7 @@ pub(super) fn commit_database_transaction_state(
 fn commit_database_transaction_state_inner(
     db: &mut Database,
     state: &mut DatabaseTransactionState,
+    graph_transaction: crate::store::PreparedGraphMutationTransaction,
     allow_stale_rebase: bool,
 ) -> Result<TransactionCommitResult> {
     db.ensure_writable()?;
@@ -8688,35 +8712,18 @@ fn commit_database_transaction_state_inner(
         dependencies.validate(db)?;
     }
     let returning = std::mem::take(&mut state.relational_returning);
-    let graph_transaction = state
-        .graph_transaction
-        .take()
-        .expect("database transaction must own a graph workspace");
     let relational_transaction = std::mem::take(&mut state.relational_transaction);
     let append_transaction = std::mem::take(&mut state.append_transaction);
     let mut branch_runtime_access = db.runtime.get_mut()?;
     let branch_runtime = &mut *branch_runtime_access;
-    let summary = if allow_stale_rebase {
-        branch_runtime
-            .store
-            .commit_rebased_mutation_transaction_relational_and_append(
-                &mut branch_runtime.catalog,
-                graph_transaction,
-                relational_transaction,
-                append_transaction,
-                db.config.mutation_limits,
-            )?
-    } else {
-        branch_runtime
-            .store
-            .commit_mutation_transaction_relational_and_append(
-                &mut branch_runtime.catalog,
-                graph_transaction,
-                relational_transaction,
-                append_transaction,
-                db.config.mutation_limits,
-            )?
-    };
+    let summary = branch_runtime.store.commit_prepared_graph_transaction(
+        &mut branch_runtime.catalog,
+        graph_transaction,
+        relational_transaction,
+        append_transaction,
+        db.config.mutation_limits,
+        allow_stale_rebase,
+    )?;
     drop(branch_runtime_access);
     db.complete_required_relational_row_checkpoint("transaction commit")?;
     if returning.len() != summary.relational_mutation_outcomes.len() {
@@ -9790,81 +9797,27 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
         options: query_runtime::QueryExecutionOptions<'_>,
         external: &mut dyn executor::ExternalReadOperator,
     ) -> Result<(QueryOutput, QueryExecutionTrace)> {
-        let _planning_memory = prepared.planning_memory.take();
-        let task_context = options.task_context;
         self.store.ensure_usable()?;
-        query_runtime::query_runtime_checkpoint(task_context)?;
-        let max_rows =
-            restrictive_query_limit(self.read_result_row_limit(), options.output_limits.max_rows);
-        let max_payload_bytes = restrictive_query_limit(
-            self.config.max_read_result_payload_bytes,
-            options.output_limits.max_payload_bytes,
-        );
-        let prepared_optimized =
-            prepared.take_optimized(options.access_control, options.scoring)?;
-        let query_runtime::PreparedRuntimeExecution { statement, .. } = prepared;
-        let body = statement_body(&statement);
-        if let cypher::Statement::Explain(explain) = &statement {
+        query_runtime::query_runtime_checkpoint(options.task_context)?;
+        if let cypher::Statement::Explain(explain) = &prepared.statement {
+            let _planning_memory = prepared.planning_memory.take();
             let result =
                 self.execute_explain_request(cypher_text, explain, parameters, options, external)?;
-            let mut trace = QueryExecutionTrace::uncached(statement);
+            let mut trace = QueryExecutionTrace::uncached(prepared.statement);
             trace.execution_profile = Some(result.execution_profile);
             return Ok((result.output, trace));
         }
-        if matches!(body, cypher::Statement::Checkpoint) {
-            reject_transaction_control_parameters("CHECKPOINT", parameters)?;
-            return Err(HawDBError::Execution(
-                "CHECKPOINT is not allowed inside a read transaction".to_string(),
-            ));
-        }
-        if matches!(body, cypher::Statement::SetSystemVariable(_)) {
-            reject_system_variable_parameters(parameters)?;
-            return Err(HawDBError::Execution(
-                "SET system variable is not allowed inside a read transaction".to_string(),
-            ));
-        }
-        query_work_request_for_statement(&self.system_variables, &statement)?;
-        let optimized = match prepared_optimized {
-            Some(optimized) => optimized,
-            _ => self.optimized_query_plan_for_request(
-                cypher_text,
-                &statement,
-                parameters,
-                options.access_control,
-                PlanTraceMode::Template,
-                options.scoring,
-            )?,
-        };
-        if executor::is_mutation_plan(&optimized.physical_plan)? {
-            return Err(HawDBError::Execution(
-                "read transaction query must not be a mutation".to_string(),
-            ));
-        }
-        let profiled = executor::execute_with_request(
-            executor::ExecutionRequest::new(
-                &optimized.physical_plan,
-                parameters,
-                &self.config.execution_memory,
-            )
-            .with_output_limits(max_rows, max_payload_bytes)
-            .with_optional_task_context(task_context)
-            .with_optional_host_scorer(options.scoring.and_then(BoundScoringRequest::host_scorer)),
+        let prepared = self.prepare_read_execution(cypher_text, prepared, parameters, options)?;
+        let row_limit = self.read_result_row_limit();
+        let result = prepared.execute(
+            parameters,
+            options,
+            &self.config,
+            row_limit,
             executor::ExecutionResources::new(&mut self.catalog, &mut self.store, external),
         );
-        self.store.poison_on_storage_error(&profiled);
-        let profiled = profiled?;
-        query_runtime::query_runtime_checkpoint(task_context)?;
-        Ok((
-            QueryOutput {
-                rows: profiled.rows,
-            },
-            QueryExecutionTrace {
-                statement,
-                optimizer_trace: options.capture_trace.then_some(optimized.trace),
-                plan_cache_lookup: Some(optimized.plan_cache_lookup),
-                execution_profile: Some(profiled.profile),
-            },
-        ))
+        self.store.poison_on_storage_error(&result);
+        result
     }
 
     fn execute_explain_request(

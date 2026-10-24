@@ -188,34 +188,53 @@ reclamation remains available when an older pin prevents baseline replacement.
 ## Shared retained-history admission
 
 Each open GraphStore and its snapshot/workspace descendants share a separate
-256 MiB budget (`DEFAULT_MAX_RETAINED_VERSION_HISTORY_BYTES`) for non-Database
-version-root payload estimates. Clones share one reference-counted lease without
-charging again. A changed candidate root reserves its entire resulting estimate
-before COW preparation or WAL; the previous root stays charged until its final
-holder drops. Different roots may share physical pages and are deliberately
-charged separately. Read baselines retain no narrow-key payload, but inherit the
-same budget for any subsequent low-level storage writes.
+256 MiB budget (`DEFAULT_MAX_RETAINED_VERSION_HISTORY_BYTES`) for narrow-key
+version-page payload estimates. Each immutable physical page owns one credit;
+different snapshot roots share that credit with the page. The credit is dropped
+after the page entries, so even an older unmanaged recovery/construction root
+retains the charge after another root adopts its shared pages.
 
-After safe reclamation and one retry, insufficient credit returns a storage
-error before WAL/data/epoch publication. Cancellation and WAL refusal drop the
-prepared root and refund its lease. Successful publication installs that root;
-final-owner retirement refunds the old charge. A replacement of existing keys
-can therefore fail this aggregate admission even though it fits the current
-index limit. No snapshot is cancelled automatically.
+Before COW preparation or WAL, a candidate reserves the complete input payload
+of each touched page plus new identities and any uncharged source pages. It
+adopts source pages before detaching them, then distributes the remaining
+reservation among new pages, including split descendants. Unchanged pages need
+no duplicate credit. Both new-key insertion and existing-key replacement can
+fail admission; cancellation or WAL refusal releases only the candidate's new
+pages, while older snapshots retain their original credits. Safe reclamation
+and one retry still precede a final pre-WAL storage refusal.
 
-Partial pruning of a shared root reserves the full input estimate before
-`retain`, because that operation copies input pages before filtering. It refunds
-the removed portion afterward. Insufficient copying credit defers that pruning
-safely. A unique root reuses its charge and shrinks it; replacing a fully obsolete
-root with an empty map requires no copying credit. Inline Database barriers do
-not grow or detach the narrow-key map, so legacy publication remains infallible
-with respect to this admission.
+Watermark pruning uses cached per-page epoch bounds. Fully retained pages stay
+shared, fully obsolete pages retire without copying, and only mixed pages are
+filtered. A shared mixed page needs its full input payload reserved before
+copying; a unique mixed page shrinks its existing credit after filtering. When
+copy credit is unavailable, whole obsolete pages can still retire while mixed
+pages conservatively retain extra evidence. The history floor and pin watermark
+are unchanged. Inline Database/ReadBarrier publication needs no new page credit.
 
-The [lease proof](tla/MVCC_VALIDATION_PROOF.md#shared-retained-history-leases)
-separates this per-open-lineage estimate from total allocator/RSS memory,
-per-handle headers and pin counts, internal transient page restructuring, and
-independent database opens. Neither the 256 MiB default nor conservative whole-root
-charging is a measured workload qualification.
+The budget excludes allocator/RSS overhead, root directories, private user-data
+workspaces, internal transient restructuring and independent opens. It is not a
+total process memory cap or a measured workload guarantee. The historical
+[root-lease model](tla/MVCC_VALIDATION_PROOF.md#shared-retained-history-leases)
+models the earlier conservative root accounting; it does not prove physical
+page aliasing in this implementation. Current native regressions in
+`version/page_history_tests.rs` and `version.rs` exercise page sharing, initial
+adoption, cancellation/refusal, full-budget pruning, stale upgrades and final
+retirement.
+
+Concurrent facade commits seal graph operations before entering the sequencer.
+Compaction and graph-only persistent WAL operation encoding use the private
+transaction alone. The sealed object retains its workspace/pins while queued. Governed facade
+mutations retain the originating `RuntimePermit` throughout preparation and the
+queue; existing mutation admission reserves two maximum WAL records plus bounded
+operation, affected-row and result bookkeeping. This change does not introduce
+a total workspace/RSS guarantee for hosts using ungoverned manual transactions.
+The sequencer still validates current dependencies, catalog and constraints,
+admits version pages, binds the final WAL LSN/commit epoch, frames/checks/adopts
+and appends the WAL, and completes the configured durability barrier before
+publication. SQL/append staging that depends on current rows, constraints or
+commit epoch remains serialized. Mixed transactions discard graph-only prepared
+bytes and use the existing complete mixed WAL encoding path. Prepared records
+use exactly the existing binary record format.
 
 ## Commit and visibility order
 

@@ -13,7 +13,7 @@ struct BudgetState {
 pub(super) struct HistoryBudget(Arc<Mutex<BudgetState>>);
 
 #[derive(Debug)]
-pub(super) struct HistoryLease {
+pub(crate) struct HistoryLease {
     budget: HistoryBudget,
     bytes: usize,
 }
@@ -46,7 +46,18 @@ impl HistoryBudget {
 }
 
 impl HistoryLease {
-    pub(super) fn shrink(&mut self, bytes: usize) {
+    pub(crate) fn split(&mut self, bytes: usize) -> Arc<Self> {
+        self.bytes = self
+            .bytes
+            .checked_sub(bytes)
+            .expect("preflight covers each new page");
+        Arc::new(Self {
+            budget: self.budget.clone(),
+            bytes,
+        })
+    }
+
+    pub(crate) fn shrink(&mut self, bytes: usize) {
         let released = self
             .bytes
             .checked_sub(bytes)

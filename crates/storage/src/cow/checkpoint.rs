@@ -134,18 +134,6 @@ where
         self.prepare_checkpoint_page_copy(key, false, 0, work)
     }
 
-    pub(crate) fn prepare_checkpoint_insert_copy_for_key(
-        &mut self,
-        key: &K,
-        work: &CheckpointWorkContext,
-    ) -> Result<()>
-    where
-        K: CheckpointCopyBytes,
-        V: CheckpointCopyBytes,
-    {
-        self.prepare_checkpoint_insertions_for_key(key, 1, work)
-    }
-
     pub(crate) fn prepare_checkpoint_insertions_for_key(
         &mut self,
         key: &K,
@@ -206,7 +194,7 @@ where
                 .checked_add(if inserting { planned_insertions } else { 0 })
                 .ok_or_else(|| overflow(work))?;
             let bytes = capacity
-                .checked_mul(size_of::<CowSegment<BTreeMap<K, V>>>())
+                .checked_mul(size_of::<CowSegment<CowMapPage<K, V>>>())
                 .and_then(|bytes| bytes.checked_add(ownership_bytes::<CowPageDirectory<K, V>>()))
                 .ok_or_else(|| overflow(work))?;
             let unit = work.start_unit()?;
@@ -225,7 +213,7 @@ where
                 }));
             }
             unit.finish();
-            let count = (64 * 1024 / size_of::<CowSegment<BTreeMap<K, V>>>()).max(1);
+            let count = (64 * 1024 / size_of::<CowSegment<CowMapPage<K, V>>>()).max(1);
             for group in self.segments.chunks(count) {
                 let unit = work.start_unit()?;
                 values.extend(group.iter().cloned());
@@ -265,7 +253,7 @@ where
         }
         let mut values = None;
         if copy_page {
-            let mut bytes = ownership_bytes::<BTreeMap<K, V>>()
+            let mut bytes = ownership_bytes::<CowMapPage<K, V>>()
                 .checked_add(tree_bytes::<K, V>(source.len(), work)?)
                 .ok_or_else(|| overflow(work))?;
             for (key, value) in source.iter() {
@@ -285,7 +273,7 @@ where
                 copied.insert(key.clone(), value.clone());
                 unit.finish();
             }
-            values = Some(copied);
+            values = Some(CowMapPage::from(copied));
         }
         let unit = work.start_unit()?;
         let mut page = values.map(|values| owned(values, std::mem::take(&mut page_memory)));
@@ -356,7 +344,7 @@ where
             .ok_or_else(|| overflow(work))?;
         let per_split = 2usize
             .checked_mul(tree_node_bytes::<K, V>())
-            .and_then(|bytes| bytes.checked_add(ownership_bytes::<BTreeMap<K, V>>()))
+            .and_then(|bytes| bytes.checked_add(ownership_bytes::<CowMapPage<K, V>>()))
             .and_then(|bytes| bytes.checked_add(key_bytes))
             .ok_or_else(|| overflow(work))?;
         let amortized = tree_bytes::<K, V>(future_len, work)?
@@ -365,7 +353,7 @@ where
             .ok_or_else(|| overflow(work))?;
         // The independent per-insertion bound is tighter for small batches.
         let sequential = transient
-            .checked_add(ownership_bytes::<BTreeMap<K, V>>())
+            .checked_add(ownership_bytes::<CowMapPage<K, V>>())
             .and_then(|bytes| bytes.checked_add(key_bytes))
             .and_then(|bytes| bytes.checked_mul(count))
             .ok_or_else(|| overflow(work))?;
@@ -389,10 +377,10 @@ where
             .checked_add(1)
             .ok_or_else(|| overflow(work))?;
         let directory_bytes = directory_capacity
-            .checked_mul(size_of::<CowSegment<BTreeMap<K, V>>>())
+            .checked_mul(size_of::<CowSegment<CowMapPage<K, V>>>())
             .and_then(|bytes| bytes.checked_add(ownership_bytes::<CowPageDirectory<K, V>>()))
             .ok_or_else(|| overflow(work))?;
-        let page_bytes = ownership_bytes::<BTreeMap<K, V>>()
+        let page_bytes = ownership_bytes::<CowMapPage<K, V>>()
             .checked_add(Self::checkpoint_growth_bytes(
                 0,
                 planned_insertions,
@@ -422,7 +410,7 @@ where
                 reason: "initial COW directory capacity differs from admission".into(),
             }));
         }
-        let mut page = owned(BTreeMap::new(), page_memory);
+        let mut page = owned(CowMapPage::from(BTreeMap::new()), page_memory);
         Arc::get_mut(&mut page.0)
             .expect("new page is unique")
             .growth = Some(Arc::new(CheckpointGrowthBudget {

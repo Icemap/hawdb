@@ -54,7 +54,7 @@ fn node_page_capacity(
 ) -> Option<usize> {
     let bytes = bytes
         .checked_add(2usize.checked_mul(std::mem::size_of::<usize>())?)?
-        .checked_add(std::mem::size_of::<CowData<BTreeMap<NodeId, NodeRecord>>>())?
+        .checked_add(std::mem::size_of::<CowData<CowMapPage<NodeId, NodeRecord>>>())?
         .checked_add(tree_capacity::<NodeId, NodeRecord>(page.len())?)?;
     page.values().try_fold(bytes, |bytes, node| {
         *inspected = inspected.saturating_add(1);

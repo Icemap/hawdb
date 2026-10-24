@@ -687,6 +687,7 @@ struct MutationCommitOptions<'a> {
     preserve_single_create_wal: bool,
     mvcc_read_epoch: Option<u64>,
     captured_graph_ops: Option<&'a mut Vec<WalOp>>,
+    prepared_wal: Option<crate::wal::binary::PreparedWalBatch>,
 }
 
 /// An isolated graph mutation workspace for a single explicit transaction.
@@ -704,6 +705,17 @@ pub struct GraphMutationTransaction {
     store: GraphStore,
     ops: Vec<WalOp>,
     rows: Vec<BTreeMap<String, Value>>,
+    persistent_commit: bool,
+}
+
+/// A sealed transaction preparation. No statement can mutate its compacted
+/// operations or encoded graph WAL before authoritative commit validation.
+#[derive(Debug)]
+#[doc(hidden)]
+pub struct PreparedGraphMutationTransaction {
+    transaction: GraphMutationTransaction,
+    wal: Option<crate::wal::binary::PreparedWalBatch>,
+    had_graph_writes: bool,
 }
 
 #[derive(Debug)]
@@ -844,7 +856,7 @@ pub struct GraphStore {
     read_dependency_validation_failures: Arc<read_dependencies::ValidationFailureCounters>,
     read_summary_collapses: Arc<AtomicU64>,
     nodes: crate::cow::CowNodeMap,
-    relationships: CowSegmentedMap<RelId, RelRecord>,
+    relationships: crate::cow::CowRelMap,
     basic_statistics: BasicStatisticsState,
     checkpoint_statistics: CheckpointStatisticsState,
     advanced_statistics_dirty: AdvancedStatisticsDirtyState,
@@ -1222,7 +1234,49 @@ impl RelationshipScanPruningCandidate {
     }
 }
 
+impl PreparedGraphMutationTransaction {
+    #[doc(hidden)]
+    pub fn encode_graph_wal(&mut self, graph_only: bool) -> Result<()> {
+        if self.wal.is_none()
+            && self.transaction.persistent_commit
+            && graph_only
+            && !self.transaction.ops.is_empty()
+        {
+            self.wal = Some(crate::wal::binary::PreparedWalBatch::prepare(
+                &self.transaction.ops,
+            )?);
+        }
+        Ok(())
+    }
+}
+
 impl GraphMutationTransaction {
+    #[doc(hidden)]
+    pub fn prepare_commit(
+        self,
+        limits: MutationLimits,
+        graph_only: bool,
+    ) -> Result<PreparedGraphMutationTransaction> {
+        let mut prepared = self.compact_for_commit(limits)?;
+        prepared.encode_graph_wal(graph_only)?;
+        Ok(prepared)
+    }
+
+    #[doc(hidden)]
+    pub fn compact_for_commit(
+        mut self,
+        limits: MutationLimits,
+    ) -> Result<PreparedGraphMutationTransaction> {
+        let had_graph_writes = !self.ops.is_empty();
+        self.ops = compact_transaction_graph_ops(self.ops);
+        ensure_mutation_commit_limits(&self.ops, &self.rows, limits)?;
+        Ok(PreparedGraphMutationTransaction {
+            transaction: self,
+            wal: None,
+            had_graph_writes,
+        })
+    }
+
     #[doc(hidden)]
     pub fn is_read_only(&self) -> bool {
         self.ops.is_empty()
@@ -1796,7 +1850,7 @@ impl GraphStore {
             read_dependency_validation_failures: Arc::new(Default::default()),
             read_summary_collapses: Arc::new(AtomicU64::new(0)),
             nodes: crate::cow::CowNodeMap::default(),
-            relationships: CowSegmentedMap::default(),
+            relationships: crate::cow::CowRelMap::default(),
             basic_statistics: BasicStatisticsState::default(),
             checkpoint_statistics: CheckpointStatisticsState::default(),
             advanced_statistics_dirty: AdvancedStatisticsDirtyState::default(),
@@ -13683,7 +13737,7 @@ mod tests {
     #[test]
     fn adaptive_histograms_use_medium_sample_for_medium_cardinality() {
         let nodes = histogram_nodes("score", 2_000);
-        let statistics = compute_statistics(&nodes, &CowSegmentedMap::default(), 1);
+        let statistics = compute_statistics(&nodes, &crate::cow::CowRelMap::default(), 1);
         let histogram = statistics
             .property_histograms
             .get(&(LabelId(0), "score".to_string()))
@@ -13710,7 +13764,7 @@ mod tests {
     #[test]
     fn adaptive_histograms_use_max_sample_for_large_cardinality() {
         let nodes = histogram_nodes("score", 5_000);
-        let statistics = compute_statistics(&nodes, &CowSegmentedMap::default(), 1);
+        let statistics = compute_statistics(&nodes, &crate::cow::CowRelMap::default(), 1);
         let histogram = statistics
             .property_histograms
             .get(&(LabelId(0), "score".to_string()))

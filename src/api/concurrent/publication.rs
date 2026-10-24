@@ -83,6 +83,29 @@ impl PublishedConcurrentRead {
             .query_sql_with_prepared_request(request, prepared)
     }
 
+    pub(super) fn query_prepared_request(
+        &self,
+        prepared: PreparedRuntimeQuery,
+        request: crate::QueryRequest<'_>,
+    ) -> Result<super::super::BoundedReadQueryOutput> {
+        if prepared.uses_borrowed_read() {
+            let (output, trace) = self.snapshot.query_prepared_request_borrowed(
+                prepared,
+                request,
+                false,
+                &mut crate::executor::NoExternalReadOperator,
+            )?;
+            return Ok(super::super::BoundedReadQueryOutput {
+                output,
+                execution_profile: trace
+                    .execution_profile
+                    .expect("read execution supplies a profile"),
+            });
+        }
+        self.begin_read_transaction()?
+            .query_prepared_request(prepared, request)
+    }
+
     pub(crate) fn accepts_prepared(&self, prepared: &PreparedRuntimeQuery) -> bool {
         self.snapshot.accepts_prepared(prepared)
     }
@@ -103,6 +126,14 @@ impl PublishedConcurrentRead {
         let statement_kind = prepared.statement_kind();
         let parse_nanos = prepared.parse_nanos();
         let result = (|| {
+            if prepared.uses_borrowed_read() {
+                return self.snapshot.query_prepared_request_borrowed(
+                    prepared,
+                    request,
+                    capture_trace,
+                    external,
+                );
+            }
             let mut read = match request.task_context {
                 Some(context) => self.begin_read_transaction_with_context(context)?,
                 None => self.begin_read_transaction()?,
@@ -335,6 +366,74 @@ mod tests {
         assert_eq!(oldest(), Some(epoch));
         drop(reader);
         assert_eq!(oldest(), None);
+    }
+
+    #[test]
+    fn borrowed_cypher_reads_keep_the_published_generation_and_fallback_boundary() {
+        let mut database = Database::new();
+        database.query("CREATE (:Item {id: 1, value: 7})").unwrap();
+        let db = database.into_concurrent();
+        let old = db.inner.commits.read_view().unwrap();
+        let request = crate::QueryRequest::new("MATCH (n:Item) RETURN n.value AS value LIMIT 1");
+        let prepared = old.prepare(request).unwrap();
+        assert!(prepared.uses_borrowed_read());
+        db.query("MATCH (n:Item) SET n.value = 9").unwrap();
+        let output = old.query_prepared_request(prepared, request).unwrap();
+        assert_eq!(output.output.rows[0]["value"], Value::Int(7));
+        assert_eq!(
+            db.query(request.cypher).unwrap().rows[0]["value"],
+            Value::Int(9)
+        );
+        let explain = crate::QueryRequest::new("EXPLAIN MATCH (n:Item) RETURN n.value AS value");
+        assert!(!old.prepare(explain).unwrap().uses_borrowed_read());
+        let mutation = crate::QueryRequest::new("CREATE (:Item {id: 2})");
+        assert!(!old.prepare(mutation).unwrap().uses_borrowed_read());
+        assert!(db.query(explain.cypher).is_ok());
+    }
+
+    #[test]
+    fn borrowed_cypher_requests_keep_private_limits_cancellation_and_profiles() {
+        let mut database = Database::new();
+        database
+            .query("CREATE (:Item {value: 'nonempty payload'})")
+            .unwrap();
+        let db = database.into_concurrent();
+        let request = crate::QueryRequest::new("MATCH (n:Item) RETURN n.value AS value LIMIT 1");
+        for limits in [
+            crate::QueryStreamOptions {
+                max_rows: Some(0),
+                max_payload_bytes: None,
+            },
+            crate::QueryStreamOptions {
+                max_rows: None,
+                max_payload_bytes: Some(1),
+            },
+        ] {
+            assert!(db
+                .query_request(request.with_output_limits(limits))
+                .is_err());
+            assert_eq!(db.query_request(request).unwrap().rows.len(), 1);
+        }
+        let token = hawdb_core::RuntimeCancellationToken::new();
+        let context = hawdb_core::RuntimeTaskContext::without_deadline(token.clone());
+        token.cancel();
+        assert!(db
+            .query_request(request.with_task_context(&context))
+            .is_err());
+        let view = db.inner.commits.read_view().unwrap();
+        let (output, trace) = view
+            .query_prepared_with_trace(
+                view.prepare(request).unwrap(),
+                request,
+                true,
+                &mut crate::executor::NoExternalReadOperator,
+            )
+            .unwrap();
+        assert_eq!(output.rows.len(), 1);
+        assert!(trace.execution_profile.is_some());
+        assert!(trace.optimizer_trace.is_some());
+        assert!(view.snapshot.0.slow_query_snapshot.is_empty());
+        assert!(view.snapshot.0.statement_summary_snapshot.is_empty());
     }
 
     #[test]

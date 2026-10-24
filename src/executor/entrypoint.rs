@@ -25,9 +25,28 @@ use hawdb_executor::result_delivery::QueryOutputAccumulator;
 /// The resources are borrowed for the duration of the call. The executor does
 /// not retain them or create a process-global execution context.
 pub struct ExecutionResources<'a, S: ExecutionStore> {
-    catalog: &'a mut Catalog,
-    store: &'a mut S,
+    access: ExecutionAccess<'a, S>,
     external: &'a mut dyn ExternalReadOperator,
+}
+
+enum ExecutionAccess<'a, S> {
+    Mutable {
+        catalog: &'a mut Catalog,
+        store: &'a mut S,
+    },
+    ReadOnly {
+        catalog: &'a Catalog,
+        store: &'a S,
+    },
+}
+
+impl<S> ExecutionAccess<'_, S> {
+    fn read(&self) -> (&Catalog, &S) {
+        match self {
+            Self::Mutable { catalog, store } => (catalog, store),
+            Self::ReadOnly { catalog, store } => (catalog, store),
+        }
+    }
 }
 
 impl<'a, S: ExecutionStore> ExecutionResources<'a, S> {
@@ -37,8 +56,18 @@ impl<'a, S: ExecutionStore> ExecutionResources<'a, S> {
         external: &'a mut dyn ExternalReadOperator,
     ) -> Self {
         Self {
-            catalog,
-            store,
+            access: ExecutionAccess::Mutable { catalog, store },
+            external,
+        }
+    }
+
+    pub(crate) fn read_only(
+        catalog: &'a Catalog,
+        store: &'a S,
+        external: &'a mut dyn ExternalReadOperator,
+    ) -> Self {
+        Self {
+            access: ExecutionAccess::ReadOnly { catalog, store },
             external,
         }
     }
@@ -122,10 +151,10 @@ fn execute_profiled_output<S: ExecutionStore>(
     target: OutputTarget<'_>,
 ) -> Result<(ProfiledQueryStream, Option<QueryRows>)> {
     let ExecutionResources {
-        catalog,
-        store,
+        mut access,
         external,
     } = resources;
+    let (catalog, store) = access.read();
     store.ensure_usable()?;
     let plan = request.plan();
     let parameters = request.parameters();
@@ -232,9 +261,14 @@ fn execute_profiled_output<S: ExecutionStore>(
             )?;
         }
     } else {
+        let ExecutionAccess::Mutable { catalog, store } = &mut access else {
+            return Err(crate::HawDBError::Execution(
+                "materialized execution requires a private query workspace".into(),
+            ));
+        };
         observer.record_operator_start(plan);
         let bindings =
-            execute_bindings_with_limit(plan, catalog, store, &mut context, execution_limit)?;
+            execute_bindings_with_limit(plan, catalog, *store, &mut context, execution_limit)?;
         observer.record_operator_output(plan, bindings.len());
         for binding in bindings {
             output.emit(binding)?;

@@ -1088,7 +1088,8 @@ impl GraphStore {
                         self.nodes
                             .prepare_checkpoint_insertions_for_key(id, insertions.0, work)
                     } else {
-                        self.nodes.prepare_checkpoint_insert_copy_for_key(id, work)
+                        self.nodes
+                            .prepare_checkpoint_insertions_for_key(id, 1, work)
                     };
                     result.map_err(HawDBError::from_storage_error)?;
                 }
@@ -1101,7 +1102,7 @@ impl GraphStore {
                         )
                     } else {
                         self.relationships
-                            .prepare_checkpoint_insert_copy_for_key(id, work)
+                            .prepare_checkpoint_insertions_for_key(id, 1, work)
                     };
                     result.map_err(HawDBError::from_storage_error)?;
                 }
