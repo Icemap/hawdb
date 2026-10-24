@@ -1,0 +1,25 @@
+   Compiling hawdb-storage v0.15.0 (/private/tmp/hawdb-mvcc-optimization-20261024/crates/storage)
+   Compiling hawdb-executor v0.15.0 (/private/tmp/hawdb-mvcc-optimization-20261024/crates/executor)
+   Compiling hawdb-search v0.15.0 (/private/tmp/hawdb-mvcc-optimization-20261024/crates/search)
+   Compiling hawdb-system-sql v0.15.0 (/private/tmp/hawdb-mvcc-optimization-20261024/crates/system-sql)
+   Compiling hawdb-resource-profile v0.15.0 (/private/tmp/hawdb-mvcc-optimization-20261024/crates/resource-profile)
+   Compiling hawdb-relational v0.15.0 (/private/tmp/hawdb-mvcc-optimization-20261024/crates/relational)
+   Compiling hawdb-compat v0.15.0 (/private/tmp/hawdb-mvcc-optimization-20261024/crates/compat)
+   Compiling hawdb-artifact v0.15.0 (/private/tmp/hawdb-mvcc-optimization-20261024/crates/artifact)
+   Compiling hawdb-explain v0.15.0 (/private/tmp/hawdb-mvcc-optimization-20261024/crates/explain)
+   Compiling hawdb-nowledge-contracts v0.15.0 (/private/tmp/hawdb-mvcc-optimization-20261024/crates/nowledge-contracts)
+   Compiling hawdb-bootstrap v0.15.0 (/private/tmp/hawdb-mvcc-optimization-20261024/crates/bootstrap)
+   Compiling hawdb-readiness v0.15.0 (/private/tmp/hawdb-mvcc-optimization-20261024/crates/readiness)
+   Compiling hawdb v0.15.0 (/private/tmp/hawdb-mvcc-optimization-20261024)
+   Compiling hawdb-mvcc-fuzz v0.0.0 (/private/tmp/hawdb-mvcc-optimization-20261024/tools/mvcc-fuzz)
+    Finished `dev` profile [optimized] target(s) in 1m 59s
+     Running `/private/tmp/hawdb-mvcc-fuzz-cargo/debug/hawdb-mvcc-fuzz run --seconds 30 --explain`
+PASS | 13384 cases | 30011 ms | target/mvcc-fuzz/33344-1792861831705358000
+  same_key           T1 first:    816  T2 first:    857
+  disjoint           T1 first:    826  T2 first:    847
+  net_zero           T1 first:    398  T2 first:   1275
+  absent_delete      T1 first:    819  T2 first:    854
+  delete_insert      T1 first:    428  T2 first:   1245
+  broad_narrow       T1 first:    830  T2 first:    843
+  duplicate_insert   T1 first:    830  T2 first:    843
+  rollback           T1 first:    815  T2 first:    858

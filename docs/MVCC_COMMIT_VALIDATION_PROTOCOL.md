@@ -236,6 +236,12 @@ commit epoch remains serialized. Mixed transactions discard graph-only prepared
 bytes and use the existing complete mixed WAL encoding path. Prepared records
 use exactly the existing binary record format.
 
+The manual [MVCC hot-path measurement](benchmarks/mvcc_hot_paths_macos_2026_10_25/README.md)
+compares identical release harnesses on the pre-change and optimized revisions.
+It records fixed-work reads/COW updates, synchronized graph transactions,
+group/fsync diagnostics, process resources and shared-host limitations. These
+measurements do not establish a lock-duration bound or power-loss qualification.
+
 ## Commit and visibility order
 
 The non-rebased path passes the transaction's base epoch into
