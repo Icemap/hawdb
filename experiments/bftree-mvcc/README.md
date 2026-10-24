@@ -3,12 +3,14 @@
 An unpublished, binary-only, independent Cargo workspace for evaluating a
 transaction adapter over `bf-tree = 0.5.6`. This is not a selectable HawDB
 production backend. The root library does not depend on it, and its sources are
-excluded from the published library archive. See [issue #1212](https://github.com/nowledge-co/hawdb/issues/1212).
+excluded from the published library archive. See [issue #1212](https://github.com/nowledge-co/hawdb/issues/1212)
+and the three-direction follow-up [#1237](https://github.com/nowledge-co/hawdb/issues/1237).
 
 Run commands from the repository root to inherit the uniform Cargo profiles:
 
 ```console
 cargo run --locked --manifest-path experiments/bftree-mvcc/Cargo.toml -- demo /tmp/bftree-demo.journal
+cargo run --locked --manifest-path experiments/bftree-mvcc/Cargo.toml -- maintenance-demo /tmp/bftree-maintenance.journal
 cargo test --locked --manifest-path experiments/bftree-mvcc/Cargo.toml --all-targets --all-features
 cargo fmt --manifest-path experiments/bftree-mvcc/Cargo.toml -- --check
 cargo clippy --locked --manifest-path experiments/bftree-mvcc/Cargo.toml --all-targets --all-features -- -D warnings
@@ -36,9 +38,12 @@ an epoch, not an iterator or leaf latch. Scans release native iterator guards
 between bounded batches and before historical point lookups.
 
 The journal reuses HawDB's binary WAL framing, checksums and strict reader. Its
-`BFMVCC01` identity, layout generation and compact transaction payload are
+`BFMVCC02` identity, layout generation and compact transaction payload are
 experiment-only and are **not the canonical HawDB WAL format**. Reopen rebuilds
-the entire working index. Complete durable transactions are replayed atomically,
+the retained index from the last complete checkpoint, then replays its suffix.
+The complete preceding journal remains validated. This greenfield experiment
+requires recreating earlier `BFMVCC01` databases; it adds no migration to HawDB.
+Complete durable transactions are replayed atomically,
 including a commit whose response was lost. Stable caller-supplied operation
 IDs deduplicate exactly equal mutation batches across reopen; different writes
 with the same ID are rejected. This does not deduplicate arbitrary application
@@ -51,11 +56,18 @@ may already have committed. A torn, corrupt or unverified tail fails closed
 and preserves evidence: there is no automatic truncation, repair or retry that
 assumes rollback. Each journal has one exclusive file-lock owner, retained by
 its snapshots. Existing journal layout mismatches are rejected.
+The last database/transaction owner explicitly releases that lock; incidental
+descriptor copies do not extend ownership beyond those handles. A regression
+retains a copied descriptor across close/reopen while proving live snapshots
+and the next owner still exclude competing opens.
 
-`sync_all` is requested for every transaction and for initial journal creation;
+`sync_all` is requested for every transaction, maintenance record and initial journal creation;
 on Unix the parent directory is also synchronized. Successful synchronization
 is assumed to provide the filesystem's documented durability. Process-exit and
-unwind tests are not power-loss, reordered-write or storage-device qualification.
+unwind tests alone are not power-loss qualification. Deterministic recovery
+images additionally model a lost unacknowledged tail, torn/zeroed writes and
+reordered full blocks after a durable checkpoint. These models do not establish
+storage-device or filesystem qualification.
 Windows behavior is unqualified. Bf-Tree uses its **memory backend**, with its
 own WAL/CPR disabled; the experiment journal supplies recovery. Its 4 MiB Bf-Tree
 cache setting is not a total process-memory bound.
@@ -71,7 +83,7 @@ cache setting is not a total process-memory bound.
 The COW case is a **component reference**, not an end-to-end comparison with
 HawDB transactions. All layouts use the same experiment journal, synchronous
 commit policy, conflict ledger and receipts. Bf-Tree layouts retain history
-without GC; COW history survives through live snapshots. Compare memory and
+until explicit snapshot-safe collection; COW history survives through live snapshots. Compare memory and
 write costs as well as read latency. No result here establishes an overall
 HawDB speedup or larger-than-memory index performance.
 
@@ -95,14 +107,69 @@ ordering with scalar word and ARM NEON kernels in temporary dependency copies.
 It adds long-key shapes through `bench-shaped` without selecting a patched
 dependency in the default adapter.
 
+The separate [internal-key, batch and collection probes](structural/README.md)
+measure actual internal pivot bytes and preview fallbacks, native head/fence
+candidates, batch-local positioning and maintenance costs. The default remains
+the original registry dependency. Instrumented builds never qualify timing.
+The [complete source-bound report](measurements/structural-20261024/README.md)
+includes all five-pair cohorts, adverse controls, maintenance/RSS costs and
+the earlier exploratory data.
+
+## Bounded batches, collection and checkpoints
+
+`ReadTxn::get_many` accepts at most 128 logical keys, preserves caller order and
+duplicates, and returns both values and observable work counts. It sorts and
+deduplicates requests, reuses a native cursor for adjacent keys, and falls back
+to independent probes when traversing intervening records is unproductive.
+Hybrid historical probes begin only after head iterator guards are released.
+Cursor starts and resolutions describe this wrapper; native page crossings can
+perform further root searches, so they are not exact root/leaf reuse counts.
+
+Every read transaction and write transaction registers its captured epoch
+before releasing the capture gate. `Store::collect_garbage(work_budget)` visits
+at most 128 logical keys/removals per call. It preserves every version newer
+than the oldest active epoch and the newest anchor at or below that epoch.
+A pass holds one horizon and advances a logical-key cursor; releasing a lease
+may require another pass before `complete_pass` reports that collection caught
+up. There is no TTL that silently invalidates a reader or writer.
+
+A complete framed GC plan is synchronized before native deletion. Recovery
+validates and replays the plan if deletion/publication was interrupted. Native
+deletion may retain internal page allocations; `Store::checkpoint()` exports
+all retained versions, prepares a replacement index, synchronizes one complete
+checkpoint record, then publishes the replacement generation. Old views retain
+their original index generation. After those views drop, rebuilding permits
+the old tree to be released. A checkpoint is bounded to 16 MiB/200,000 rows and
+does not increment the transaction epoch.
+
+Receipts keep compact offsets into the original WAL. Only batches referenced
+by current heads retain their full payload in the journal's RAM ledger; exact
+old retries read and validate their captured record interval. Maintenance does
+**not reclaim journal disk capacity or discard receipt evidence**: the 32 MiB
+cap still refuses further growth. Full prefix validation and per-operation
+receipt metadata remain recovery costs even when checkpointed index replay is
+small. Report native retained versions, payload bytes, journal bytes and RSS
+separately; they are different measurements.
+
+```console
+cargo run --release --locked --manifest-path experiments/bftree-mvcc/Cargo.toml -- bench-advanced /tmp/bftree-advanced.journal hybrid 512 24 prefix64 collect
+```
+
+`keep` is the matched no-maintenance control. This workload verifies old and
+current points/scans, dense/sparse/missing/duplicate batches, lease-protected
+collection, both checkpoints, bounded incremental steps, exact historical
+retry, and every current key after reopen. Its reports include maintenance
+tails, before/after memory and replay counts; a synchronous checkpoint is
+explicit foreground work, not a background-latency claim.
+
 ## Bounds and coverage
 
 Keys: 64 bytes; values: 1024 bytes; distinct writes: 128 per transaction;
 encoded payload: 256 KiB; journal: 32 MiB; returned scan rows: 4096; visited
-physical records: 200,000. Exceeding a scan budget returns an error rather than
+returned native records: 200,000. Exceeding a scan budget returns an error rather than
 partial results. Benchmark sizes must fit the retained-version scan budget.
-There is no checkpoint, GC, spill policy, group commit, background compaction,
-read-only journal opener, stable format compatibility or production integration.
+There is no spill policy, group commit, automatic background compaction,
+read-only database opener, stable format compatibility or production integration.
 Receipts and conflict stamps consume memory and are bounded indirectly by the
 journal cap, not by an independent RSS budget.
 
@@ -112,12 +179,17 @@ model with binary/prefix keys, page splits and long histories, tombstones/range
 edges, long-snapshot writer progress, field/write limits, exclusive ownership,
 layout mismatch, uncertain outcomes/unwind, torn/corrupt/trailing input, and
 actual subprocess exits after durability, first-key installation and publication.
-The ignored `crash_child` is an internal subprocess entry point invoked by its
-parent regression; it is not an omitted manual acceptance case.
+Maintenance adds captured-epoch leases, anchor/tombstone retention, active-writer
+conflicts, partial GC, checkpoint publication and post-checkpoint replay,
+snapshot/collector races, malformed checksummed maintenance records and
+deterministic power-loss images. Shuffled variable-length binary keys and deep
+histories exercise native fences across inner levels. The two ignored crash
+children are internal subprocess entry points invoked by parent regressions;
+they are not omitted manual acceptance cases.
 
 Hybrid update installation reuses immutable mutation payloads already retained
-for exact retries. Committed batches are indexed directly by epoch, and the latest-key ledger
-stores the entry position alongside that epoch; it does not maintain another value cache. Encoded
+for current heads. The latest-key ledger stores each head's epoch and entry
+position; old receipt payloads remain on disk rather than in another value cache. Encoded
 keys and values use bounded stack buffers. The receipt regression checks sparse
 updates, non-monotonic operation IDs, old retries after reopen, deletion and
 reinsertion while earlier snapshots remain readable. Version upgrades must
@@ -131,15 +203,17 @@ The physical resume key uses a bounded stack buffer; each scan reuses one owned
 row batch. Discarded newer/duplicate versions no longer allocate and copy their
 payloads. Hybrid history lookups still occur after releasing the native guard.
 
-Every native batch visits at most 32 physical records, including discarded
-records. A completely filtered batch advances its resume position rather than
+Every native batch returns at most 32 records, including records discarded by
+the adapter. Native deleted slots may be skipped internally and are not counted
+as returned records; this is not a bound on latch duration or raw slot visits.
+A completely filtered batch advances its resume position rather than
 ending the range. At a Versioned batch boundary, an already selected value or
 tombstone permits seeking past that key's remaining versions. The encoded
 successor stays before all longer logical keys, including a zero-byte extension.
 If the last visited version is newer than the snapshot, seek inclusively to its
 fixed epoch instead. No iterator or leaf guard survives either seek.
 
-The physical-record cap counts actual records visited; version runs skipped by
+The physical-record cap counts records returned by the native cursor; version runs skipped by
 an ordered seek do not consume that work budget. The cap, returned-row cap,
 snapshot semantics, journal bytes, synchronization and publication boundaries
 are unchanged. Focused tests cover empty/deep snapshots, tombstones across

@@ -216,9 +216,13 @@ pub struct BinaryWalReader<R: Read> {
 }
 
 impl<R: Read + std::io::Seek> BinaryWalReader<R> {
-    /// Opens an internally captured, complete-record interval. Read at most
-    /// one preceding block to preserve the existing block/framing grammar.
-    pub(crate) fn range(
+    /// Opens a captured, complete-record interval. Offsets include the binary
+    /// WAL file header. The caller must have verified that header/generation
+    /// and captured both boundaries from complete records in this same file.
+    /// Read at most one preceding block to preserve the framing grammar.
+    /// Consumers must still reject torn/corrupt read events; a byte interval
+    /// is not an independent durability or publication guarantee.
+    pub fn range(
         mut reader: R,
         generation: u64,
         max_record_bytes: Option<usize>,

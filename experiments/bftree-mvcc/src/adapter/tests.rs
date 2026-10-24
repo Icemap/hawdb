@@ -1,6 +1,7 @@
 // Copyright 2026 Nowledge
 // SPDX-License-Identifier: Apache-2.0
 
+use super::maintenance::MaintenanceStage;
 use super::*;
 use std::process::Command;
 use std::sync::mpsc;
@@ -8,6 +9,657 @@ use std::thread;
 use tempfile::tempdir;
 
 const LAYOUTS: [Layout; 3] = [Layout::Versioned, Layout::Hybrid, Layout::Cow];
+
+#[test]
+fn ownership_tracks_live_database_handles_instead_of_incidental_descriptor_copies() {
+    for layout in LAYOUTS {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("journal");
+        let store = Store::open_layout(&path, layout).unwrap();
+        let mut tx = store.begin_write().unwrap();
+        tx.put(b"key", b"durable").unwrap();
+        tx.commit(1).unwrap();
+        let snapshot = store.begin_read().unwrap();
+        // Like a descriptor briefly inherited by a concurrently spawned
+        // process before close-on-exec, this is not another database handle.
+        let descriptor = store.0.journal.lock().unwrap().file.try_clone().unwrap();
+        drop(store);
+        assert!(matches!(
+            Store::open_layout(&path, layout),
+            Err(Error::Busy)
+        ));
+        drop(snapshot);
+        let reopened = Store::open_layout(&path, layout).unwrap();
+        assert_eq!(
+            reopened.begin_read().unwrap().get(b"key").unwrap(),
+            Some(b"durable".to_vec())
+        );
+        drop(descriptor);
+        assert!(matches!(
+            Store::open_layout(&path, layout),
+            Err(Error::Busy)
+        ));
+    }
+}
+
+#[test]
+fn shuffled_variable_binary_keys_preserve_fences_batches_and_retained_generations() {
+    // Also run against every temporary native internal-key candidate. Long
+    // keys and histories force multiple inner levels; odd insertion order and
+    // late gap keys exercise shortened fences rather than append-only splits.
+    let keys: Vec<_> = (0..2048_u64)
+        .map(|n| {
+            let mut key = if n.is_multiple_of(3) {
+                vec![0; 56]
+            } else {
+                (0..n as usize % 57)
+                    .map(|i| (n as usize * 31 + i) as u8)
+                    .collect()
+            };
+            key.extend(n.to_be_bytes());
+            key
+        })
+        .collect();
+    for layout in LAYOUTS {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("journal");
+        let store = Store::open_layout(&path, layout).unwrap();
+        let mut model = BTreeMap::new();
+        let mut snapshots = Vec::new();
+        let mut operation = 0;
+        for round in 0..12_u8 {
+            for start in (0..keys.len()).step_by(MAX_WRITES) {
+                let mut tx = store.begin_write().unwrap();
+                for offset in start..start + MAX_WRITES {
+                    let position = (offset * 1597 + round as usize * 97) % keys.len();
+                    let key = &keys[position];
+                    if (position + round as usize).is_multiple_of(7) {
+                        tx.delete(key).unwrap();
+                        model.remove(key);
+                    } else {
+                        let value = vec![round; 100];
+                        tx.put(key, &value).unwrap();
+                        model.insert(key.clone(), value);
+                    }
+                }
+                operation += 1;
+                tx.commit(operation).unwrap();
+            }
+            if [0, 5, 11].contains(&round) {
+                snapshots.push((store.begin_read().unwrap(), model.clone()));
+            }
+        }
+        store.checkpoint().unwrap();
+        for (view, expected) in &snapshots {
+            assert_eq!(
+                view.scan(&[], &[255; MAX_KEY]).unwrap(),
+                expected.clone().into_iter().collect::<Rows>()
+            );
+            for start in (0..keys.len()).step_by(MAX_BATCH_LOOKUPS) {
+                let requested: Vec<_> = keys[start..start + MAX_BATCH_LOOKUPS]
+                    .iter()
+                    .map(Vec::as_slice)
+                    .collect();
+                assert_eq!(
+                    view.get_many(&requested).unwrap().values,
+                    requested
+                        .iter()
+                        .map(|key| expected.get(*key).cloned())
+                        .collect::<Vec<_>>()
+                );
+            }
+        }
+        drop(snapshots);
+        collect_pass(&store, MAX_GC_WORK);
+        store.checkpoint().unwrap();
+        drop(store);
+        let reopened = Store::open_layout(&path, layout).unwrap();
+        assert_eq!(
+            reopened
+                .begin_read()
+                .unwrap()
+                .scan(&[], &[255; MAX_KEY])
+                .unwrap(),
+            model.into_iter().collect::<Rows>()
+        );
+    }
+}
+
+fn collect_pass(store: &Store, budget: usize) -> usize {
+    let mut removed = 0;
+    for _ in 0..1000 {
+        let report = store.collect_garbage(budget).unwrap();
+        assert!(report.examined <= budget && report.removed <= report.examined);
+        removed += report.removed;
+        if report.complete_pass {
+            return removed;
+        }
+    }
+    panic!("collection cursor made no bounded progress");
+}
+
+#[test]
+fn batch_lookup_preserves_input_order_duplicates_missing_binary_keys_and_snapshots() {
+    for layout in LAYOUTS {
+        let dir = tempdir().unwrap();
+        let store = Store::open_layout(&dir.path().join("journal"), layout).unwrap();
+        let keys = [
+            vec![],
+            vec![0],
+            vec![0, 0],
+            vec![0, 255],
+            vec![1],
+            vec![255; MAX_KEY],
+        ];
+        let mut model = BTreeMap::new();
+        let mut snapshots = Vec::new();
+        for operation in 1..=12_u64 {
+            let mut tx = store.begin_write().unwrap();
+            for (position, key) in keys.iter().enumerate() {
+                if (position as u64 + operation).is_multiple_of(3) {
+                    tx.delete(key).unwrap();
+                    model.remove(key);
+                } else {
+                    let value = if position == 1 {
+                        Vec::new()
+                    } else {
+                        vec![operation as u8; MAX_VALUE]
+                    };
+                    tx.put(key, &value).unwrap();
+                    model.insert(key.clone(), value);
+                }
+            }
+            tx.commit(operation).unwrap();
+            if [1, 4, 12].contains(&operation) {
+                snapshots.push((store.begin_read().unwrap(), model.clone()));
+            }
+        }
+        let requested = [
+            &keys[5][..],
+            &keys[0],
+            &[0, 1],
+            &keys[3],
+            &keys[0],
+            &keys[1],
+            &keys[4],
+            &[254],
+        ];
+        for (snapshot, expected) in &snapshots {
+            let batch = snapshot.get_many(&requested).unwrap();
+            assert_eq!(
+                batch.values,
+                requested
+                    .iter()
+                    .map(|key| expected.get(*key).cloned())
+                    .collect::<Vec<_>>()
+            );
+            assert_eq!(batch.work.unique_keys, requested.len() - 1);
+            assert!(batch.work.scanned_records + batch.work.point_probes <= MAX_BATCH_LOOKUPS * 66);
+        }
+        assert!(store
+            .begin_read()
+            .unwrap()
+            .get_many(&[])
+            .unwrap()
+            .values
+            .is_empty());
+        assert!(matches!(
+            store.begin_read().unwrap().get_many(&[&[0; MAX_KEY + 1]]),
+            Err(Error::Budget(_))
+        ));
+        assert!(matches!(
+            store
+                .begin_read()
+                .unwrap()
+                .get_many(&vec![&b"k"[..]; MAX_BATCH_LOOKUPS + 1]),
+            Err(Error::Budget(_))
+        ));
+        store.checkpoint().unwrap();
+        for (snapshot, expected) in &snapshots {
+            assert_eq!(
+                snapshot.get_many(&requested).unwrap().values,
+                requested
+                    .iter()
+                    .map(|key| expected.get(*key).cloned())
+                    .collect::<Vec<_>>()
+            );
+        }
+    }
+}
+
+#[test]
+fn dense_batches_reuse_native_position_and_sparse_batches_have_bounded_fallback() {
+    for layout in LAYOUTS {
+        let dir = tempdir().unwrap();
+        let store = Store::open_layout(&dir.path().join("journal"), layout).unwrap();
+        for chunk in 0..4_u64 {
+            let mut tx = store.begin_write().unwrap();
+            for n in chunk * 128..(chunk + 1) * 128 {
+                tx.put(&n.to_be_bytes(), b"value").unwrap();
+            }
+            tx.commit(chunk + 1).unwrap();
+        }
+        let dense: Vec<_> = (100..228_u64).map(|n| n.to_be_bytes()).collect();
+        let requested: Vec<_> = dense.iter().rev().map(|key| key.as_slice()).collect();
+        let snapshot = store.begin_read().unwrap();
+        let batch = snapshot.get_many(&requested).unwrap();
+        assert_eq!(batch.values, vec![Some(b"value".to_vec()); 128]);
+        if layout != Layout::Cow {
+            assert!(batch.work.cursor_starts <= 5);
+            assert!(batch.work.cursor_resolutions >= 123);
+            assert_eq!(batch.work.point_probes, 0);
+        }
+        let sparse: Vec<_> = (0..128_u64).map(|n| (n * 97).to_be_bytes()).collect();
+        let requested: Vec<_> = sparse.iter().map(|key| key.as_slice()).collect();
+        let batch = snapshot.get_many(&requested).unwrap();
+        assert_eq!(
+            batch.values,
+            requested
+                .iter()
+                .map(|key| snapshot.get(key).unwrap())
+                .collect::<Vec<_>>()
+        );
+        assert!(batch.work.scanned_records <= 128 * 32);
+    }
+}
+
+#[test]
+fn snapshot_capture_and_batched_reads_race_incremental_collection_and_checkpoints() {
+    for layout in LAYOUTS {
+        let dir = tempdir().unwrap();
+        let store = Store::open_layout(&dir.path().join("journal"), layout).unwrap();
+        let mut seed = store.begin_write().unwrap();
+        pair(&mut seed, &1_u64.to_le_bytes());
+        seed.commit(1).unwrap();
+        let done = Arc::new(AtomicBool::new(false));
+        let writer_store = store.clone();
+        let writer_done = Arc::clone(&done);
+        let writer = thread::spawn(move || {
+            for epoch in 2..=40_u64 {
+                let mut tx = writer_store.begin_write().unwrap();
+                pair(&mut tx, &epoch.to_le_bytes());
+                tx.commit(epoch).unwrap();
+                thread::yield_now();
+            }
+            writer_done.store(true, Ordering::Release);
+        });
+        let collector_store = store.clone();
+        let collector_done = Arc::clone(&done);
+        let collector = thread::spawn(move || {
+            let mut step = 0;
+            loop {
+                let result = collector_store.collect_garbage(2).unwrap();
+                step += 1;
+                if step % 11 == 0 {
+                    collector_store.checkpoint().unwrap();
+                }
+                if collector_done.load(Ordering::Acquire) && result.complete_pass {
+                    break;
+                }
+                thread::yield_now();
+            }
+        });
+        for _ in 0..100 {
+            let snapshot = store.begin_read().unwrap();
+            let expected = Some(snapshot.epoch().to_le_bytes().to_vec());
+            assert_eq!(
+                snapshot.get_many(&[b"b", b"a", b"b"]).unwrap().values,
+                vec![expected.clone(), expected.clone(), expected]
+            );
+            thread::yield_now();
+        }
+        writer.join().unwrap();
+        collector.join().unwrap();
+        collect_pass(&store, 2);
+        assert_eq!(store.storage_stats().unwrap().retained_versions, 2);
+    }
+}
+
+#[test]
+#[ignore = "subprocess entry point"]
+fn maintenance_crash_child() {
+    let path = std::env::var_os("HAWDB_BFTREE_TEST_JOURNAL").unwrap();
+    let layout = Layout::parse(&std::env::var("HAWDB_BFTREE_TEST_LAYOUT").unwrap()).unwrap();
+    let stage = std::env::var("HAWDB_BFTREE_MAINT_STAGE").unwrap();
+    let store = Store::open_layout(Path::new(&path), layout).unwrap();
+    let hook = |boundary| {
+        if ((stage.ends_with("durable")) && boundary == MaintenanceStage::Durable)
+            || ((stage.ends_with("partial")) && boundary == MaintenanceStage::Removed(1))
+            || ((stage.ends_with("published")) && boundary == MaintenanceStage::Published)
+        {
+            std::process::exit(86);
+        }
+        Ok(())
+    };
+    if stage.starts_with("checkpoint") {
+        store.checkpoint_with_hook(hook).unwrap();
+    } else {
+        store.collect_with_hook(MAX_GC_WORK, hook).unwrap();
+    }
+    panic!("maintenance crash boundary not reached");
+}
+
+#[test]
+fn process_exit_recovers_durable_collection_and_checkpoint_boundaries() {
+    for layout in LAYOUTS {
+        for stage in [
+            "gc-durable",
+            "gc-partial",
+            "gc-published",
+            "checkpoint-durable",
+            "checkpoint-published",
+        ] {
+            let dir = tempdir().unwrap();
+            let path = dir.path().join("journal");
+            let store = Store::open_layout(&path, layout).unwrap();
+            for operation in 1..=5 {
+                let mut tx = store.begin_write().unwrap();
+                pair(&mut tx, &[operation as u8]);
+                tx.commit(operation).unwrap();
+            }
+            drop(store);
+            let status = Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "adapter::tests::maintenance_crash_child",
+                    "--ignored",
+                    "--nocapture",
+                ])
+                .env("HAWDB_BFTREE_TEST_JOURNAL", &path)
+                .env("HAWDB_BFTREE_TEST_LAYOUT", layout.name())
+                .env("HAWDB_BFTREE_MAINT_STAGE", stage)
+                .status()
+                .unwrap();
+            assert_eq!(status.code(), Some(86));
+            let reopened = Store::open_layout(&path, layout).unwrap();
+            assert_eq!(
+                reopened
+                    .begin_read()
+                    .unwrap()
+                    .get_many(&[b"a", b"b"])
+                    .unwrap()
+                    .values,
+                vec![Some(vec![5]), Some(vec![5])]
+            );
+            if stage.starts_with("gc") {
+                assert_eq!(reopened.storage_stats().unwrap().retained_versions, 2);
+            } else {
+                assert_eq!(
+                    reopened.storage_stats().unwrap().recovery.checkpoint_epoch,
+                    5
+                );
+            }
+            let mut retry = reopened.begin_write().unwrap();
+            pair(&mut retry, &[1]);
+            assert_eq!(retry.commit(1).unwrap(), 1);
+        }
+    }
+}
+
+#[test]
+fn collection_checkpoint_and_replay_preserve_anchors_snapshots_and_exact_receipts() {
+    for layout in LAYOUTS {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("journal");
+        let store = Store::open_layout(&path, layout).unwrap();
+        let keys = [vec![], vec![0], vec![0, 0], vec![255; MAX_KEY]];
+        let mut models = BTreeMap::new();
+        let mut seed = store.begin_write().unwrap();
+        seed.put(b"unchanged", b"anchor at epoch 1").unwrap();
+        for key in &keys {
+            seed.put(key, b"seed").unwrap();
+            models.insert(key.clone(), b"seed".to_vec());
+        }
+        seed.commit(1).unwrap();
+        let old = store.begin_read().unwrap();
+        let mut stale_writer = store.begin_write().unwrap();
+        let mut middle = None;
+        for operation in 2..=10 {
+            let mut tx = store.begin_write().unwrap();
+            for (position, key) in keys.iter().enumerate() {
+                if (operation + position as u64).is_multiple_of(3) {
+                    tx.delete(key).unwrap();
+                    models.remove(key);
+                } else {
+                    let value = operation.to_le_bytes().to_vec();
+                    tx.put(key, &value).unwrap();
+                    models.insert(key.clone(), value);
+                }
+            }
+            tx.commit(operation).unwrap();
+            if operation == 4 {
+                middle = Some((store.begin_read().unwrap(), models.clone()));
+            }
+        }
+        assert_eq!(collect_pass(&store, 3), 0);
+        store.checkpoint().unwrap();
+        assert_eq!(
+            old.get(b"unchanged").unwrap(),
+            Some(b"anchor at epoch 1".to_vec())
+        );
+        for key in &keys {
+            assert_eq!(old.get(key).unwrap(), Some(b"seed".to_vec()));
+        }
+        stale_writer.put(&keys[0], b"stale").unwrap();
+        assert!(matches!(stale_writer.commit(900), Err(Error::Conflict(_))));
+        drop(old);
+        assert!(collect_pass(&store, 3) > 0);
+        store.checkpoint().unwrap();
+        let (middle, expected) = middle.unwrap();
+        for key in &keys {
+            assert_eq!(middle.get(key).unwrap(), expected.get(key).cloned());
+        }
+        assert_eq!(
+            middle.get(b"unchanged").unwrap(),
+            Some(b"anchor at epoch 1".to_vec())
+        );
+        if layout != Layout::Cow {
+            let (_, restored_old) = store
+                .0
+                .index
+                .read()
+                .unwrap()
+                .capture(&AtomicU64::new(4))
+                .unwrap();
+            for key in &keys {
+                assert_eq!(restored_old.get(key).unwrap(), expected.get(key).cloned());
+            }
+        }
+        drop(middle);
+        assert!(collect_pass(&store, 1) > 0);
+        let stats = store.storage_stats().unwrap();
+        assert_eq!(stats.retained_versions, keys.len() + 1);
+        let checkpoint = store.checkpoint().unwrap();
+        assert_eq!(checkpoint.epoch, 10);
+        let mut tail = store.begin_write().unwrap();
+        tail.put(&keys[0], b"post-checkpoint").unwrap();
+        tail.commit(11).unwrap();
+        collect_pass(&store, 2);
+        drop(store);
+        let reopened = Store::open_layout(&path, layout).unwrap();
+        let stats = reopened.storage_stats().unwrap();
+        assert_eq!(stats.recovery.checkpoint_epoch, 10);
+        assert_eq!(stats.recovery.replayed_batches, 1);
+        assert_eq!(stats.retained_versions, keys.len() + 1);
+        assert_eq!(
+            reopened.begin_read().unwrap().get(&keys[0]).unwrap(),
+            Some(b"post-checkpoint".to_vec())
+        );
+        for key in &keys[1..] {
+            assert_eq!(
+                reopened.begin_read().unwrap().get(key).unwrap(),
+                models.get(key).cloned()
+            );
+        }
+        let mut retry = reopened.begin_write().unwrap();
+        retry.put(b"unchanged", b"anchor at epoch 1").unwrap();
+        for key in &keys {
+            retry.put(key, b"seed").unwrap();
+        }
+        assert_eq!(retry.commit(1).unwrap(), 1);
+    }
+}
+
+#[test]
+fn collection_and_checkpoint_uncertainty_poison_until_complete_recovery() {
+    for layout in LAYOUTS {
+        for checkpoint in [false, true] {
+            for failed_stage in [MaintenanceStage::Durable, MaintenanceStage::Published] {
+                let dir = tempdir().unwrap();
+                let path = dir.path().join("journal");
+                let store = Store::open_layout(&path, layout).unwrap();
+                for operation in 1..=4 {
+                    let mut tx = store.begin_write().unwrap();
+                    pair(&mut tx, &[operation as u8]);
+                    tx.commit(operation).unwrap();
+                }
+                let hook = |stage| {
+                    if stage == failed_stage {
+                        Err(Error::Invalid("injected maintenance failure"))
+                    } else {
+                        Ok(())
+                    }
+                };
+                let failed = if checkpoint {
+                    store.checkpoint_with_hook(hook).map(|_| ())
+                } else {
+                    store.collect_with_hook(MAX_GC_WORK, hook).map(|_| ())
+                };
+                assert!(matches!(failed, Err(Error::CommitUncertain(_))));
+                assert!(matches!(store.begin_read(), Err(Error::NeedsRecovery)));
+                drop(store);
+                let reopened = Store::open_layout(&path, layout).unwrap();
+                assert_eq!(
+                    reopened.begin_read().unwrap().get(b"a").unwrap(),
+                    Some(vec![4])
+                );
+                if checkpoint {
+                    assert_eq!(
+                        reopened.storage_stats().unwrap().recovery.checkpoint_epoch,
+                        4
+                    );
+                } else {
+                    assert_eq!(reopened.storage_stats().unwrap().retained_versions, 2);
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn maintenance_rejects_torn_checkpoint_and_corrupt_covered_evidence_without_repair() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("journal");
+    let store = Store::open(&path).unwrap();
+    for operation in 1..=10 {
+        let mut tx = store.begin_write().unwrap();
+        pair(&mut tx, &[operation as u8; 200]);
+        tx.commit(operation).unwrap();
+    }
+    collect_pass(&store, 4);
+    let checkpoint = store.checkpoint().unwrap();
+    drop(store);
+    let bytes = std::fs::read(&path).unwrap();
+    for (n, damaged) in [
+        bytes[..checkpoint.end as usize - 1].to_vec(),
+        {
+            let mut b = bytes.clone();
+            *b.last_mut().unwrap() ^= 1;
+            b
+        },
+        {
+            let mut b = bytes.clone();
+            b[(PREFIX as usize) + WAL_BINARY_FILE_HEADER_BYTES + 2] ^= 1;
+            b
+        },
+        {
+            let mut b = bytes.clone();
+            b.extend_from_slice(&[0; 5]);
+            b
+        },
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let target = dir.path().join(format!("damage-{n}"));
+        std::fs::write(&target, &damaged).unwrap();
+        assert!(Store::open(&target).is_err());
+        assert_eq!(std::fs::read(&target).unwrap(), damaged);
+    }
+}
+
+#[test]
+fn invalid_collection_budgets_refuse_before_mutation() {
+    let dir = tempdir().unwrap();
+    let store = Store::open(&dir.path().join("journal")).unwrap();
+    let bytes = store.journal_bytes().unwrap();
+    for budget in [0, MAX_GC_WORK + 1] {
+        assert!(matches!(
+            store.collect_garbage(budget),
+            Err(Error::Budget(_))
+        ));
+    }
+    assert_eq!(store.journal_bytes().unwrap(), bytes);
+    store.checkpoint().unwrap();
+    assert_eq!(store.begin_read().unwrap().epoch(), 0);
+}
+
+#[test]
+fn old_receipts_leave_ram_but_exact_retry_and_append_survive() {
+    for layout in LAYOUTS {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("journal");
+        let store = Store::open_layout(&path, layout).unwrap();
+        let mut tx = store.begin_write().unwrap();
+        pair(&mut tx, b"old");
+        tx.commit(1).unwrap();
+        let old = store.begin_read().unwrap();
+        let original = {
+            let journal = store.0.journal.lock().unwrap();
+            Arc::downgrade(&journal.latest.get(b"a".as_slice()).unwrap().batch)
+        };
+        for operation in 2..=100 {
+            let mut tx = store.begin_write().unwrap();
+            pair(&mut tx, &[operation as u8; MAX_VALUE]);
+            tx.commit(operation).unwrap();
+        }
+        assert!(original.upgrade().is_none());
+        assert_eq!(old.get(b"a").unwrap(), Some(b"old".to_vec()));
+        let mut retry = store.begin_write().unwrap();
+        pair(&mut retry, b"old");
+        assert_eq!(retry.commit(1).unwrap(), 1);
+        let mut next = store.begin_write().unwrap();
+        pair(&mut next, b"last");
+        assert_eq!(next.commit(101).unwrap(), 101);
+        drop(old);
+        drop(store);
+        let reopened = Store::open_layout(&path, layout).unwrap();
+        assert_eq!(reopened.begin_read().unwrap().epoch(), 101);
+        assert_eq!(
+            reopened.begin_read().unwrap().get(b"a").unwrap(),
+            Some(b"last".to_vec())
+        );
+        let mut retry = reopened.begin_write().unwrap();
+        pair(&mut retry, b"old");
+        assert_eq!(retry.commit(1).unwrap(), 1);
+        let mut wrong = reopened.begin_write().unwrap();
+        pair(&mut wrong, b"wrong");
+        assert!(matches!(wrong.commit(1), Err(Error::Invalid(_))));
+    }
+}
+
+#[test]
+fn read_and_write_snapshot_leases_are_registered_until_drop() {
+    let dir = tempdir().unwrap();
+    let store = Store::open(&dir.path().join("journal")).unwrap();
+    let read = store.begin_read().unwrap();
+    let writer = store.begin_write().unwrap();
+    assert_eq!(store.0.snapshots.lock().unwrap().get(&0), Some(&2));
+    drop(read);
+    assert_eq!(store.0.snapshots.lock().unwrap().get(&0), Some(&1));
+    writer.rollback();
+    assert!(store.0.snapshots.lock().unwrap().is_empty());
+}
 
 #[test]
 fn filtered_scan_chunks_preserve_deep_versions_tombstones_and_binary_bounds() {

@@ -7,6 +7,10 @@ mod index;
 #[cfg(test)]
 #[path = "../simd/key_compare.rs"]
 mod key_compare;
+mod performance;
+#[cfg(test)]
+#[path = "../structural/keys.rs"]
+mod structural_keys;
 
 use adapter::Store;
 use std::path::Path;
@@ -43,15 +47,93 @@ fn demo(path: &Path) -> adapter::Result<()> {
     Ok(())
 }
 
+fn maintenance_demo(path: &Path) -> adapter::Result<()> {
+    let store = Store::open(path)?;
+    let mut seed = store.begin_write()?;
+    seed.put(b"key", b"old")?;
+    seed.commit(1)?;
+    let old = store.begin_read()?;
+    let mut update = store.begin_write()?;
+    update.put(b"key", b"new")?;
+    update.commit(2)?;
+    store.collect_garbage(adapter::MAX_GC_WORK)?;
+    store.checkpoint()?;
+    assert_eq!(old.get(b"key")?, Some(b"old".to_vec()));
+    drop(old);
+    while !store.collect_garbage(4)?.complete_pass {}
+    store.checkpoint()?;
+    let mut retry = store.begin_write()?;
+    retry.put(b"key", b"old")?;
+    assert_eq!(retry.commit(1)?, 1);
+    drop(store);
+    let reopened = Store::open(path)?;
+    assert_eq!(reopened.begin_read()?.get(b"key")?, Some(b"new".to_vec()));
+    let batch = reopened
+        .begin_read()?
+        .get_many(&[b"key", b"missing", b"key"])?;
+    assert_eq!(
+        batch.values,
+        vec![Some(b"new".to_vec()), None, Some(b"new".to_vec())]
+    );
+    println!(
+        "{}",
+        serde_json::to_string(&reopened.storage_stats()?)
+            .map_err(|e| adapter::Error::Index(e.to_string()))?
+    );
+    Ok(())
+}
+
 fn main() {
     let args: Vec<_> = std::env::args_os().collect();
     let result = match args.get(1).and_then(|a| a.to_str()) {
-        Some("demo") if args.len() == 3 => {
+        Some("audit") if args.len() == 4 => args[3]
+            .to_str()
+            .ok_or(adapter::Error::Invalid("invalid audit layout"))
+            .and_then(index::Layout::parse)
+            .and_then(|layout| {
+                adapter::audit::transaction_stream(
+                    Path::new(&args[2]),
+                    layout,
+                    std::io::stdout().lock(),
+                )
+            }),
+        Some("bench-advanced") if args.len() == 8 => {
+            let parsed = args[3]
+                .to_str()
+                .and_then(|s| index::Layout::parse(s).ok())
+                .zip(args[4].to_str().and_then(|s| s.parse().ok()))
+                .zip(args[5].to_str().and_then(|s| s.parse().ok()))
+                .zip(
+                    args[6]
+                        .to_str()
+                        .and_then(|s| benchmark::KeyShape::parse(s).ok()),
+                );
+            match (parsed, args[7].to_str()) {
+                (Some((((layout, keys), rounds), shape)), Some(mode @ ("keep" | "collect"))) => {
+                    performance::advanced(
+                        Path::new(&args[2]),
+                        layout,
+                        keys,
+                        rounds,
+                        shape,
+                        mode == "collect",
+                    )
+                }
+                _ => Err(adapter::Error::Invalid(
+                    "invalid advanced benchmark arguments",
+                )),
+            }
+        }
+        Some(command @ ("demo" | "maintenance-demo")) if args.len() == 3 => {
             let path = Path::new(&args[2]);
             if path.exists() {
                 Err(adapter::Error::Invalid("demo requires a new journal path"))
             } else {
-                demo(path)
+                if command == "demo" {
+                    demo(path)
+                } else {
+                    maintenance_demo(path)
+                }
             }
         }
         Some("bench") if (3..=5).contains(&args.len()) => {
@@ -99,7 +181,7 @@ fn main() {
             }
         }
         _ => {
-            eprintln!("Usage: hawdb-bftree-mvcc-experiment demo <new-journal> | bench <new-directory> [keys] [rounds] | bench-one <new-journal> <versioned|hybrid|cow> <keys> <rounds> | bench-shaped <new-journal> <versioned|hybrid|cow> <keys> <rounds> <numeric8|prefix64|spread64>");
+            eprintln!("Usage: hawdb-bftree-mvcc-experiment <demo|maintenance-demo> <new-journal> | bench <new-directory> [keys] [rounds] | bench-one <new-journal> <versioned|hybrid|cow> <keys> <rounds> | bench-shaped <new-journal> <layout> <keys> <rounds> <numeric8|prefix64|spread64> | bench-advanced <new-journal> <layout> <keys> <rounds> <shape> <keep|collect> | audit <journal> <layout> (binary normalized transaction stream on stdout)");
             std::process::exit(2);
         }
     };

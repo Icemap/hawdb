@@ -9,6 +9,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 pub type Rows = Vec<(Vec<u8>, Vec<u8>)>;
+mod batch;
+pub use batch::BatchRead;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 pub enum Layout {
@@ -220,6 +222,112 @@ fn history_get(tree: &BfTree, key: &[u8], epoch: u64) -> Result<Option<Vec<u8>>>
 }
 
 impl Index {
+    pub fn retained_value(&self, key: &[u8], epoch: u64, latest: bool) -> Result<Option<Vec<u8>>> {
+        if let Self::Cow(state) = self {
+            if !latest {
+                return Err(Error::Invalid("COW history belongs to retained snapshots"));
+            }
+            return Ok(state
+                .lock()
+                .map_err(|_| Error::NeedsRecovery)?
+                .get(&Key(key.to_vec()))
+                .map(|value| value.0.as_ref().clone()));
+        }
+        let Self::Bf { tree, layout } = self else {
+            unreachable!()
+        };
+        let head = *layout == Layout::Hybrid && latest;
+        let encoded = if head {
+            prefix(key, 2)
+        } else {
+            version_key(key, epoch)
+        };
+        let mut buffer = [0; MAX_VALUE + 9];
+        match tree.read(&encoded, &mut buffer) {
+            LeafReadResult::Found(n) => {
+                let value = &buffer[..n as usize];
+                if head {
+                    let found_epoch = u64::from_be_bytes(
+                        value
+                            .get(..8)
+                            .ok_or(Error::Invalid("short retained head"))?
+                            .try_into()
+                            .expect("epoch"),
+                    );
+                    if found_epoch != epoch {
+                        return Err(Error::Invalid("retained head epoch mismatch"));
+                    }
+                    decode_value(&value[8..])
+                } else {
+                    decode_value(value)
+                }
+            }
+            _ => Err(Error::Invalid("retained index version is missing")),
+        }
+    }
+    pub fn current_head(&self, key: &[u8]) -> Result<Option<(u64, Option<Vec<u8>>)>> {
+        let Self::Bf {
+            tree,
+            layout: Layout::Hybrid,
+        } = self
+        else {
+            return Ok(None);
+        };
+        let mut buffer = [0; MAX_VALUE + 9];
+        match tree.read(&prefix(key, 2), &mut buffer) {
+            LeafReadResult::Found(n) => {
+                let bytes = &buffer[..n as usize];
+                let epoch = u64::from_be_bytes(
+                    bytes
+                        .get(..8)
+                        .ok_or(Error::Invalid("short replay head"))?
+                        .try_into()
+                        .expect("epoch"),
+                );
+                Ok(Some((epoch, decode_value(&bytes[8..])?)))
+            }
+            LeafReadResult::NotFound => Ok(None),
+            _ => Err(Error::Invalid("unexpected replay head state")),
+        }
+    }
+    pub fn restore_version(
+        &self,
+        key: &[u8],
+        epoch: u64,
+        value: &Option<Vec<u8>>,
+        latest: bool,
+    ) -> Result<()> {
+        let mut buffer = [0; MAX_VALUE + 9];
+        match self {
+            Self::Bf { tree, layout } => {
+                let head = *layout == Layout::Hybrid && latest;
+                let key = if head {
+                    prefix(key, 2)
+                } else {
+                    version_key(key, epoch)
+                };
+                insert(
+                    tree,
+                    &key,
+                    encode_value(value, head.then_some(epoch), &mut buffer),
+                )
+            }
+            Self::Cow(state) => {
+                let mut state = state.lock().map_err(|_| Error::NeedsRecovery)?;
+                if let Some(value) = value {
+                    state.insert(Key(key.to_vec()), Value(Arc::new(value.clone())));
+                } else {
+                    state.remove(&Key(key.to_vec()));
+                }
+                Ok(())
+            }
+        }
+    }
+    pub fn remove_version(&self, key: &[u8], epoch: u64) {
+        if let Self::Bf { tree, .. } = self {
+            tree.delete(&version_key(key, epoch));
+        }
+    }
     pub fn new(layout: Layout) -> Result<Self> {
         if layout == Layout::Cow {
             return Ok(Self::Cow(Mutex::new(CowMap::default())));

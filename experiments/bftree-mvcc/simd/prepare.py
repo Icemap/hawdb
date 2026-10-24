@@ -89,6 +89,8 @@ def main():
         shutil.copytree(project / "src", harness / "src")
         (harness / "simd").mkdir()
         shutil.copy2(project / "simd/key_compare.rs", harness / "simd/key_compare.rs")
+        (harness / "structural").mkdir()
+        shutil.copy2(project / "structural/keys.rs", harness / "structural/keys.rs")
         manifest = (project / "Cargo.toml").read_text()
         for name in ("qos", "storage"):
             manifest = manifest.replace(f'"../../crates/{name}"',

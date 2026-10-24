@@ -10,7 +10,7 @@ use std::process::Command;
 use std::time::Instant;
 
 #[derive(Serialize)]
-struct Latency {
+pub(crate) struct Latency {
     operations: usize,
     p50_ns: u64,
     p95_ns: u64,
@@ -18,7 +18,7 @@ struct Latency {
     total_ns: u64,
 }
 impl Latency {
-    fn from(mut samples: Vec<u64>) -> Self {
+    pub(crate) fn from(mut samples: Vec<u64>) -> Self {
         let total_ns = samples.iter().sum();
         samples.sort_unstable();
         let percentile = |p: usize| samples[(samples.len() * p).div_ceil(100).saturating_sub(1)];
@@ -53,7 +53,7 @@ struct Report {
     resident_bytes: Option<u64>,
     process_peak_bytes: Option<u64>,
 }
-fn nanos(start: Instant) -> u64 {
+pub(crate) fn nanos(start: Instant) -> u64 {
     start.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64
 }
 #[derive(Clone, Copy)]
@@ -71,14 +71,14 @@ impl KeyShape {
             _ => Err(Error::Invalid("unknown benchmark key shape")),
         }
     }
-    fn name(self) -> &'static str {
+    pub(crate) fn name(self) -> &'static str {
         match self {
             Self::Numeric8 => "numeric8",
             Self::Prefix64 => "prefix64",
             Self::Spread64 => "spread64",
         }
     }
-    fn key(self, n: usize) -> Vec<u8> {
+    pub(crate) fn key(self, n: usize) -> Vec<u8> {
         let number = (n as u64).to_be_bytes();
         match self {
             Self::Numeric8 => number.to_vec(),
@@ -101,7 +101,7 @@ impl KeyShape {
         }
     }
 }
-fn value(round: usize, n: usize) -> Vec<u8> {
+pub(crate) fn value(round: usize, n: usize) -> Vec<u8> {
     let mut value = vec![b'x'; 100];
     value[..8].copy_from_slice(&(round as u64).to_le_bytes());
     value[8..16].copy_from_slice(&(n as u64).to_le_bytes());

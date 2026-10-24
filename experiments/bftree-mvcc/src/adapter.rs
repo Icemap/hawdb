@@ -1,28 +1,33 @@
 // Copyright 2026 Nowledge
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::index::{Index, Layout, Previous, Rows, View};
+use crate::index::{BatchRead, Index, Layout, Previous, Rows, View};
 use hawdb_storage::wal::frame::{
     decode_binary_wal_header, encode_binary_wal_header, frame_binary_wal_record,
     BinaryWalReadEvent, BinaryWalReader, WAL_BINARY_FILE_HEADER_BYTES,
 };
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::fmt;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 pub const MAX_KEY: usize = 64;
 pub const MAX_VALUE: usize = 1024;
 pub const MAX_WRITES: usize = 128;
 pub const MAX_SCAN_ROWS: usize = 4096;
 pub const MAX_SCAN_RECORDS: usize = 200_000;
+pub const MAX_BATCH_LOOKUPS: usize = 128;
 const MAX_BATCH: usize = 256 * 1024;
 const MAX_JOURNAL: u64 = 32 * 1024 * 1024;
-const MAGIC: &[u8; 8] = b"BFMVCC01";
+const MAGIC: &[u8; 8] = b"BFMVCC02";
 const PREFIX: u64 = 8;
+
+pub mod audit;
+mod maintenance;
+pub use maintenance::MAX_GC_WORK;
 
 #[derive(Debug)]
 pub enum Error {
@@ -77,7 +82,7 @@ pub struct Batch {
 }
 impl Batch {
     fn encode(&self) -> Vec<u8> {
-        let mut out = Vec::new();
+        let mut out = vec![0];
         out.extend_from_slice(&self.epoch.to_le_bytes());
         out.extend_from_slice(&self.operation.to_le_bytes());
         out.extend_from_slice(&(self.writes.len() as u32).to_le_bytes());
@@ -104,7 +109,9 @@ impl Batch {
             *bytes = tail;
             Ok(head)
         }
-        let mut input = bytes;
+        let mut input = bytes
+            .strip_prefix(&[0])
+            .ok_or(Error::Invalid("not a transaction record"))?;
         let epoch = u64::from_le_bytes(take(&mut input, 8)?.try_into().expect("8 bytes"));
         let operation = u64::from_le_bytes(take(&mut input, 8)?.try_into().expect("8 bytes"));
         let n = u32::from_le_bytes(take(&mut input, 4)?.try_into().expect("4 bytes")) as usize;
@@ -143,25 +150,84 @@ impl Batch {
     }
 }
 
+#[derive(Clone)]
 struct Latest {
     epoch: u64,
     position: usize,
+    batch: Arc<Batch>,
+    versions: VecDeque<u64>,
+}
+#[derive(Clone, Copy)]
+struct Receipt {
+    epoch: u64,
+    start: u64,
+    end: u64,
+}
+// Present the authoritative file after the experiment's eight-byte identity.
+// Clones share a cursor, so use only under the journal coordinator. Appends
+// always re-seek to the verified end before writing.
+struct WalFile(File);
+impl Read for WalFile {
+    fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+        self.0.read(buffer)
+    }
+}
+impl Seek for WalFile {
+    fn seek(&mut self, position: SeekFrom) -> std::io::Result<u64> {
+        let position = match position {
+            SeekFrom::Start(offset) => SeekFrom::Start(
+                offset
+                    .checked_add(PREFIX)
+                    .ok_or_else(|| std::io::Error::other("WAL offset overflow"))?,
+            ),
+            other => other,
+        };
+        self.0
+            .seek(position)?
+            .checked_sub(PREFIX)
+            .ok_or_else(|| std::io::Error::other("WAL seek precedes identity"))
+    }
 }
 struct Journal {
     file: File,
     len: u64,
     latest: BTreeMap<Vec<u8>, Latest>,
-    // Bounded by MAX_JOURNAL; exact payload equality avoids hash-based replay ambiguity.
-    receipts: BTreeMap<u64, u64>,
-    commits: Vec<Batch>,
+    // Mutation payloads remain in the bounded journal for exact retries. Only
+    // batches referenced by current heads retain their payload in memory.
+    receipts: BTreeMap<u64, Receipt>,
+    retained_versions: usize,
+    gc_cursor: Option<Vec<u8>>,
+    gc_pass_horizon: Option<u64>,
 }
 impl Journal {
+    fn frame(&self, payload: &[u8], generation: u64) -> Result<(Vec<u8>, u64)> {
+        let frame = frame_binary_wal_record(
+            generation,
+            payload,
+            self.len - PREFIX - WAL_BINARY_FILE_HEADER_BYTES as u64,
+        );
+        let new_len = self
+            .len
+            .checked_add(frame.len() as u64)
+            .filter(|n| *n <= MAX_JOURNAL)
+            .ok_or(Error::Budget("journal bytes"))?;
+        Ok((frame, new_len))
+    }
+    fn write_frame(&mut self, frame: &[u8]) -> Result<()> {
+        if self.file.metadata()?.len() != self.len {
+            return Err(Error::Invalid("journal length changed outside its owner"));
+        }
+        self.file.seek(SeekFrom::Start(self.len))?;
+        self.file.write_all(frame)?;
+        self.file.sync_all()?;
+        Ok(())
+    }
     fn previous(&self, key: &[u8]) -> Result<Option<Previous<'_>>> {
         let Some(latest) = self.latest.get(key) else {
             return Ok(None);
         };
-        let change = self
-            .batch(latest.epoch)?
+        let change = latest
+            .batch
             .writes
             .get(latest.position)
             .filter(|change| change.key == key)
@@ -171,34 +237,87 @@ impl Journal {
             value: &change.value,
         }))
     }
-    fn batch(&self, epoch: u64) -> Result<&Batch> {
-        let index = usize::try_from(epoch)
-            .ok()
-            .and_then(|n| n.checked_sub(1))
-            .ok_or(Error::Invalid("invalid receipt epoch"))?;
-        self.commits
-            .get(index)
-            .filter(|batch| batch.epoch == epoch)
-            .ok_or(Error::Invalid("missing commit receipt"))
-    }
-    fn record(&mut self, batch: Batch) {
-        for (position, change) in batch.writes.iter().enumerate() {
-            let latest = Latest {
-                epoch: batch.epoch,
-                position,
-            };
-            if let Some(entry) = self.latest.get_mut(change.key.as_slice()) {
-                *entry = latest;
-            } else {
-                self.latest.insert(change.key.clone(), latest);
-            }
+    fn batch(&self, receipt: Receipt, key_hint: &[u8], generation: u64) -> Result<Arc<Batch>> {
+        let epoch = receipt.epoch;
+        if let Some(latest) = self.latest.get(key_hint).filter(|head| head.epoch == epoch) {
+            return Ok(Arc::clone(&latest.batch));
         }
-        self.receipts.insert(batch.operation, batch.epoch);
-        self.commits.push(batch);
+        let mut reader = BinaryWalReader::range(
+            WalFile(self.file.try_clone()?),
+            generation,
+            Some(MAX_BATCH),
+            receipt.start,
+            receipt.end,
+        )
+        .map_err(|error| Error::Journal(error.to_string()))?;
+        let batch = match reader
+            .next_event()
+            .map_err(|error| Error::Journal(error.to_string()))?
+        {
+            BinaryWalReadEvent::Record {
+                payload,
+                end_offset,
+                ..
+            } if end_offset == receipt.end => Batch::decode(&payload)?,
+            _ => return Err(Error::Invalid("missing complete commit receipt")),
+        };
+        if batch.epoch != epoch
+            || !matches!(
+                reader
+                    .next_event()
+                    .map_err(|error| Error::Journal(error.to_string()))?,
+                BinaryWalReadEvent::Eof
+            )
+        {
+            return Err(Error::Invalid("receipt epoch or boundary mismatch"));
+        }
+        Ok(Arc::new(batch))
+    }
+    fn record(&mut self, batch: Batch, start: u64, end: u64) {
+        let batch = Arc::new(batch);
+        for (position, change) in batch.writes.iter().enumerate() {
+            if let Some(entry) = self.latest.get_mut(change.key.as_slice()) {
+                entry.epoch = batch.epoch;
+                entry.position = position;
+                entry.batch = Arc::clone(&batch);
+                entry.versions.push_back(batch.epoch);
+            } else {
+                self.latest.insert(
+                    change.key.clone(),
+                    Latest {
+                        epoch: batch.epoch,
+                        position,
+                        batch: Arc::clone(&batch),
+                        versions: VecDeque::from([batch.epoch]),
+                    },
+                );
+            }
+            self.retained_versions += 1;
+        }
+        self.receipts.insert(
+            batch.operation,
+            Receipt {
+                epoch: batch.epoch,
+                start,
+                end,
+            },
+        );
     }
 }
+impl Drop for Journal {
+    fn drop(&mut self) {
+        // Ownership follows live Store/transaction handles. Descriptor copies
+        // made by readers or briefly inherited before a child's close-on-exec
+        // must not extend it after the last owning handle has closed.
+        let _ = self.file.unlock();
+    }
+}
+
 struct Inner {
-    index: Index,
+    index: RwLock<Index>,
+    snapshots: Mutex<BTreeMap<u64, usize>>,
+    index_generation: AtomicU64,
+    recovery: maintenance::RecoveryReport,
     layout: Layout,
     published: AtomicU64,
     poisoned: AtomicBool,
@@ -275,53 +394,22 @@ impl Store {
         if generation != layout.id() || start != 1 {
             return Err(Error::Invalid("journal layout/header mismatch"));
         }
-        let index = Index::new(layout)?;
-        let published = AtomicU64::new(0);
         let mut journal = Journal {
             file,
             len,
             latest: BTreeMap::new(),
             receipts: BTreeMap::new(),
-            commits: Vec::new(),
+            retained_versions: 0,
+            gc_cursor: None,
+            gc_pass_horizon: None,
         };
-        let reader = journal.file.try_clone()?;
-        let mut reader = BinaryWalReader::new(reader, generation, Some(MAX_BATCH));
-        let mut valid_end = WAL_BINARY_FILE_HEADER_BYTES as u64;
-        loop {
-            match reader
-                .next_event()
-                .map_err(|e| Error::Journal(e.to_string()))?
-            {
-                BinaryWalReadEvent::Record {
-                    payload,
-                    end_offset,
-                    ..
-                } => {
-                    let batch = Batch::decode(&payload)?;
-                    if batch.epoch != published.load(Ordering::Relaxed) + 1
-                        || journal.receipts.contains_key(&batch.operation)
-                    {
-                        return Err(Error::Invalid(
-                            "non-contiguous epoch or duplicate operation",
-                        ));
-                    }
-                    let candidate =
-                        index.prepare(&batch, |key| journal.previous(key), |_| Ok(()))?;
-                    index.publish(candidate, batch.epoch, &published)?;
-                    journal.record(batch);
-                    valid_end = end_offset;
-                }
-                BinaryWalReadEvent::Eof => break,
-                BinaryWalReadEvent::TornTail { reason, .. }
-                | BinaryWalReadEvent::Corrupt { reason, .. } => return Err(Error::Journal(reason)),
-            }
-        }
-        if valid_end + PREFIX != len {
-            return Err(Error::Invalid("unverified trailing journal bytes"));
-        }
-        journal.file.seek(SeekFrom::End(0))?;
+        let (index, epoch, recovery) = maintenance::recover(&mut journal, layout)?;
+        let published = AtomicU64::new(epoch);
         Ok(Self(Arc::new(Inner {
-            index,
+            index: RwLock::new(index),
+            snapshots: Mutex::new(BTreeMap::new()),
+            index_generation: AtomicU64::new(1),
+            recovery,
             layout,
             published,
             poisoned: AtomicBool::new(false),
@@ -330,8 +418,20 @@ impl Store {
     }
     pub fn begin_read(&self) -> Result<ReadTxn> {
         self.0.usable()?;
-        let (epoch, view) = self.0.index.capture(&self.0.published)?;
+        // Collection uses this same gate while choosing a horizon. Register
+        // before releasing it, so no snapshot is captured but unprotected.
+        let mut snapshots = self.0.snapshots.lock().map_err(|_| Error::NeedsRecovery)?;
+        let (epoch, view) = self
+            .0
+            .index
+            .read()
+            .map_err(|_| Error::NeedsRecovery)?
+            .capture(&self.0.published)?;
         self.0.usable()?;
+        let count = snapshots.entry(epoch).or_default();
+        *count = count
+            .checked_add(1)
+            .ok_or(Error::Budget("snapshot references"))?;
         Ok(ReadTxn {
             inner: Arc::clone(&self.0),
             epoch,
@@ -350,14 +450,43 @@ impl Store {
 }
 impl Inner {
     fn usable(&self) -> Result<()> {
-        if self.poisoned.load(Ordering::Acquire) {
+        if self.poisoned.load(Ordering::Acquire)
+            || self.journal.is_poisoned()
+            || self.index.is_poisoned()
+            || self.snapshots.is_poisoned()
+        {
             Err(Error::NeedsRecovery)
         } else {
             Ok(())
         }
     }
 }
+impl Drop for ReadTxn {
+    fn drop(&mut self) {
+        let Ok(mut snapshots) = self.inner.snapshots.lock() else {
+            self.inner.poisoned.store(true, Ordering::Release);
+            return;
+        };
+        if let Some(count) = snapshots.get_mut(&self.epoch) {
+            *count -= 1;
+            if *count == 0 {
+                snapshots.remove(&self.epoch);
+            }
+        } else {
+            self.inner.poisoned.store(true, Ordering::Release);
+        }
+    }
+}
 impl ReadTxn {
+    pub fn get_many(&self, keys: &[&[u8]]) -> Result<BatchRead> {
+        if keys.len() > MAX_BATCH_LOOKUPS || keys.iter().any(|key| key.len() > MAX_KEY) {
+            return Err(Error::Budget("batch lookup keys"));
+        }
+        self.inner.usable()?;
+        let batch = self.view.get_many(keys)?;
+        self.inner.usable()?;
+        Ok(batch)
+    }
     pub fn epoch(&self) -> u64 {
         self.epoch
     }
@@ -427,9 +556,13 @@ impl WriteTxn {
         if writes.is_empty() {
             return Err(Error::Invalid("empty write transaction"));
         }
-        if let Some(&previous_epoch) = journal.receipts.get(&operation) {
-            let previous = journal.batch(previous_epoch)?;
-            return if previous.writes == writes {
+        if let Some(&receipt) = journal.receipts.get(&operation) {
+            let previous = journal
+                .batch(receipt, &writes[0].key, inner.layout.id())
+                .inspect_err(|_| {
+                    inner.poisoned.store(true, Ordering::Release);
+                })?;
+            return if previous.operation == operation && previous.writes == writes {
                 Ok(previous.epoch)
             } else {
                 Err(Error::Invalid("operation ID reused with different writes"))
@@ -458,16 +591,7 @@ impl WriteTxn {
         if payload.len() > MAX_BATCH {
             return Err(Error::Budget("encoded batch"));
         }
-        let frame = frame_binary_wal_record(
-            inner.layout.id(),
-            &payload,
-            journal.len - PREFIX - WAL_BINARY_FILE_HEADER_BYTES as u64,
-        );
-        let new_len = journal
-            .len
-            .checked_add(frame.len() as u64)
-            .filter(|n| *n <= MAX_JOURNAL)
-            .ok_or(Error::Budget("journal bytes"))?;
+        let (frame, new_len) = journal.frame(&payload, inner.layout.id())?;
         // From the first write onward, an error may leave a durable commit.
         // Poison all handles until authoritative journal replay resolves it.
         let mut uncertain = Uncertain {
@@ -475,21 +599,22 @@ impl WriteTxn {
             armed: true,
         };
         let outcome: Result<()> = (|| {
-            journal.file.write_all(&frame)?;
-            journal.file.sync_all()?;
+            journal.write_frame(&frame)?;
             hook(Stage::Durable)?;
-            let candidate = inner.index.prepare(
+            let index = inner.index.read().map_err(|_| Error::NeedsRecovery)?;
+            let candidate = index.prepare(
                 &batch,
                 |key| journal.previous(key),
                 |n| hook(Stage::Installed(n)),
             )?;
-            inner.index.publish(candidate, epoch, &inner.published)?;
+            index.publish(candidate, epoch, &inner.published)?;
             hook(Stage::Published)?;
             Ok(())
         })();
         outcome.map_err(|error| Error::CommitUncertain(error.to_string()))?;
+        let start = journal.len - PREFIX;
         journal.len = new_len;
-        journal.record(batch);
+        journal.record(batch, start, new_len - PREFIX);
         uncertain.armed = false;
         Ok(epoch)
     }
