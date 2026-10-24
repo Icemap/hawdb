@@ -1,9 +1,0 @@
-{
-  "release_tag": "evidence-pr-1217-2026-10-24",
-  "name": "read-p50-40060901487.zip",
-  "bytes": 30276725,
-  "sha256": "64ec8f6af905f184f35398241f8a2a049d5a5721857c660d7fd5835d04cf1ac2",
-  "source_revision": "8202d2f50cc057716b47cd4080e5bb56d37ab562",
-  "run_id": 40060901487,
-  "download_after_upload_verified": true
-}

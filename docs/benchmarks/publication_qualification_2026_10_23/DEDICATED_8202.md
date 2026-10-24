@@ -9,17 +9,18 @@ with controller `e81001f28da7ccc1b0d9e08b95b63ecfe31e7b47`. The later merge head
 The full [50,688,759-byte ZIP](https://github.com/nowledge-co/hawdb/releases/download/evidence-pr-1217-2026-10-24/publication-resource-40049133474.zip)
 has SHA-256 `769de7476d6f13fe67ebd58d3b5aceaa4df60b071dd3f6519040c3dbe2a999f0`.
 Re-executing its verifier over all raw records reproduced `verified-summary.json`
-byte for byte; see [independent verification](dedicated-8202/independent-verification.json).
+byte for byte. Detailed per-case tables are in the ZIP under
+`read-resource/summary.md`, `sustained/summary.md`, and `controls/summary.md`.
 
 | Cohort | Cases | Observed scope |
 | --- | ---: | --- |
-| [Pinned reads/resource](dedicated-8202/read-resource/summary.md) | 54 | 119,808 reads; enabled modes read during preparation before writers drain; 5–7,673 staging calls. |
-| [Sustained](dedicated-8202/sustained/summary.md) | 18 | 100,000 writes/case, six checkpoints, no publisher cap, 31–1,048 post-E advances before writer drain in every case. |
-| [Controls](dedicated-8202/controls/summary.md) | 54 | 4,096 writes/case and all declared controls; 5–7,115 staging calls. |
+| Pinned reads/resource | 54 | 119,808 reads; enabled modes read during preparation before writers drain; 5–7,673 staging calls. |
+| Sustained | 18 | 100,000 writes/case, six checkpoints, no publisher cap, 31–1,048 post-E advances before writer drain in every case. |
+| Controls | 54 | 4,096 writes/case and all declared controls; 5–7,115 staging calls. |
 
 All 126 cases retained exact document/epoch checks and `SyncOnEveryWrite`:
 2,242,368 writes in total. This closes the dedicated-run evidence gap; it does
-not pass or waive the strict writer gate. The linked tables retain p50/p95/p99,
+not pass or waive the strict writer gate. The archived tables retain p50/p95/p99,
 including worse tails, without selecting favorable modes. In the read/resource
 matrix, detached quiet callback medians were 3.164–3.465 ms versus scoped
 23.307–75.209 ms. These are same-binary cohort summaries, not paired confidence
@@ -30,7 +31,7 @@ Build: pinned Rust 1.97.1 image, default features, global optimized release
 profile, debug assertions and overflow checks disabled. Binary SHA-256:
 `419ceb1271f706b8cf1bd006341f885fc2f3ec0a8339b000e79b41ea782b236b`.
 Build time was 1,239.713 seconds, separate from 3,031.254 seconds of measurement.
-The [host receipt](dedicated-8202/host-measurement-receipt.json) records 2,997
+The ZIP's `host-measurement-receipt.json` records 2,997
 samples, zero compiler observations, no monitor errors and complete coverage.
 Linux x86_64 had four logical CPUs, two physical cores and effective CPU count
 two; 4/8 writers were manual oversubscription, while the automatic policy would

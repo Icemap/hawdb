@@ -13,7 +13,7 @@ Actions artifact retention expiry; this prerelease is not a software release or
 [Archive workflow 40062320602](https://github.com/nowledge-co/hawdb/actions/runs/40062320602)
 bound checkout to that exact source, checked the complete 1,231-file original
 inventory, uploaded four assets, then downloaded all four and verified both
-asset hashes and every tar member before publishing. See [the receipt](archive-receipt.json),
+asset hashes and every tar member before publishing. See
 [the complete raw manifest](raw-manifest.json) and [asset checksums](ARCHIVE_SHA256SUMS).
 The downloaded manifest's 654 paths and sizes also match the GitHub source tree.
 
