@@ -511,7 +511,10 @@ fourteen DTOs, test-only analytics DTO module and graph-inspection mutation
 helpers are removed. Entity/property reads now use fixed bounded statements
 on read snapshots.
 Their six read wrappers and eleven request/response types are removed.
-The remaining fourteen read wrappers and final qualification remain unfinished;
+Crystal list, community aggregation and source visibility fixtures also use
+fixed statements for projection, filtering, sorting and pagination. Their three
+read wrappers and twelve DTOs are removed. The remaining eleven read wrappers
+and final qualification remain unfinished;
 this mutation cleanup alone does not complete issue #1193.
 
 ## Stable typed boundaries

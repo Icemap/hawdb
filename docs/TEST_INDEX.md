@@ -1027,3 +1027,15 @@ existing out-of-core cases retain checkpointed entity/property reads and digest
 corruption refusal. These cases remain in the existing root general CI lane.
 Six read extension methods, eleven DTOs and the test-only mutation DTO module
 are removed; fourteen other read wrappers still require migration.
+
+### Crystal query fixtures
+
+Nine existing root cases move to `src/api/tests/crystal_reads.rs`. Fixed queries
+own key ranking, cursor predicates, limits, community grouping, distinct source
+counts, visibility ordering and default-value projections. Detail/page counts
+use separate statements on one snapshot with a cumulative row/payload budget.
+Invalid key/cursor combinations and empty/null community scopes remain caller
+validation. Cache assertions account for separate count/page templates and the
+snapshot cache. All field, path-multiplicity, pagination and read-only epoch
+checks remain in the root general CI lane. The three legacy wrappers, twelve
+DTOs and host-side graph-result sorting/truncation helpers are removed.

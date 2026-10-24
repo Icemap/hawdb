@@ -26,21 +26,6 @@ pub(super) trait QueryFirstTestExt {
         request: &KnowledgeCommunityMemoryListRequest,
     ) -> Result<KnowledgeCommunityMemoryListOutput>;
 
-    fn query_crystals_via_cypher(
-        &self,
-        request: &KnowledgeCrystalListRequest,
-    ) -> Result<KnowledgeCrystalListOutput>;
-
-    fn query_crystal_communities_via_cypher(
-        &self,
-        request: &KnowledgeCrystalCommunityListRequest,
-    ) -> Result<KnowledgeCrystalCommunityListOutput>;
-
-    fn query_crystal_source_visibility_via_cypher(
-        &self,
-        request: &KnowledgeCrystalSourceVisibilityRequest,
-    ) -> Result<KnowledgeCrystalSourceVisibilityOutput>;
-
     fn query_neighbors_via_cypher(
         &self,
         request: &KnowledgeNeighborsRequest,
@@ -98,27 +83,6 @@ impl QueryFirstTestExt for Database {
         request: &KnowledgeCommunityMemoryListRequest,
     ) -> Result<KnowledgeCommunityMemoryListOutput> {
         super::super::knowledge_community_memories_via_query_runtime(self, request)
-    }
-
-    fn query_crystals_via_cypher(
-        &self,
-        request: &KnowledgeCrystalListRequest,
-    ) -> Result<KnowledgeCrystalListOutput> {
-        super::super::knowledge_crystals_via_query_runtime(self, request)
-    }
-
-    fn query_crystal_communities_via_cypher(
-        &self,
-        request: &KnowledgeCrystalCommunityListRequest,
-    ) -> Result<KnowledgeCrystalCommunityListOutput> {
-        super::super::knowledge_crystal_communities_via_query_runtime(self, request)
-    }
-
-    fn query_crystal_source_visibility_via_cypher(
-        &self,
-        request: &KnowledgeCrystalSourceVisibilityRequest,
-    ) -> Result<KnowledgeCrystalSourceVisibilityOutput> {
-        super::super::knowledge_crystal_source_visibility_via_query_runtime(self, request)
     }
 
     fn query_neighbors_via_cypher(
