@@ -1,9 +1,26 @@
+load("@bazel_skylib//rules:common_settings.bzl", "string_flag")
 load("@crate_index//:defs.bzl", "aliases", "all_crate_deps")
 load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_test")
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
 load("//:benchmarks.bzl", "HAWDB_BENCHMARKS", "HAWDB_BENCHMARK_TARGETS", "hawdb_benchmark_binaries")
+load("//:windows_native_features.bzl", "WINDOWS_NATIVE_FEATURE_PROFILES", "windows_native_features")
 
 package(default_visibility = ["//visibility:public"])
+
+# Cargo-parity features are independent of the repository-wide build profile.
+string_flag(
+    name = "windows_native_profile",
+    build_setting_default = "bazel",
+    values = ["bazel"] + WINDOWS_NATIVE_FEATURE_PROFILES.keys(),
+)
+
+[
+    config_setting(
+        name = "windows_native_profile_" + profile,
+        flag_values = {":windows_native_profile": profile},
+    )
+    for profile in WINDOWS_NATIVE_FEATURE_PROFILES
+]
 
 _CARGO_WORKSPACE_PACKAGES = [
     "crates/analytics",
@@ -207,13 +224,16 @@ _HAWDB_VECTOR_DEPS = [
     "//crates/vector-projection:hawdb_vector_projection",
 ]
 
-_HAWDB_DEFAULT_FEATURES = [
-    "background-maintenance",
-    "full-text-search",
-    "graph-analytics",
-    "tokio-runtime",
-    "vector-search",
-]
+_HAWDB_DEFAULT_FEATURES = windows_native_features(
+    "hawdb",
+    [
+        "background-maintenance",
+        "full-text-search",
+        "graph-analytics",
+        "tokio-runtime",
+        "vector-search",
+    ],
+)
 
 rust_library(
     name = "hawdb",
@@ -245,6 +265,7 @@ rust_library(
 # Matches `hawdb = { default-features = false }` for dependency-boundary checks.
 rust_library(
     name = "hawdb_minimal",
+    crate_features = windows_native_features("hawdb", []),
     crate_name = "hawdb",
     crate_root = "src/lib.rs",
     srcs = _HAWDB_SRCS,
@@ -345,6 +366,32 @@ rust_test(
     ),
     deps = all_crate_deps(normal_dev = True),
     proc_macro_deps = all_crate_deps(proc_macro_dev = True),
+)
+
+# Reuse one minimal native unit executable across filtered identity selections.
+rust_test(
+    name = "hawdb_minimal_unit_test_binary",
+    size = "large",
+    aliases = aliases(
+        normal_dev = True,
+        proc_macro_dev = True,
+    ),
+    crate = ":hawdb_minimal",
+    crate_features = windows_native_features("hawdb", []),
+    edition = "2024",
+    proc_macro_deps = all_crate_deps(proc_macro_dev = True),
+    tags = ["manual"],
+    deps = all_crate_deps(normal_dev = True),
+)
+
+rust_test(
+    name = "hawdb_in_memory_portable_default_tests",
+    srcs = ["tests/in_memory_portable.rs"],
+    crate_features = _HAWDB_DEFAULT_FEATURES,
+    crate_root = "tests/in_memory_portable.rs",
+    edition = "2024",
+    tags = ["manual"],
+    deps = [":hawdb"],
 )
 
 [
@@ -820,6 +867,7 @@ sh_test(
 [
     rust_test(
         name = "hawdb_mvcc_staging_session" + suffix + "_tests",
+        crate_features = windows_native_features("hawdb", []),
         crate_root = "tests/mvcc_staging_session.rs",
         srcs = [
             "tests/mvcc_staging_session.rs",

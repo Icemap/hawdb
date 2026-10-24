@@ -206,14 +206,15 @@ fn active_database_directories() -> MutexGuard<'static, BTreeSet<SourceDirectory
 mod tests {
     use super::{DatabaseDirectoryLease, DatabaseDirectoryLeaseError};
     use std::fs;
+    use std::io::{Read, Write};
     use std::path::{Path, PathBuf};
+    use std::process::Stdio;
     use std::process::{Child, Command};
     use std::thread;
     use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
     const CHILD_DATABASE_PATH: &str = "HAWDB_TEST_CHILD_DATABASE_PATH";
     const CHILD_READY_PATH: &str = "HAWDB_TEST_CHILD_READY_PATH";
-    const CHILD_RELEASE_PATH: &str = "HAWDB_TEST_CHILD_RELEASE_PATH";
 
     #[test]
     fn native_lock_creation_failure_releases_capture_and_process_registration() {
@@ -370,7 +371,6 @@ mod tests {
     fn rejects_lease_held_by_another_process() {
         let path = unique_test_dir("cross_process");
         let ready_path = path.join("child.ready");
-        let release_path = path.join("child.release");
         fs::create_dir_all(&path).unwrap();
 
         let mut child = Command::new(std::env::current_exe().unwrap())
@@ -379,7 +379,7 @@ mod tests {
             .arg("--nocapture")
             .env(CHILD_DATABASE_PATH, &path)
             .env(CHILD_READY_PATH, &ready_path)
-            .env(CHILD_RELEASE_PATH, &release_path)
+            .stdin(Stdio::piped())
             .spawn()
             .unwrap();
 
@@ -387,7 +387,7 @@ mod tests {
         let error = DatabaseDirectoryLease::acquire(&path).unwrap_err();
         assert!(matches!(error, DatabaseDirectoryLeaseError::AlreadyOpen));
 
-        fs::write(&release_path, b"release").unwrap();
+        child.stdin.take().unwrap().write_all(b"1").unwrap();
         assert!(child.wait().unwrap().success());
         DatabaseDirectoryLease::acquire(&path).unwrap();
         fs::remove_dir_all(path).unwrap();
@@ -399,18 +399,15 @@ mod tests {
             return;
         };
         let ready_path = required_child_path(CHILD_READY_PATH);
-        let release_path = required_child_path(CHILD_RELEASE_PATH);
         let _lease = DatabaseDirectoryLease::acquire(Path::new(&database_path)).unwrap();
         fs::write(ready_path, b"ready").unwrap();
 
-        let deadline = Instant::now() + Duration::from_secs(10);
-        while !release_path.exists() {
-            assert!(
-                Instant::now() < deadline,
-                "parent did not release child lease holder"
-            );
-            thread::sleep(Duration::from_millis(10));
-        }
+        // A wall-clock lease timeout can expire while the parent is descheduled
+        // under CI load, turning correct exclusion into a false successful open.
+        // Parent exit/drop closes stdin; the outer test timeout bounds the case.
+        let mut release = [0];
+        std::io::stdin().read_exact(&mut release).unwrap();
+        assert_eq!(release, *b"1");
     }
 
     fn wait_for_path_or_child_exit(path: &Path, child: &mut Child) {

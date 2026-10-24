@@ -51,6 +51,11 @@ on:
       - "Cargo.lock"
       - "rust-toolchain.toml"
       - "scripts/cargo-test-required.sh"
+      - "scripts/run-windows-native-bazel.sh"
+      - "scripts/run-windows-native-bazel.test.sh"
+      - "scripts/check-windows-native-features.py"
+      - "windows_native_features.bzl"
+      - ".github/actions/windows-bazel/**"
       - "tests/in_memory_portable.rs"
       - "tests/branch_project_open.rs"
       - "bindings/ffi/**"
@@ -70,6 +75,11 @@ on:
       - "Cargo.lock"
       - "rust-toolchain.toml"
       - "scripts/cargo-test-required.sh"
+      - "scripts/run-windows-native-bazel.sh"
+      - "scripts/run-windows-native-bazel.test.sh"
+      - "scripts/check-windows-native-features.py"
+      - "windows_native_features.bzl"
+      - ".github/actions/windows-bazel/**"
       - "tests/in_memory_portable.rs"
       - "tests/branch_project_open.rs"
       - "bindings/ffi/**"
@@ -161,191 +171,124 @@ jobs:
         # The Go test cache does not qualify the newly built dynamic library.
         run: go test -race -count=1 -run '^TestRetained' ./...
 
-  windows-native-contracts:
+  windows-bazel-contracts:
     if: >-
       github.event_name != 'schedule' &&
       (github.event_name != 'workflow_dispatch' ||
        (!inputs.windows_abandonment_qualification && !inputs.boundary_comparison && !inputs.rabitq_baseline))
-    name: Windows native contracts
+    name: Windows Bazel (${{ matrix.shard }})
     runs-on: windows-2025
     timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [transactions, storage, search, consumers, identities, snapshots, bindings]
     steps:
       - name: Checkout
         uses: actions/checkout@v7
         with:
           fetch-depth: 2
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.97.1
+      - name: Restore native Bazel toolchain and caches
+        id: bazel
+        uses: ./.github/actions/windows-bazel
         with:
-          components: clippy
-
-      - name: Record tested source and toolchain
+          cache-scope: ${{ matrix.shard }}
+      - name: Record exact native source and cache configuration
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p windows-native-results
           git log -1 --format='%H%n%T%n%P' > windows-native-results/source.txt
           rustc --version --verbose > windows-native-results/toolchain.txt
-
-      - name: Run strict native Windows Clippy
+          bazel version > windows-native-results/bazel-version.txt
+          bazel info > windows-native-results/bazel-info.txt
+          python scripts/check-windows-native-features.py | tee windows-native-results/feature-inventory.txt
+      - name: Run fresh native contract selections
         shell: bash
-        run: |
-          set -euo pipefail
-          cargo clippy --locked --workspace --all-targets --all-features -- -D warnings \
-            2>&1 | tee windows-native-results/clippy.txt
-
-      - name: Test optional serializable transaction capture and commit
-        shell: bash
-        run: |
-          set -euo pipefail
-          bash scripts/cargo-test-required.sh --locked -p hawdb --all-features --lib \
-            -- ::serializable:: --nocapture --test-threads=1 \
-            2>&1 | tee windows-native-results/serializable-transactions.txt
-
-      - name: Test descriptor capacity and namespace probe isolation
-        shell: bash
-        run: |
-          set -euo pipefail
-          bash scripts/cargo-test-required.sh --locked -p hawdb-storage --all-features --lib \
-            -- file_descriptors::tests:: --nocapture --test-threads=1 \
-            2>&1 | tee windows-native-results/descriptor-capacity.txt
-          bash scripts/cargo-test-required.sh --locked -p hawdb --all-features --lib \
-            -- api::tests::descriptor_capacity:: --nocapture --test-threads=1 \
-            2>&1 | tee windows-native-results/descriptor-facade.txt
-
-      - name: Test original generation spool and captured publication ownership
-        shell: bash
-        run: |
-          set -euo pipefail
-          bash scripts/cargo-test-required.sh --locked -p hawdb-search --all-features --lib \
-            -- generation_spool --nocapture --test-threads=1 \
-            2>&1 | tee windows-native-results/held-generation-spool.txt
-          bash scripts/cargo-test-required.sh --locked -p hawdb-search --all-features --lib \
-            -- out_of_core::publish_lease::tests::captured_lease --nocapture --test-threads=1 \
-            2>&1 | tee windows-native-results/captured-publication-capacity.txt
-
-      - name: Test complete graph algorithm identities
-        shell: bash
-        run: |
-          set -euo pipefail
-          bash scripts/cargo-test-required.sh --locked -p hawdb --lib -- identity_898_ --nocapture --test-threads=1
-          bash scripts/cargo-test-required.sh --locked -p hawdb-executor --lib -- identity_898_ --nocapture --test-threads=1
-          bash scripts/cargo-test-required.sh --locked -p hawdb-cypher --lib -- identity_898_ --nocapture --test-threads=1
-
-      - name: Test Consumer generation reclamation
-        shell: bash
-        run: |
-          set -euo pipefail
-          bash scripts/cargo-test-required.sh --locked -p hawdb --all-features --lib \
-            consumer_reclamation -- --nocapture --test-threads=1 \
-            2>&1 | tee windows-native-results/consumer-reclamation.txt
-
-      - name: Test stationary Consumer publication and retained legacy refusal
-        shell: bash
-        run: |
-          set -euo pipefail
-          bash scripts/cargo-test-required.sh --locked -p hawdb-search --all-features --lib \
-            consumer::tests::windows_publication_refusal_preserves_receipt_and_native_lease \
-            -- --exact --nocapture --test-threads=1 \
-            2>&1 | tee windows-native-results/consumer-publication-refusal.txt
-          bash scripts/cargo-test-required.sh --locked -p hawdb --all-features --lib \
-            api::search_projection_consumer::tests::windows_registered_stationary_creation_catch_up_and_reopen \
-            -- --exact --nocapture --test-threads=1 \
-            2>&1 | tee windows-native-results/consumer-stationary-create.txt
-          bash scripts/cargo-test-required.sh --locked -p hawdb --all-features --lib \
-            registered_stationary -- --nocapture --test-threads=1 \
-            2>&1 | tee windows-native-results/consumer-stationary-recovery.txt
-          bash scripts/cargo-test-required.sh --locked -p hawdb --all-features --test mvcc_staging_session \
-            registered_consumer -- --nocapture --test-threads=1 \
-            2>&1 | tee windows-native-results/consumer-covered-catch-up.txt
-          bash scripts/cargo-test-required.sh --locked -p hawdb-storage --all-features --lib \
-            captured_wal_append_prepays_post_write_descriptor_checks -- --nocapture --test-threads=1 \
-            2>&1 | tee windows-native-results/consumer-wal-admission.txt
-          bash scripts/cargo-test-required.sh --locked -p hawdb-storage --all-features --lib -- \
-            consumer_allocation::bootstrap_tests file_io::source_directory::control_candidate::tests \
-            held_wal_rollback captured_wal_first_rollback --nocapture --test-threads=1 \
-            2>&1 | tee windows-native-results/consumer-failure-boundaries.txt
-
-      - name: Test legacy projection source epoch fences
-        shell: bash
-        run: >-
-          bash scripts/cargo-test-required.sh --locked -p hawdb --lib --
-          _1043_ --nocapture --test-threads=1
-
-      - name: Build and test the retained Windows C ABI
-        shell: bash
-        run: |
-          set -euo pipefail
-          cargo build --locked --manifest-path bindings/ffi/Cargo.toml --lib
-          bash scripts/cargo-test-required.sh --locked --manifest-path bindings/ffi/Cargo.toml --lib retained:: -- --nocapture \
-            2>&1 | tee windows-native-results/retained-ffi.txt
-
-      - name: Install Go for Windows numeric bindings
-        uses: actions/setup-go@v7
-        with:
-          go-version-file: bindings/go/go.mod
-          cache-dependency-path: bindings/go/go.sum
-
-      - name: Test Go against the Windows C ABI
-        shell: bash
-        working-directory: bindings/go
-        run: |
-          set -euo pipefail
-          HAWDB_LIBRARY="$GITHUB_WORKSPACE/bindings/ffi/target/debug/hawdb_ffi.dll" \
-            go test -count=1 -v ./... 2>&1 | tee ../../windows-native-results/go.txt
-
-      - name: Test retained indexed node ownership and task controls
-        shell: bash
-        run: |
-          set -euo pipefail
-          bash scripts/cargo-test-required.sh --locked -p hawdb --features tokio-runtime \
-            --lib api::retained_query::node::tests -- --nocapture \
-            2>&1 | tee windows-native-results/retained-node.txt
-
-      - name: Test database instance identity and published views
-        shell: bash
-        run: |
-          set -euo pipefail
-          for profile in default minimal; do
-            feature_args=()
-            if [[ "$profile" == minimal ]]; then
-              feature_args=(--no-default-features)
-            fi
-            for target in in_memory_portable branch_project_open; do
-              expected=1
-              if [[ "$target" == branch_project_open ]]; then
-                expected=2
-              fi
-              output="windows-native-results/instance-identity-$profile-$target.txt"
-              bash scripts/cargo-test-required.sh --locked -p hawdb "${feature_args[@]}" \
-                --test "$target" -- database_instance_identity_ --nocapture \
-                2>&1 | tee "$output"
-              grep -Eq "^test result: ok\\. $expected passed; 0 failed; 0 ignored;" "$output"
-            done
-            output="windows-native-results/instance-identity-$profile-views.txt"
-            bash scripts/cargo-test-required.sh --locked -p hawdb "${feature_args[@]}" \
-              --lib -- database_instance_identity_ --nocapture \
-              2>&1 | tee "$output"
-            # Reject poisoned handles and preserve view binding across writes and replacement.
-            grep -Eq '^test result: ok\. 3 passed; 0 failed; 0 ignored;' "$output"
-          done
-
-      - name: Test retained Arrow array and stream contracts
-        shell: bash
-        run: |
-          set -euo pipefail
-          bash scripts/cargo-test-required.sh --locked -p hawdb --all-features --lib \
-            api::retained_query::tests::arrow -- --nocapture \
-            2>&1 | tee windows-native-results/retained-arrow.txt
-
-      - name: Preserve Windows validation evidence
+        run: bash scripts/run-windows-native-bazel.sh '${{ matrix.shard }}'
+      - name: Preserve Windows shard evidence
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: windows-native-contracts-${{ github.sha }}
+          name: windows-native-${{ matrix.shard }}-${{ github.sha }}-${{ github.run_attempt }}
           path: windows-native-results
           if-no-files-found: error
+      - name: Save updated disk actions for this source
+        if: always() && steps.bazel.outputs.disk-cache-key != '' && steps.bazel.outputs.disk-cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: D:/hawdb-bazel-disk
+          key: ${{ steps.bazel.outputs.disk-cache-key }}
+
+  windows-native-clippy:
+    if: >-
+      github.event_name != 'schedule' &&
+      (github.event_name != 'workflow_dispatch' ||
+       (!inputs.windows_abandonment_qualification && !inputs.boundary_comparison && !inputs.rabitq_baseline))
+    name: Windows native Clippy
+    runs-on: windows-2025
+    timeout-minutes: 120
+    env:
+      CARGO_TARGET_DIR: D:/hawdb-clippy-target
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.97.1
+        with:
+          components: clippy
+      - name: Restore native Clippy dependencies
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            D:/hawdb-clippy-target
+          key: Windows-${{ runner.arch }}-clippy-v1-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', '.cargo/config.toml') }}-${{ github.sha }}
+          restore-keys: |
+            Windows-${{ runner.arch }}-clippy-v1-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', '.cargo/config.toml') }}-
+            Windows-${{ runner.arch }}-clippy-v1-
+      - name: Validate native runner failure controls and feature inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/check-windows-native-features.py
+          bash scripts/run-windows-native-bazel.test.sh
+      - name: Run unchanged strict native Windows Clippy
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p windows-native-results
+          git log -1 --format='%H%n%T%n%P' > windows-native-results/source.txt
+          rustc --version --verbose > windows-native-results/toolchain.txt
+          cargo clippy --locked --workspace --all-targets --all-features -- -D warnings \
+            2>&1 | tee windows-native-results/clippy.txt
+      - name: Preserve native Clippy evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-native-clippy-${{ github.sha }}-${{ github.run_attempt }}
+          path: windows-native-results
+          if-no-files-found: error
+
+  windows-native-contracts:
+    if: >-
+      always() && github.event_name != 'schedule' &&
+      (github.event_name != 'workflow_dispatch' ||
+       (!inputs.windows_abandonment_qualification && !inputs.boundary_comparison && !inputs.rabitq_baseline))
+    name: Windows native contracts
+    runs-on: ubuntu-24.04
+    needs: [windows-bazel-contracts, windows-native-clippy]
+    steps:
+      - name: Require every Windows shard and native lint
+        env:
+          CONTRACTS_RESULT: ${{ needs.windows-bazel-contracts.result }}
+          CLIPPY_RESULT: ${{ needs.windows-native-clippy.result }}
+        run: |
+          test "$CONTRACTS_RESULT" = success
+          test "$CLIPPY_RESULT" = success
 
   windows-abandonment-qualification:
     if: >-
@@ -360,8 +303,11 @@ jobs:
         with:
           fetch-depth: 2
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.97.1
+      - name: Restore native Bazel toolchain and caches
+        id: bazel
+        uses: ./.github/actions/windows-bazel
+        with:
+          cache-scope: abandonment
 
       - name: Record tested source and toolchain
         shell: bash
@@ -370,6 +316,8 @@ jobs:
           mkdir -p windows-abandonment-results
           git log -1 --format='%H%n%T%n%P' > windows-abandonment-results/source.txt
           rustc --version --verbose > windows-abandonment-results/toolchain.txt
+          bazel version > windows-abandonment-results/bazel-version.txt
+          python scripts/check-windows-native-features.py > windows-abandonment-results/feature-inventory.txt
 
       - name: Test abandonment GC power-loss cuts
         shell: bash
@@ -383,22 +331,23 @@ jobs:
           esac
           echo "power_loss_test_threads=$POWER_LOSS_TEST_THREADS" \
             | tee windows-abandonment-results/abandonment-config.txt
-          bash scripts/cargo-test-required.sh --locked -p hawdb --all-features --lib \
-            api::tests::power_loss::branch_abandonment:: \
-            -- --nocapture --test-threads="$POWER_LOSS_TEST_THREADS" \
-            2>&1 | tee windows-abandonment-results/abandonment.txt
-          # Keep all two-policy/four-cut groups in the required selection.
-          # Adding another test to this module must also update this exact count.
-          grep -Eq '^test result: ok\. 8 passed; 0 failed; 0 ignored;' \
-            windows-abandonment-results/abandonment.txt
+          WINDOWS_NATIVE_RESULTS=windows-abandonment-results \
+            bash scripts/run-windows-native-bazel.sh abandonment
 
       - name: Preserve Windows abandonment qualification evidence
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: windows-abandonment-gc-${{ github.sha }}
+          name: windows-abandonment-gc-${{ github.sha }}-${{ github.run_attempt }}
           path: windows-abandonment-results
           if-no-files-found: error
+
+      - name: Save updated abandonment disk actions
+        if: always() && steps.bazel.outputs.disk-cache-key != '' && steps.bazel.outputs.disk-cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: D:/hawdb-bazel-disk
+          key: ${{ steps.bazel.outputs.disk-cache-key }}
 
   boundary-comparison:
     if: github.event_name == 'workflow_dispatch' && !inputs.windows_abandonment_qualification && inputs.boundary_comparison

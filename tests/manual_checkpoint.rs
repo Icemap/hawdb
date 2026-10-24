@@ -205,3 +205,160 @@ fn manual_checkpoint_without_background_admission_completes_durable_publication(
         manual(config, concurrent);
     }
 }
+
+fn embedded_governor() -> hawdb::RuntimeGovernor {
+    hawdb::RuntimeGovernor::new(
+        hawdb::RuntimeGovernorConfig::shared_host(),
+        hawdb::RuntimeResourceSnapshot::from_parts(
+            hawdb::RuntimeResourceBudget::from_limits(
+                std::num::NonZeroUsize::new(8).unwrap(),
+                None,
+                None,
+            ),
+            hawdb::RuntimeMemorySnapshot::from_limits(
+                Some(8 << 30),
+                Some(8 << 30),
+                None,
+                None,
+                None,
+            ),
+        ),
+        hawdb::IoConcurrencyBudget::new(1, 1),
+    )
+}
+
+fn embedded_handle(
+    root: &Fixture,
+    governor: hawdb::RuntimeGovernor,
+) -> hawdb::NowledgeMemEmbeddedStoreHandle {
+    let options = hawdb::NowledgeMemOpenOptions::graph_only(
+        &root.0,
+        hawdb::NowledgeMemGraphMode::WritableCutover,
+    )
+    .with_database_config(config());
+    let (handle, _) =
+        hawdb::NowledgeMemEmbeddedStoreHandle::open_with_options_and_runtime_governor(
+            options, governor,
+        )
+        .unwrap();
+    handle
+        .query_with_report("CREATE (:Memory {id: 1, body: 'checkpoint body'})")
+        .unwrap();
+    handle
+}
+
+fn embedded_state_after_reopen(root: &Fixture) -> (u64, Option<u64>, usize) {
+    let mut recovered = Database::open_with_config(
+        &root.0,
+        DatabaseConfig {
+            read_only: true,
+            ..DatabaseConfig::default()
+        },
+    )
+    .unwrap();
+    let report = recovered.storage_recovery_report().unwrap();
+    assert_eq!(
+        recovered.query(VALUES).unwrap().rows,
+        vec![BTreeMap::from([
+            ("id".into(), Value::Int(1)),
+            ("body".into(), Value::String("checkpoint body".into())),
+        ])],
+    );
+    (
+        recovered.commit_epoch().unwrap(),
+        report.checkpoint_commit_epoch,
+        report.replayed_wal_entries,
+    )
+}
+
+fn copied_embedded_state(root: &Fixture) -> (u64, Option<u64>, usize) {
+    let copied = Fixture::new();
+    copy_project(&root.0, &copied.0);
+    embedded_state_after_reopen(&copied)
+}
+
+#[test]
+fn embedded_checkpoint_is_available_with_background_io_saturated() {
+    let root = Fixture::new();
+    let governor = embedded_governor();
+    let handle = embedded_handle(&root, governor.clone());
+    let pending = copied_embedded_state(&root);
+    assert!(pending.0 > pending.1.unwrap_or(0));
+    assert!(pending.2 > 0);
+    let background = governor
+        .try_admit(hawdb::RuntimeWorkRequest::io(
+            hawdb::RuntimeWorkPriority::Background,
+            1,
+            0,
+        ))
+        .unwrap();
+    let before = governor.snapshot();
+    assert_eq!(before.active_background_io_slots, 1);
+    assert_eq!(before.active_foreground_io_slots, 0);
+
+    let checkpoint = handle.checkpoint();
+    assert!(
+        checkpoint.is_ok(),
+        "an explicit foreground checkpoint must not be rejected by retained background I/O: {checkpoint:?}",
+    );
+    let after = governor.snapshot();
+    assert_eq!(after.active_background_io_slots, 1);
+    assert_eq!(after.active_foreground_io_slots, 0);
+    assert_eq!(after.active_cpu_slots, 0);
+    assert_eq!(after.admitted_memory_bytes, before.admitted_memory_bytes);
+
+    // Reopen an independent copy while both original owners remain alive.
+    assert_eq!(
+        copied_embedded_state(&root),
+        (pending.0, Some(pending.0), 0)
+    );
+    drop(background);
+    assert_eq!(governor.snapshot().active_background_io_slots, 0);
+    drop(handle);
+    assert_eq!(
+        embedded_state_after_reopen(&root),
+        (pending.0, Some(pending.0), 0)
+    );
+}
+
+#[test]
+fn embedded_checkpoint_retains_foreground_io_refusal_and_refunds() {
+    let root = Fixture::new();
+    let governor = embedded_governor();
+    let handle = embedded_handle(&root, governor.clone());
+    let pending = copied_embedded_state(&root);
+    assert!(pending.0 > pending.1.unwrap_or(0));
+    assert!(pending.2 > 0);
+    let foreground = governor
+        .try_admit(hawdb::RuntimeWorkRequest::io(
+            hawdb::RuntimeWorkPriority::Foreground,
+            1,
+            0,
+        ))
+        .unwrap();
+    let before = governor.snapshot();
+    assert_eq!(before.active_foreground_io_slots, 1);
+    let checkpoint = handle.checkpoint();
+    assert!(
+        matches!(checkpoint, Err(hawdb::HawDBError::Execution(ref reason))
+            if reason == "runtime admission io_saturated: requested 1, available 0"),
+        "foreground admission must remain effective: {checkpoint:?}",
+    );
+    let after = governor.snapshot();
+    assert_eq!(after.active_foreground_io_slots, 1);
+    assert_eq!(after.active_background_io_slots, 0);
+    assert_eq!(after.active_cpu_slots, 0);
+    assert_eq!(after.admitted_memory_bytes, before.admitted_memory_bytes);
+    // The refusal cannot publish a checkpoint or change recoverable rows,
+    // observed before the retained owner is released or a retry is attempted.
+    assert_eq!(copied_embedded_state(&root), pending);
+    drop(foreground);
+    assert_eq!(governor.snapshot().active_foreground_io_slots, 0);
+    assert!(!handle.storage_handle_poisoned().unwrap());
+    handle.checkpoint().unwrap();
+    drop(handle);
+    assert_eq!(
+        embedded_state_after_reopen(&root),
+        (pending.0, Some(pending.0), 0)
+    );
+}
