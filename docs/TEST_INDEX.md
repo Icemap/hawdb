@@ -892,6 +892,8 @@ preserve full versus omitted fields, empty file paths, missing/idless targets,
 first-input duplicates, exact timestamps/content, validation before WAL and
 one-batch durable reopen. One business adapter, four DTOs and the assignment
 factory disappear; no executor feature or runtime test ownership changes.
+Invalid-input coverage compares against the captured initial epoch, which may
+include persistent bootstrap work.
 
 ### Source revision edge queries
 
@@ -934,6 +936,10 @@ missing identities produce no candidate. A nonnumeric stored count refuses its
 query while prior staged changes remain committable. Invalid input preserves
 WAL/epoch; two source updates retain one batch and exact reopen. One business
 method, four DTOs and the graph-side aggregation helpers are removed.
+Arithmetic stays in WITH/RETURN stages outside CASE branches, with a numeric
+operand check before clamping. Increment clamps the base to `i64::MAX - delta`
+before addition; decrement clamps the base to zero before adding its negative
+delta and floors the result, preserving MAX/MIN boundary coverage.
 
 ### Source-reference cleanup queries
 

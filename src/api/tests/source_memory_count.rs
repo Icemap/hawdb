@@ -3,14 +3,16 @@
 
 use super::*;
 
-const INCREMENT: &str = "MATCH (s:Source {id: $id}) RETURN \
-    CASE WHEN COALESCE(s.memory_count, 0) < 0 THEN $delta \
-    WHEN COALESCE(s.memory_count, 0) > $threshold THEN $maximum \
-    ELSE COALESCE(s.memory_count, 0) + $delta END AS count";
-const DECREMENT: &str = "MATCH (s:Source {id: $id}) RETURN \
-    CASE WHEN COALESCE(s.memory_count, 0) <= 0 THEN 0 \
-    WHEN COALESCE(s.memory_count, 0) + $delta < 0 THEN 0 \
-    ELSE COALESCE(s.memory_count, 0) + $delta END AS count";
+// CASE branches accept scalar values; arithmetic is evaluated in separate WITH/RETURN stages.
+const INCREMENT: &str = "MATCH (s:Source {id: $id}) \
+    WITH COALESCE(s.memory_count, 0) + 0 AS current \
+    WITH CASE WHEN current < 0 THEN 0 WHEN current > $threshold THEN $threshold \
+    ELSE current END AS base RETURN base + $delta AS count";
+const DECREMENT: &str = "MATCH (s:Source {id: $id}) \
+    WITH COALESCE(s.memory_count, 0) + 0 AS current \
+    WITH CASE WHEN current < 0 THEN 0 ELSE current END AS base \
+    WITH base + $delta AS adjusted \
+    RETURN CASE WHEN adjusted < 0 THEN 0 ELSE adjusted END AS count";
 const APPLY: &str =
     "MATCH (s:Source {id: $id}) SET s.memory_count = $count RETURN s.memory_count AS count";
 const POINT_READ: &str = "MATCH (s:Source {id: $id}) RETURN COALESCE(s.memory_count, 0) AS count";

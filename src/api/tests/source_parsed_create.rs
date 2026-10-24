@@ -195,7 +195,6 @@ fn source_parsed_create_batch_rejects_invalid_rows_before_wal() {
         let error = validate_parameters(&parameters).unwrap_err();
         assert!(error.to_string().contains(message), "{error}");
     }
-    assert_eq!(epoch, 0);
     assert_eq!(db.commit_epoch().unwrap(), epoch);
     assert_eq!(read_test_wal(&path).unwrap_or_default(), wal);
     drop(db);
