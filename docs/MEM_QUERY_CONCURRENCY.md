@@ -110,4 +110,10 @@ satisfy its performance acceptance gate.
 The [2026-10-24 v1 comparison](benchmarks/query_first_mem_linux_2026_10_24/README.md)
 retains the complete fixed-work matrix, source/build provenance and raw traces.
 It shows some tail-latency regressions and does not pass the strict performance
-gate; sustained-reader and direct-preparation observations remain separate work.
+gate. The [v2 sustained-reader comparison](benchmarks/query_first_mem_sustained_linux_2026_10_24/README.md)
+adds direct preparation counts, per-worker tails and read/write completion
+deciles. Both matrices retain every pair and default synchronous durability;
+v2 also has tail regressions and does not establish universal speedup.
+Its losslessly packed traces restore to the original JSON hashes using the
+included codec, allowing the analysis to be reproduced without discarding
+slow runs or large reader cohorts.

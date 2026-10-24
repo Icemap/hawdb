@@ -1,0 +1,241 @@
+{
+  "name": "candidate-v2-instrumented",
+  "source": "/tmp/hawdb-query-first-api",
+  "target": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-candidate",
+  "command": [
+    "cargo",
+    "bench",
+    "--manifest-path",
+    "/tmp/hawdb-query-first-api/Cargo.toml",
+    "--locked",
+    "--bench",
+    "mem_query_concurrency",
+    "--no-run",
+    "--message-format=json",
+    "--features",
+    "qualification"
+  ],
+  "exit_code": 0,
+  "build_seconds": 181.22612810786813,
+  "binary_sha256": "e50a9485000acb1ad75a2e9788f6bf1a0ec12dfffa5d9460153e1cb3ed7d17c3",
+  "benchmark_sha256": "936ed6d150836fa959aa6aca129ef3b89df17b3d5d6dffa190f15d9619a7d07f",
+  "source_artifacts": [
+    {
+      "manifest": "/tmp/hawdb-query-first-api/crates/plan-core/Cargo.toml",
+      "target": "hawdb_plan_core",
+      "fresh": true
+    },
+    {
+      "manifest": "/tmp/hawdb-query-first-api/crates/cgroup/Cargo.toml",
+      "target": "hawdb_cgroup",
+      "fresh": true
+    },
+    {
+      "manifest": "/tmp/hawdb-query-first-api/crates/core/Cargo.toml",
+      "target": "hawdb_core",
+      "fresh": true
+    },
+    {
+      "manifest": "/tmp/hawdb-query-first-api/crates/expression/Cargo.toml",
+      "target": "hawdb_expression",
+      "fresh": true
+    },
+    {
+      "manifest": "/tmp/hawdb-query-first-api/crates/ddl/Cargo.toml",
+      "target": "hawdb_ddl",
+      "fresh": true
+    },
+    {
+      "manifest": "/tmp/hawdb-query-first-api/crates/qos/Cargo.toml",
+      "target": "hawdb_qos",
+      "fresh": true
+    },
+    {
+      "manifest": "/tmp/hawdb-query-first-api/crates/analytics/Cargo.toml",
+      "target": "hawdb_analytics",
+      "fresh": true
+    },
+    {
+      "manifest": "/tmp/hawdb-query-first-api/crates/cascades/Cargo.toml",
+      "target": "hawdb_cascades",
+      "fresh": true
+    },
+    {
+      "manifest": "/tmp/hawdb-query-first-api/crates/cypher/Cargo.toml",
+      "target": "hawdb_cypher",
+      "fresh": true
+    },
+    {
+      "manifest": "/tmp/hawdb-query-first-api/crates/integrity/Cargo.toml",
+      "target": "hawdb_integrity",
+      "fresh": true
+    },
+    {
+      "manifest": "/tmp/hawdb-query-first-api/crates/telemetry/Cargo.toml",
+      "target": "hawdb_telemetry",
+      "fresh": true
+    },
+    {
+      "manifest": "/tmp/hawdb-query-first-api/crates/plan-cypher/Cargo.toml",
+      "target": "hawdb_plan_cypher",
+      "fresh": true
+    },
+    {
+      "manifest": "/tmp/hawdb-query-first-api/crates/optimizer-vector/Cargo.toml",
+      "target": "hawdb_optimizer_vector",
+      "fresh": true
+    },
+    {
+      "manifest": "/tmp/hawdb-query-first-api/crates/optimizer-predicate/Cargo.toml",
+      "target": "hawdb_optimizer_predicate",
+      "fresh": true
+    },
+    {
+      "manifest": "/tmp/hawdb-query-first-api/crates/storage/Cargo.toml",
+      "target": "hawdb_storage",
+      "fresh": true
+    },
+    {
+      "manifest": "/tmp/hawdb-query-first-api/crates/evidence/Cargo.toml",
+      "target": "hawdb_evidence",
+      "fresh": true
+    },
+    {
+      "manifest": "/tmp/hawdb-query-first-api/crates/plan-cache/Cargo.toml",
+      "target": "hawdb_plan_cache",
+      "fresh": true
+    },
+    {
+      "manifest": "/tmp/hawdb-query-first-api/crates/executor/Cargo.toml",
+      "target": "hawdb_executor",
+      "fresh": true
+    },
+    {
+      "manifest": "/tmp/hawdb-query-first-api/crates/vector-projection/Cargo.toml",
+      "target": "hawdb_vector_projection",
+      "fresh": true
+    },
+    {
+      "manifest": "/tmp/hawdb-query-first-api/crates/optimizer-graph/Cargo.toml",
+      "target": "hawdb_optimizer_graph",
+      "fresh": true
+    },
+    {
+      "manifest": "/tmp/hawdb-query-first-api/crates/optimizer-relational/Cargo.toml",
+      "target": "hawdb_optimizer_relational",
+      "fresh": true
+    },
+    {
+      "manifest": "/tmp/hawdb-query-first-api/crates/sql-syntax/Cargo.toml",
+      "target": "hawdb_sql_syntax",
+      "fresh": true
+    },
+    {
+      "manifest": "/tmp/hawdb-query-first-api/crates/query/Cargo.toml",
+      "target": "hawdb_query",
+      "fresh": true
+    },
+    {
+      "manifest": "/tmp/hawdb-query-first-api/crates/route-ownership/Cargo.toml",
+      "target": "hawdb_route_ownership",
+      "fresh": true
+    },
+    {
+      "manifest": "/tmp/hawdb-query-first-api/crates/optimizer/Cargo.toml",
+      "target": "hawdb_optimizer",
+      "fresh": true
+    },
+    {
+      "manifest": "/tmp/hawdb-query-first-api/crates/compat/Cargo.toml",
+      "target": "hawdb_compat",
+      "fresh": true
+    },
+    {
+      "manifest": "/tmp/hawdb-query-first-api/crates/artifact/Cargo.toml",
+      "target": "hawdb_artifact",
+      "fresh": true
+    },
+    {
+      "manifest": "/tmp/hawdb-query-first-api/crates/resource-profile/Cargo.toml",
+      "target": "hawdb_resource_profile",
+      "fresh": true
+    },
+    {
+      "manifest": "/tmp/hawdb-query-first-api/crates/fuzz-contracts/Cargo.toml",
+      "target": "hawdb_fuzz_contracts",
+      "fresh": true
+    },
+    {
+      "manifest": "/tmp/hawdb-query-first-api/crates/runtime-tokio/Cargo.toml",
+      "target": "hawdb_runtime_tokio",
+      "fresh": true
+    },
+    {
+      "manifest": "/tmp/hawdb-query-first-api/crates/explain/Cargo.toml",
+      "target": "hawdb_explain",
+      "fresh": true
+    },
+    {
+      "manifest": "/tmp/hawdb-query-first-api/crates/query-policy/Cargo.toml",
+      "target": "hawdb_query_policy",
+      "fresh": true
+    },
+    {
+      "manifest": "/tmp/hawdb-query-first-api/crates/search/Cargo.toml",
+      "target": "hawdb_search",
+      "fresh": true
+    },
+    {
+      "manifest": "/tmp/hawdb-query-first-api/crates/sql/Cargo.toml",
+      "target": "hawdb_sql",
+      "fresh": true
+    },
+    {
+      "manifest": "/tmp/hawdb-query-first-api/crates/system-sql/Cargo.toml",
+      "target": "hawdb_system_sql",
+      "fresh": true
+    },
+    {
+      "manifest": "/tmp/hawdb-query-first-api/crates/bootstrap/Cargo.toml",
+      "target": "hawdb_bootstrap",
+      "fresh": true
+    },
+    {
+      "manifest": "/tmp/hawdb-query-first-api/crates/relational/Cargo.toml",
+      "target": "hawdb_relational",
+      "fresh": true
+    },
+    {
+      "manifest": "/tmp/hawdb-query-first-api/crates/nowledge-contracts/Cargo.toml",
+      "target": "hawdb_nowledge_contracts",
+      "fresh": false
+    },
+    {
+      "manifest": "/tmp/hawdb-query-first-api/crates/readiness/Cargo.toml",
+      "target": "hawdb_readiness",
+      "fresh": false
+    },
+    {
+      "manifest": "/tmp/hawdb-query-first-api/Cargo.toml",
+      "target": "hawdb",
+      "fresh": false
+    },
+    {
+      "manifest": "/tmp/hawdb-query-first-api/Cargo.toml",
+      "target": "hawdb-shadow-self",
+      "fresh": false
+    },
+    {
+      "manifest": "/tmp/hawdb-query-first-api/Cargo.toml",
+      "target": "hawdb",
+      "fresh": false
+    },
+    {
+      "manifest": "/tmp/hawdb-query-first-api/Cargo.toml",
+      "target": "mem_query_concurrency",
+      "fresh": false
+    }
+  ],
+  "candidate_head": "c669b8d186574d2cda319089601d630910cfe919",
+  "candidate_diff": ""
+}
