@@ -18,10 +18,8 @@ use super::{
     DatabaseConfig, DatabaseReadTransaction, DerivedArtifactJobStatus,
     ExternalContentArtifactJobCompletion, ExternalContentArtifactRuntimeManifest,
     KnowledgeCandidateScoringPolicy, KnowledgeCandidateSource, KnowledgeFallbackReasonCode,
-    KnowledgeFanoutReasonCode, KnowledgeGraphPathDirection, KnowledgeNeighborDirection,
-    KnowledgePathRequest, KnowledgeRetrievalEmptyReasonCode, KnowledgeRetrievalRequest,
-    KnowledgeRetrievalStage, KnowledgeScopedPathRequest, KnowledgeScopedSubgraphRequest,
-    KnowledgeSubgraphRequest, KnowledgeTraversalFallbackReasonCode, KnowledgeTruncationReasonCode,
+    KnowledgeFanoutReasonCode, KnowledgeGraphPathDirection, KnowledgeRetrievalEmptyReasonCode,
+    KnowledgeRetrievalRequest, KnowledgeRetrievalStage, KnowledgeTruncationReasonCode,
     NowledgeGraphAdapter, NowledgeGraphStatement, PlanCacheBypassReason, PlanCacheLookup,
     QueryOutput, QueryStreamOptions, RecoveryMode, SearchProjectionGraphDeltaRequest,
     HAWDB_LIGHTNING_BOOTSTRAP_PROTOCOL_VERSION, NOWLEDGE_DEEP_SEARCH_FILTERED_RANK_WINDOW,
@@ -133,7 +131,6 @@ mod projected_graph_artifacts;
 mod projected_graph_execution;
 mod projection_generations;
 mod query_execution;
-mod query_first_support;
 mod query_observability;
 mod read_transactions;
 mod relational_access_cost;
@@ -179,8 +176,6 @@ mod thread_metadata_reads;
 mod transaction_compaction;
 mod transaction_control;
 mod transaction_merge;
-
-use query_first_support::QueryFirstTestExt;
 
 #[test]
 fn database_instance_identity_rejects_poisoned_store() {

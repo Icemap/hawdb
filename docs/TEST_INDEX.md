@@ -1111,3 +1111,25 @@ uses `left(id, $key_chars) = $key` because `STARTS WITH` is a WHERE predicate,
 not a supported CASE condition. The existing two failing Crystal CI fixtures
 retain their result and cache assertions. The root general CI lane owns these
 ordinary-query runtime checks.
+
+### Final path and subgraph query fixtures
+
+All six path/subgraph runtime cases in `knowledge_navigation.rs` now execute
+fixed parameterized statements. Endpoint identity, one/two-hop paths, both
+edge types, wrong direction, unknown types, source/target scopes, LIMIT 0,
+zero allowed hops, missing endpoints and snapshot cache reuse remain covered.
+Node pages use bounded zero-to-two-hop expansion; edge pages restrict both
+endpoints to the query-selected node IDs. Host code only passes those selected
+IDs to the next statement. The main path/subgraph phases share cumulative
+snapshot budgets and assert exact identities, relationship types/properties
+and commit epochs. All fixture creation uses ordinary queries.
+
+These are bounded query fixtures, not a replacement generic BFS adapter.
+Retired facade diagnostics and synthetic unknown-type node counts are removed;
+an explicit seed lookup still distinguishes an existing seed from an empty
+relationship result. Four wrappers, their request/output/diagnostic models,
+legacy traversal/decoding/filter helpers, the test-support trait and both
+re-export modules are removed. The obsolete contracts and facade fallback-enum encoding
+units are removed with their enum; all six graph runtime cases remain in the root
+general CI lane. Production retrieval retains its outgoing/incoming dense
+adjacency reports using the existing storage directions directly.

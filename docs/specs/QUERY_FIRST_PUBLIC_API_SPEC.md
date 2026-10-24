@@ -522,9 +522,13 @@ and page phases also use ordinary queries, removing two wrappers and four DTOs.
 Neighbor fixtures now use fixed hop/direction/scope queries and explicit output
 budgets, removing two wrappers and three DTOs. Dense adjacency is checked through
 storage layout statistics and ordinary profiled reads, rather than retired
-facade reason DTOs. The remaining four path/subgraph wrappers and final
-qualification remain unfinished;
-this mutation cleanup alone does not complete issue #1193.
+facade reason DTOs. Path/subgraph fixtures now use fixed endpoint, bounded
+expansion, scope and edge-page statements, removing the final four wrappers and
+their DTOs, host traversals, decoders and test-support exports. No business CRUD
+compatibility layer remains under `cfg(test)`. Reusable retrieval, transaction,
+recovery, Consumer and projection lifecycle contracts remain. Final-candidate
+qualification is still pending; source cleanup alone does not complete issue
+#1193.
 
 ## Stable typed boundaries
 

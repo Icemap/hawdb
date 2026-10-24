@@ -26,9 +26,6 @@ mod retrieval;
 mod storage_lifecycle;
 mod workload;
 
-#[doc(hidden)]
-pub mod test_support;
-
 /// Stable host-neutral contracts exposed to the root HawDB facade.
 pub mod public {
     pub use crate::graph::*;

@@ -13,13 +13,9 @@
 // limitations under the License.
 
 mod analytics;
-#[cfg(test)]
-mod graph_read;
 mod relational;
 mod retrieval;
 
 pub(crate) use analytics::QueryExecutionTrace;
-#[cfg(test)]
-pub use graph_read::*;
 pub use relational::*;
 pub use retrieval::*;
