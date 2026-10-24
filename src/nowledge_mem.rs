@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(test)]
-use crate::api::{
-    KnowledgeMemoryEvolvesCreateBatchOutput, KnowledgeMemoryEvolvesCreateBatchRequest,
-    KnowledgeMemoryLifecycleBatchOutput, KnowledgeMemoryLifecycleBatchRequest,
-};
 use crate::search::{
     AdaptiveVectorSearchOptions, CompressedVectorSearchMode, SearchFallbackReasonCode,
     SearchLexicalProductionQualificationReport, SearchOutOfCoreConfig,
@@ -2972,31 +2967,6 @@ impl NowledgeMemEmbeddedStoreHandle {
     }
 }
 
-#[cfg(test)]
-impl NowledgeMemEmbeddedStoreHandle {
-    pub fn create_knowledge_memory_evolves_batch(
-        &self,
-        request: &KnowledgeMemoryEvolvesCreateBatchRequest,
-    ) -> Result<KnowledgeMemoryEvolvesCreateBatchOutput> {
-        let _permit = self.admit_typed_mutation()?;
-        self.write_store()?
-            .graph_mut()
-            .database_mut()
-            .create_knowledge_memory_evolves_batch(request)
-    }
-
-    pub fn update_knowledge_memory_lifecycle_batch(
-        &self,
-        request: &KnowledgeMemoryLifecycleBatchRequest,
-    ) -> Result<KnowledgeMemoryLifecycleBatchOutput> {
-        let _permit = self.admit_typed_mutation()?;
-        self.write_store()?
-            .graph_mut()
-            .database_mut()
-            .update_knowledge_memory_lifecycle_batch(request)
-    }
-}
-
 impl NowledgeMemEmbeddedStoreHandle {
     pub fn transaction(
         &self,
@@ -3847,21 +3817,6 @@ impl NowledgeMemEmbeddedStoreHandle {
         )?;
         self.write_store()?
             .catch_up_search_projection_scheduled(max_operations_per_batch, max_batches)
-    }
-
-    #[cfg(test)]
-    fn admit_typed_mutation(&self) -> Result<RuntimePermit> {
-        let store = self.read_store()?;
-        let config = store.graph.database().config();
-        let estimated_memory_bytes = crate::executor::estimated_mutation_memory_bytes(
-            config.mutation_limits,
-            config.max_wal_record_bytes,
-        );
-        store
-            .graph
-            .try_admit_runtime(RuntimeWorkRequest::foreground_mutation(
-                estimated_memory_bytes,
-            ))
     }
 
     fn admit_typed_transaction(&self) -> Result<RuntimePermit> {

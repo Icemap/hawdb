@@ -441,6 +441,12 @@ target protection, omitted-field behavior, no-op epochs and single-batch
 WAL/reopen assertions. Their business adapters and request/result DTOs are
 removed. The shared property-statement helper remains only for legacy fixtures
 that have not yet migrated.
+Memory lifecycle/latest flags and EVOLVES relationship fixtures also use bounded
+parameterized statements and explicit transactions. Space predicates and exact
+endpoint matching stay in Cypher; host helpers only normalize input. Their three
+database adapters, twelve DTOs and the last two Mem business forwarding methods
+are removed, including the now-unused business-mutation admission helper. Typed
+transaction, recovery, Consumer and projection lifecycle capabilities remain.
 Remaining legacy business adapters still require migration; this removal does
 not complete issue #1193.
 

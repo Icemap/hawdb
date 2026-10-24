@@ -809,3 +809,15 @@ Go test results; the Unix native binding jobs retain their existing profile.
 The native feature inventory audit also requires the independent telemetry
 Bazel spec and lock to match the workspace Cargo.lock package version, source
 and checksum. Update them together when upgrading the optional dependency.
+
+### Memory lifecycle and evolution queries
+
+`api::tests::memory_lifecycle` retains the ten lifecycle/latest/EVOLVES cases
+previously in the root API module, owned by the same root general Prow partition.
+Bounded parameterized SET/CREATE statements and explicit transactions preserve
+first-input duplicate handling, scoped nonmatches, missing/idless endpoints,
+exact property values, commit epochs and one-batch WAL/reopen. Input-only
+validation covers empty identifiers/state/relation and non-finite confidence
+before any database effect. The three database mutation adapters, twelve DTOs
+and final two Mem business forwarding methods are removed. Transaction and
+maintenance admission remain independent typed capabilities.
