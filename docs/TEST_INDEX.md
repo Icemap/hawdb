@@ -882,3 +882,13 @@ filtered/missing rows, idless protection, omitted fields, timestamps, one WAL
 batch and exact durable reopen. Two business methods and eight mutation DTOs
 are removed. Source count, parsed/revision and label adapters remain separate
 migration work.
+
+### Source parsed metadata queries
+
+`api::tests::source_parsed_metadata` retains three root general cases with bounded
+parameterized SET statements. Base parsing fields and optional detail/path
+assignments remain separate statements in one explicit transaction. The cases
+preserve full versus omitted fields, empty file paths, missing/idless targets,
+first-input duplicates, exact timestamps/content, validation before WAL and
+one-batch durable reopen. One business adapter, four DTOs and the assignment
+factory disappear; no executor feature or runtime test ownership changes.

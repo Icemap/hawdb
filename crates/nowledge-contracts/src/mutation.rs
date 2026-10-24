@@ -178,50 +178,6 @@ pub struct KnowledgeSourceMemoryCountBatchOutput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeSourceParsedMetadataUpdate {
-    pub source_id: String,
-    pub parsed_path: Option<String>,
-    pub file_path: Option<String>,
-    pub original_name: Option<String>,
-    pub mime_type: Option<String>,
-    pub source_url: Option<String>,
-    pub summary: String,
-    pub sha256: String,
-    pub size_bytes: i64,
-    pub updated_at: Value,
-    pub metadata: Option<Value>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeSourceParsedMetadataBatchRequest {
-    pub updates: Vec<KnowledgeSourceParsedMetadataUpdate>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeSourceParsedMetadataBatchRow {
-    pub source_id: String,
-    pub node_id: Option<u64>,
-    pub matched: bool,
-    pub updated: bool,
-    pub duplicate: bool,
-    pub non_writable: bool,
-    pub updated_property_count: usize,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnowledgeSourceParsedMetadataBatchOutput {
-    pub graph_commit_epoch_before: u64,
-    pub graph_commit_epoch_after: u64,
-    pub rows: Vec<KnowledgeSourceParsedMetadataBatchRow>,
-    pub matched_count: usize,
-    pub missing_count: usize,
-    pub duplicate_count: usize,
-    pub non_writable_count: usize,
-    pub updated_count: usize,
-    pub updated_property_count: usize,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KnowledgeSourceParsedCreate {
     pub source_id: String,
     pub source_type: String,

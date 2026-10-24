@@ -472,6 +472,9 @@ Source lifecycle and metadata fixtures use fixed parameterized statements with
 current-state predicates and explicit optional chunk assignments. Their six
 runtime cases retain missing/idless protection, first-input normalization,
 one-batch WAL and reopen assertions without two business methods or eight DTOs.
+Source parsed-metadata fixtures likewise use separate base and optional-detail
+statements in one transaction, preserving omitted fields, idless protection and
+recovery coverage without the old adapter, four DTOs or assignment factory.
 Remaining legacy business adapters still require migration; this removal does
 not complete issue #1193.
 
