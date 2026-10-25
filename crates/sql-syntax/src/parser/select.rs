@@ -14,120 +14,22 @@
 
 use super::{Depths, Parser};
 use crate::{
-    ExpressionSyntax, LabeledExpressionSyntax, LockStrengthSyntax, LockingClauseSyntax,
-    NullOrderSyntax, OrderBySyntax, OrderDirectionSyntax, PostgresFromItemSyntax,
-    PostgresFromSyntax, PostgresJoinKind, PostgresJoinSyntax, PostgresSelectSyntax,
-    RelationTableSyntax, Span, SyntaxError, TokenKind,
+    ExpressionSyntax, LabeledExpressionSyntax, NullOrderSyntax, OrderBySyntax,
+    OrderDirectionSyntax, Span, SyntaxError, TokenKind,
 };
 
-const SELECT_CLAUSE_KEYWORDS: &[&str] = &[
+pub(super) const SELECT_CLAUSE_KEYWORDS: &[&str] = &[
     "WHERE", "GROUP", "HAVING", "ORDER", "LIMIT", "OFFSET", "FOR", "FETCH",
 ];
-const JOIN_BOUNDARY_KEYWORDS: &[&str] = &[
+pub(super) const JOIN_BOUNDARY_KEYWORDS: &[&str] = &[
     "JOIN", "INNER", "LEFT", "RIGHT", "FULL", "CROSS", "WHERE", "GROUP", "HAVING", "ORDER",
     "LIMIT", "OFFSET", "FOR", "FETCH",
 ];
 
 impl Parser<'_> {
-    pub(super) fn parse_postgres_select(&mut self) -> Result<PostgresSelectSyntax, SyntaxError> {
-        let start = self.expect_keyword("SELECT")?.span.start;
-        let distinct = self.consume_keyword("DISTINCT");
-        if !distinct {
-            self.consume_keyword("ALL");
-        } else if self.at_keyword("ON") {
-            return Err(self.unexpected("a projection after DISTINCT"));
-        }
-
-        let projection = self.parse_select_projection()?;
-        self.expect_keyword("FROM")?;
-        let from = self.parse_select_from_sources()?;
-
-        let selection = if self.consume_keyword("WHERE") {
-            Some(self.parse_select_clause_expression(
-                SELECT_CLAUSE_KEYWORDS,
-                "an expression after WHERE",
-            )?)
-        } else {
-            None
-        };
-        let group_by = if self.consume_keyword("GROUP") {
-            self.expect_keyword("BY")?;
-            self.parse_select_expression_list(
-                SELECT_CLAUSE_KEYWORDS,
-                "an expression list after GROUP BY",
-            )?
-        } else {
-            Vec::new()
-        };
-        let having = if self.consume_keyword("HAVING") {
-            Some(self.parse_select_clause_expression(
-                SELECT_CLAUSE_KEYWORDS,
-                "an expression after HAVING",
-            )?)
-        } else {
-            None
-        };
-        let order_by = if self.consume_keyword("ORDER") {
-            self.expect_keyword("BY")?;
-            self.parse_order_by_items()?
-        } else {
-            Vec::new()
-        };
-        let limit = if self.consume_keyword("LIMIT") {
-            Some(self.parse_select_clause_expression(
-                SELECT_CLAUSE_KEYWORDS,
-                "an expression after LIMIT",
-            )?)
-        } else {
-            None
-        };
-        let offset = if self.consume_keyword("OFFSET") {
-            Some(self.parse_select_clause_expression(
-                SELECT_CLAUSE_KEYWORDS,
-                "an expression after OFFSET",
-            )?)
-        } else {
-            None
-        };
-        if self.at_keyword("FETCH") {
-            return Err(self.unexpected("LIMIT or OFFSET in the owned SELECT subset"));
-        }
-        let locking = if self.consume_keyword("FOR") {
-            let start = self.tokens[self.position - 1].span.start;
-            let strength = if self.consume_keyword("SHARE") {
-                LockStrengthSyntax::Share
-            } else if self.consume_keyword("UPDATE") {
-                LockStrengthSyntax::Update
-            } else {
-                return Err(self.unexpected("SHARE or UPDATE after FOR"));
-            };
-            Some(LockingClauseSyntax {
-                strength,
-                span: Span::new(start, self.previous_end()),
-            })
-        } else {
-            None
-        };
-        if !matches!(self.current().kind, TokenKind::Semicolon | TokenKind::End) {
-            return Err(self.unexpected("end of SELECT or a supported SELECT clause"));
-        }
-
-        Ok(PostgresSelectSyntax {
-            distinct,
-            projection,
-            from,
-            selection,
-            group_by,
-            having,
-            order_by,
-            limit,
-            offset,
-            locking,
-            span: Span::new(start, self.previous_end()),
-        })
-    }
-
-    fn parse_select_projection(&mut self) -> Result<Vec<LabeledExpressionSyntax>, SyntaxError> {
+    pub(super) fn parse_select_projection(
+        &mut self,
+    ) -> Result<Vec<LabeledExpressionSyntax>, SyntaxError> {
         if self.at_keyword("FROM") {
             return Err(self.unexpected("at least one SELECT projection"));
         }
@@ -143,89 +45,7 @@ impl Parser<'_> {
         Ok(projection)
     }
 
-    fn parse_select_from_sources(&mut self) -> Result<Vec<PostgresFromSyntax>, SyntaxError> {
-        let mut from = Vec::new();
-        loop {
-            if self.at_select_clause_boundary() {
-                return Err(self.unexpected("at least one FROM item"));
-            }
-            let start = self.current().span.start;
-            let relation = self.parse_select_from_primary()?;
-            let mut joins = Vec::new();
-            while self.at_join_start() {
-                joins.push(self.parse_select_join()?);
-            }
-            from.push(PostgresFromSyntax {
-                relation,
-                joins,
-                span: Span::new(start, self.previous_end()),
-            });
-
-            if self.consume_kind(TokenKind::Comma) {
-                continue;
-            }
-            if self.at_select_clause_boundary() {
-                break;
-            }
-            return Err(
-                self.unexpected("a join, comma, or supported SELECT clause after FROM item")
-            );
-        }
-        Ok(from)
-    }
-
-    fn parse_select_from_primary(&mut self) -> Result<PostgresFromItemSyntax, SyntaxError> {
-        if self.at_keyword("GRAPH_TABLE") {
-            return self
-                .parse_graph_table()
-                .map(PostgresFromItemSyntax::GraphTable);
-        }
-        let start = self.current().span.start;
-        let name = self.parse_qualified_name()?;
-        let alias = self.parse_optional_table_alias()?;
-        Ok(PostgresFromItemSyntax::Relation(RelationTableSyntax {
-            name,
-            alias,
-            span: Span::new(start, self.previous_end()),
-        }))
-    }
-
-    fn parse_select_join(&mut self) -> Result<PostgresJoinSyntax, SyntaxError> {
-        let start = self.current().span.start;
-        let kind = if self.consume_keyword("JOIN") {
-            PostgresJoinKind::Inner
-        } else if self.consume_keyword("INNER") {
-            self.expect_keyword("JOIN")?;
-            PostgresJoinKind::Inner
-        } else if self.consume_keyword("LEFT") {
-            self.consume_keyword("OUTER");
-            self.expect_keyword("JOIN")?;
-            PostgresJoinKind::Left
-        } else if self.consume_keyword("CROSS") {
-            self.expect_keyword("JOIN")?;
-            PostgresJoinKind::Cross
-        } else {
-            return Err(self.unexpected("INNER, LEFT, or CROSS JOIN"));
-        };
-        let relation = self.parse_select_from_primary()?;
-        let condition = if kind == PostgresJoinKind::Cross {
-            None
-        } else {
-            self.expect_keyword("ON")?;
-            Some(self.parse_select_clause_expression(
-                JOIN_BOUNDARY_KEYWORDS,
-                "an expression after JOIN ON",
-            )?)
-        };
-        Ok(PostgresJoinSyntax {
-            kind,
-            relation,
-            condition,
-            span: Span::new(start, self.previous_end()),
-        })
-    }
-
-    fn parse_select_expression_list(
+    pub(super) fn parse_select_expression_list(
         &mut self,
         stop_keywords: &[&str],
         expected: &'static str,
@@ -245,7 +65,7 @@ impl Parser<'_> {
         Ok(expressions)
     }
 
-    fn parse_order_by_items(&mut self) -> Result<Vec<OrderBySyntax>, SyntaxError> {
+    pub(super) fn parse_order_by_items(&mut self) -> Result<Vec<OrderBySyntax>, SyntaxError> {
         let mut items = Vec::new();
         loop {
             let start_position = self.position;
@@ -310,7 +130,7 @@ impl Parser<'_> {
         })
     }
 
-    fn parse_select_clause_expression(
+    pub(super) fn parse_select_clause_expression(
         &mut self,
         stop_keywords: &[&str],
         expected: &'static str,
@@ -346,13 +166,7 @@ impl Parser<'_> {
         Ok(self.position)
     }
 
-    fn at_join_start(&self) -> bool {
-        ["JOIN", "INNER", "LEFT", "CROSS"]
-            .into_iter()
-            .any(|keyword| self.at_keyword(keyword))
-    }
-
-    fn at_select_clause_boundary(&self) -> bool {
+    pub(super) fn at_select_clause_boundary(&self) -> bool {
         matches!(self.current().kind, TokenKind::Semicolon | TokenKind::End)
             || SELECT_CLAUSE_KEYWORDS
                 .iter()

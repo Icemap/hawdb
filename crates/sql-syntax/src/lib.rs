@@ -15,6 +15,9 @@
 //! In-progress HawDB-owned PostgreSQL SQL/PGQ syntax frontend.
 //!
 //! This crate owns tokens, byte spans, structured syntax errors, and syntax ASTs.
+//! Statement envelopes use a bounded token PEG with packrat memoization, composed
+//! SQL/PGQ rules, and transformation into the existing syntax AST. Native terminals
+//! retain the bounded Pratt expression and graph-pattern parsers.
 //! Semantic binding and logical-plan lowering belong to `hawdb-sql`.
 //!
 //! This frontend is not yet selected by `Database::query_sql*`; the existing
@@ -34,6 +37,7 @@ mod ast;
 mod error;
 mod lexer;
 mod parser;
+mod peg;
 mod span;
 mod token;
 
