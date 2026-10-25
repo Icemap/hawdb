@@ -501,6 +501,10 @@ pub(super) fn run(arguments: &[String]) -> Result<()> {
         max_documents: NonZeroUsize::new(count + changes).unwrap(),
         ..Default::default()
     };
+    // Fund ordered key seeks, row emission and the final source probe.
+    let key_seek_work = 2 + (usize::BITS - count.leading_zeros()) as usize;
+    let source_work = (count + 1) * (key_seek_work + 1) + 2;
+    build.feed.work = NonZeroUsize::new(source_work.max(build.feed.work.get())).unwrap();
     let VectorIndexBackend::DiskAnn { lsg: settings, .. } = &mut build.backend else {
         return Err("default backend is not DiskANN".into());
     };
@@ -512,7 +516,8 @@ pub(super) fn run(arguments: &[String]) -> Result<()> {
     println!(
         "{}",
         json!({"phase": "configuration", "protocol": VERSION, "seed": SEED, "count": count,
-        "dimension": dimension, "build_memory_bytes": memory, "lsg": lsg, "mutation_per_mille": rate,
+        "dimension": dimension, "build_memory_bytes": memory, "feed_work_budget": build.feed.work.get(),
+        "lsg": lsg, "mutation_per_mille": rate,
         "changed_keys": changes, "samples": samples, "durability": "SyncOnEveryWrite"})
     );
     let started = Instant::now();

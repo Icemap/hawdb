@@ -400,6 +400,10 @@ point-query workspace also needs funding. Thus the 100k-by-128 controls request
 320 MiB rather than 128 MiB. The graph kernel's smaller construction preflight
 does not qualify the full canonical source envelope. The fixture's host governor
 declares 2 GiB for coexisting staging, publication, query and old/current readers.
+The fixture also funds ordered source-key seeks, emitted rows and the terminal
+probe from its row count. At 100k rows the full-source cursor needs 2,000,021
+work units, so the fixture explicitly admits 2,000,022 instead of the default
+1,000,000 and records that feed-work budget in its configuration output.
 These are explicit workload settings; library defaults, source accounting,
 resource-refusal cases and the query thresholds remain unchanged.
 
