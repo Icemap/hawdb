@@ -443,8 +443,10 @@ or production-data qualification by itself.
 
 The same manual example's `canonical` mode owns synthetic source ingestion,
 default-parameter plain/LSG builds and mixed replacement/delete/NULL/insert
-workloads at an explicit changed-key rate. It checks canonical exact recall and
-independent eligibility, retained old MVCC results, stale-source refusal, graph
+workloads at an explicit changed-key rate. Initial loading is sealed every 10,000
+rows within the default live-row overlay bound, before retaining the source/index
+baseline. It checks canonical exact recall, independent eligibility, retained old
+MVCC results, stale-source refusal, graph
 reuse, restore/reinsertion, no-op maintenance and cold reopen. Existing library
 tests retain their CI owners. The opt-in Native Bindings
 `canonical_vector_lifecycle` dispatch runs four fixed 100k-by-128 workloads

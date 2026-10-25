@@ -388,6 +388,10 @@ query samples. The changed-key count rounds down to complete groups of four,
 with at least one group. Each group replaces one vector, deletes one row, sets
 one vector to NULL and inserts one new row; the next phase restores the original
 source. A coprime stride spreads mutations across cluster labels.
+Initial loading commits 1,000 rows per transaction and checkpoints every 10,000
+rows and at the end, before capturing C. This keeps the default bounded live-row
+overlay intact; each checkpoint's time is recorded separately. Both CRUD phases
+remain complete transactions after the retained baseline is captured.
 
 At baseline, after both publications and after cold reopen, each of the five
 filter families compares ANN results with exhaustive canonical SQL distances,

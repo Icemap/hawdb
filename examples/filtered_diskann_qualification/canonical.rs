@@ -478,12 +478,22 @@ pub(super) fn run(arguments: &[String]) -> Result<()> {
             )?;
         }
         transaction.commit()?;
+        let rows = count.min(first + 1000);
         println!(
             "{}",
-            json!({"phase": "ingest", "rows": count.min(first + 1000), "elapsed_ns": started.elapsed().as_nanos()})
+            json!({"phase": "ingest", "rows": rows, "elapsed_ns": started.elapsed().as_nanos()})
         );
+        // Seal initial batches within the default live-row overlay envelope.
+        if rows.is_multiple_of(10_000) || rows == count {
+            let checkpoint = Instant::now();
+            db.checkpoint()?;
+            println!(
+                "{}",
+                json!({"phase": "ingest_checkpoint", "rows": rows,
+                "elapsed_ns": checkpoint.elapsed().as_nanos()})
+            );
+        }
     }
-    db.checkpoint()?;
     resources(&db, &governor, "source_checkpoint", started)?;
     let mut build = VectorIndexBuildOptions {
         memory_bytes: NonZeroUsize::new(memory).unwrap(),
