@@ -124,6 +124,7 @@ pub(crate) fn test_row_page_schema(table: &str, column_count: usize) -> Relation
         })
         .collect();
     RelationalTableSchema {
+        materialized_view: None,
         name: table.to_string(),
         columns,
         primary_key: vec!["id".to_string()],

@@ -137,6 +137,7 @@ pub(super) fn prepare_relational_select_with_snapshot(
     let limits = resources.limits;
     let join_planning = resources.join_planning;
     let prepare_started = Instant::now();
+    crate::materialized_view::prepare_select(&mut select, state)?;
     let mut current_state_bind_nanos = 0;
     let output_schema = measure_nanos(&mut current_state_bind_nanos, || -> Result<QuerySchema> {
         reject_non_public_schema(select.from_table().schema.as_deref())?;

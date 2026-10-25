@@ -657,6 +657,7 @@ fn publication_schema() -> hawdb_storage::relational::RelationalTableSchema {
         RelationalColumnSchema, RelationalScalarType, RelationalTableSchema,
     };
     RelationalTableSchema {
+        materialized_view: None,
         name: PUBLICATIONS.into(),
         columns: [
             ("projection", RelationalScalarType::Text),

@@ -31,10 +31,14 @@ mod compaction;
 mod constraints;
 mod index_range;
 mod index_shadow;
+mod materialized_view;
 pub(crate) use index_range::EncodedRelationalIndexRange;
 pub use index_range::{RelationalIndexBound, RelationalIndexBounds};
 pub(crate) use index_shadow::{
     IndexReadAdmission, IndexReadCharge, IndexReadObserver, IndexReadPreflightError,
+};
+pub use materialized_view::{
+    MaterializedViewColumn, MaterializedViewDefinition, MaterializedViewExpression,
 };
 mod admitted_point;
 mod ordered_key;
@@ -608,6 +612,7 @@ pub struct RelationalTableSchema {
     pub unique_constraints: Vec<Vec<String>>,
     pub foreign_keys: Vec<RelationalForeignKeySchema>,
     pub indexes: Vec<RelationalIndexSchema>,
+    pub materialized_view: Option<Box<MaterializedViewDefinition>>,
 }
 
 #[derive(Debug)]
@@ -728,6 +733,11 @@ fn clone_schema_with_allocations(
     context: &crate::background::CheckpointDecodeContext,
 ) -> Result<RelationalTableSchema, RelationalError> {
     Ok(RelationalTableSchema {
+        materialized_view: schema
+            .materialized_view
+            .as_deref()
+            .map(|view| materialized_view::clone_definition(view, context))
+            .transpose()?,
         name: clone_string_with_allocations(&schema.name, Some(context))?,
         columns: collect_results_with_allocations(
             schema
@@ -3473,6 +3483,9 @@ impl RelationalState {
         let mut row_counts = BTreeMap::new();
         let mut total_rows = 0usize;
         for table in &manifest.tables {
+            if table.schema.materialized_view.is_some() {
+                return Err(RelationalError::Admission("materialized views require resident relational rows; authoritative out-of-core storage is unsupported".into()));
+            }
             if table.table != table.schema.name {
                 return Err(RelationalError::Corruption(format!(
                     "canonical row root table {} carries schema {}",
@@ -4513,6 +4526,7 @@ impl RelationalState {
                 | RelationalWrite::DeleteWhere { table, .. }
                 | RelationalWrite::UpdateWhere { table, .. }
                 | RelationalWrite::AddColumn { table, .. }
+                | RelationalWrite::DropMaterializedView { table }
                 | RelationalWrite::CreateIndex { table, .. } => (table.as_str(), false),
                 RelationalWrite::CreateTable(schema) => (schema.name.as_str(), false),
             };
@@ -4596,6 +4610,7 @@ impl RelationalState {
                     scan_tables.insert(table.clone());
                 }
                 RelationalWrite::CreateTable(_)
+                | RelationalWrite::DropMaterializedView { .. }
                 | RelationalWrite::AddColumn { .. }
                 | RelationalWrite::CreateIndex { .. } => {
                     unreachable!("schema-changing transactions were rejected above")
@@ -6156,6 +6171,9 @@ pub enum RelationalConflictAction {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RelationalWrite {
     CreateTable(RelationalTableSchema),
+    DropMaterializedView {
+        table: String,
+    },
     AddColumn {
         table: String,
         column: RelationalColumnSchema,
@@ -6214,6 +6232,7 @@ impl RelationalTransaction {
             matches!(
                 write,
                 RelationalWrite::CreateTable(_)
+                    | RelationalWrite::DropMaterializedView { .. }
                     | RelationalWrite::AddColumn { .. }
                     | RelationalWrite::CreateIndex { .. }
             )
@@ -6235,6 +6254,7 @@ impl RelationalTransaction {
                 | RelationalWrite::AddColumn { .. }
                 | RelationalWrite::CreateIndex { .. }
                 | RelationalWrite::DeleteWhere { .. }
+                | RelationalWrite::DropMaterializedView { .. }
                 | RelationalWrite::UpdateWhere { .. } => 0,
             })
             .sum()
@@ -6261,6 +6281,7 @@ impl RelationalTransaction {
                 | RelationalWrite::AddColumn { .. }
                 | RelationalWrite::CreateIndex { .. }
                 | RelationalWrite::DeleteWhere { .. }
+                | RelationalWrite::DropMaterializedView { .. }
                 | RelationalWrite::UpdateWhere { .. } => 0,
             })
             .sum()
@@ -6952,6 +6973,12 @@ fn apply_transaction_inner(
         Some(context) => state.clone_metadata_with_work_context(&context.work)?,
         None => state.clone(),
     };
+    if index_mode != TransactionIndexMode::Materialized
+        && (state.table_schemas().any(|schema| schema.materialized_view.is_some())
+            || transaction.writes.iter().any(|write| matches!(write, RelationalWrite::CreateTable(schema) if schema.materialized_view.is_some())))
+    {
+        return Err(RelationalError::Admission("materialized views do not support authoritative relational indexes".into()));
+    }
     match index_mode {
         TransactionIndexMode::Materialized => {
             if !state.materialized_index_postings_resident {
@@ -7006,9 +7033,11 @@ fn apply_transaction_inner(
     let mut projection_rebuild_tables = BTreeSet::new();
     let mut mutation_outcomes = Vec::new();
     for write in transaction.writes {
+        materialized_view::reject_write(&next, &write)?;
         match write {
             RelationalWrite::CreateTable(schema) => {
                 validate_table_schema(&schema)?;
+                materialized_view::validate_definition(&next, &schema)?;
                 if next.schemas.contains_key(&schema.name) {
                     return Err(RelationalError::Schema(format!(
                         "table {} already exists",
@@ -7070,6 +7099,28 @@ fn apply_transaction_inner(
                             .insert(schema.name.clone(), Arc::new(schema.into()));
                     }
                 }
+            }
+            RelationalWrite::DropMaterializedView { table } => {
+                if !next
+                    .table_schema(&table)
+                    .is_some_and(|schema| schema.materialized_view.is_some())
+                {
+                    return Err(RelationalError::Schema(format!(
+                        "unknown materialized view {table}"
+                    )));
+                }
+                next.schemas.remove(&table);
+                next.segments.remove(&table);
+                insert_table_name_with_allocations(
+                    &mut full_index_rebuild,
+                    &table,
+                    checkpoint_allocations,
+                )?;
+                insert_table_name_with_allocations(
+                    &mut projection_rebuild_tables,
+                    &table,
+                    checkpoint_allocations,
+                )?;
             }
             RelationalWrite::AddColumn { table, column } => {
                 if let Some(context) = checkpoint_allocations {
@@ -7520,9 +7571,24 @@ fn apply_transaction_inner(
             queue_allocations: deletion_context.as_ref(),
         },
     )?;
+    materialized_view::maintain(
+        state,
+        &mut next,
+        &mut changed_keys,
+        &mut touched,
+        &full_index_rebuild,
+        materialized_view::MaintenanceOptions {
+            limits,
+            overflow_config,
+            allocations: checkpoint_allocations,
+        },
+    )?;
     overflow::prune_unreachable_segments_with_allocations(&mut next, checkpoint_allocations)?;
     if index_mode == TransactionIndexMode::Materialized {
         for table in &touched {
+            if !next.schemas.contains_key(table) {
+                continue;
+            }
             if full_index_rebuild.contains(table) {
                 match checkpoint_allocations {
                     Some(context) => rebuild_indexes_with_allocations(&mut next, table, context)?,
@@ -8553,6 +8619,15 @@ fn predicate_truth(
 }
 
 fn validate_table_schema(schema: &RelationalTableSchema) -> Result<(), RelationalError> {
+    if schema
+        .materialized_view
+        .as_ref()
+        .is_some_and(|view| view.columns.len() >= schema.columns.len())
+    {
+        return Err(RelationalError::Schema(
+            "materialized view is missing its internal columns".into(),
+        ));
+    }
     if schema.name.is_empty() || schema.columns.is_empty() {
         return Err(RelationalError::Schema(
             "table name and columns must be non-empty".to_string(),

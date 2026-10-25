@@ -443,6 +443,7 @@ fn recognizes_coalesced_sum_octet_length_as_columnar_aggregate() {
         panic!("expected SELECT statement")
     };
     let schema = RelationalTableSchema {
+        materialized_view: None,
         name: "documents".to_string(),
         columns: vec![
             RelationalColumnSchema {

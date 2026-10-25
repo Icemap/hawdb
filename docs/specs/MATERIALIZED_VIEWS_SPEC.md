@@ -2,7 +2,15 @@
 
 ## Status and decision boundary
 
-**Status: exploratory proposal; no implemented materialized-view surface.**
+**Status: exploratory graph/async proposal; its acceptance gates remain open.**
+
+The separately scoped [synchronous SQL implementation](../MATERIALIZED_VIEWS.md)
+supports single-table SELECT definitions, maintained inside the source commit.
+The user selected SQL SELECT plus synchronous maintenance on 2026-10-25 and
+deferred Cypher. That implementation does not complete the Mem graph workload
+milestones below or introduce this proposal's asynchronous publication protocol.
+The freshness and first-delivery requirements below describe this future graph
+proposal, not the synchronous SQL contract.
 Initial workload design: https://github.com/nowledge-co/hawdb/issues/1142.
 Execution protocol follow-up: https://github.com/nowledge-co/hawdb/issues/1204.
 

@@ -2795,6 +2795,7 @@ fn collect_relational_version_writes(
             | RelationalWrite::DeleteWhere { table, .. }
             | RelationalWrite::UpdateWhere { table, .. } => table,
             RelationalWrite::CreateTable(_)
+            | RelationalWrite::DropMaterializedView { .. }
             | RelationalWrite::AddColumn { .. }
             | RelationalWrite::CreateIndex { .. }
             | RelationalWrite::Upsert { .. } => {
@@ -2804,6 +2805,14 @@ fn collect_relational_version_writes(
         let Some(schema) = state.table_schema(table) else {
             return record_live_version(writes, VersionKey::Database);
         };
+        if state.table_schemas().any(|schema| {
+            schema
+                .materialized_view
+                .as_ref()
+                .is_some_and(|view| view.source == *table)
+        }) {
+            return record_live_version(writes, VersionKey::Database);
+        }
         let preserves_constraint_keys = match write {
             RelationalWrite::Insert {
                 mode: RelationalInsertMode::Error,
@@ -3119,6 +3128,7 @@ mod tests {
                 &mut catalog,
                 RelationalTransaction {
                     writes: vec![RelationalWrite::CreateTable(RelationalTableSchema {
+                        materialized_view: None,
                         name: "rows".into(),
                         columns: vec![
                             RelationalColumnSchema {
@@ -3260,6 +3270,7 @@ mod tests {
                 &mut catalog,
                 RelationalTransaction {
                     writes: vec![RelationalWrite::CreateTable(RelationalTableSchema {
+                        materialized_view: None,
                         name: "rows".into(),
                         columns: vec![
                             RelationalColumnSchema {

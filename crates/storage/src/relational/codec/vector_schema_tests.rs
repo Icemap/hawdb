@@ -17,6 +17,7 @@ use hawdb_core::VectorDimension;
 
 fn schema(dimension: u32) -> RelationalTableSchema {
     RelationalTableSchema {
+        materialized_view: None,
         name: "memories".into(),
         columns: vec![
             RelationalColumnSchema {

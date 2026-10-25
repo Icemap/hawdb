@@ -58,6 +58,7 @@ impl Fixture {
             default,
         };
         let parents = RelationalTableSchema {
+            materialized_view: None,
             name: "parents".into(),
             columns: vec![column("id", RelationalScalarType::BigInt, false, None)],
             primary_key: vec!["id".into()],
@@ -66,6 +67,7 @@ impl Fixture {
             indexes: Vec::new(),
         };
         let schema = RelationalTableSchema {
+            materialized_view: None,
             name: "messages".into(),
             columns: vec![
                 column(
@@ -296,6 +298,7 @@ fn checkpoint_streams_wide_inline_rows_without_a_row_sized_allocation() {
             RelationalTransaction {
                 writes: vec![
                     RelationalWrite::CreateTable(RelationalTableSchema {
+                        materialized_view: None,
                         name: "wide".into(),
                         columns: vec![RelationalColumnSchema {
                             name: "value".into(),
@@ -546,6 +549,7 @@ fn checkpoint_units_relational_image_preserves_budget_and_reachability_error_ord
 #[test]
 fn checkpoint_units_relational_wide_schema_defaults_keys_and_foreign_metadata_preserve_bytes() {
     let mut schema = RelationalTableSchema {
+        materialized_view: None,
         name: "schema-界".repeat(20000),
         columns: Vec::new(),
         primary_key: vec!["id".into()],

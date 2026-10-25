@@ -6,6 +6,17 @@ authoritative; this is a map of test families, not an exhaustive list of every
 Rust test function. Update it when changing a family's scope, build profile,
 execution lane, fixture size, isolation or known failure mode.
 
+The `api::tests::materialized_views` family covers synchronous SQL view DDL,
+projection/group retractions, differential SELECT equality, admission refusals,
+rollback, concurrent commits, cascade deletes and WAL/checkpoint recovery.
+It belongs to the existing root general unit lane and Cargo library tests;
+local replay: `cargo test --locked -p hawdb --lib api::tests::materialized_views`.
+Fixtures are small and do not introduce a new fuzz or CI lane. Supported modes
+and limits are documented in [the implementation guide](MATERIALIZED_VIEWS.md).
+The existing storage unit lane also covers admission-aware view recovery, WAL
+decode parity, schema copying, and reservation release through
+`cargo test --locked -p hawdb-storage --lib controlled_materialized_view_recovery`.
+
 The `api::query_request::tests` unit family covers compact request collection
 through the ordinary read-transaction API. The 2,048-row collection regression
 compares rows and payload accounting with validated consumer delivery, checks

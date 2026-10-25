@@ -232,6 +232,8 @@ pub fn statement_writes_system_schema_registry(statement: &SqlStatement) -> bool
         SqlStatement::CreateTable(statement) => Some(&statement.table),
         SqlStatement::CreateIndex(statement) => Some(&statement.table),
         SqlStatement::AlterTableAddColumn(statement) => Some(&statement.table),
+        SqlStatement::CreateMaterializedView(statement) => Some(&statement.name),
+        SqlStatement::DropMaterializedView(statement) => Some(&statement.name),
         SqlStatement::Select(_) | SqlStatement::Explain(_) | SqlStatement::Branch(_) => None,
     };
     table.is_some_and(|table| {

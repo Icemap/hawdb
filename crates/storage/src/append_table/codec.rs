@@ -31,7 +31,7 @@ use crate::{
 use hawdb_integrity::{integrity_digest, SHA256_BYTES};
 
 const APPEND_WAL_MAGIC: &[u8; 8] = b"SKAPWAL1";
-const APPEND_CODEC_VERSION: u16 = 2;
+const APPEND_CODEC_VERSION: u16 = 3;
 const APPEND_HEADER_BYTES: usize = 64;
 const CREATE_TABLE_TAG: u8 = 1;
 const APPEND_ROWS_TAG: u8 = 2;
@@ -224,6 +224,7 @@ fn encode_schema(
     let mut primary_key = schema.partition_key.clone();
     primary_key.extend(schema.order_key.iter().cloned());
     let relational = RelationalTableSchema {
+        materialized_view: None,
         name: schema.name.clone(),
         columns: schema.columns.clone(),
         primary_key,
@@ -273,7 +274,8 @@ fn decode_schema(
         decode_relational_table_schema(encoded, limits.max_schema_bytes, limits.max_values)
     }
     .map_err(map_relational)?;
-    if partition_count > relational.primary_key.len()
+    if relational.materialized_view.is_some()
+        || partition_count > relational.primary_key.len()
         || partition_count == relational.primary_key.len()
         || !relational.unique_constraints.is_empty()
         || !relational.foreign_keys.is_empty()

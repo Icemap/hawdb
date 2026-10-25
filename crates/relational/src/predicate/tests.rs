@@ -34,6 +34,7 @@ fn predicate(source: &str) -> SqlPredicate {
 
 fn schema() -> RelationalTableSchema {
     RelationalTableSchema {
+        materialized_view: None,
         name: "records".into(),
         columns: [
             ("x", RelationalScalarType::BigInt),
@@ -455,6 +456,7 @@ fn streaming_binding_keeps_eager_validation_and_qualifier_errors() {
 #[test]
 fn borrowed_row_binding_short_circuits_before_missing_fields() {
     let schema = RelationalTableSchema {
+        materialized_view: None,
         name: "logic_rows".to_string(),
         columns: vec![
             RelationalColumnSchema {

@@ -5608,6 +5608,7 @@ mod tests {
                 RelationalTransaction {
                     writes: vec![
                         RelationalWrite::CreateTable(RelationalTableSchema {
+                            materialized_view: None,
                             name: "spill_rows".to_string(),
                             columns: vec![
                                 RelationalColumnSchema {

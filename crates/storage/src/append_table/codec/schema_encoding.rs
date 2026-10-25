@@ -22,6 +22,7 @@ use hawdb_integrity::IntegrityHasher;
 
 fn view(schema: &AppendTableSchema) -> relational::Schema<'_> {
     relational::Schema {
+        materialized_view: None,
         name: &schema.name,
         columns: &schema.columns,
         primary_key: &schema.partition_key,

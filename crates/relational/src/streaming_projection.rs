@@ -323,6 +323,7 @@ mod tests {
 
     fn schema() -> RelationalTableSchema {
         RelationalTableSchema {
+            materialized_view: None,
             name: "records".to_string(),
             columns: vec![
                 RelationalColumnSchema {

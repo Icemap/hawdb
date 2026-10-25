@@ -1675,6 +1675,7 @@ mod tests {
                     RelationalTransaction {
                         writes: vec![
                             RelationalWrite::CreateTable(RelationalTableSchema {
+                                materialized_view: None,
                                 name: "documents".to_string(),
                                 columns: vec![
                                     RelationalColumnSchema {
@@ -3492,6 +3493,7 @@ mod tests {
         RelationalTransaction {
             writes: vec![
                 RelationalWrite::CreateTable(RelationalTableSchema {
+                    materialized_view: None,
                     name: "documents".to_string(),
                     columns: vec![
                         RelationalColumnSchema {
@@ -3954,6 +3956,7 @@ mod tests {
         RelationalTransaction {
             writes: vec![
                 RelationalWrite::CreateTable(RelationalTableSchema {
+                    materialized_view: None,
                     name: "accounts".to_string(),
                     columns: vec![
                         constraint_text_column("id", false),
@@ -3971,6 +3974,7 @@ mod tests {
                     }],
                 }),
                 RelationalWrite::CreateTable(RelationalTableSchema {
+                    materialized_view: None,
                     name: "sessions".to_string(),
                     columns: vec![
                         constraint_text_column("id", false),

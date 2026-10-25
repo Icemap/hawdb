@@ -246,6 +246,7 @@ fn seeded_store(target_prefix_rows: usize) -> RelationalStore {
             RelationalTransaction {
                 writes: vec![
                     RelationalWrite::CreateTable(RelationalTableSchema {
+                        materialized_view: None,
                         name: "messages".to_string(),
                         columns: vec![
                             text_column("id"),

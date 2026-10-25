@@ -41,6 +41,7 @@ fn fixture() -> (
             RelationalTransaction {
                 writes: vec![
                     RelationalWrite::CreateTable(RelationalTableSchema {
+                        materialized_view: None,
                         name: "counts".into(),
                         columns: ["id", "bucket"]
                             .into_iter()

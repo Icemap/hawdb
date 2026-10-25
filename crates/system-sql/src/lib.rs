@@ -872,7 +872,14 @@ fn information_schema_table_rows(state: &RelationalState) -> Vec<Row> {
                 ("table_name".to_string(), Value::String(schema.name.clone())),
                 (
                     "table_type".to_string(),
-                    Value::String("BASE TABLE".to_string()),
+                    Value::String(
+                        if schema.materialized_view.is_some() {
+                            "MATERIALIZED VIEW"
+                        } else {
+                            "BASE TABLE"
+                        }
+                        .to_string(),
+                    ),
                 ),
                 ("self_referencing_column_name".to_string(), Value::Null),
                 ("reference_generation".to_string(), Value::Null),
@@ -881,7 +888,14 @@ fn information_schema_table_rows(state: &RelationalState) -> Vec<Row> {
                 ("user_defined_type_name".to_string(), Value::Null),
                 (
                     "is_insertable_into".to_string(),
-                    Value::String("YES".to_string()),
+                    Value::String(
+                        if schema.materialized_view.is_some() {
+                            "NO"
+                        } else {
+                            "YES"
+                        }
+                        .to_string(),
+                    ),
                 ),
                 ("is_typed".to_string(), Value::String("NO".to_string())),
                 ("commit_action".to_string(), Value::Null),
@@ -916,7 +930,7 @@ fn information_schema_column_rows(state: &RelationalState) -> Vec<Row> {
         .table_schemas()
         .flat_map(|schema| {
             schema
-                .columns
+                .visible_columns()
                 .iter()
                 .enumerate()
                 .map(move |(position, column)| {

@@ -43,6 +43,8 @@ pub(super) fn sql_statement_kind(statement: &SqlStatement) -> &'static str {
         SqlStatement::Delete(_) => "delete",
         SqlStatement::CreateTable(_) => "create_table",
         SqlStatement::CreateIndex(_) => "create_index",
+        SqlStatement::CreateMaterializedView(_) => "create_materialized_view",
+        SqlStatement::DropMaterializedView(_) => "drop_materialized_view",
         SqlStatement::AlterTableAddColumn(_) => "alter_table_add_column",
         SqlStatement::Explain(_) => "explain",
         SqlStatement::Branch(_) => "branch",
@@ -723,6 +725,19 @@ impl Database {
 
             super::query_runtime::query_runtime_checkpoint(task_context)?;
             self.ensure_writable()?;
+            if let crate::sql::SqlStatement::CreateMaterializedView(create) = prepared.statement()
+                && self
+                    .runtime
+                    .get()?
+                    .store
+                    .append_table_schema(&create.name.name)
+                    .is_some()
+            {
+                return Err(HawDBError::Semantic(format!(
+                    "relation {} already exists as a strict append table",
+                    create.name.name
+                )));
+            }
             let transaction = compile_prepared_append_statement_sql(
                 &prepared.template,
                 parameters,

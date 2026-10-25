@@ -13,6 +13,8 @@ HawDB is written in Rust and licensed under Apache-2.0. It is built for Nowledge
 
 The site and in-browser playground are at [hawdb.ai](https://hawdb.ai). Their source is [nowledge-co/hawdb-website](https://github.com/nowledge-co/hawdb-website).
 
+For synchronous SQL materialized views, see [the materialized view guide](docs/MATERIALIZED_VIEWS.md).
+
 ## Install
 
 HawDB is a Rust library. Published releases are on crates.io. The repository pins Rust 1.97.1.

@@ -80,6 +80,18 @@ pub fn compile_prepared_relational_statement_with_result(
         )));
     }
     match &prepared.statement {
+        SqlStatement::CreateMaterializedView(create) => Ok(CompiledRelationalStatement {
+            transaction: RelationalTransaction {
+                writes: crate::materialized_view::create(create.clone(), state)?,
+            },
+            returning: None,
+        }),
+        SqlStatement::DropMaterializedView(drop) => Ok(CompiledRelationalStatement {
+            transaction: RelationalTransaction {
+                writes: crate::materialized_view::drop_view(drop.clone(), state)?,
+            },
+            returning: None,
+        }),
         statement @ (SqlStatement::CreateTable(_)
         | SqlStatement::CreateIndex(_)
         | SqlStatement::AlterTableAddColumn(_)) => Ok(CompiledRelationalStatement {
@@ -348,6 +360,8 @@ fn compile_relational_mutation(
             }
         }
         SqlStatement::Select(_)
+        | SqlStatement::CreateMaterializedView(_)
+        | SqlStatement::DropMaterializedView(_)
         | SqlStatement::Explain(_)
         | SqlStatement::CreateTable(_)
         | SqlStatement::CreateIndex(_)
@@ -402,7 +416,7 @@ fn compile_bigint_arithmetic_operand(
     }
 }
 
-fn compile_mutation_predicate(
+pub(super) fn compile_mutation_predicate(
     predicate: &SqlPredicate,
     parameters: &[Value],
     schema: &RelationalTableSchema,
@@ -510,7 +524,7 @@ fn mutation_value_expression(expression: &hawdb_sql::Expr) -> Result<&SqlValue> 
     }
 }
 
-fn validate_mutation_column(
+pub(super) fn validate_mutation_column(
     column: &hawdb_sql::SqlColumnRef,
     schema: &RelationalTableSchema,
     alias: Option<&str>,
@@ -650,6 +664,7 @@ fn compile_create_table(create: &CreateTableStatement) -> Result<RelationalTable
         })
         .collect::<Result<_>>()?;
     Ok(RelationalTableSchema {
+        materialized_view: None,
         name: create.table.name.clone(),
         columns,
         primary_key,
