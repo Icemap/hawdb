@@ -156,6 +156,15 @@ pinned end epoch and retract its own native ID when the node is absent. WAL
 failure, live feed pinning, checkpoint and both residency modes have focused
 storage cases. The feed alone still does not authorize source publication.
 
+Initial field-index construction and explicit rebuild enumerate only the
+descriptor's declared SQL table or node label through the scoped canonical
+source cursor. Unrelated relational tables, including the operational
+`hawdb_schema_migrations` table, are outside that field's input domain. Node
+fields use the existing canonical label cursor; resident graph overlay/header
+inspection retains its existing work accounting. Source completion and
+publication still bind to the same global pinned epoch. Checkpointed regression
+fixtures include both source families, unrelated data and finite work limits.
+
 Schema-bound builds now default to DiskANN. The public backend definition uses
 canonical integer-scaled Vamana/LSG settings. SQL and Cypher `filtered_ann` use
 the real graph before exact reranking; reports identify the executed backend.
@@ -401,7 +410,7 @@ point-query workspace also needs funding. Thus the 100k-by-128 controls request
 does not qualify the full canonical source envelope. The fixture's host governor
 declares 2 GiB for coexisting staging, publication, query and old/current readers.
 The fixture also funds ordered source-key seeks, emitted rows and the terminal
-probe from its row count. At 100k rows the full-source cursor needs 2,000,021
+probe from its row count. At 100k rows the scoped table cursor needs 2,000,021
 work units, so the fixture explicitly admits 2,000,022 instead of the default
 1,000,000 and records that feed-work budget in its configuration output.
 These are explicit workload settings; library defaults, source accounting,

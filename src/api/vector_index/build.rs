@@ -217,10 +217,22 @@ fn build_source(
     index.bind_vector_index(binding.clone())?;
     let mut documents = account.reserve(0)?;
     let mut count = 0usize;
-    let mut cursor = source.store.capture_full_projection_source(
+    // Field completeness excludes unrelated schema and data domains.
+    let (labels, tables) = match binding.target() {
+        VectorIndexTarget::NodeProperty { table, .. } => {
+            let label = source.catalog.label_id(table).ok_or_else(|| {
+                invalid("vector index label is absent from the canonical catalog")
+            })?;
+            (vec![label], Vec::new())
+        }
+        VectorIndexTarget::Relational { table, .. } => (Vec::new(), vec![table.clone()]),
+    };
+    let mut cursor = source.store.capture_projection_source_domains(
         options.feed,
         options.source,
         options.task.clone(),
+        Some(labels),
+        Some(tables),
     )?;
     let row_bytes = add(
         options

@@ -534,6 +534,14 @@ the existing root unit and Windows consumers owners retain this scope. Its
 and incremental maintenance for SQL/node fields before/after intent under
 occupied strict descriptor capacity. Original custody survives registry refresh,
 execution slots are released, and later source advancement uses a new operation.
+The root vector-index build family also owns
+`vector_index_canonical_completion_scopes_full_source_to_declared_field`:
+SQL/node baseline builds and explicit rebuilds must complete under finite work
+limits with unrelated SQL/graph data and the operational schema-migration
+table present.
+Initial construction and explicit rebuild share the descriptor-scoped source
+cursor. Its name keeps it in the existing Windows consumers selection. No
+incremental feed, feature lane or compiler profile changes.
 The acknowledged-image
 owner is `api::tests::power_loss::consumer_vector_incremental` with `test-support`;
 it checks SQL and custom-node sources under both durability policies, original

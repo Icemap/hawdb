@@ -4,6 +4,93 @@
 use super::*;
 
 #[test]
+fn vector_index_canonical_completion_scopes_full_source_to_declared_field() {
+    use crate::{DatabaseConfig, StorageResidencyMode};
+    let count = 128usize;
+    let mut outcomes = Vec::new();
+    for graph in [false, true] {
+        let fixture = Fixture::new();
+        let mut db = Database::open_with_config(
+            fixture.0.join("database"),
+            DatabaseConfig {
+                storage_residency_mode: StorageResidencyMode::OutOfCore,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        db.query_sql("CREATE TABLE vectors (id BIGINT PRIMARY KEY, coarse_cluster BIGINT, fine_cluster BIGINT, embedding VECTOR(4))").unwrap();
+        db.query_sql("CREATE INDEX vectors_fine ON vectors (fine_cluster)")
+            .unwrap();
+        db.query_sql("CREATE INDEX vectors_coarse ON vectors (coarse_cluster)")
+            .unwrap();
+        db.query_sql("CREATE TABLE noise (id BIGINT PRIMARY KEY)")
+            .unwrap();
+        db.query("CREATE NODE TABLE Document").unwrap();
+        db.query("CREATE PROPERTY ON NODE TABLE Document(embedding) TYPE VECTOR(4)")
+            .unwrap();
+        let mut transaction = db.begin_transaction().unwrap();
+        for id in 0..count {
+            let vector = Value::Vector(Vector::new(&[1.0, 0.1, 0.0, 0.0]).unwrap());
+            transaction.query_sql_with_params("INSERT INTO vectors (id, coarse_cluster, fine_cluster, embedding) VALUES ($1, $2, $3, $4)", &[
+                Value::Int(id as i64), Value::Int((id % 100 / 10) as i64), Value::Int((id % 100) as i64), vector.clone()
+            ]).unwrap();
+            transaction
+                .query_with_params(
+                    "CREATE (:Document {embedding: $vector})",
+                    &BTreeMap::from([("vector".into(), vector)]),
+                )
+                .unwrap();
+        }
+        for id in 0..count * 2 {
+            transaction
+                .query_sql_with_params(
+                    "INSERT INTO noise (id) VALUES ($1)",
+                    &[Value::Int(id as i64)],
+                )
+                .unwrap();
+        }
+        transaction.commit().unwrap();
+        db.checkpoint().unwrap();
+        let mut options = VectorIndexBuildOptions::default();
+        let target_work = if graph {
+            1024
+        } else {
+            (count + 1) * (3 + (usize::BITS - count.leading_zeros()) as usize) + 2
+        };
+        options.feed.work = NonZeroUsize::new(target_work).unwrap();
+        options.max_documents = NonZeroUsize::new(count).unwrap();
+        let field = if graph {
+            VectorIndexField::NodeProperty {
+                table: "Document".into(),
+                property: "embedding".into(),
+            }
+        } else {
+            sql_field()
+        };
+        let result = db.create_vector_index(
+            "scoped",
+            &field,
+            fixture.0.join("index"),
+            registration(),
+            options.clone(),
+        );
+        outcomes.push((
+            graph,
+            result.and_then(|mut consumer| {
+                db.rebuild_vector_index(&mut consumer, options)?;
+                Ok(consumer.document_count().unwrap())
+            }),
+        ));
+    }
+    assert!(
+        outcomes
+            .iter()
+            .all(|(_, result)| matches!(result, Ok(rows) if *rows == count)),
+        "{outcomes:?}"
+    );
+}
+
+#[test]
 fn default_vector_index_backend_is_diskann() {
     assert!(matches!(
         VectorIndexBuildOptions::default().backend,
