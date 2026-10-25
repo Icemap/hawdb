@@ -826,6 +826,7 @@ mod tests {
         columns: &[(&str, RelationalScalarType)],
     ) -> RelationalTableSchema {
         RelationalTableSchema {
+            materialized_view: None,
             name: table.to_string(),
             columns: columns
                 .iter()

@@ -1192,6 +1192,8 @@ pub(super) fn sql_statement_uses_snapshot(statement: &SqlStatement) -> bool {
         SqlStatement::Select(select) => select.lock_strength.is_none(),
         SqlStatement::Explain(explain) => sql_statement_uses_snapshot(&explain.statement),
         SqlStatement::Insert(_)
+        | SqlStatement::CreateMaterializedView(_)
+        | SqlStatement::DropMaterializedView(_)
         | SqlStatement::Update(_)
         | SqlStatement::Delete(_)
         | SqlStatement::CreateTable(_)
@@ -1410,6 +1412,8 @@ fn sql_lock_requests(
             Ok(delete_lock_requests(delete, parameters, state))
         }
         SqlStatement::CreateTable(_)
+        | SqlStatement::CreateMaterializedView(_)
+        | SqlStatement::DropMaterializedView(_)
         | SqlStatement::CreateIndex(_)
         | SqlStatement::AlterTableAddColumn(_) => {
             Ok(vec![LockRequest::database(LockMode::Exclusive)])

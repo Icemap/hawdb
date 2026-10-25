@@ -25,6 +25,7 @@ pub mod field_plan;
 pub mod index_access;
 #[doc(hidden)]
 pub mod index_runtime;
+mod materialized_view;
 mod read_profile;
 #[doc(hidden)]
 pub mod row_access;

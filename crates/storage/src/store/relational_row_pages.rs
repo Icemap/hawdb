@@ -2318,6 +2318,7 @@ mod tests {
         };
         let path = unique_test_dir("metadata-only-monotonic-append-reads");
         let event_schema = RelationalTableSchema {
+            materialized_view: None,
             name: "events".to_string(),
             columns: vec![
                 RelationalColumnSchema {
@@ -3866,6 +3867,7 @@ mod tests {
 
     fn named_schema(name: &str) -> RelationalTableSchema {
         RelationalTableSchema {
+            materialized_view: None,
             name: name.to_string(),
             columns: vec![
                 RelationalColumnSchema {
@@ -3890,6 +3892,7 @@ mod tests {
 
     fn upsert_schema() -> RelationalTableSchema {
         RelationalTableSchema {
+            materialized_view: None,
             name: "accounts".to_string(),
             columns: vec![
                 RelationalColumnSchema {

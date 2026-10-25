@@ -172,6 +172,7 @@ fn derive_ranges(predicate: &str, parameters: &[Value]) -> KeyRanges {
         panic!("expected SELECT")
     };
     let schema = RelationalTableSchema {
+        materialized_view: None,
         name: "messages".into(),
         columns: vec![hawdb_storage::relational::RelationalColumnSchema {
             name: "id".into(),

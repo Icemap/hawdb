@@ -508,6 +508,7 @@ fn partial_and_reordered_projected_rows_fail_closed() {
 
 fn schema() -> RelationalTableSchema {
     RelationalTableSchema {
+        materialized_view: None,
         name: "nodes".into(),
         columns: [
             ("id", RelationalScalarType::BigInt, false),

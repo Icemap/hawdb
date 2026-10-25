@@ -1,3 +1,6 @@
+// Copyright 2026 Nowledge
+// SPDX-License-Identifier: Apache-2.0
+
 //! GraphStore integration for immutable-root publication and WAL handoff.
 
 use super::{GraphStore, MANIFEST_FILE};
@@ -3977,6 +3980,7 @@ mod tests {
 
     fn write_schema_and_graph(branch: &mut AdmittedBranchStore) {
         let table = RelationalTableSchema {
+            materialized_view: None,
             name: "messages".into(),
             columns: vec![RelationalColumnSchema {
                 name: "body".into(),
@@ -4360,6 +4364,7 @@ mod tests {
 
     fn write_checkpoint_candidate_schema(branch: &mut AdmittedBranchStore) {
         let table = RelationalTableSchema {
+            materialized_view: None,
             name: "messages".into(),
             columns: ["id", "body"]
                 .into_iter()

@@ -34,6 +34,7 @@ fn fixture() -> RelationalState {
         default: None,
     };
     let parents = RelationalTableSchema {
+        materialized_view: None,
         name: "parents".into(),
         columns: vec![
             column("id", false, RelationalScalarType::BigInt),
@@ -49,6 +50,7 @@ fn fixture() -> RelationalState {
         }],
     };
     let children = RelationalTableSchema {
+        materialized_view: None,
         name: "children".into(),
         columns: vec![
             column("id", false, RelationalScalarType::BigInt),

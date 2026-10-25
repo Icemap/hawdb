@@ -762,6 +762,14 @@ pub(super) fn execute_database_transaction_prepared_sql(
         )
         .map(sql_query_result);
     }
+    if let crate::sql::SqlStatement::CreateMaterializedView(create) = prepared.statement()
+        && state.append_state.schema(&create.name.name).is_some()
+    {
+        return Err(HawDBError::Semantic(format!(
+            "relation {} already exists as a strict append table",
+            create.name.name
+        )));
+    }
     let pending_generated_read_table = match prepared.statement() {
         crate::sql::SqlStatement::Select(select) => {
             select.from.as_ref().map(|from| from.name.as_str())

@@ -5255,6 +5255,7 @@ mod tests {
         let backup = unique_test_dir("unified_relational_backup");
         let restored = unique_test_dir("unified_relational_restored");
         let table = RelationalTableSchema {
+            materialized_view: None,
             name: "messages".to_string(),
             columns: vec![
                 RelationalColumnSchema {
@@ -5403,6 +5404,7 @@ mod tests {
                     }],
                     RelationalTransaction {
                         writes: vec![RelationalWrite::CreateTable(RelationalTableSchema {
+                            materialized_view: None,
                             name: "messages".to_string(),
                             columns: vec![RelationalColumnSchema {
                                 name: "id".to_string(),
@@ -5448,6 +5450,7 @@ mod tests {
                     &mut catalog,
                     RelationalTransaction {
                         writes: vec![RelationalWrite::CreateTable(RelationalTableSchema {
+                            materialized_view: None,
                             name: "messages".to_string(),
                             columns: vec![RelationalColumnSchema {
                                 name: "id".to_string(),
@@ -8566,6 +8569,7 @@ mod tests {
                 &mut catalog,
                 RelationalTransaction {
                     writes: vec![RelationalWrite::CreateTable(RelationalTableSchema {
+                        materialized_view: None,
                         name: "messages".to_string(),
                         columns: vec![RelationalColumnSchema {
                             name: "id".to_string(),
@@ -9025,6 +9029,7 @@ mod tests {
                 RelationalTransaction {
                     writes: vec![
                         RelationalWrite::CreateTable(RelationalTableSchema {
+                            materialized_view: None,
                             name: "documents".into(),
                             columns: ["id", "body"]
                                 .into_iter()
@@ -9186,6 +9191,7 @@ mod tests {
                 RelationalTransaction {
                     writes: vec![
                         RelationalWrite::CreateTable(RelationalTableSchema {
+                            materialized_view: None,
                             name: "documents".into(),
                             columns: ["id", "body"]
                                 .into_iter()
@@ -9406,6 +9412,7 @@ mod tests {
                         &mut catalog,
                         RelationalTransaction {
                             writes: vec![RelationalWrite::CreateTable(RelationalTableSchema {
+                                materialized_view: None,
                                 name: "documents".into(),
                                 columns: ["id", "body"]
                                     .into_iter()

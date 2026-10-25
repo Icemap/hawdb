@@ -49,6 +49,7 @@ fn relational_decode_denial_precedes_mixed_replay_mutation_and_allows_retry() {
             &mut catalog,
             RelationalTransaction {
                 writes: vec![RelationalWrite::CreateTable(RelationalTableSchema {
+                    materialized_view: None,
                     name: "documents".into(),
                     columns: vec![RelationalColumnSchema {
                         name: "id".into(),

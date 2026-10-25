@@ -1,3 +1,6 @@
+// Copyright 2026 Nowledge
+// SPDX-License-Identifier: Apache-2.0
+
 //! Typed branch metadata lifecycle for the embedded database facade.
 //!
 //! Durable head publication and branch opening remain storage-owned. This
@@ -1900,6 +1903,7 @@ mod tests {
                 &mut crate::schema::Catalog::default(),
                 RelationalTransaction {
                     writes: vec![RelationalWrite::CreateTable(RelationalTableSchema {
+                        materialized_view: None,
                         name: "pending_legacy_rows".into(),
                         columns: vec![RelationalColumnSchema {
                             name: "id".into(),

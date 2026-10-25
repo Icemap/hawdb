@@ -30,11 +30,26 @@ pub enum SqlStatement {
     Delete(DeleteStatement),
     CreateTable(CreateTableStatement),
     CreateIndex(CreateIndexStatement),
+    CreateMaterializedView(CreateMaterializedViewStatement),
+    DropMaterializedView(DropMaterializedViewStatement),
     AlterTableAddColumn(AlterTableAddColumnStatement),
     /// Project-scoped branch lifecycle commands. These are deliberately
     /// distinct from relational DDL: their executor operates on the durable
     /// branch catalog rather than a selected branch's schema.
     Branch(BranchSqlStatement),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CreateMaterializedViewStatement {
+    pub name: SqlTableName,
+    pub if_not_exists: bool,
+    pub query: Box<SelectStatement>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DropMaterializedViewStatement {
+    pub name: SqlTableName,
+    pub if_exists: bool,
 }
 
 /// A branch lifecycle command parsed by the PostgreSQL entrypoint.

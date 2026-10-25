@@ -14,6 +14,7 @@
 
 use super::{
     column_positions, rebuild_indexes, validate_foreign_keys, validate_row, validate_table_schema,
+    MaterializedViewColumn, MaterializedViewDefinition, MaterializedViewExpression,
     RelationalBigIntArithmeticOperator, RelationalBigIntOperand, RelationalColumnDefault,
     RelationalColumnSchema, RelationalComparisonOp, RelationalConflictAction, RelationalError,
     RelationalForeignKeySchema, RelationalIndexSchema, RelationalInsertMode, RelationalKey,
@@ -55,7 +56,7 @@ pub(crate) use checkpoint::{
 
 const WAL_MAGIC: &[u8; 8] = b"SKRLWAL1";
 const CHECKPOINT_MAGIC: &[u8; 8] = b"SKRLCKP1";
-const CODEC_VERSION: u16 = 1;
+const CODEC_VERSION: u16 = 2;
 const HEADER_BYTES: usize = 64;
 const RELATIONAL_CHECKPOINT_ARTIFACT_ID: u64 = 1;
 
@@ -904,6 +905,16 @@ fn decode_relational_checkpoint_from_decoder<I: DecodeInput>(
     } else {
         validate_checkpoint_overflow_reachability(&state)?;
     }
+    for schema in state.table_schemas() {
+        super::materialized_view::validate_definition(&state, schema)?;
+        if schema.materialized_view.is_some()
+            && index_load == RelationalCheckpointIndexLoad::OmitMaterializedPostings
+        {
+            return Err(RelationalError::Admission(
+                "materialized views do not support authoritative relational indexes".into(),
+            ));
+        }
+    }
     if index_load == RelationalCheckpointIndexLoad::MaterializedPostings {
         if let Some(work) = &work {
             for table in state.schemas.keys() {
@@ -1226,6 +1237,10 @@ impl Encoder {
 
     fn write(&mut self, write: &RelationalWrite) -> Result<(), RelationalError> {
         match write {
+            RelationalWrite::DropMaterializedView { table } => {
+                self.u8(9);
+                self.string(table)?;
+            }
             RelationalWrite::CreateTable(schema) => {
                 self.u8(1);
                 self.table_schema(schema)?;
@@ -1391,41 +1406,7 @@ impl Encoder {
     }
 
     fn predicate(&mut self, predicate: &RelationalPredicate) -> Result<(), RelationalError> {
-        match predicate {
-            RelationalPredicate::And(left, right) => {
-                self.u8(0);
-                self.predicate(left)?;
-                self.predicate(right)?;
-            }
-            RelationalPredicate::Or(left, right) => {
-                self.u8(1);
-                self.predicate(left)?;
-                self.predicate(right)?;
-            }
-            RelationalPredicate::Not(predicate) => {
-                self.u8(2);
-                self.predicate(predicate)?;
-            }
-            RelationalPredicate::Compare { column, op, value } => {
-                self.u8(3);
-                self.string(column)?;
-                self.u8(match op {
-                    RelationalComparisonOp::Eq => 0,
-                    RelationalComparisonOp::NotEq => 1,
-                    RelationalComparisonOp::Lt => 2,
-                    RelationalComparisonOp::Lte => 3,
-                    RelationalComparisonOp::Gt => 4,
-                    RelationalComparisonOp::Gte => 5,
-                });
-                self.logical_value(value)?;
-            }
-            RelationalPredicate::IsNull { column, negated } => {
-                self.u8(4);
-                self.string(column)?;
-                self.u8(u8::from(*negated));
-            }
-        }
-        Ok(())
+        schema_encoding::predicate(self, predicate)
     }
 }
 
@@ -1996,7 +1977,46 @@ impl<I: DecodeInput> Decoder<I> {
         let foreign_keys = self.repeated(foreign_key_count, Self::foreign_key)?;
         let index_count = self.count(self.limits.max_values, "indexes")?;
         let indexes = self.repeated(index_count, Self::index)?;
+        let materialized_view = if self.boolean("materialized view")? {
+            let source = self.string()?;
+            let group_by = self.string_list()?;
+            let count = self.count(self.limits.max_values, "materialized view columns")?;
+            let columns = self.repeated(count, |decoder| {
+                let name = decoder.string()?;
+                let expression = match decoder.u8()? {
+                    0 => MaterializedViewExpression::Column(decoder.string()?),
+                    1 => MaterializedViewExpression::Count(None),
+                    2 => MaterializedViewExpression::Count(Some(decoder.string()?)),
+                    3 => MaterializedViewExpression::Sum(decoder.string()?),
+                    tag => {
+                        return Err(RelationalError::Corruption(format!(
+                            "invalid materialized view expression tag {tag}"
+                        )))
+                    }
+                };
+                Ok(MaterializedViewColumn { name, expression })
+            })?;
+            let filter = if self.boolean("materialized view filter")? {
+                Some(self.predicate()?)
+            } else {
+                None
+            };
+            if let Some(context) = self.input.checkpoint_allocation_context() {
+                context
+                    .reserve(std::mem::size_of::<MaterializedViewDefinition>())
+                    .map_err(|error| RelationalError::Admission(error.to_string()))?;
+            }
+            Some(Box::new(MaterializedViewDefinition {
+                source,
+                group_by,
+                columns,
+                filter,
+            }))
+        } else {
+            None
+        };
         Ok(RelationalTableSchema {
+            materialized_view,
             name,
             columns,
             primary_key,
@@ -2073,6 +2093,9 @@ impl<I: DecodeInput> Decoder<I> {
 
     fn write(&mut self) -> Result<RelationalWrite, RelationalError> {
         match self.u8()? {
+            9 => Ok(RelationalWrite::DropMaterializedView {
+                table: self.string()?,
+            }),
             1 => Ok(RelationalWrite::CreateTable(self.table_schema()?)),
             2 => Ok(RelationalWrite::CreateIndex {
                 table: self.string()?,

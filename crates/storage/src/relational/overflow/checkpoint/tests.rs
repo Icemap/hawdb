@@ -426,6 +426,7 @@ fn scheduler() -> LocalQosScheduler {
 fn source(rows: usize) -> RelationalState {
     let source = RelationalStore::new(RelationalMutationLimits::default());
     let schema = |name: &str| RelationalTableSchema {
+        materialized_view: None,
         name: name.into(),
         columns: ["id", "payload", "duplicate", "plain"]
             .map(|name| RelationalColumnSchema {
@@ -866,6 +867,7 @@ fn checkpoint_units_overflow_input_collection_detaches_file_bytes_without_servin
         .commit(
             RelationalTransaction {
                 writes: vec![RelationalWrite::CreateTable(RelationalTableSchema {
+                    materialized_view: None,
                     name: "messages".into(),
                     columns: vec![
                         RelationalColumnSchema {

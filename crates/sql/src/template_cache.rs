@@ -98,6 +98,8 @@ fn is_cacheable_query(statement: &SqlStatement) -> bool {
             matches!(explain.statement.as_ref(), SqlStatement::Select(_))
         }
         SqlStatement::Insert(_)
+        | SqlStatement::CreateMaterializedView(_)
+        | SqlStatement::DropMaterializedView(_)
         | SqlStatement::Update(_)
         | SqlStatement::Delete(_)
         | SqlStatement::CreateTable(_)

@@ -184,6 +184,8 @@ fn production(sql: &str) -> Result<(Outcome, Option<&'static str>), String> {
                 SqlStatement::Update(_) => "update",
                 SqlStatement::Delete(_) => "delete",
                 SqlStatement::CreateTable(_) => "create_table",
+                SqlStatement::CreateMaterializedView(_) => "create_materialized_view",
+                SqlStatement::DropMaterializedView(_) => "drop_materialized_view",
                 SqlStatement::CreateIndex(_) => "create_index",
                 SqlStatement::AlterTableAddColumn(_) => "alter_table",
                 SqlStatement::Branch(_) => "branch",
