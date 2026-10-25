@@ -346,7 +346,7 @@ impl ResidentDiskAnn {
                     .saturating_mul(2),
             );
         let graph_options = DiskAnnSearchOptions {
-            beam_width: limit.max(128),
+            beam_width: limit.max(crate::vector_execution::DISKANN_NAVIGATION_BEAM),
             max_working_bytes: options.max_working_bytes.saturating_sub(retained_bytes),
             task: options.task_context,
             ..Default::default()

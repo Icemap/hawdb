@@ -491,10 +491,23 @@ fn retry_covers_existing_unsynchronized_component_ancestry() {
     assert_eq!(project.metrics().open, baseline.open);
     assert_eq!(project.metrics().reserved, baseline.reserved);
 
-    // This standalone writer synchronizes ancestors one at a time. The same
-    // single free slot then admits its spool beside the model's root anchor.
+    // Windows audits the retained root's full native identity through a second
+    // counted handle. Refusal must refund the file-operation slot as well.
+    if cfg!(windows) {
+        with_reserved_descriptors(&project, available - 1, || {
+            let error =
+                SearchOutOfCoreGenerationWriter::create(&root, Default::default()).unwrap_err();
+            assert!(matches!(error, HawDBError::FileDescriptors(_)), "{error:?}");
+        });
+        assert_eq!(project.metrics().open, baseline.open);
+        assert_eq!(project.metrics().reserved, baseline.reserved);
+    }
+
+    // Ancestors synchronize one at a time. Windows also funds the temporary
+    // root-identity audit; the completed writer retains only its spool handle.
     // Captured, governed Consumer staging has a separate directory inventory.
-    with_reserved_descriptors(&project, available - 1, || {
+    let working_descriptors = if cfg!(windows) { 2 } else { 1 };
+    with_reserved_descriptors(&project, available - working_descriptors, || {
         let writer = SearchOutOfCoreGenerationWriter::create(&root, Default::default()).unwrap();
         assert_eq!(project.metrics().open, baseline.open + 1);
         drop(writer);

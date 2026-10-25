@@ -484,9 +484,14 @@ jobs:
 
   canonical-vector-lifecycle:
     if: github.event_name == 'workflow_dispatch' && !inputs.windows_abandonment_qualification && inputs.canonical_vector_lifecycle
-    name: Manual canonical vector lifecycle (Linux)
+    name: Manual canonical vector lifecycle (Linux, ${{ matrix.mode }}, rate${{ matrix.rate }})
     runs-on: ubuntu-24.04
     timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [plain, lsg]
+        rate: [10, 100]
     env:
       CARGO_TARGET_DIR: target/canonical-vector-lifecycle
     steps:
@@ -513,33 +518,31 @@ jobs:
           sha256sum "$CARGO_TARGET_DIR/debug/examples/filtered_diskann_qualification" \
             > "$evidence/binary.sha256"
 
-      - name: Compare plain and LSG at both changed-key rates
+      - name: Qualify the complete canonical lifecycle
         shell: bash
         run: |
           set -euo pipefail
           evidence="$RUNNER_TEMP/canonical-vector-lifecycle"
+          mode="${{ matrix.mode }}"
+          rate="${{ matrix.rate }}"
           status=0
-          for mode in plain lsg; do
-            for rate in 10 100; do
-              name="canonical-100000-128-$mode-rate$rate"
-              if /usr/bin/time -v -o "$evidence/$name.time.txt" \
-                "$CARGO_TARGET_DIR/debug/examples/filtered_diskann_qualification" canonical \
-                "$RUNNER_TEMP/$name" 100000 128 320 "$mode" "$rate" 16 \
-                > "$evidence/$name.jsonl" 2> "$evidence/$name.stderr.txt"; then
-                printf '%s PASS\n' "$name" | tee -a "$evidence/status.txt"
-              else
-                printf '%s FAIL\n' "$name" | tee -a "$evidence/status.txt"
-                status=1
-              fi
-            done
-          done
+          name="canonical-100000-128-$mode-rate$rate"
+          if /usr/bin/time -v -o "$evidence/$name.time.txt" \
+            "$CARGO_TARGET_DIR/debug/examples/filtered_diskann_qualification" canonical \
+            "$RUNNER_TEMP/$name" 100000 128 320 "$mode" "$rate" 16 \
+            > "$evidence/$name.jsonl" 2> "$evidence/$name.stderr.txt"; then
+            printf '%s PASS\n' "$name" | tee -a "$evidence/status.txt"
+          else
+            printf '%s FAIL\n' "$name" | tee -a "$evidence/status.txt"
+            status=1
+          fi
           exit "$status"
 
       - name: Preserve complete or partial source-bound measurements
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: canonical-vector-lifecycle-${{ github.sha }}
+          name: canonical-vector-lifecycle-${{ github.sha }}-${{ matrix.mode }}-rate${{ matrix.rate }}
           path: ${{ runner.temp }}/canonical-vector-lifecycle
           if-no-files-found: error
           retention-days: 14

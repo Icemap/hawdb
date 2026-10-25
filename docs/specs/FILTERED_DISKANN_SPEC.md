@@ -213,7 +213,12 @@ positive-only cosine relevance and stable-ID ties.
 `try_search_with_options_context` carries memory/cancellation limits and honors
 `with_exact_search`; explicit adaptive/compressed entry points keep their prior
 RaBitQ selection policy. Default ANN pagination admits at least `offset + limit` candidates and keeps
-the default graph beam as a minimum candidate window for hybrid fusion. Cache construction has a 64 MiB ceiling and query admission includes
+a 128-candidate minimum window for hybrid fusion. Resident and mapped serving
+independently retain at least 1,024 navigation candidates, or the requested
+output window when larger, bounded by graph size. Navigation does not increase
+the raw reranking window. Its full workspace is preflighted against the existing
+query memory/work limits; insufficient admission fails rather than shrinking
+the beam or returning partial results. Cache construction has a 64 MiB ceiling and query admission includes
 its conservative retained envelope, ordinal selection and candidate workspace.
 Runtime allocation leases retain cache ownership and cover candidate execution.
 Cache readers capture an immutable Arc and release the cache lock before
@@ -455,11 +460,27 @@ physical device I/O; phase snapshots are not peak RSS. Measure process resources
 externally when needed, keeping compilation cost separate from execution. These
 clustered synthetic workloads do not establish production-corpus qualification.
 
+The first completed 100k canonical baseline failed the unchanged 95% recall
+floor: a 128-wide navigation beam reached only 86.875% in the weakest plain
+filter family. A standalone fixture with thirteen smaller graphs did not
+reproduce that single-graph limit. A direct single-graph diagnostic reproduced
+all five canonical recall totals exactly. With the same 128 output candidates,
+navigation widths 256, 512 and 1,024 reached minimum family means of 90.625%,
+95.625% and 96.25%, respectively. Serving now uses the independent 1,024-wide
+navigation workspace. On this diagnostic it scores 125,639 unfiltered vectors
+across sixteen queries, versus 41,111 at width 128; this is a quality/cost
+tradeoff, not a latency improvement. These plain in-memory diagnostic results
+do not qualify LSG or the complete canonical CRUD/MVCC lifecycle; the unchanged
+four-control 100k CI protocol must be rerun on the repaired source.
+
 The Native Bindings workflow exposes an explicit `canonical_vector_lifecycle`
 dispatch. It runs the four 100k-by-128 plain/LSG and 1%/10% changed-key controls
-serially, with sixteen samples per filter family and state. Its 180-minute ceiling
-is a job timeout, not a claimed workload duration. The job records source/tree,
-toolchain, compiler profile and binary hash; first compilation and each lifecycle
+in four independent matrix jobs, with sixteen samples per filter family
+and state. All four must pass qualification; no failure cancels another control.
+Each job retains the 180-minute
+ceiling and the complete lifecycle; this ceiling is not a claimed workload
+duration. Each job records source/tree, toolchain, compiler profile and binary
+hash, including its own first-build cost; compilation and each lifecycle
 have separate process time and peak RSS measurements. Complete or partial JSON,
 stderr and exit outcomes survive failure. This benchmark dispatch includes no
 fuzz tool; recovery sharding is owned by the separate native qualification lanes.

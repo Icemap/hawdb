@@ -100,6 +100,57 @@ fn default_graph_recall_probe_measures_the_served_backend() {
 }
 
 #[test]
+fn default_graph_navigation_is_funded_independently_of_its_output_window() {
+    let mut index = SearchIndex::in_memory();
+    for id in 0..512 {
+        index
+            .upsert(document(id, Some(vec![1.0, id as f32 / 1024.0])))
+            .unwrap();
+    }
+    let options = SearchQueryOptions {
+        limit: 10,
+        rank_window: Some(128),
+        metadata_filters: BTreeMap::new(),
+        ..options()
+    };
+    let search = |bytes| {
+        index.try_search_with_options_context(
+            "",
+            Some(&[1.0, 0.0]),
+            SearchMode::Vector,
+            options.clone(),
+            VectorSearchExecutionOptions::bounded(std::num::NonZeroUsize::MIN, bytes, None),
+        )
+    };
+    let actual = search(CACHE_BYTES).unwrap();
+    let report = &actual.retrievers[0];
+    assert_eq!(report.generated_candidate_count, 128);
+    assert_eq!(report.reranked_candidate_count, 128);
+    assert_eq!(report.candidate_scan_scored_document_count, 512);
+    assert_eq!(actual.hits.len(), 10);
+    let original = graph_address(&index);
+    let former_envelope = {
+        let state = index.resident_diskann.projection.lock().unwrap();
+        let projection = state.as_ref().unwrap();
+        let retained =
+            512 * size_of::<u64>() + 2 * 128 * (size_of::<VectorCandidate>() + "0000".len());
+        // Funding the old 128-wide navigation must not admit a larger search
+        // or silently shrink its beam to fit the obsolete memory envelope.
+        projection.memory_bytes
+            + retained
+            + DiskAnnSearchOptions::default()
+                .working_memory_bound(512, 128)
+                .unwrap()
+    };
+    assert!(matches!(
+        search(former_envelope),
+        Err(HawDBError::ResourceBudgetExceeded(_))
+    ));
+    assert_eq!(graph_address(&index), original);
+    assert_eq!(search(CACHE_BYTES).unwrap().hits, actual.hits);
+}
+
+#[test]
 fn default_resident_graph_reuses_immutable_baseline_across_crud_and_nulls() {
     let mut index = SearchIndex::in_memory();
     for id in 1..=32 {

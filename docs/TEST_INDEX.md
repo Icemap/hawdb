@@ -450,24 +450,30 @@ MVCC results, stale-source refusal, graph
 reuse, restore/reinsertion, no-op maintenance and cold reopen. Existing library
 tests retain their CI owners. The opt-in Native Bindings
 `canonical_vector_lifecycle` dispatch runs four fixed 100k-by-128 workloads
-serially: plain/LSG at 1%/10% changed keys, sixteen query samples per family and
+in four independent matrix jobs: plain/LSG at 1%/10% changed keys, sixteen query samples per family and
 state, a 320 MiB canonical source/producer envelope, source-feed work bounded
-from the row count and a 2 GiB host governor, with a 180-minute job ceiling.
+from the row count and a 2 GiB host governor, with a 180-minute ceiling per job.
+Every control retains its complete lifecycle; failures do not cancel siblings.
 The original 128 MiB envelope correctly refused
 the conservative resident source charge plus point-query workspace before graph
 construction; graph-only preflight is not canonical-build qualification.
 It preserves partial JSON/timing evidence,
-source/tree/toolchain/profile and binary hash. Compilation and each full
+source/tree/toolchain/profile and binary hash separately per job, including
+repeated compilation cost. Compilation and each full
 lifecycle have separate process time/RSS observations. Default/scheduled CI,
 existing test deadlines and repository compiler profiles are unchanged; no fuzz
 tool is registered. Replay and resource-evidence limits are documented in
 [the canonical lifecycle protocol](specs/FILTERED_DISKANN_SPEC.md#manual-canonical-lifecycle-qualification).
 
 The out-of-core DiskANN family also checks candidate-window propagation on a
-512-vector fixture: default navigation window, explicit rank window, configured
+512-vector fixture: independent navigation coverage, default output window, explicit rank window, configured
 ceiling, excess-window refusal and unchanged explicit exhaustive behavior.
 The ceiling must not silently become the requested candidate count. Replay with
 `cargo test --locked -p hawdb-search --all-features --lib default_graph_uses_the_requested_candidate_window`.
+Resident `default_graph_navigation_is_funded_independently_of_its_output_window`
+also requires navigation beyond the 128 output candidates, rejects the former
+smaller workspace without changing the cached graph, and retries with sufficient
+funding. Both remain in existing Search lanes with the repository profile.
 
 The vector-projection DiskANN family also owns sorted-ID filtered entry points,
 small-domain ID lookup without rejected-link scanning, two-hop rejection bounds
@@ -683,8 +689,12 @@ and uses reservation pressure to evict the model-owned idle file cache before
 asserting return to the original native-root charge. Internal recovery/cleanup
 may exceed the strict foreground target. Search-ancestry refusal/retry reserves
 the remaining capacity after that root charge: this standalone writer synchronizes
-ancestors serially, refuses with zero free slots and retries with one. Governed
-Consumer staging uses its separate captured-directory inventory.
+ancestors serially and refuses with zero free slots. Unix retries with one;
+Windows additionally refuses with one, refunds every charge and retries with
+two because the model audits the retained root's full native identity through
+a second counted handle. The completed writer retains only its spool beside
+the original root anchor; the total descriptor limit and crash/reopen checks
+are unchanged. Governed Consumer staging uses its separate captured-directory inventory.
 These remain existing storage/root and native branch-power-loss CI families.
 
 ### Standalone Search writer I/O waves

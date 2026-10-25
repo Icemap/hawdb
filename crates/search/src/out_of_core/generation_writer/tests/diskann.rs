@@ -246,6 +246,8 @@ fn default_graph_uses_the_requested_candidate_window_within_its_ceiling() {
         assert_eq!(report.backend, "hawdb_diskann_out_of_core_candidate_graph");
         assert_eq!(report.reranked_candidate_count, expected);
         assert_eq!(report.generated_candidate_count, expected);
+        // Navigation can cover the graph while raw reranking honors its window.
+        assert_eq!(report.candidate_scan_scored_document_count, 512);
         assert_eq!(report.raw_vector_bytes_read, expected as u64 * 8);
         assert_eq!(output.result.hits.len(), 10);
     }

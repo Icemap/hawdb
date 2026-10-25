@@ -133,7 +133,7 @@ impl<R> GraphProjection<R> {
             top_k,
             options.candidates,
             DiskAnnSearchOptions {
-                beam_width: top_k.max(128),
+                beam_width: top_k.max(crate::vector_execution::DISKANN_NAVIGATION_BEAM),
                 max_working_bytes,
                 task: options.task_context,
                 ..Default::default()

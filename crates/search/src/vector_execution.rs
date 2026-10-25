@@ -29,6 +29,11 @@ use std::collections::BTreeMap;
 #[cfg(feature = "qualification")]
 use std::collections::BTreeSet;
 
+// A single large graph needs more navigation state than its reranked output.
+// Keep the ordinary 128-candidate window independent of this search workspace.
+#[cfg(feature = "vector-search")]
+pub(crate) const DISKANN_NAVIGATION_BEAM: usize = 1024;
+
 pub(super) struct SearchVectorExecution {
     pub scores: BTreeMap<String, f64>,
     pub candidate_ids: Vec<String>,
