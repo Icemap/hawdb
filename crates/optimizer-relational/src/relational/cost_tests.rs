@@ -28,6 +28,7 @@ fn scan(rows: usize) -> RelationalAccessPathDescriptor {
         equality_prefix_len: 0,
         order_prefix_len: 0,
         exclusive_range: false,
+        range: None,
         reverse_order: false,
         unique_point: false,
         covering: false,

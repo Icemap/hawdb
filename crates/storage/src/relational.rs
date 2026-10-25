@@ -29,7 +29,10 @@ mod codec;
 pub(crate) use codec::schema_encoding;
 mod compaction;
 mod constraints;
+mod index_range;
 mod index_shadow;
+pub(crate) use index_range::EncodedRelationalIndexRange;
+pub use index_range::{RelationalIndexBound, RelationalIndexBounds};
 pub(crate) use index_shadow::{
     IndexReadAdmission, IndexReadCharge, IndexReadObserver, IndexReadPreflightError,
 };
@@ -964,24 +967,15 @@ pub enum RelationalIndexScanDirection {
 ///
 /// `exclusive_bound`, when present, is a complete index key. Forward scans
 /// visit keys greater than the bound; backward scans visit keys less than it.
+/// `bounds` intersect that cursor with inclusive/exclusive leading-key bounds;
+/// a short boundary applies to every complete key sharing its trailing prefix.
+/// An empty equality prefix permits a range on the first index column.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RelationalIndexRangeScan {
     pub prefix: RelationalKey,
+    pub bounds: Option<Box<RelationalIndexBounds>>,
     pub exclusive_bound: Option<RelationalKey>,
     pub direction: RelationalIndexScanDirection,
-}
-
-impl RelationalIndexRangeScan {
-    pub fn matches(&self, key: &RelationalKey) -> bool {
-        relational_key_has_prefix(key, &self.prefix)
-            && self
-                .exclusive_bound
-                .as_ref()
-                .is_none_or(|bound| match self.direction {
-                    RelationalIndexScanDirection::Forward => key > bound,
-                    RelationalIndexScanDirection::Backward => key < bound,
-                })
-    }
 }
 
 pub fn encode_relational_primary_key(key: &RelationalKey) -> Result<Vec<u8>, RelationalError> {
@@ -3094,37 +3088,30 @@ impl RelationalIndexPages {
         scan: &RelationalIndexRangeScan,
         mut visit: impl FnMut(&'a RelationalKey, &'a RelationalKey) -> bool,
     ) {
-        let seek = scan.exclusive_bound.as_ref().unwrap_or(&scan.prefix);
-        let Some(mut start) = self.page_index(seek) else {
+        if scan.bounds().empty {
             return;
-        };
-        if scan.direction == RelationalIndexScanDirection::Backward
-            && scan.exclusive_bound.is_none()
-        {
-            while self.pages.get(start + 1).is_some_and(|page| {
-                page.first_key_value()
-                    .is_some_and(|(key, _)| relational_key_has_prefix(key, &scan.prefix))
-            }) {
-                start += 1;
-            }
         }
         match scan.direction {
             RelationalIndexScanDirection::Forward => {
-                'pages: for (page_ordinal, page) in self.pages[start..].iter().enumerate() {
-                    let lower = if page_ordinal == 0 {
-                        match &scan.exclusive_bound {
-                            Some(bound) => std::ops::Bound::Excluded(bound.clone()),
-                            None => std::ops::Bound::Included(scan.prefix.clone()),
-                        }
+                let start = self.pages.partition_point(|page| {
+                    page.last_key_value()
+                        .is_some_and(|(key, _)| scan.before(key))
+                });
+                'pages: for (ordinal, page) in self.pages[start..].iter().enumerate() {
+                    let lower = if ordinal == 0 {
+                        std::ops::Bound::Included(scan.lower_seek())
                     } else {
                         std::ops::Bound::Unbounded
                     };
-                    for (index_key, postings) in page.range((lower, std::ops::Bound::Unbounded)) {
-                        if !relational_key_has_prefix(index_key, &scan.prefix) {
+                    for (key, postings) in page.range((lower, std::ops::Bound::Unbounded)) {
+                        if scan.before(key) {
+                            continue;
+                        }
+                        if scan.after(key) {
                             break 'pages;
                         }
-                        for primary_key in postings.iter() {
-                            if !visit(index_key, primary_key) {
+                        for primary in postings.iter() {
+                            if !visit(key, primary) {
                                 break 'pages;
                             }
                         }
@@ -3132,27 +3119,27 @@ impl RelationalIndexPages {
                 }
             }
             RelationalIndexScanDirection::Backward => {
-                'pages: for (page_ordinal, page) in self.pages[..=start].iter().rev().enumerate() {
-                    let upper = if page_ordinal == 0 {
+                let end = self.pages.partition_point(|page| {
+                    page.first_key_value()
+                        .is_none_or(|(key, _)| !scan.after(key))
+                });
+                'pages: for (ordinal, page) in self.pages[..end].iter().rev().enumerate() {
+                    let upper = if ordinal == 0 {
                         scan.exclusive_bound
                             .as_ref()
-                            .map_or(std::ops::Bound::Unbounded, |bound| {
-                                std::ops::Bound::Excluded(bound.clone())
-                            })
+                            .map_or(std::ops::Bound::Unbounded, std::ops::Bound::Excluded)
                     } else {
                         std::ops::Bound::Unbounded
                     };
-                    for (index_key, postings) in
-                        page.range((std::ops::Bound::Unbounded, upper)).rev()
-                    {
-                        if !relational_key_has_prefix(index_key, &scan.prefix) {
-                            if index_key < &scan.prefix {
-                                break 'pages;
-                            }
+                    for (key, postings) in page.range((std::ops::Bound::Unbounded, upper)).rev() {
+                        if scan.after(key) {
                             continue;
                         }
-                        for primary_key in postings.iter() {
-                            if !visit(index_key, primary_key) {
+                        if scan.before(key) {
+                            break 'pages;
+                        }
+                        for primary in postings.iter() {
+                            if !visit(key, primary) {
                                 break 'pages;
                             }
                         }
@@ -5744,6 +5731,24 @@ impl RelationalState {
     }
 
     /// Visits an exclusive ordered index range without materializing postings.
+    pub fn index_range_cardinality_at_most(
+        &self,
+        table: &str,
+        index: &str,
+        scan: &RelationalIndexRangeScan,
+        max_count: usize,
+    ) -> Option<usize> {
+        let index = self.segments.get(table)?.indexes.get(index)?;
+        let mut count = 0usize;
+        if max_count != 0 {
+            index.visit_range_entries(scan, |_, _| {
+                count += 1;
+                count < max_count
+            });
+        }
+        Some(count)
+    }
+
     pub fn visit_index_range_entries<'a>(
         &'a self,
         table: &str,

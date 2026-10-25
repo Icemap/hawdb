@@ -177,6 +177,7 @@ fn measure(target_prefix_rows: usize) -> serde_json::Value {
                         "messages",
                         "idx_messages_space_thread_order",
                         &RelationalIndexRangeScan {
+                            bounds: Default::default(),
                             prefix: composite_prefix.clone(),
                             exclusive_bound: Some(cursor.clone()),
                             direction,
@@ -340,6 +341,7 @@ fn access_path(
         equality_prefix_len,
         order_prefix_len: 0,
         exclusive_range: false,
+        range: None,
         reverse_order: false,
         unique_point,
         covering: false,

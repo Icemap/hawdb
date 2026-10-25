@@ -217,6 +217,7 @@ fn checkpoint_units_relational_runtime_rebuilds_all_postings_and_bidirectional_r
             ])),
         ] {
             let scan = RelationalIndexRangeScan {
+                bounds: Default::default(),
                 prefix: prefix.clone(),
                 exclusive_bound,
                 direction,

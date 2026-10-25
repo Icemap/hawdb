@@ -494,7 +494,7 @@ fn explain_access_path(
     evidence: Option<&RelationalIndexExecutionEvidence>,
     row_evidence: &RelationalRowExecutionEvidence,
 ) -> String {
-    let planned = format!(
+    let mut planned = format!(
         "equality_prefix={}, order_prefix={}, exclusive_seek={}, direction={}, unique_point={}, covering={}, row_fetch={}",
         descriptor.equality_prefix_len,
         descriptor.order_prefix_len,
@@ -508,6 +508,13 @@ fn explain_access_path(
         descriptor.covering,
         descriptor.requires_row_fetch
     );
+    if let Some(range) = &descriptor.range {
+        planned.push_str(&format!(
+            ", range_column={}, lower_inclusive={:?}, upper_inclusive={:?}, empty_range={}",
+            range.column, range.lower_inclusive, range.upper_inclusive, range.empty
+        ));
+    }
+
     let row = format!(
         "row_runtime_path={}, row_projection_generation={}, row_projection_source_watermark={}, row_projection_version={}, row_projection_publication_epoch={}, row_base_generation={}, row_delta_generation={}, row_base_epoch={}, row_visible_epoch={}, row_root_set_digest={}, row_descriptor_reads={}, row_logical_pages={}, row_logical_bytes={}, row_physical_pages={}, row_physical_bytes={}, row_cache_hits={}, row_cache_misses={}, row_cache_admission_rejections={}, row_overlay_entries={}, row_overlay_bytes={}, row_rows={}, row_borrowed_rows={}, row_owned_rows={}, row_index_covered_rows={}",
         row_evidence.runtime_path,

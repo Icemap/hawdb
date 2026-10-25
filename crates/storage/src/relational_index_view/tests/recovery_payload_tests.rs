@@ -74,6 +74,7 @@ fn visit(
             TABLE,
             INDEX,
             &RelationalIndexRangeScan {
+                bounds: Default::default(),
                 prefix: key(&[0]),
                 exclusive_bound: None,
                 direction: RelationalIndexScanDirection::Forward,

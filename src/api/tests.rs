@@ -140,6 +140,7 @@ mod relational_from_scopes;
 mod relational_having;
 mod relational_ordering;
 mod relational_projection_expressions;
+mod relational_range;
 mod relational_update_delete_outcomes;
 mod relationship_patterns;
 mod relationship_property_mutations;

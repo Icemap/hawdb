@@ -34,6 +34,16 @@ pub struct RelationalNestedLoopJoinCost {
     pub estimated_work: usize,
 }
 
+/// A conjunctive range on the first index column after the equality prefix.
+/// Bound values remain in the bound execution plan, not diagnostic metadata.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RelationalRangeAccess {
+    pub column: String,
+    pub lower_inclusive: Option<bool>,
+    pub upper_inclusive: Option<bool>,
+    pub empty: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RelationalAccessPathDescriptor {
     pub kind: RelationalAccessPathKind,
@@ -43,6 +53,7 @@ pub struct RelationalAccessPathDescriptor {
     pub equality_prefix_len: usize,
     pub order_prefix_len: usize,
     pub exclusive_range: bool,
+    pub range: Option<RelationalRangeAccess>,
     pub reverse_order: bool,
     pub unique_point: bool,
     pub covering: bool,
@@ -73,6 +84,15 @@ impl RelationalAccessPathDescriptor {
         {
             return Err("relational range metadata requires an ordered index access");
         }
+        if let Some(range) = &self.range
+            && (self.kind != RelationalAccessPathKind::Index
+                || self.index_columns.get(self.equality_prefix_len) != Some(&range.column)
+                || (!range.empty
+                    && range.lower_inclusive.is_none()
+                    && range.upper_inclusive.is_none()))
+        {
+            return Err("relational range must constrain the next index column");
+        }
         let expected_access_columns = self.index_columns[..self.equality_prefix_len]
             .iter()
             .cloned()
@@ -98,6 +118,7 @@ impl RelationalAccessPathDescriptor {
             && self.equality_prefix_len >= other.equality_prefix_len
             && self.order_prefix_len >= other.order_prefix_len
             && (self.exclusive_range || !other.exclusive_range)
+            && (self.range.is_some() || other.range.is_none())
             && (self.unique_point || !other.unique_point)
             && (self.covering || !other.covering)
             && (!self.requires_row_fetch || other.requires_row_fetch)
@@ -108,6 +129,7 @@ impl RelationalAccessPathDescriptor {
             || self.equality_prefix_len > other.equality_prefix_len
             || self.order_prefix_len > other.order_prefix_len
             || (self.exclusive_range && !other.exclusive_range)
+            || (self.range.is_some() && other.range.is_none())
             || (self.unique_point && !other.unique_point)
             || (self.covering && !other.covering)
             || (!self.requires_row_fetch && other.requires_row_fetch)
@@ -223,6 +245,7 @@ mod tests {
             equality_prefix_len,
             order_prefix_len: 0,
             exclusive_range: false,
+            range: None,
             reverse_order: false,
             unique_point,
             covering: false,
@@ -314,6 +337,7 @@ mod tests {
             equality_prefix_len: 0,
             order_prefix_len: 0,
             exclusive_range: false,
+            range: None,
             reverse_order: false,
             unique_point: false,
             covering: false,

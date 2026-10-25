@@ -339,6 +339,7 @@ impl RelationalTransactionIndexView {
             table,
             index,
             &RelationalIndexRangeScan {
+                bounds: Default::default(),
                 prefix: prefix.clone(),
                 exclusive_bound: None,
                 direction: RelationalIndexScanDirection::Forward,

@@ -3882,6 +3882,7 @@ mod tests {
             let context = RelationalIndexReadContext::new(limits);
             let prefix = RelationalKey(vec![RelationalValue::Text("owner-1".into())]);
             let scan = RelationalIndexRangeScan {
+                bounds: Default::default(),
                 prefix: prefix.clone(),
                 exclusive_bound: None,
                 direction: hawdb_storage::relational::RelationalIndexScanDirection::Forward,

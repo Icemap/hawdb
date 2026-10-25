@@ -14,7 +14,7 @@
 
 //! Extracts index-compatible constraints without binding values or accessing storage.
 //!
-//! Extraction is deliberately conservative: only conjunctive equalities and the
+//! Extraction is deliberately conservative: conjunctive equalities/ranges and the
 //! existing two-column keyset shape qualify. Callers retain residual evaluation,
 //! schema/type checks, parameter binding, index enumeration, and cost selection.
 
@@ -23,6 +23,82 @@ use hawdb_expression::sql::{
     SqlValue,
 };
 use std::collections::{BTreeMap, BTreeSet};
+
+/// Extract only column-to-value range comparisons under conjunctions. OR, NOT,
+/// column-to-column comparisons and scalar expressions remain residuals.
+pub fn collect_conjunctive_ranges<'a>(
+    predicate: &'a SqlPredicate,
+    output: &mut Vec<(&'a SqlColumnRef, SqlComparisonOp, &'a SqlValue)>,
+) {
+    match &predicate.kind {
+        ExprKind::And(left, right) => {
+            collect_conjunctive_ranges(left, output);
+            collect_conjunctive_ranges(right, output);
+        }
+        ExprKind::Compare { left, op, right }
+            if matches!(
+                op,
+                SqlComparisonOp::Lt
+                    | SqlComparisonOp::Lte
+                    | SqlComparisonOp::Gt
+                    | SqlComparisonOp::Gte
+            ) =>
+        {
+            if let (Some(column), Some(value)) = (left.as_column(), right.as_value()) {
+                output.push((column, *op, value));
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Proves that the bound interval and distinct leading equalities cover every
+/// predicate. Repeated equality constraints remain residuals; range constraints
+/// may repeat because their bound intersection includes every comparison.
+pub fn predicate_is_covered_by_range(
+    predicate: Option<&SqlPredicate>,
+    equalities: &BTreeSet<String>,
+    range_column: &str,
+    table: &str,
+    qualifier: &str,
+) -> bool {
+    let Some(predicate) = predicate else {
+        return false;
+    };
+    let mut terms = Vec::new();
+    collect_conjuncts(predicate, &mut terms);
+    let mut seen = BTreeSet::new();
+    let mut range = false;
+    for term in terms {
+        let ExprKind::Compare { left, op, right } = &term.kind else {
+            return false;
+        };
+        let Some(column) = left.as_column() else {
+            return false;
+        };
+        if !column_matches(column, table, qualifier) || right.as_value().is_none() {
+            return false;
+        }
+        if *op == SqlComparisonOp::Eq && equalities.contains(&column.name) {
+            if !seen.insert(column.name.clone()) {
+                return false;
+            }
+        } else if column.name == range_column
+            && matches!(
+                op,
+                SqlComparisonOp::Lt
+                    | SqlComparisonOp::Lte
+                    | SqlComparisonOp::Gt
+                    | SqlComparisonOp::Gte
+            )
+        {
+            range = true;
+        } else {
+            return false;
+        }
+    }
+    range && seen == *equalities
+}
 
 /// Whether distinct conjunctive equalities exactly cover the access columns.
 /// An absent predicate is already covered; duplicate constraints remain residuals.
@@ -76,6 +152,19 @@ pub fn canonical_keyset_values<'a>(
     table: &str,
     qualifier: &str,
 ) -> Option<(&'a SqlValue, &'a SqlValue)> {
+    canonical_keyset_values_with_range(predicate, access_columns, order_by, table, qualifier, None)
+}
+
+/// Recognizes the same keyset cursor intersected with already-bound conjunctive
+/// comparisons on its first ordered column. The caller must apply every bound.
+pub fn canonical_keyset_values_with_range<'a>(
+    predicate: Option<&'a SqlPredicate>,
+    access_columns: &BTreeSet<String>,
+    order_by: &[SqlOrderItem],
+    table: &str,
+    qualifier: &str,
+    range_column: Option<&str>,
+) -> Option<(&'a SqlValue, &'a SqlValue)> {
     let predicate = predicate?;
     if order_by.len() != 2 || order_by[0].direction != order_by[1].direction {
         return None;
@@ -104,6 +193,22 @@ pub fn canonical_keyset_values<'a>(
             if !equality_columns.insert(left.name.clone()) {
                 return None;
             }
+            continue;
+        }
+        if let ExprKind::Compare { left, op, right } = &term.kind
+            && matches!(
+                op,
+                SqlComparisonOp::Lt
+                    | SqlComparisonOp::Lte
+                    | SqlComparisonOp::Gt
+                    | SqlComparisonOp::Gte
+            )
+            && right.as_value().is_some()
+            && let Some(column) = left.as_column()
+            && column_matches(column, table, qualifier)
+            && range_column == Some(column.name.as_str())
+            && column.name == first_order_column.name
+        {
             continue;
         }
         if cursor.is_some() {

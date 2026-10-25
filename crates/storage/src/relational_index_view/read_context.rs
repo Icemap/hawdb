@@ -214,6 +214,7 @@ impl RelationalIndexReadContext {
             table,
             index,
             &RelationalIndexRangeScan {
+                bounds: Default::default(),
                 prefix: prefix.clone(),
                 exclusive_bound: None,
                 direction: super::RelationalIndexScanDirection::Forward,

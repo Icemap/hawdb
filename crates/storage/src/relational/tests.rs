@@ -3507,6 +3507,7 @@ fn relational_index_shadow_range_seek_traverses_multiple_pages_in_both_direction
             "documents",
             "documents_owner_id_idx",
             &RelationalIndexRangeScan {
+                bounds: Default::default(),
                 prefix: prefix.clone(),
                 exclusive_bound: Some(RelationalKey(vec![
                     RelationalValue::Text("owner-1".to_string()),
@@ -3540,7 +3541,8 @@ fn relational_index_shadow_range_seek_traverses_multiple_pages_in_both_direction
             "documents",
             "documents_owner_id_idx",
             &RelationalIndexRangeScan {
-                prefix,
+                bounds: Default::default(),
+                prefix: prefix.clone(),
                 exclusive_bound: None,
                 direction: RelationalIndexScanDirection::Backward,
             },
@@ -3563,6 +3565,102 @@ fn relational_index_shadow_range_seek_traverses_multiple_pages_in_both_direction
         ]
     );
     assert!(backward_report.stopped_early);
+    // Bounds on a partial key must include/exclude every trailing value, not
+    // just the short tuple itself. The tiny pages force cross-leaf traversal.
+    let boundary = |id: Option<&str>, inclusive| {
+        let mut key = prefix.0.clone();
+        if let Some(id) = id {
+            key.push(RelationalValue::Text(id.into()));
+        }
+        RelationalIndexBound {
+            key: RelationalKey(key),
+            inclusive,
+        }
+    };
+    for direction in [
+        RelationalIndexScanDirection::Forward,
+        RelationalIndexScanDirection::Backward,
+    ] {
+        for (lower, upper, start, end, empty_prefix) in [
+            (
+                Some(boundary(Some("doc-03"), false)),
+                Some(boundary(Some("doc-06"), true)),
+                4,
+                7,
+                false,
+            ),
+            (
+                Some(boundary(Some("doc-03"), true)),
+                Some(boundary(Some("doc-06"), false)),
+                3,
+                6,
+                false,
+            ),
+            (
+                Some(boundary(None, true)),
+                Some(boundary(None, true)),
+                0,
+                12,
+                true,
+            ),
+            (Some(boundary(None, false)), None, 0, 0, true),
+            (None, Some(boundary(None, false)), 0, 0, true),
+        ] {
+            let scan = RelationalIndexRangeScan {
+                prefix: if empty_prefix {
+                    RelationalKey(Vec::new())
+                } else {
+                    prefix.clone()
+                },
+                bounds: Some(Box::new(RelationalIndexBounds {
+                    lower,
+                    upper,
+                    empty: false,
+                })),
+                exclusive_bound: None,
+                direction,
+            };
+            let mut materialized = Vec::new();
+            state
+                .visit_index_range_entries(
+                    "documents",
+                    "documents_owner_id_idx",
+                    &scan,
+                    |index, _| {
+                        materialized.push(index.clone());
+                        true
+                    },
+                )
+                .unwrap();
+            let mut persisted = Vec::new();
+            let report = reader
+                .visit_range_entries(
+                    "documents",
+                    "documents_owner_id_idx",
+                    &scan,
+                    RelationalIndexReadLimits::default(),
+                    |index, _| {
+                        persisted.push(index.clone());
+                        true
+                    },
+                )
+                .unwrap();
+            let mut expected = (start..end)
+                .map(|ordinal| {
+                    RelationalKey(vec![
+                        RelationalValue::Text("owner-1".into()),
+                        RelationalValue::Text(format!("doc-{ordinal:02}")),
+                    ])
+                })
+                .collect::<Vec<_>>();
+            if direction == RelationalIndexScanDirection::Backward {
+                expected.reverse();
+            }
+            assert_eq!(materialized, expected);
+            assert_eq!(persisted, expected);
+            assert_eq!(report.leaf_entries_visited, expected.len());
+        }
+    }
     std::fs::remove_dir_all(directory).expect("remove range-seek fixture");
 }
 
@@ -4928,6 +5026,7 @@ fn relational_index_wal_deltas_merge_with_cold_base_and_stay_bounded() {
             "documents",
             RELATIONAL_PRIMARY_INDEX_NAME,
             &RelationalIndexRangeScan {
+                bounds: Default::default(),
                 prefix: inserted_document.clone(),
                 exclusive_bound: None,
                 direction: RelationalIndexScanDirection::Forward,

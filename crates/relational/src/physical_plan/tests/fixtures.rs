@@ -69,6 +69,7 @@ pub(super) fn base(rows: usize, indexed: bool) -> RelationalAccessCandidate {
             equality_prefix_len: 0,
             order_prefix_len: usize::from(indexed),
             exclusive_range: false,
+            range: None,
             reverse_order: false,
             unique_point: false,
             covering: false,
@@ -79,6 +80,7 @@ pub(super) fn base(rows: usize, indexed: bool) -> RelationalAccessCandidate {
             RelationalBaseAccess::Index {
                 name: "key_index".into(),
                 scan: RelationalIndexRangeScan {
+                    bounds: Default::default(),
                     prefix: RelationalKey(Vec::new()),
                     exclusive_bound: None,
                     direction: RelationalIndexScanDirection::Forward,

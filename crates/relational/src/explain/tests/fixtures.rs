@@ -96,6 +96,7 @@ impl Case {
             equality_prefix_len: self.n % 3,
             order_prefix_len: 0,
             exclusive_range: self.present,
+            range: None,
             reverse_order: self.spilled,
             unique_point: self.kind == 1,
             covering: self.present,

@@ -190,6 +190,7 @@ fn assert_view(view: &RelationalIndexReadView, oracle: &Oracle) {
             let prefix = key(&[bucket]);
             for exclusive_bound in [None, Some(key(&[bucket, 4]))] {
                 let scan = RelationalIndexRangeScan {
+                    bounds: Default::default(),
                     prefix: prefix.clone(),
                     exclusive_bound,
                     direction,
@@ -275,6 +276,7 @@ fn run_view_campaign(seeds: impl IntoIterator<Item = u64>) {
             ] {
                 for bucket in 0..3 {
                     let scan = RelationalIndexRangeScan {
+                        bounds: Default::default(),
                         prefix: key(&[bucket]),
                         exclusive_bound: None,
                         direction,
