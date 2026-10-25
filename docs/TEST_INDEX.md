@@ -310,6 +310,11 @@ legacy document tombstones before reducing the complete pinned source interval.
 | `//:hawdb_system_sql_loom_tests` | Bounded modeled system-table publication interleavings | Model exploration; not a wall-clock fuzz campaign. |
 | Package parity, query-limit inventory and root-partition script tests | Missing package ownership, unbudgeted query routes, duplicate or omitted test partition selection | Keep these structural checks when moving targets. |
 
+The `_1043_` deleted-prefix fixture updates a surviving node in the same
+prefix transaction so its one-operation budget still truncates before the
+deletion after live-upsert filtering. Both residency modes retain prefix
+refusal, unchanged durable checkpoint and complete-retry/rebuild parity.
+
 Brace notation describes several concrete labels; expand it before invoking
 Bazel. A family description does not imply every leaf belongs to every lane.
 

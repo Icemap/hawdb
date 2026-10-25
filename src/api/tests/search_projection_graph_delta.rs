@@ -1919,8 +1919,9 @@ fn legacy_deleted_prefix_1043_preserves_the_old_checkpoint_until_complete_retry(
         let before = index.document("memory:a").unwrap().clone();
         let base_epoch = db.commit_epoch().unwrap();
 
-        db.query("MATCH (m:Memory {id: 'a'}) SET m.title = 'new'")
-            .unwrap();
+        // A surviving update consumes the prefix budget even though the raw
+        // native key for the subsequently deleted node is not a live upsert.
+        db.query("MATCH (m:Memory) SET m.title = 'new'").unwrap();
         let prefix_epoch = db.commit_epoch().unwrap();
         db.query("MATCH (m:Memory {id: 'a'}) DETACH DELETE m")
             .unwrap();
@@ -1930,6 +1931,8 @@ fn legacy_deleted_prefix_1043_preserves_the_old_checkpoint_until_complete_retry(
             .unwrap()
             .unwrap();
         assert_eq!(batch.complete_through_commit_epoch(), Some(prefix_epoch));
+        assert_eq!(batch.graph_delta().upsert_node_ids.len(), 1);
+        assert!(batch.graph_delta().delete_document_ids.is_empty());
         let error = db
             .apply_search_projection_change_batch(
                 &mut index,
