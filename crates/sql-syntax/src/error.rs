@@ -19,6 +19,7 @@ use crate::Span;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SyntaxErrorCode {
     InputTooLarge,
+    ParserLimitExceeded,
     TokenLimitExceeded,
     CommentNestingLimitExceeded,
     ExpressionNestingLimitExceeded,

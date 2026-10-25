@@ -61,6 +61,14 @@ Pratt AST; semantic binding owns only normalized names and typed values that
 survive past parsing. This keeps parse memory proportional to token and node
 count while preserving exact source locations for diagnostics.
 
+The owned statement envelopes use token PEG rules with ordered alternatives,
+packrat caching of successes and failures, and a separate AST transformer.
+SQL/PGQ composes into the statement and FROM-item rules before matching starts.
+Bounded native terminals retain the Pratt expression parser, graph patterns,
+and property-graph element definitions. See [SQL PEG parser](../SQL_PEG_PARSER.md)
+for the resource and grammar-validation contract. This internal composition
+mechanism does not establish a public loadable-dialect API.
+
 The owned frontend MUST be implemented incrementally. Existing relational
 statement families may continue to use upstream `sqlparser` until the owned
 parser has equivalent positive and negative corpus coverage. Parser selection

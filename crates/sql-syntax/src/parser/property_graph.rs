@@ -14,57 +14,14 @@
 
 use super::Parser;
 use crate::{
-    CreatePropertyGraph, EdgeEndpoint, EdgeTableDefinition, ElementExposure, ElementLabel,
-    ElementLabelExposure, Identifier, PropertyExposure, Span, SyntaxError, TokenKind,
-    VertexTableDefinition,
+    EdgeEndpoint, EdgeTableDefinition, ElementExposure, ElementLabel, ElementLabelExposure,
+    Identifier, PropertyExposure, Span, SyntaxError, TokenKind, VertexTableDefinition,
 };
 
 impl Parser<'_> {
-    pub(super) fn parse_create_property_graph(
+    pub(super) fn parse_vertex_table_definition(
         &mut self,
-    ) -> Result<CreatePropertyGraph, SyntaxError> {
-        let start = self.expect_keyword("CREATE")?.span.start;
-        let temporary = self.consume_keyword("TEMP") || self.consume_keyword("TEMPORARY");
-        self.expect_keyword("PROPERTY")?;
-        self.expect_keyword("GRAPH")?;
-        let name = self.parse_qualified_name()?;
-        let mut vertex_tables = Vec::new();
-        let mut edge_tables = Vec::new();
-
-        if self.consume_keyword("VERTEX") || self.consume_keyword("NODE") {
-            self.expect_keyword("TABLES")?;
-            self.expect_kind(TokenKind::LeftParen, "(")?;
-            vertex_tables = self.parse_nonempty_comma_separated(
-                TokenKind::RightParen,
-                Self::parse_vertex_table_definition,
-                "at least one vertex table definition",
-            )?;
-            self.expect_kind(TokenKind::RightParen, ")")?;
-        }
-        if self.consume_keyword("EDGE") || self.consume_keyword("RELATIONSHIP") {
-            self.expect_keyword("TABLES")?;
-            self.expect_kind(TokenKind::LeftParen, "(")?;
-            edge_tables = self.parse_nonempty_comma_separated(
-                TokenKind::RightParen,
-                Self::parse_edge_table_definition,
-                "at least one edge table definition",
-            )?;
-            self.expect_kind(TokenKind::RightParen, ")")?;
-        }
-        if !matches!(self.current().kind, TokenKind::Semicolon | TokenKind::End) {
-            return Err(self.unexpected("VERTEX TABLES followed by EDGE TABLES"));
-        }
-
-        Ok(CreatePropertyGraph {
-            temporary,
-            name,
-            vertex_tables,
-            edge_tables,
-            span: Span::new(start, self.previous_end()),
-        })
-    }
-
-    fn parse_vertex_table_definition(&mut self) -> Result<VertexTableDefinition, SyntaxError> {
+    ) -> Result<VertexTableDefinition, SyntaxError> {
         let start = self.current().span.start;
         let table = self.parse_qualified_name()?;
         let alias = self.parse_optional_as_alias()?;
@@ -79,7 +36,9 @@ impl Parser<'_> {
         })
     }
 
-    fn parse_edge_table_definition(&mut self) -> Result<EdgeTableDefinition, SyntaxError> {
+    pub(super) fn parse_edge_table_definition(
+        &mut self,
+    ) -> Result<EdgeTableDefinition, SyntaxError> {
         let start = self.current().span.start;
         let table = self.parse_qualified_name()?;
         let alias = self.parse_optional_as_alias()?;

@@ -543,7 +543,7 @@ it no longer changes compilation mode by itself.
 ## Repository-wide compilation profiles
 
 Cargo loads `.cargo/config.toml` from the repository hierarchy, covering the root
-workspace, independent tools, bindings and the parser experiment. Run Cargo from
+workspace, independent tools and bindings. Run Cargo from
 within the repository (including when using `--manifest-path`); callers outside
 this directory hierarchy must explicitly supply the config. Published library
 consumers still own their host application's profiles. External-consumer
@@ -1378,3 +1378,21 @@ release and selected descriptor/payload ownership after task closure. Original
 production reproductions fail the new admission oracles; corrected cursor tests
 and affected checkpoint/source tests pass. No target, fixture budget, timeout or
 CI/fuzz lane is weakened.
+
+## Owned SQL/PGQ token PEG
+
+The existing `//crates/sql-syntax:hawdb_sql_syntax_tests` target owns the token
+PEG engine regressions: ordered choice, successful and failed packrat reuse,
+lookahead diagnostics, long invalid token text, invalid grammar rejection, linear malformed recursion,
+and fatal work/storage/depth budgets. The existing `postgres_pgq_tests` and
+`postgres_select_pgq_tests` targets own syntax ASTs, graph nesting, aliases,
+joins, byte spans and composed GRAPH_TABLE rejection. All use the ordinary
+checked profile and existing SQL syntax CI lanes.
+
+`//crates/sql:hawdb_sql_tests` retains the frozen production/owned frontend
+corpus and PGQ binder/lowering tests. It must preserve the recorded acceptance
+and rejection codes; production relational SQL still uses `sqlparser`.
+Local Shiro parser campaigns and
+`//crates/sql-syntax:hawdb_sql_alias_boundary_fuzz_tests` remain manual/local.
+See [SQL PEG parser](SQL_PEG_PARSER.md) for the matcher/transformer boundary,
+budget accounting and explicit production-routing limitations.

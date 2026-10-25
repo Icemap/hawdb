@@ -679,8 +679,10 @@ rendered into the other. They converge only after binding, where graph scans,
 expansion, filtering, and projection use the same logical operators. The owned
 syntax crate is introduced incrementally; existing relational statement
 families remain on upstream `sqlparser` until equivalent positive and negative
-owned-parser coverage exists. The current owned `SELECT` syntax envelope uses a
-bounded Pratt expression AST, supports inner/left/cross joins around
+owned-parser coverage exists. The owned syntax frontend uses a
+[token PEG](SQL_PEG_PARSER.md) with bounded packrat memoization and composable statement/FROM rules. Its transformer
+produces the existing syntax AST. The current owned `SELECT` syntax envelope
+retains a bounded Pratt expression AST, supports inner/left/cross joins around
 `GRAPH_TABLE`, and has a read-only catalog-driven binder for graph variables,
 labels, properties, correlated columns, and output schema. It is intentionally
 not wired into production SQL lowering until shared logical-plan lowering and
