@@ -277,7 +277,7 @@ legacy document tombstones before reducing the complete pinned source interval.
 | --- | --- | --- |
 | `//:hawdb_manual_checkpoint_tests`, `//:hawdb_manual_checkpoint_minimal_tests` | Explicit ordinary/concurrent/embedded checkpoints preserve durable publication independently of background support/admission. Embedded controls retain one same-governor background or foreground I/O permit, distinguish allowed foreground work from legitimate refusal, and check reopen and refunds. | Existing default/minimal public-consumer carriers and profiles; replay `cargo test --locked --test manual_checkpoint`, adding `--no-default-features` for minimal. The existing root automatic-checkpoint `publication_io` family also pauses the actual owner with its acquired wave, observes manual suspension, and checks durable completion/refunds under [#1219](https://github.com/nowledge-co/hawdb/issues/1219). |
 | `//:hawdb_unit_general_tests` | Embedded API, schema/query and general facade regressions | Shared unit executable; partition script assigns each discovered case an owner. |
-| Automatic checkpoint `read_handoff` | Read callbacks, concurrent and SQL reads adopt ready generations; invalid identities fail closed; typed EXPLAIN ANALYZE progresses without the owner mutex | Five existing cases in `//:hawdb_unit_general_tests`. The seal-pause fixture waits for the owner's handoff-pause acknowledgement before adoption or guard release; observing `Phase::Handoff` alone races probe entry. Existing query, admission refund, snapshot and reopen assertions and deadlines remain. Replay: `bazel test //:hawdb_unit_general_tests --test_arg=api::automatic_checkpoint::tests::read_handoff`. Ref [#1116](https://github.com/nowledge-co/hawdb/issues/1116); this fixture race is distinct from other checkpoint/branch-open stalls. |
+| Automatic checkpoint `read_handoff` | Read callbacks, concurrent and SQL reads adopt ready generations; invalid identities fail closed; typed EXPLAIN ANALYZE progresses without the owner mutex | Five existing cases in `//:hawdb_unit_general_tests`. The seal-pause fixture waits for the owner's handoff-pause acknowledgement before adoption or guard release; observing `Phase::Handoff` alone races probe entry. The invalid-identity case prepares its foreign persistent database before entering the bounded owner pause, keeping unrelated setup I/O outside the 15-second assertion window. Existing query, admission refund, snapshot and reopen assertions and deadlines remain. Replay: `bazel test //:hawdb_unit_general_tests --test_arg=api::automatic_checkpoint::tests::read_handoff`. Ref [#1116](https://github.com/nowledge-co/hawdb/issues/1116); this fixture race is distinct from other checkpoint/branch-open stalls. |
 | `//:hawdb_unit_concurrent_tests` | Transaction locks, read observation, commit admission and concurrent publication races | Known long target: [#972](https://github.com/nowledge-co/hawdb/issues/972). Preserve barriers and observations; a deadline is not a substitute for a deterministic schedule. |
 | Covered pessimistic graph mutations (`covered_graph`) and concurrent metrics (`api::concurrent::metrics::tests`) | Retained staged results under existing locks, new-target/upgrade replay, stale-epoch refusal, lock timeout/retry, rollback, failed-statement atomicity, durable reopen, disabled-by-default instrumentation and explicit metrics inspection during writer ownership | Owned by `//:hawdb_unit_concurrent_tests`; local replay with `--test_arg=covered_graph` or `--test_arg=api::concurrent::metrics::tests`. Assertions use work counts and final rows rather than timing thresholds. |
 | `//:hawdb_unit_analytics_core_general_tests` | Graph algorithms, projected artifacts, identity and generation behavior | Separate from isolated dense RSS ownership. |
@@ -320,8 +320,8 @@ Bazel. A family description does not imply every leaf belongs to every lane.
 
 ### Automatic-checkpoint frontend deadline controls
 
-`//:hawdb_unit_general_tests` owns
-`api::automatic_checkpoint::tests::headroom` in the default-feature root CI lane
+`//:hawdb_unit_checkpoint_headroom_tests` owns
+`api::automatic_checkpoint::tests::headroom` in the isolated default-feature root CI lane
 (`background-maintenance` required). It retains the checked profile, 320-row
 write/reopen fixtures and
 target timeout ceilings. Functional idle/retiring/prepared-prefix tests freeze
@@ -374,7 +374,7 @@ workload does not change default or CI benchmark selection.
 | QoS, cgroup, telemetry, resource-profile and runtime-tokio | Resource detection/admission, metrics and synchronous/async runtime boundaries. |
 | Readiness, evidence, route-ownership, nowledge-contracts, compat and qualification | Typed readiness, complete evidence identity, compatibility and host integration contracts. |
 | `crates/fuzz-contracts` | Production readiness contract values only. Its fast unit tests are not the Shiro generator/campaign. |
-| Python DB-API (`bindings/python/tests/test_dbapi.py`) | The PEP 249 layer in `hawdb.dbapi`: module globals and the PEP 249 exception hierarchy, with every engine error and every built-in error from statement parameters raised as its PEP 249 class while keeping its own type, attributes and pickling; tuple rows, `description` type codes and identity-hashed type objects; lazily begun connection transactions with commit, rollback, close and context-manager semantics; autocommit set at connect or between transactions, read-only and branch-command routing; `executemany` delegation and the aborted state after a failed batch; parameter containers matching the native rule; and refusal of closed objects and of other threads, including reused thread idents. Owned by `//bindings/python:hawdb_python_tests` and the Python Bindings pip job. Engine transaction semantics run on file and in-memory databases, durability, read-only and branch cases on a file database, and the rest in memory. Two non-strict `xfail(raises=AssertionError)` cases pin the engine's name-sorted columns and missing zero-row schema for key lookups ([#1225](https://github.com/nowledge-co/hawdb/issues/1225)). The Python workflow does not run on engine changes, so an engine fix shows up there as XPASS; remove the markers and the documented caveats then. The `pandas.read_sql` smoke skips without pandas; the pip job installs a pinned pandas and selects it with `-k pandas`. Replay: `pytest tests/test_dbapi.py` in `bindings/python` with the wheel installed. |
+| Python DB-API (`bindings/python/tests/test_dbapi.py`) | The PEP 249 layer in `hawdb.dbapi`: module globals and the PEP 249 exception hierarchy, with every engine error and every built-in error from statement parameters raised as its PEP 249 class while keeping its own type, attributes and pickling, or raised unchanged if it cannot be rebuilt as that class; tuple rows in SELECT-list order, a `description` with type codes, also for a key lookup that matches nothing, and identity-hashed type objects; lazily begun connection transactions with commit, rollback, close and context-manager semantics; autocommit set at connect or between transactions, read-only and branch-command routing; `executemany` delegation and the aborted state after a failed batch; parameter containers matching the native rule; and refusal of closed objects and of other threads, including reused thread idents. Owned by `//bindings/python:hawdb_python_tests` and the Python Bindings pip job. Engine transaction semantics run on file and in-memory databases, durability, read-only and branch cases on a file database, and the rest in memory. The engine's column order per query shape belongs to the SQL result column order family; `EXPLAIN` and system catalog queries, which still sort their columns ([#1249](https://github.com/nowledge-co/hawdb/issues/1249)), are not covered here. The `pandas.read_sql` smoke skips without pandas; the pip job installs a pinned pandas and selects it with `-k pandas`. Replay: `pytest tests/test_dbapi.py` in `bindings/python` with the wheel installed. |
 
 ## WAL identity performance qualification
 
@@ -1488,3 +1488,48 @@ independence, snapshot-size monotonicity, selective covering-index selection,
 and unchanged point/default-context controls. These are checked-profile unit
 cases in the existing crate lane; no fixture, feature matrix, timeout or
 execution lane changes. See [the cost model](OPTIMIZER_COST_MODEL.md).
+
+
+## Embedded architecture ownership (#1222)
+
+- `//:hawdb_storage_language_boundary_test` checks both normal Bazel dependency
+  paths from storage to Cypher syntax and plans; Cargo metadata checks the same
+  normal closure. It belongs to the existing root unit suite.
+- Existing storage units own `canonical::node_label_cursor` and
+  `store::projection_full_source::tests`: complete label synopses, absent labels,
+  sparse IDs, overlapping labels, pinned checkpoint/delta/tombstone membership,
+  cancellation, corruption and sticky budget/IO/memory refusals. Existing
+  checkpoint accumulator cut/retry tests also cover resumable label inventory.
+  Label Bloom cardinality cases compare one and 4,096 propertyless nodes with
+  one or three distinct labels in ordinary and admitted flushes, including
+  persisted descriptor round trips. Repeated labels retain the original memory
+  allocation. A distinct-label insertion case cancels at every work-unit cut
+  across two bounded shift blocks, then resumes without duplicate keys or leaks.
+  Descriptor admission is checked before both matching and Bloom-negative
+  decisions with cold and warm serving caches. Resident batches retain one
+  pinned COW iterator per step and check cancellation between every delivered row.
+- Existing default/minimal `hawdb_mvcc_staging_session` targets own the four
+  `registered_consumer_defin` cases: canonical version/scope identity, graph/SQL
+  catch-up and complete rebuild equality, target-version refusal/reopen, original
+  owner retention, cancellation and conflict. No fixture or deadline is reduced.
+- Ordinary query regression tests migrated on main in PR #1194 stay in their
+  existing root partitions. Splitting API/embedded-owner implementations into
+  private responsibility modules preserves their public facade identity and
+  ordinary query execution; no captured-response replacement corpus is added.
+- The manual storage `projection_label_source` and root `consumer_publication`
+  benches report scan work/time and foreground latency/successful watermarks.
+  The optional capture-before-writers schedule uses bounded setup handshakes
+  outside measured transaction/preparation/construction intervals; it adds no
+  rate limiter and changes no progress threshold. See the [source-bound
+  controls](benchmarks/architecture_2026_10_24/README.md). No fuzz lane is added.
+
+
+PR #1240 descriptor-admission follow-up retains the existing storage owner.
+The label cursor reuses admitted checkpoint descriptor traversal; three new Rust
+cases cover cold/warm serving caches and Bloom-positive/negative decisions under
+tiny and exhausted concrete memory. They also check memory-before-IO refusal,
+no denied descriptor progress, no shared-reader poison, prompt pruned-lease
+release and selected descriptor/payload ownership after task closure. Original
+production reproductions fail the new admission oracles; corrected cursor tests
+and affected checkpoint/source tests pass. No target, fixture budget, timeout or
+CI/fuzz lane is weakened.

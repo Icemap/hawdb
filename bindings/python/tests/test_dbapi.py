@@ -217,10 +217,6 @@ def test_statements_without_result_columns(connection):
         assert cursor.fetchall() == []
 
 
-@pytest.mark.xfail(
-    raises=AssertionError,
-    reason="the engine reports no columns when a key lookup matches no rows (#1225)",
-)
 def test_empty_key_lookup_still_describes_its_columns(connection):
     cursor = connection.cursor()
     cursor.execute(CREATE)
@@ -230,10 +226,6 @@ def test_empty_key_lookup_still_describes_its_columns(connection):
     assert [column[0] for column in cursor.description] == ["id", "name"]
 
 
-@pytest.mark.xfail(
-    raises=AssertionError,
-    reason="the engine sorts the columns of a key lookup by name (#1225)",
-)
 def test_rows_follow_the_select_list(connection):
     cursor = connection.cursor()
     cursor.execute(CREATE)
@@ -432,6 +424,36 @@ def test_errors_leave_no_reference_cycle():
     finally:
         gc.enable()
         connection.close()
+    assert unreachable == 0
+
+
+def test_an_error_that_cannot_be_rebuilt_is_raised_unchanged(monkeypatch):
+    # As if a binding error gained a constructor that refuses its own args.
+    class Refusing(hawdb.exceptions.ParseError, dbapi.ProgrammingError):
+        def __init__(self, message, position):
+            super().__init__(message, position)
+
+    monkeypatch.setitem(dbapi._ENGINE_ERRORS, hawdb.exceptions.ParseError, Refusing)
+    connection = hawdb.connect()
+    cursor = connection.cursor()
+
+    def fail():
+        try:
+            cursor.execute("SELEC 1")
+        except dbapi.Error as error:
+            return error
+
+    gc.collect()
+    gc.disable()
+    try:
+        error = fail()
+        unreachable = gc.collect()
+    finally:
+        gc.enable()
+        connection.close()
+    assert type(error) is hawdb.exceptions.ParseError
+    # The failed construction is neither chained to it nor left in a cycle.
+    assert error.__context__ is None
     assert unreachable == 0
 
 

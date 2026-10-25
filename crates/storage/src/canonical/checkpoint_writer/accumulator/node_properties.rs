@@ -28,6 +28,9 @@ pub(super) struct Progress {
     property: Option<CheckpointText>,
     key: Option<CheckpointVectorPush<u64>>,
     phase: usize,
+    label_recorded: bool,
+    label_insert_at: usize,
+    label_shift_from: usize,
 }
 
 pub(super) fn add(
@@ -65,7 +68,7 @@ fn resume(
             "retained property source identity changed".into(),
         ));
     }
-    if node.properties.is_empty() || node.labels.is_empty() {
+    if node.labels.is_empty() {
         context.checkpoint()?;
         return Ok(());
     }
@@ -79,6 +82,9 @@ fn resume(
         property: None,
         key: None,
         phase: 0,
+        label_recorded: false,
+        label_insert_at: 0,
+        label_shift_from: 0,
     });
     if state.id != node.id
         || state.labels != node.labels.len()
@@ -103,14 +109,50 @@ fn resume(
             }
             if state.label.is_none() {
                 state.phase = 5;
+            } else if !state.label_recorded {
+                let key = u64::from(state.label.expect("selected label").0);
+                match output.segment.node_label_keys.binary_search(&key) {
+                    Ok(_) => state.label_recorded = true,
+                    Err(index) => {
+                        state.label_insert_at = index;
+                        state.key = Some(CheckpointVectorPush::new(key));
+                        state.phase = 6;
+                    }
+                }
             } else if next_property(node, state.previous_property.as_deref()).is_some() {
                 state.property = Some(CheckpointText::new());
                 state.phase = 1;
             } else {
                 state.previous_label = state.label.take();
                 state.previous_property = None;
+                state.label_recorded = false;
             }
             unit.finish();
+        }
+        if state.phase == 6 {
+            context
+                .resume_push(&mut output.segment.node_label_keys, &mut state.key)
+                .map_err(source)?;
+            state.label_shift_from = output.segment.node_label_keys.len() - 1;
+            state.phase = 7;
+        }
+        if state.phase == 7 {
+            // Shift the admitted appended key into sorted order in bounded
+            // blocks. Cancellation retains the private insertion position.
+            while state.label_shift_from > state.label_insert_at {
+                let unit = context.start_unit()?;
+                let start = state
+                    .label_shift_from
+                    .saturating_sub(256)
+                    .max(state.label_insert_at);
+                output.segment.node_label_keys[start..=state.label_shift_from].rotate_right(1);
+                state.label_shift_from = start;
+                unit.finish();
+                context.checkpoint()?;
+            }
+            state.label_recorded = true;
+            state.phase = 0;
+            continue;
         }
         if state.phase == 1 {
             let unit = context.start_unit()?;

@@ -55,21 +55,21 @@ before it. The connection is then aborted: ``execute``, ``executemany`` and
 ``commit()`` raise ``OperationalError`` until ``rollback()`` acknowledges the
 lost work. ``close()`` still succeeds.
 
-Rows are tuples in ``description`` order. ``description`` holds one
-seven-item tuple per column: the name, a type code and five ``None``. The
-type code is the Python type of the column's first non-null value, or
-``None`` when every value is null. ``STRING`` equals ``str``, ``BINARY``
-equals ``bytes`` and ``NUMBER`` equals ``int`` and ``float``; booleans and
-vectors match none of them. DDL and every INSERT, UPDATE and DELETE leave
-``description`` as ``None`` and ``rowcount`` as -1, since the binding does
-not report affected rows, and fetching from them returns no rows.
+Rows are tuples in ``description`` order, which is the order of the SELECT
+list. ``description`` holds one seven-item tuple per column, also when no
+row matches: the name, a type code and five ``None``. The type code is the
+Python type of the column's first non-null value, or ``None`` when there is
+none. ``STRING`` equals ``str``, ``BINARY`` equals ``bytes`` and ``NUMBER``
+equals ``int`` and ``float``; booleans and vectors match none of them. DDL
+and every INSERT, UPDATE and DELETE leave ``description`` as ``None`` and
+``rowcount`` as -1, since the binding does not report affected rows, and
+fetching from them returns no rows.
 
-Two engine gaps show through. Key lookups, joins, ORDER BY, DISTINCT,
-aggregates and GROUP BY return their columns sorted by name rather than in
-SELECT order, so read a row by the names in ``description``, not by the
-positions of the SELECT list. When nothing matches, the same shapes report
-no columns at all: ``description`` is ``None``, and ``pandas.read_sql``
-cannot build a frame from it.
+``EXPLAIN`` and queries on the system catalogs (``information_schema``,
+``pg_catalog`` and ``system``) are the exception: the engine still returns
+their columns sorted by name, and a catalog query that matches nothing
+reports none at all (#1249). Read their rows by the names in
+``description``.
 
 Errors follow the PEP 249 hierarchy. ``Error`` is ``hawdb.exceptions.Error``;
 ``InterfaceError`` and ``DatabaseError`` are its subclasses, and the other
@@ -320,7 +320,7 @@ _PARAMETER_ERRORS: dict[type[Exception], type[Exception]] = {
 
 
 def _pep249(error: Exception, statement: bool) -> Exception:
-    """Returns ``error`` as its PEP 249 subclass, or unchanged without one."""
+    """Returns ``error`` rebuilt as its PEP 249 subclass, or else unchanged."""
     target = _ENGINE_ERRORS.get(type(error))
     if target is None and statement:
         target = _PARAMETER_ERRORS.get(type(error))
@@ -328,8 +328,13 @@ def _pep249(error: Exception, statement: bool) -> Exception:
         return error
     if target is _ExecutionError and getattr(error, "retryable", False) is True:
         target = _RetryableExecutionError
-    translated = target(*error.args)
-    vars(translated).update(vars(error))
+    try:
+        translated = target(*error.args)
+        vars(translated).update(vars(error))
+    except Exception:
+        # A failure here, such as a constructor that refuses the error's own
+        # args, must not replace the error: it loses its PEP 249 class instead.
+        return error
     return translated
 
 
