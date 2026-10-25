@@ -288,6 +288,8 @@ fn partitioned_initial_publication_survives_lost_torn_and_reordered_writes() {
                 SearchOutOfCoreGenerationBuildOptions {
                     max_content_documents: NonZeroUsize::new(2).unwrap(),
                     source_graph_commit_epoch: Some(21),
+                    // This fixture requires the legacy compressed projection.
+                    vector_backend: None,
                     ..Default::default()
                 },
             )

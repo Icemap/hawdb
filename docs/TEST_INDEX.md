@@ -621,6 +621,10 @@ The power-loss publication fixtures select actual temporary manifest writes by
 filename prefix, preserving after-write, before/after-rename and torn/reordered
 fault schedules for both ordinary and partitioned mutations. Validation scratch
 written by later cleanup must not replace the observed publication boundary.
+The partitioned initial-publication fixture explicitly builds legacy RaBitQ
+content because its required-compression queries must exercise that codec after
+every recovered publication. Its five cuts and empty/replacement states remain
+unchanged; ordinary mutation/compaction fixtures retain the default graph.
 The storage model unit family checks that this filter preserves path scope,
 skip/last selection and pre-sync torn bytes despite later writes and barriers.
 The branch-GC fixture checks balanced descriptor ownership after runtime closure
