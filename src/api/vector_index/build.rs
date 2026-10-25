@@ -149,9 +149,11 @@ impl Database {
         build.bind_memory_limit()?;
         let mut input_error = None;
         let mut producer_memory = None;
+        let mut admission_error = None;
         let result = self.rebuild_consumer_with_initializer(
             consumer,
             build.task.clone(),
+            &mut admission_error,
             |source, index, permit, previous| {
                 let mapped = (|| {
                     producer_memory = Some(
@@ -177,9 +179,10 @@ impl Database {
             },
         );
         drop(producer_memory);
-        match input_error {
-            Some(error) => Err(error),
-            None => result.map_err(VectorIndexBuildError::Consumer),
+        match (input_error, admission_error) {
+            (Some(error), _) => Err(error),
+            (None, Some(error)) => Err(VectorIndexBuildError::Admission(error)),
+            (None, None) => result.map_err(VectorIndexBuildError::Consumer),
         }
     }
 }

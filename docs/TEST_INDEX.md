@@ -453,6 +453,12 @@ tests retain their CI owners. The opt-in Native Bindings
 in four independent matrix jobs: plain/LSG at 1%/10% changed keys, sixteen query samples per family and
 state, a 320 MiB canonical source/producer envelope, source-feed work bounded
 from the row count and a 2 GiB host governor, with a 180-minute ceiling per job.
+The source capture explicitly funds the complete atomic changed-key envelope:
+4,096 entries for the 1% controls and 10,000 for the 10% controls, with the
+unchanged 256 KiB capture byte limit. These typed workload settings leave
+library defaults intact. The host wrapper retries typed retryable background-task
+saturation or `BranchBusy` for at most 30 seconds, only while the completed
+stationary source and selection remain unchanged, and records every retry.
 Every control retains its complete lifecycle; failures do not cancel siblings.
 The original 128 MiB envelope correctly refused
 the conservative resident source charge plus point-query workspace before graph
@@ -481,6 +487,17 @@ budget, compares residual UPDATE/DELETE captures with the legacy scan oracle,
 and recovers both access shapes with transient rows and primary-key changes.
 Surplus access entries must fail exact replay validation. Storage's existing
 checkpoint-admission cases also exercise controlled point-key allocation.
+
+The existing root vector API family additionally owns explicit source-capture
+capacity refusal/success, single-background-slot and held-catalog admission with
+unchanged selection and retry, no-op behavior under saturation, and
+automatic-checkpoint feed preservation. The admission and automatic-checkpoint
+controls require `background-maintenance`;
+they remain in the existing root/Prow and native API lanes. Replay with
+`cargo test --locked -p hawdb --all-features --lib api::vector_index:: -- --test-threads=1`.
+The existing Consumer vector uncertainty test also requires stationary-receipt
+refusal after selector publication, so a host cannot mistake an uncertain
+outcome for a safe retry.
 
 The out-of-core DiskANN family also checks candidate-window propagation on a
 512-vector fixture: independent navigation coverage, default output window, explicit rank window, configured

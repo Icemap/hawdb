@@ -852,6 +852,7 @@ impl Database {
         &mut self,
         consumer: &mut SearchProjectionConsumer,
         task: RuntimeTaskContext,
+        admission_error: &mut Option<hawdb_qos::RuntimeAdmissionError>,
         initialize: F,
     ) -> SearchProjectionConsumerResult<()>
     where
@@ -862,6 +863,7 @@ impl Database {
             &hawdb_core::VectorIndexDescriptor,
         ) -> Result<()>,
     {
+        *admission_error = None;
         if task.has_resource_controllers() {
             return Err(HawDBError::Execution(
                 "Consumer rebuild task already has a resource controller".into(),
@@ -874,7 +876,18 @@ impl Database {
         let root = self.consumer_writable_root()?;
         self.reload_consumer_registry_if_unavailable()?;
         self.validate_consumer_receipt(consumer)?;
-        let permit = self.vector_consumer_publication_permit(&task)?;
+        // Keep the pre-effect governor refusal typed across the generic
+        // Consumer result, without changing admission or custody ordering.
+        let permit =
+            self.admit_vector_consumer_publication(&task)
+                .map_err(|error| match error {
+                    crate::VectorIndexBuildError::Admission(error) => {
+                        *admission_error = Some(error);
+                        HawDBError::Execution(error.to_string())
+                    }
+                    crate::VectorIndexBuildError::Query(error) => error,
+                    error => HawDBError::Execution(error.to_string()),
+                })?;
         let mut snapshot = self.begin_read_transaction_with_context(&task)?;
         let recovery_memory = permit
             .reserve_retained_memory(
@@ -1257,10 +1270,27 @@ impl Database {
         &mut self,
         task: &RuntimeTaskContext,
     ) -> Result<Arc<hawdb_qos::RuntimePermit>> {
+        self.admit_vector_consumer_publication(task)
+            .map_err(|error| match error {
+                crate::VectorIndexBuildError::Query(error) => error,
+                error => HawDBError::Execution(error.to_string()),
+            })
+    }
+
+    fn admit_vector_consumer_publication(
+        &mut self,
+        task: &RuntimeTaskContext,
+    ) -> std::result::Result<Arc<hawdb_qos::RuntimePermit>, crate::VectorIndexBuildError> {
         let working_bytes = task.memory_reservation().map_or(64 << 20, |reservation| {
             reservation.memory_bytes().max(64 << 20)
         });
-        self.consumer_publication_permit_with_limits(working_bytes, 0)
+        self.consumer_governor()?
+            .try_admit(
+                hawdb_qos::RuntimeWorkRequest::background_maintenance(working_bytes)
+                    .with_io_wave_slots(1),
+            )
+            .map(Arc::new)
+            .map_err(crate::VectorIndexBuildError::Admission)
     }
 
     fn consumer_publication_permit_with_limits(

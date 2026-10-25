@@ -5,21 +5,23 @@
 
 use super::{vector, SEED, TOP_K, VERSION};
 use hawdb::{
-    Database, DatabaseConfig, IoConcurrencyBudget, QueryStreamOptions, RuntimeGovernor,
+    Database, DatabaseConfig, HawDBError, IoConcurrencyBudget, QueryStreamOptions, RuntimeGovernor,
     RuntimeGovernorConfig, RuntimePermit, RuntimeWorkRequest, SearchProjectionConsumer,
-    SearchProjectionConsumerId, SearchProjectionConsumerOptions, StorageResidencyMode, Value,
-    Vector, VectorDistance, VectorIndexBackend, VectorIndexBuildOptions, VectorIndexField,
-    VectorIndexLanguageBudget, VectorIndexLsg, VectorIndexReadError, VectorIndexReadTransaction,
-    VectorIndexSqlRequest,
+    SearchProjectionConsumerError, SearchProjectionConsumerId, SearchProjectionConsumerOptions,
+    StorageResidencyMode, Value, Vector, VectorDistance, VectorIndexBackend, VectorIndexBuildError,
+    VectorIndexBuildOptions, VectorIndexField, VectorIndexLanguageBudget, VectorIndexLsg,
+    VectorIndexReadError, VectorIndexReadTransaction, VectorIndexSqlRequest,
+    VectorIndexUpdateReport,
 };
 use hawdb_integrity::IntegrityHasher;
+use hawdb_qos::RuntimeAdmissionCode;
 use serde_json::json;
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::io::Read;
 use std::num::{NonZeroU64, NonZeroUsize};
 use std::path::{Path, PathBuf};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 type Hits = Vec<(usize, f64)>;
@@ -406,6 +408,70 @@ fn mutate(db: &mut Database, fixture: &Fixture, restore: bool) -> Result<()> {
     Ok(())
 }
 
+fn catch_up(
+    db: &mut Database,
+    consumer: &mut SearchProjectionConsumer,
+    build: &VectorIndexBuildOptions,
+    phase: &str,
+) -> Result<VectorIndexUpdateReport> {
+    let epoch = consumer.canonical_vector_source_epoch()?;
+    let generation = consumer
+        .projection()
+        .stationary_receipt()?
+        .generation_name()
+        .to_owned();
+    let deadline = Instant::now() + Duration::from_secs(30);
+    let mut attempts = 0usize;
+    loop {
+        let error = match db.catch_up_vector_index(consumer, build.clone()) {
+            Ok(report) => return Ok(report),
+            Err(error) => error,
+        };
+        let (code, resource, requested, available) = match &error {
+            VectorIndexBuildError::Admission(error)
+                if error.code == RuntimeAdmissionCode::BackgroundTaskSaturated
+                    && error.is_retryable() =>
+            {
+                (
+                    error.code.as_str(),
+                    None,
+                    Some(error.requested),
+                    Some(error.available),
+                )
+            }
+            VectorIndexBuildError::Consumer(SearchProjectionConsumerError::Database(
+                HawDBError::BranchBusy { resource },
+            ))
+            | VectorIndexBuildError::Query(HawDBError::BranchBusy { resource }) => {
+                ("branch_busy", Some(resource), None, None)
+            }
+            _ => return Err(error.into()),
+        };
+        if Instant::now() >= deadline {
+            return Err(error.into());
+        }
+        // A stationary receipt refuses pending preparation/selection, including
+        // an uncertain publication whose old read domain is still usable.
+        if consumer.canonical_vector_source_epoch()? != epoch
+            || consumer
+                .projection()
+                .stationary_receipt()?
+                .generation_name()
+                != generation
+        {
+            return Err("retryable refusal changed the Consumer selection".into());
+        }
+        attempts += 1;
+        println!(
+            "{}",
+            json!({"event": "admission_retry", "phase": phase,
+            "attempt": attempts, "code": code, "resource": resource,
+            "requested": requested, "available": available})
+        );
+        std::thread::sleep(Duration::from_millis(25));
+    }
+}
+
 pub(super) fn run(arguments: &[String]) -> Result<()> {
     if arguments.len() != 7 {
         return Err("canonical requires root, count, dimension, memory-MiB, plain|lsg, mutation-per-mille and samples".into());
@@ -450,11 +516,24 @@ pub(super) fn run(arguments: &[String]) -> Result<()> {
         changes: (0..changes).map(|index| index * stride % count).collect(),
     };
     std::fs::create_dir(root)?;
-    let config = DatabaseConfig {
+    let mut config = DatabaseConfig {
         storage_residency_mode: StorageResidencyMode::OutOfCore,
         strict_capacity_limit: true,
         ..Default::default()
     };
+    // Declare the atomic mutation envelope; undersized capture still requires
+    // an explicit rebuild and is covered independently by library regressions.
+    config
+        .search_projection_relational_change_limits
+        .max_entries = NonZeroUsize::new(
+        config
+            .search_projection_relational_change_limits
+            .max_entries
+            .get()
+            .max(changes),
+    )
+    .unwrap();
+    let change_capture = config.search_projection_relational_change_limits;
     let governor = RuntimeGovernor::detect(
         RuntimeGovernorConfig {
             // Source staging, publication and retained read domains coexist.
@@ -518,7 +597,9 @@ pub(super) fn run(arguments: &[String]) -> Result<()> {
         json!({"phase": "configuration", "protocol": VERSION, "seed": SEED, "count": count,
         "dimension": dimension, "build_memory_bytes": memory, "feed_work_budget": build.feed.work.get(),
         "lsg": lsg, "mutation_per_mille": rate,
-        "changed_keys": changes, "samples": samples, "durability": "SyncOnEveryWrite"})
+        "changed_keys": changes, "samples": samples, "durability": "SyncOnEveryWrite",
+        "source_change_capture_entries": change_capture.max_entries.get(),
+        "source_change_capture_bytes": change_capture.max_bytes.get()})
     );
     let started = Instant::now();
     let destination = root.join("index");
@@ -572,7 +653,7 @@ pub(super) fn run(arguments: &[String]) -> Result<()> {
         ) {
             return Err("stale index bound to a newer source epoch".into());
         }
-        let report = db.catch_up_vector_index(&mut consumer, build.clone())?;
+        let report = catch_up(&mut db, &mut consumer, &build, phase)?;
         let expected_upserts = changes / 4 * if restore { 3 } else { 2 };
         if report.mapped_candidates != changes
             || report.upserted_vectors != expected_upserts
@@ -603,7 +684,7 @@ pub(super) fn run(arguments: &[String]) -> Result<()> {
             "old_pin",
             Some(&baseline),
         )?;
-        let no_op = db.catch_up_vector_index(&mut consumer, build.clone())?;
+        let no_op = catch_up(&mut db, &mut consumer, &build, &format!("{phase}_noop"))?;
         if no_op.mapped_candidates != 0 || no_op.source_epoch != report.source_epoch {
             return Err("no-op catch-up changed its source identity".into());
         }

@@ -460,6 +460,27 @@ work units, so the fixture explicitly admits 2,000,022 instead of the default
 These are explicit workload settings; library defaults, source accounting,
 resource-refusal cases and the query thresholds remain unchanged.
 
+The atomic source transaction also needs an explicit primary-key capture
+envelope. The library default is 4,096 entries and 256 KiB per transaction.
+The 1% control changes 1,000 keys and retains that default; the 10% control
+changes 10,000 keys and explicitly declares a 10,000-entry host envelope.
+Both keep the 256 KiB byte limit and record the configured limits. An
+underfunded transaction still produces `RequiresRebuild`; the Consumer must
+retain its old source cursor and selection. The fixture does not split the
+atomic mutation or change library defaults to avoid this boundary.
+
+Vector maintenance preserves publication admission as a typed
+`VectorIndexBuildError::Admission`. A background task can temporarily occupy
+the host's sole background slot or the source catalog's metadata lock. The
+fixture retries only a retryable `BackgroundTaskSaturated` or a typed
+`BranchBusy` refusal, for at most 30 seconds with 25 ms backoff. Each refusal
+must leave the Consumer's source epoch and completed stationary generation
+unchanged and emits an `admission_retry` record. A pending preparation or
+uncertain selection cannot supply that stationary receipt. Other failures
+propagate immediately. Admission and original native custody retain their
+ordering; this retry policy does not apply to uncertain publication. No-op maintenance
+requires no publication slot, even while that slot is occupied.
+
 At baseline, after both publications and after cold reopen, each of the five
 filter families compares ANN results with exhaustive canonical SQL distances,
 checks independent eligible counts, IDs and raw distances, and requires at least
@@ -494,11 +515,17 @@ The subsequent four-control run completed all baseline queries with the repaired
 navigation: minimum family mean recall was 96.25% for plain and 98.75% for LSG.
 Every control then refused its first mixed CRUD transaction because primary-key
 UPDATE/DELETE hydration still scanned the whole 100k table and exhausted the
-unchanged WAL replay-access entry budget. The live hydration planner now derives
-complete primary-key point reads as described above. A 16-row canonical-page
+unchanged WAL replay-access entry budget. Both live hydration and retained-row
+Materialized execution now derive complete primary-key point reads as described
+above. A 16-row canonical-page
 regression changes three keys under a four-entry budget and checks source-view,
 WAL replay and constraint parity. This bounded regression does not qualify the
 complete 100k lifecycle; all four controls still require a final-source rerun.
+The subsequent retained-row run exposed the underfunded default source-capture
+envelope in the 10% controls and transient background-slot contention after the
+1% publication and retained-reader checks. Those partial outcomes remain
+failure evidence; the explicit envelope and bounded typed host retry above
+must complete the same four full lifecycles before qualification.
 
 The Native Bindings workflow exposes an explicit `canonical_vector_lifecycle`
 dispatch. It runs the four 100k-by-128 plain/LSG and 1%/10% changed-key controls

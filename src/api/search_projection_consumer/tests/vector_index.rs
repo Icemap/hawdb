@@ -326,6 +326,10 @@ fn vector_index_rebuild_recovers_uncertain_selection_without_retargeting_old_rea
         assert!(db
             .rebuild_vector_index(&mut consumer, Default::default())
             .is_err());
+        assert!(
+            consumer.projection().stationary_receipt().is_err(),
+            "an uncertain selection must not satisfy a host's stationary retry guard"
+        );
         let old_generation = old.generation();
         let old_output = old
             .query_candidates(

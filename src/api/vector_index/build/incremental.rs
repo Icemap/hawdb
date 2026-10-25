@@ -60,9 +60,11 @@ impl Database {
         let mut input_error = None;
         let mut producer_memory = None;
         let mut report = None;
+        let mut admission_error = None;
         let result = self.rebuild_consumer_with_initializer(
             consumer,
             build.task.clone(),
+            &mut admission_error,
             |source, index, permit, definition| {
                 let mapped = (|| {
                     producer_memory = Some(
@@ -82,6 +84,9 @@ impl Database {
         drop(producer_memory);
         if let Some(error) = input_error {
             return Err(error);
+        }
+        if let Some(error) = admission_error {
+            return Err(VectorIndexBuildError::Admission(error));
         }
         result.map_err(VectorIndexBuildError::Consumer)?;
         report.ok_or_else(|| invalid("completed vector update has no mapping report").into())

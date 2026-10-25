@@ -4,6 +4,308 @@
 use super::*;
 use crate::VectorIndexReadTransaction;
 
+#[test]
+fn vector_index_incremental_capture_capacity_is_explicit_and_fails_closed() {
+    use crate::DatabaseConfig;
+    use hawdb_storage::relational::RelationalPrimaryKeyChangeCaptureLimits;
+    use hawdb_storage::store::ProjectionFeedError;
+    for capacity in [1, 2] {
+        let fixture = Fixture::new();
+        let mut db = Database::open_with_config(
+            fixture.0.join("database"),
+            DatabaseConfig {
+                search_projection_relational_change_limits:
+                    RelationalPrimaryKeyChangeCaptureLimits {
+                        max_entries: NonZeroUsize::new(capacity).unwrap(),
+                        ..Default::default()
+                    },
+                automatic_checkpoint_max_age: std::time::Duration::from_secs(3600),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        db.query_sql("CREATE TABLE vectors (id BIGINT PRIMARY KEY, embedding VECTOR(2))")
+            .unwrap();
+        for id in 1..=2 {
+            db.query_sql_with_params(
+                "INSERT INTO vectors (id, embedding) VALUES ($1, $2)",
+                &[
+                    Value::Int(id),
+                    Value::Vector(Vector::new(&[1.0, id as f32]).unwrap()),
+                ],
+            )
+            .unwrap();
+        }
+        let mut consumer = db
+            .create_vector_index(
+                "capacity",
+                &sql_field(),
+                fixture.0.join("capacity"),
+                registration(),
+                Default::default(),
+            )
+            .unwrap();
+        let before = consumer.canonical_vector_source_epoch().unwrap();
+        let generation = consumer
+            .projection()
+            .stationary_receipt()
+            .unwrap()
+            .generation_name()
+            .to_owned();
+        let mut transaction = db.begin_transaction().unwrap();
+        for id in 1..=2 {
+            transaction
+                .query_sql_with_params(
+                    "UPDATE vectors SET embedding = NULL WHERE id = $1",
+                    &[Value::Int(id)],
+                )
+                .unwrap();
+        }
+        transaction.commit().unwrap();
+        let result = db.catch_up_vector_index(&mut consumer, Default::default());
+        if capacity == 1 {
+            assert!(
+                matches!(
+                    result,
+                    Err(VectorIndexBuildError::Source(
+                        ProjectionFeedError::RequiresRebuild
+                    ))
+                ),
+                "{result:?}"
+            );
+            assert_eq!(consumer.canonical_vector_source_epoch().unwrap(), before);
+            assert_eq!(
+                consumer
+                    .projection()
+                    .stationary_receipt()
+                    .unwrap()
+                    .generation_name(),
+                generation
+            );
+            assert_eq!(consumer.document_count().unwrap(), 2);
+        } else {
+            let report = result.unwrap();
+            assert_eq!(report.mapped_candidates, 2);
+            assert_eq!(report.retraction_candidates, 2);
+            assert_eq!(consumer.document_count().unwrap(), 0);
+        }
+    }
+}
+
+#[cfg(feature = "background-maintenance")]
+#[test]
+fn vector_index_incremental_admission_is_typed_and_refuses_before_publication() {
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeAdmissionCode, RuntimeGovernor, RuntimeGovernorConfig,
+    };
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    let governor = RuntimeGovernor::detect(
+        RuntimeGovernorConfig {
+            background_task_limit: NonZeroUsize::new(1),
+            memory_budget_bytes: Some(1 << 30),
+            ..RuntimeGovernorConfig::shared_host()
+        },
+        IoConcurrencyBudget::new(2, 1),
+    );
+    governor.pin_resources();
+    db.set_runtime_governor(governor.clone());
+    let suspension = db.runtime.suspend_automatic_checkpoint().unwrap().unwrap();
+    suspension.wait_idle().unwrap();
+    db.query_sql("CREATE TABLE vectors (id BIGINT PRIMARY KEY, embedding VECTOR(2))")
+        .unwrap();
+    for id in 1..=2 {
+        db.query_sql_with_params(
+            "INSERT INTO vectors (id, embedding) VALUES ($1, $2)",
+            &[
+                Value::Int(id),
+                Value::Vector(Vector::new(&[1.0, id as f32]).unwrap()),
+            ],
+        )
+        .unwrap();
+    }
+    let mut consumer = db
+        .create_vector_index(
+            "admission",
+            &sql_field(),
+            fixture.0.join("admission"),
+            registration(),
+            Default::default(),
+        )
+        .unwrap();
+    let before = consumer.canonical_vector_source_epoch().unwrap();
+    let generation = consumer
+        .projection()
+        .stationary_receipt()
+        .unwrap()
+        .generation_name()
+        .to_owned();
+    let busy = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(1))
+        .unwrap();
+    let noop = db
+        .catch_up_vector_index(&mut consumer, Default::default())
+        .expect("a no-op needs no publication admission");
+    assert_eq!(noop.mapped_candidates, 0);
+    db.query_sql("UPDATE vectors SET embedding = NULL WHERE id = 1")
+        .unwrap();
+    for rebuild in [false, true] {
+        let result = if rebuild {
+            db.rebuild_vector_index(&mut consumer, Default::default())
+        } else {
+            db.catch_up_vector_index(&mut consumer, Default::default())
+                .map(|_| ())
+        };
+        let error = result.unwrap_err();
+        assert!(
+            matches!(error, VectorIndexBuildError::Admission(error)
+                if error.code == RuntimeAdmissionCode::BackgroundTaskSaturated && error.is_retryable()),
+            "expected typed retryable admission: {error:?}"
+        );
+        assert_eq!(consumer.canonical_vector_source_epoch().unwrap(), before);
+        assert_eq!(
+            consumer
+                .projection()
+                .stationary_receipt()
+                .unwrap()
+                .generation_name(),
+            generation
+        );
+    }
+    drop(busy);
+    let metadata = hawdb_storage::branch_catalog::CatalogMetadataLease::acquire(
+        &fixture.0.join("database/branches"),
+    )
+    .unwrap();
+    let error = db
+        .catch_up_vector_index(&mut consumer, Default::default())
+        .unwrap_err();
+    assert!(
+        matches!(
+            error,
+            VectorIndexBuildError::Consumer(crate::SearchProjectionConsumerError::Database(
+                crate::HawDBError::BranchBusy { .. }
+            ))
+        ),
+        "expected typed metadata contention: {error:?}"
+    );
+    assert_eq!(consumer.canonical_vector_source_epoch().unwrap(), before);
+    assert_eq!(
+        consumer
+            .projection()
+            .stationary_receipt()
+            .unwrap()
+            .generation_name(),
+        generation
+    );
+    drop(metadata);
+    let report = db
+        .catch_up_vector_index(&mut consumer, Default::default())
+        .unwrap();
+    assert_eq!(report.mapped_candidates, 1);
+    assert_eq!(report.retraction_candidates, 1);
+    assert_eq!(consumer.document_count().unwrap(), 1);
+}
+
+#[cfg(feature = "background-maintenance")]
+#[test]
+fn vector_index_incremental_feed_survives_automatic_checkpoint_with_one_background_slot() {
+    use crate::{DatabaseConfig, StorageResidencyMode};
+    use hawdb_qos::{IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig};
+    use std::time::{Duration, Instant};
+
+    let fixture = Fixture::new();
+    let governor = RuntimeGovernor::detect(
+        RuntimeGovernorConfig {
+            background_task_limit: NonZeroUsize::new(1),
+            memory_budget_bytes: Some(1 << 30),
+            ..RuntimeGovernorConfig::shared_host()
+        },
+        IoConcurrencyBudget::new(2, 1),
+    );
+    governor.pin_resources();
+    let mut db = Database::open_with_config(
+        fixture.0.join("database"),
+        DatabaseConfig {
+            storage_residency_mode: StorageResidencyMode::OutOfCore,
+            automatic_checkpoint_max_age: Duration::from_millis(20),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    db.set_runtime_governor(governor.clone());
+    db.query_sql("CREATE TABLE vectors (id BIGINT PRIMARY KEY, embedding VECTOR(2))")
+        .unwrap();
+    let mut transaction = db.begin_transaction().unwrap();
+    for id in 1..=32 {
+        transaction
+            .query_sql_with_params(
+                "INSERT INTO vectors (id, embedding) VALUES ($1, $2)",
+                &[
+                    Value::Int(id),
+                    Value::Vector(Vector::new(&[1.0, id as f32 / 100.0]).unwrap()),
+                ],
+            )
+            .unwrap();
+    }
+    transaction.commit().unwrap();
+    db.checkpoint().unwrap();
+    let mut consumer = db
+        .create_vector_index(
+            "checkpoint-feed",
+            &sql_field(),
+            fixture.0.join("checkpoint-feed"),
+            registration(),
+            Default::default(),
+        )
+        .unwrap();
+    let base = consumer.canonical_vector_source_epoch().unwrap().unwrap();
+    let suspension = db.runtime.suspend_automatic_checkpoint().unwrap().unwrap();
+    suspension.wait_idle().unwrap();
+    let before = db
+        .automatic_checkpoint_report()
+        .unwrap()
+        .unwrap()
+        .completed_checkpoints;
+    db.query_sql("UPDATE vectors SET embedding = NULL WHERE id = 3")
+        .unwrap();
+    let changes = db
+        .runtime
+        .get()
+        .unwrap()
+        .store
+        .search_projection_graph_changes_after(base);
+    assert_eq!(changes.len(), 1);
+    assert!(!changes[0].relational_primary_key_changes.requires_rebuild());
+    drop(suspension);
+    let deadline = Instant::now() + Duration::from_secs(15);
+    loop {
+        let report = db.automatic_checkpoint_report().unwrap().unwrap();
+        if report.completed_checkpoints > before && governor.snapshot().active_background_tasks == 0
+        {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "checkpoint did not finish: {report:?}"
+        );
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    let recovered = db
+        .runtime
+        .get()
+        .unwrap()
+        .store
+        .search_projection_graph_changes_after(base);
+    assert_eq!(recovered, changes);
+    let report = db
+        .catch_up_vector_index(&mut consumer, Default::default())
+        .unwrap();
+    assert_eq!(report.mapped_candidates, 1);
+    assert_eq!(report.retraction_candidates, 1);
+    assert_eq!(consumer.document_count().unwrap(), 31);
+}
+
 fn query(read: &VectorIndexReadTransaction, permit: &hawdb_qos::RuntimePermit) -> Vec<f64> {
     let output = read
         .query_candidates(
