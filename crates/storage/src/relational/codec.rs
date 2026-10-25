@@ -1988,6 +1988,8 @@ impl<I: DecodeInput> Decoder<I> {
                     1 => MaterializedViewExpression::Count(None),
                     2 => MaterializedViewExpression::Count(Some(decoder.string()?)),
                     3 => MaterializedViewExpression::Sum(decoder.string()?),
+                    4 => MaterializedViewExpression::Min(decoder.string()?),
+                    5 => MaterializedViewExpression::Max(decoder.string()?),
                     tag => {
                         return Err(RelationalError::Corruption(format!(
                             "invalid materialized view expression tag {tag}"

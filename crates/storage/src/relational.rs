@@ -7025,6 +7025,7 @@ fn apply_transaction_inner(
     let mut replay_access_tracker = replay_access_limits
         .map(|limits| RelationalReplayAccessTracker::new(limits, checkpoint_allocations));
     let mut full_index_rebuild = BTreeSet::new();
+    let mut created_views = BTreeSet::new();
     let mut projection_rebuild_tables = BTreeSet::new();
     let mut mutation_outcomes = Vec::new();
     for write in transaction.writes {
@@ -7049,6 +7050,13 @@ fn apply_transaction_inner(
                     &schema.name,
                     checkpoint_allocations,
                 )?;
+                if schema.materialized_view.is_some() {
+                    insert_table_name_with_allocations(
+                        &mut created_views,
+                        &schema.name,
+                        checkpoint_allocations,
+                    )?;
+                }
                 match checkpoint_allocations {
                     Some(context) => {
                         let owned_schema =
@@ -7571,7 +7579,7 @@ fn apply_transaction_inner(
         &mut next,
         &mut changed_keys,
         &mut touched,
-        &full_index_rebuild,
+        &created_views,
         materialized_view::MaintenanceOptions {
             limits,
             overflow_config,

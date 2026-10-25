@@ -47,17 +47,24 @@ EXISTS` accepts an absent relation, but cannot drop a base table.
   `SUM` ignores NULL, returns NULL for no non-NULL input, and rejects BIGINT
   overflow before commit. Empty ungrouped aggregates retain one result row;
   empty groups disappear.
+- `MIN` and `MAX` of BIGINT or TEXT columns, ignoring NULL and returning NULL
+  when no non-NULL input remains. A non-unique source index must start with the
+  `GROUP BY` columns in their declared order (an ungrouped aggregate can use any
+  non-unique source index). Unique indexes omit NULL keys and are not eligible.
 - INSERT, UPSERT, UPDATE (including primary-key or group changes), DELETE, and
   foreign-key cascade changes to the base table.
 
 Definitions reject parameters, arbitrary expressions/functions, joins,
 DISTINCT, HAVING, ORDER BY, LIMIT/OFFSET, windows, locking clauses, non-BIGINT
-SUM, and other aggregates. View-on-view definitions and strict append sources
+SUM, and aggregates other than COUNT/SUM/MIN/MAX. View-on-view definitions and strict append sources
 are not supported. Cypher definitions are deferred. Result queries can use the
 normal supported SELECT operations and must request their own ordering.
 
-Views are read-only: direct DML, ALTER TABLE, and CREATE INDEX on a view are
-rejected, including through typed relational writes. Foreign keys cannot target
+Views reject direct DML and ALTER TABLE, including through typed relational
+writes. `CREATE INDEX` and `CREATE UNIQUE INDEX` are supported on visible output
+columns. Index creation preserves existing view state and does not backfill the
+source again. Unique view indexes can reject source transactions that would
+produce duplicate indexed results; rejection leaves both source and view intact. Foreign keys cannot target
 a materialized view. `information_schema.tables` reports `MATERIALIZED VIEW`
 and `is_insertable_into = 'NO'`; internal identity and aggregate-state columns
 are excluded from SQL wildcards and `information_schema.columns`, and cannot
@@ -66,21 +73,42 @@ be explicitly selected.
 ## Maintenance and admission
 
 Creation synchronously backfills the base table under the transaction budget.
-After creation, maintenance visits changed primary keys and their old/new row
-images, rather than rescanning the base table. Updates retract old contributions
+After creation, COUNT/SUM/projection maintenance visits changed primary keys
+and their old/new row images. Updates retract old contributions
 and add new contributions. Hidden source identities preserve projection bag
 semantics; encoded group keys preserve NULL grouping without nullable primary
 keys. SUM maintains a separate non-NULL count. Aggregate deltas accumulate in
 i128 and are checked when publishing BIGINT results, avoiding false overflow
 while replacing extreme values.
 
+MIN/MAX use bounded indexed recomputation for each affected group, including
+inserts. The committed source-index prefix is streamed without a posting-list
+copy; changed identities are excluded and merged with their new values from
+the transaction. Filters are applied to both paths. Unaffected groups are not
+scanned. An ungrouped MIN/MAX necessarily visits the whole source index. This
+trades per-group read work for no separately persisted ordered/refcount state;
+large or skewed groups can exhaust admission even for a one-row source update.
+
 Maintenance shares one row/payload work budget across all affected views,
-derived from `RelationalMutationLimits`. Reads, output changes, hydration, and
+derived from `RelationalMutationLimits` (the SQL facade uses the default
+100,000 rows and 64 MiB payload limit). Reads, output changes, hydration, and
 aggregate working state are bounded. Exceeding admission or aggregate limits
 rejects the whole transaction before WAL append; results are never truncated.
 More views increase write latency and can cause a previously admitted base
 batch to exceed maintenance limits. Large initial backfills must fit admission;
 background/chunked creation is not implemented.
+
+For creation, N source rows and M output rows cost N + M row units. An
+unfiltered projection therefore needs 2N, an ungrouped aggregate needs N + 1
+(including an empty source), and a grouped aggregate needs N + the number of
+qualifying groups. A filtered projection needs N + the number of matches.
+Known lower bounds are checked against the remaining shared budget before
+collecting backfill keys; filter/group output counts are charged as discovered.
+This preflight does not predict payload admission, which separately includes
+key copies, hydrated rows, aggregate state, and output copies. Incremental
+MIN/MAX additionally charges every visited prefix entry, including changed
+identities skipped during recomputation. Budget exhaustion never publishes a
+partial backfill or source mutation.
 
 The current implementation requires materialized relational constraints and
 resident source rows. `RelationalIndexMode::Authoritative` is rejected for
@@ -103,7 +131,9 @@ schema encodings include the view definition. The append WAL codec is version 3
 because append schemas embed that shared relational encoding. Earlier development databases
 must be recreated; no migration for the earlier development format is supplied.
 This follows HawDB's greenfield policy and does not change or migrate legacy or
-Cloud data stores.
+Cloud data stores. MIN/MAX add expression tags to the existing view-definition
+encoding; current readers still read COUNT/SUM definitions. Older readers cannot
+open a definition containing the new expression tags.
 
 The regression suite is `api::tests::materialized_views`, discovered by the
 existing Cargo library and Bazel root unit-test targets. It covers full-SELECT
@@ -113,6 +143,48 @@ overflow payloads, WAL/checkpoint reopen, and fail-closed torn WAL recovery.
 Torn-tail/reopen tests are not a new power-loss qualification: machine-level
 durability continues to rely on the storage synchronization assumptions and
 qualification described in `AGENTS.md`.
+
+## Thread summaries for Mem
+
+Mem's `integrations/hawdb/schema/content_store_v1.sql` already defines the source
+index `idx_thread_messages_space (space_id, thread_storage_id)`. With that schema:
+
+```sql
+CREATE MATERIALIZED VIEW thread_activity AS
+SELECT space_id, thread_storage_id,
+       COUNT(*) AS message_count,
+       COUNT(timestamp) AS timestamp_count,
+       MIN(timestamp) AS first_message_at,
+       MAX(timestamp) AS last_message_at
+FROM thread_messages
+GROUP BY space_id, thread_storage_id;
+
+CREATE INDEX activity_space_thread
+ON thread_activity (space_id, thread_storage_id);
+
+SELECT * FROM thread_activity
+WHERE space_id = $1 AND thread_storage_id = $2;
+```
+
+Use parameterized embedded queries with explicit row and payload budgets.
+These are local content summaries, not complete source-provided activity ranges.
+An empty Thread has no grouped row. Missing timestamps remain NULL, duplicate
+extrema survive removal of only one contributing message, and changes to a
+Space/Thread key retract the old group before publishing the new group.
+
+The Mem fixture is sourced from revision
+`0b8fb240e6847c642f3bace52e52d54be5d414bc`. Its canonical `timestamp` column is TEXT.
+SQL TEXT extrema compare lexically, so chronological use requires normalized
+UTC timestamps with uniform precision and representation, or normalized BIGINT
+epoch values in a host-approved schema. Mem's current `thread_activity_stats`
+parses timestamps and uses update/create times only when no native timestamps
+parse successfully. COUNT(timestamp) counts non-NULL strings, not valid parsed
+timestamps; the example does not implement that legacy fallback. Source ranges
+and import-completeness provenance must remain independent of local extrema.
+No Mem caller or canonical schema is changed here. Adoption still needs a time
+normalization contract and full verification against the authoritative stores.
+Memory/Entity graph counts and Cypher view definitions remain outside this SQL
+slice, as described in [the broader proposal](specs/MATERIALIZED_VIEWS_SPEC.md).
 
 ## RisingWave reference
 

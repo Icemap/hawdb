@@ -42,6 +42,22 @@ fn controlled_materialized_view_recovery_matches_wal_and_releases_admission() {
             overflow,
         )
         .unwrap();
+    previous = previous
+        .stage_transaction(
+            RelationalTransaction {
+                writes: vec![RelationalWrite::CreateIndex {
+                    table: "documents".into(),
+                    index: RelationalIndexSchema {
+                        name: "by_payload".into(),
+                        columns: vec!["payload".into()],
+                        unique: false,
+                    },
+                }],
+            },
+            limits,
+            overflow,
+        )
+        .unwrap();
     let view = MaterializedViewDefinition {
         source: "documents".into(),
         columns: vec![
@@ -52,6 +68,14 @@ fn controlled_materialized_view_recovery_matches_wal_and_releases_admission() {
             MaterializedViewColumn {
                 name: "n".into(),
                 expression: MaterializedViewExpression::Count(None),
+            },
+            MaterializedViewColumn {
+                name: "first_owner".into(),
+                expression: MaterializedViewExpression::Min("owner".into()),
+            },
+            MaterializedViewColumn {
+                name: "last_owner".into(),
+                expression: MaterializedViewExpression::Max("owner".into()),
             },
         ],
         group_by: vec!["payload".into()],
@@ -66,6 +90,14 @@ fn controlled_materialized_view_recovery_matches_wal_and_releases_admission() {
     .unwrap();
     for write in [
         RelationalWrite::CreateTable(view),
+        RelationalWrite::CreateIndex {
+            table: "stats".into(),
+            index: RelationalIndexSchema {
+                name: "stats_payload".into(),
+                columns: vec!["payload".into()],
+                unique: false,
+            },
+        },
         RelationalWrite::Insert {
             table: "documents".into(),
             rows: vec![upsert_row("id-1", "owner-1", "new")],

@@ -154,9 +154,11 @@ fn same_materialized_view(
                 return Ok(false);
             }
             match (&left.expression, &right.expression) {
-                (Column(a), Column(b)) | (Sum(a), Sum(b)) | (Count(Some(a)), Count(Some(b))) => {
-                    same_text(a, b, work)
-                }
+                (Column(a), Column(b))
+                | (Sum(a), Sum(b))
+                | (Min(a), Min(b))
+                | (Max(a), Max(b))
+                | (Count(Some(a)), Count(Some(b))) => same_text(a, b, work),
                 (Count(None), Count(None)) => Ok(true),
                 _ => Ok(false),
             }

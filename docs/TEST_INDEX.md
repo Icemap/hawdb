@@ -9,12 +9,17 @@ execution lane, fixture size, isolation or known failure mode.
 The `api::tests::materialized_views` family covers synchronous SQL view DDL,
 projection/group retractions, differential SELECT equality, admission refusals,
 rollback, concurrent commits, cascade deletes and WAL/checkpoint recovery.
+Its `extrema` submodule covers retractable BIGINT/TEXT MIN/MAX, NULL-complete
+source index admission, affected-prefix row budgets, exact creation row costs,
+visible/unique view indexes, and Mem Thread message summaries with indexed
+parameterized reads in shadow/demand-paged modes. The Mem schema fixture is
+pinned in the test and guide; it does not claim legacy timestamp parsing parity.
 It belongs to the existing root general unit lane and Cargo library tests;
 local replay: `cargo test --locked -p hawdb --lib api::tests::materialized_views`.
 Fixtures are small and do not introduce a new fuzz or CI lane. Supported modes
 and limits are documented in [the implementation guide](MATERIALIZED_VIEWS.md).
 The existing storage unit lane also covers admission-aware view recovery, WAL
-decode parity, schema copying, and reservation release through
+decode parity, indexed MIN/MAX schema copying, and reservation release through
 `cargo test --locked -p hawdb-storage --lib controlled_materialized_view_recovery`.
 
 The `api::query_request::tests` unit family covers compact request collection

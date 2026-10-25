@@ -49,7 +49,7 @@ pub(super) fn create(
         || select.offset.is_some()
         || select.lock_strength.is_some()
     {
-        return Err(HawDBError::Semantic("materialized views support single-table projection, WHERE, GROUP BY, COUNT, and BIGINT SUM; joins, DISTINCT, HAVING, ORDER BY, LIMIT, OFFSET, and locking clauses are unsupported".into()));
+        return Err(HawDBError::Semantic("materialized views support single-table projection, WHERE, GROUP BY, COUNT, BIGINT SUM, and BIGINT/TEXT MIN/MAX; joins, DISTINCT, HAVING, ORDER BY, LIMIT, OFFSET, and locking clauses are unsupported".into()));
     }
     let from = select
         .from
@@ -92,7 +92,9 @@ pub(super) fn create(
                         distinct: false,
                         filter: None,
                     } if name.eq_ignore_ascii_case("count")
-                        || name.eq_ignore_ascii_case("sum") =>
+                        || name.eq_ignore_ascii_case("sum")
+                        || name.eq_ignore_ascii_case("min")
+                        || name.eq_ignore_ascii_case("max") =>
                     {
                         let input = match arguments.as_slice() {
                             [SqlFunctionArgument::Wildcard]
@@ -114,6 +116,10 @@ pub(super) fn create(
                         };
                         let expression = if name.eq_ignore_ascii_case("count") {
                             MaterializedViewExpression::Count(input)
+                        } else if name.eq_ignore_ascii_case("min") {
+                            MaterializedViewExpression::Min(input.expect("MIN column"))
+                        } else if name.eq_ignore_ascii_case("max") {
+                            MaterializedViewExpression::Max(input.expect("MAX column"))
                         } else {
                             MaterializedViewExpression::Sum(input.expect("SUM column"))
                         };
@@ -121,7 +127,7 @@ pub(super) fn create(
                     }
                     _ => {
                         return Err(HawDBError::Semantic(
-                            "unsupported materialized view expression; use columns, COUNT, or BIGINT SUM"
+                            "unsupported materialized view expression; use columns, COUNT, BIGINT SUM, or BIGINT/TEXT MIN/MAX"
                                 .into(),
                         ))
                     }

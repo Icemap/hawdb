@@ -239,6 +239,14 @@ fn materialized_view(
                     sink.raw(&[3])?;
                     bytes(sink, name.as_bytes())?;
                 }
+                MaterializedViewExpression::Min(name) => {
+                    sink.raw(&[4])?;
+                    bytes(sink, name.as_bytes())?;
+                }
+                MaterializedViewExpression::Max(name) => {
+                    sink.raw(&[5])?;
+                    bytes(sink, name.as_bytes())?;
+                }
             }
         }
         sink.raw(&[u8::from(view.filter.is_some())])?;

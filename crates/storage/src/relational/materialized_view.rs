@@ -39,6 +39,8 @@ pub enum MaterializedViewExpression {
     Column(String),
     Count(Option<String>),
     Sum(String),
+    Min(String),
+    Max(String),
 }
 
 impl RelationalTableSchema {
@@ -58,6 +60,15 @@ impl MaterializedViewDefinition {
                 .columns
                 .iter()
                 .any(|column| !matches!(column.expression, MaterializedViewExpression::Column(_)))
+    }
+
+    fn has_extrema(&self) -> bool {
+        self.columns.iter().any(|column| {
+            matches!(
+                column.expression,
+                MaterializedViewExpression::Min(_) | MaterializedViewExpression::Max(_)
+            )
+        })
     }
 
     pub fn table_schema(
@@ -80,6 +91,9 @@ impl MaterializedViewDefinition {
         }
         for column in &self.group_by {
             source_column(source, column)?;
+        }
+        if self.has_extrema() {
+            extrema_index(self, source)?;
         }
         let mut names = BTreeSet::new();
         let mut columns = Vec::new();
@@ -107,6 +121,18 @@ impl MaterializedViewDefinition {
                         source_column(source, input)?;
                     }
                     (RelationalScalarType::BigInt, false)
+                }
+                MaterializedViewExpression::Min(input) | MaterializedViewExpression::Max(input) => {
+                    let scalar_type = source_column(source, input)?.scalar_type;
+                    if !matches!(
+                        scalar_type,
+                        RelationalScalarType::BigInt | RelationalScalarType::Text
+                    ) {
+                        return Err(RelationalError::Schema(
+                            "materialized MIN/MAX requires BIGINT or TEXT input".into(),
+                        ));
+                    }
+                    (scalar_type, true)
                 }
                 MaterializedViewExpression::Sum(input) => {
                     if source_column(source, input)?.scalar_type != RelationalScalarType::BigInt {
@@ -173,6 +199,12 @@ pub(super) fn clone_definition(
                 }
                 MaterializedViewExpression::Sum(input) => {
                     MaterializedViewExpression::Sum(name(input)?)
+                }
+                MaterializedViewExpression::Min(input) => {
+                    MaterializedViewExpression::Min(name(input)?)
+                }
+                MaterializedViewExpression::Max(input) => {
+                    MaterializedViewExpression::Max(name(input)?)
                 }
             };
             Ok(MaterializedViewColumn {
@@ -255,7 +287,12 @@ pub(super) fn validate_definition(
         let source = state.table_schema(&view.source).ok_or_else(|| {
             RelationalError::Schema(format!("unknown materialized view source {}", view.source))
         })?;
-        if view.table_schema(schema.name.clone(), source)? != *schema {
+        let mut expected = view.table_schema(schema.name.clone(), source)?;
+        for index in &schema.indexes {
+            validate_view_index(schema, index)?;
+        }
+        expected.indexes.clone_from(&schema.indexes);
+        if expected != *schema {
             return Err(RelationalError::Schema(
                 "materialized view schema does not match its definition".into(),
             ));
@@ -282,8 +319,15 @@ pub(super) fn reject_write(
         RelationalWrite::CreateTable(_) | RelationalWrite::DropMaterializedView { .. } => {
             return Ok(())
         }
+        RelationalWrite::CreateIndex { table, index } => {
+            if let Some(schema) = state.table_schema(table)
+                && schema.materialized_view.is_some()
+            {
+                validate_view_index(schema, index)?;
+            }
+            return Ok(());
+        }
         RelationalWrite::AddColumn { table, .. }
-        | RelationalWrite::CreateIndex { table, .. }
         | RelationalWrite::Insert { table, .. }
         | RelationalWrite::Upsert { table, .. }
         | RelationalWrite::DeleteByPrimaryKey { table, .. }
@@ -301,6 +345,33 @@ pub(super) fn reject_write(
     Ok(())
 }
 
+fn validate_view_index(
+    schema: &RelationalTableSchema,
+    index: &RelationalIndexSchema,
+) -> Result<(), RelationalError> {
+    if index.columns.iter().any(|name| {
+        !schema
+            .visible_columns()
+            .iter()
+            .any(|column| column.name == *name)
+    }) {
+        return Err(RelationalError::Schema(
+            "materialized view indexes require visible output columns".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn extrema_index<'a>(
+    definition: &MaterializedViewDefinition,
+    source: &'a RelationalTableSchema,
+) -> Result<&'a RelationalIndexSchema, RelationalError> {
+    // Unique indexes omit NULL keys. A non-unique prefix is complete even for
+    // nullable grouping columns and nullable suffixes.
+    source.indexes.iter().find(|index| !index.unique && index.columns.starts_with(&definition.group_by))
+        .ok_or_else(|| RelationalError::Schema("materialized MIN/MAX requires a non-unique source index starting with the GROUP BY columns".into()))
+}
+
 pub(super) struct MaintenanceOptions<'a> {
     pub limits: RelationalMutationLimits,
     pub overflow_config: RelationalOverflowConfig,
@@ -316,6 +387,15 @@ struct MaintenanceBudget<'a> {
 }
 
 impl MaintenanceBudget<'_> {
+    fn ensure_rows(&self, additional: usize) -> Result<(), RelationalError> {
+        if additional > self.limits.max_rows.get().saturating_sub(self.rows) {
+            return Err(RelationalError::Admission(
+                "materialized view maintenance exceeds the transaction row budget".into(),
+            ));
+        }
+        Ok(())
+    }
+
     fn charge(&mut self, rows: usize, bytes: usize) -> Result<(), RelationalError> {
         self.rows = self.rows.saturating_add(rows);
         self.bytes = self.bytes.saturating_add(bytes);
@@ -346,6 +426,7 @@ impl MaintenanceBudget<'_> {
         table: &str,
         key: &RelationalKey,
     ) -> Result<Option<RelationalRow>, RelationalError> {
+        self.ensure_rows(1)?;
         let row = state.hydrate_row_with_context(
             table,
             key,
@@ -417,12 +498,17 @@ pub(super) fn maintain(
         );
         let keys = if rebuild {
             let rows = &next.segments[&source.name].rows;
-            // Admission precedes collecting the backfill keys.
-            if rows.len() > limits.max_rows.get() {
-                return Err(RelationalError::Admission(
-                    "materialized view backfill exceeds the transaction row budget".into(),
-                ));
-            }
+            // Reject known read + output costs before allocating backfill keys.
+            // Filtered projections and grouped cardinalities are charged exactly
+            // as they are discovered, without a second scan to estimate them.
+            let outputs = if !definition.grouped() && definition.filter.is_none() {
+                rows.len()
+            } else if definition.grouped() && definition.group_by.is_empty() {
+                1
+            } else {
+                usize::from(rows.len() != 0 && definition.filter.is_none())
+            };
+            budget.ensure_rows(rows.len().saturating_add(outputs))?;
             let mut keys = BTreeSet::new();
             for (key, _) in rows.iter() {
                 budget.charge(
@@ -449,21 +535,29 @@ pub(super) fn maintain(
         if definition.grouped() {
             let mut deltas = BTreeMap::<RelationalKey, GroupDelta>::new();
             if rebuild && definition.group_by.is_empty() {
-                budget.charge(0, GroupDelta::estimated_bytes(definition.columns.len()))?;
-                deltas.insert(
-                    RelationalKey(Vec::new()),
-                    GroupDelta::new(definition.columns.len()),
-                );
+                budget.charge(0, GroupDelta::estimated_bytes(definition))?;
+                deltas.insert(RelationalKey(Vec::new()), GroupDelta::new(definition));
             }
-            for key in keys {
-                if !rebuild && let Some(row) = budget.read(previous, &source.name, &key)? {
+            for key in &keys {
+                if !rebuild && let Some(row) = budget.read(previous, &source.name, key)? {
                     add_group_delta(definition, &source, &row, -1, &mut deltas, &mut budget)?;
                 }
-                if let Some(row) = budget.read(next, &source.name, &key)? {
+                if let Some(row) = budget.read(next, &source.name, key)? {
                     add_group_delta(definition, &source, &row, 1, &mut deltas, &mut budget)?;
                 }
             }
-            for (group, delta) in deltas {
+            for (group, mut delta) in deltas {
+                if !rebuild && definition.has_extrema() {
+                    merge_unchanged_extrema(
+                        previous,
+                        definition,
+                        &source,
+                        &group,
+                        &keys,
+                        &mut delta,
+                        &mut budget,
+                    )?;
+                }
                 let key = encoded_key(&group)?;
                 let old = if rebuild {
                     None
@@ -505,6 +599,9 @@ pub(super) fn maintain(
                     }
                     _ => None,
                 };
+                if rebuild && row.is_none() {
+                    continue;
+                }
                 write_output(
                     next,
                     &schema,
@@ -605,18 +702,33 @@ struct GroupDelta {
     rows: i128,
     values: Vec<i128>,
     counts: Vec<i128>,
+    extrema: Vec<RelationalValue>,
 }
 
 impl GroupDelta {
-    fn estimated_bytes(columns: usize) -> usize {
-        columns.saturating_mul(2 * std::mem::size_of::<i128>())
+    fn estimated_bytes(definition: &MaterializedViewDefinition) -> usize {
+        let extrema_bytes = if definition.has_extrema() {
+            std::mem::size_of::<RelationalValue>()
+        } else {
+            0
+        };
+        definition
+            .columns
+            .len()
+            .saturating_mul(2 * std::mem::size_of::<i128>() + extrema_bytes)
     }
 
-    fn new(columns: usize) -> Self {
+    fn new(definition: &MaterializedViewDefinition) -> Self {
+        let columns = definition.columns.len();
         Self {
             rows: 0,
             values: vec![0; columns],
             counts: vec![0; columns],
+            extrema: if definition.has_extrema() {
+                vec![RelationalValue::Null; columns]
+            } else {
+                Vec::new()
+            },
         }
     }
 }
@@ -640,14 +752,24 @@ fn add_group_delta(
             .collect::<Result<_, _>>()?,
     );
     if !deltas.contains_key(&group) {
-        budget.charge(0, GroupDelta::estimated_bytes(definition.columns.len()))?;
+        budget.charge(0, GroupDelta::estimated_bytes(definition))?;
     }
     let delta = deltas
         .entry(group)
-        .or_insert_with(|| GroupDelta::new(definition.columns.len()));
+        .or_insert_with(|| GroupDelta::new(definition));
     delta.rows += sign;
     for (position, column) in definition.columns.iter().enumerate() {
         match &column.expression {
+            MaterializedViewExpression::Min(input) | MaterializedViewExpression::Max(input) => {
+                if sign > 0 {
+                    merge_extremum(
+                        &column.expression,
+                        value(source, row, input),
+                        &mut delta.extrema[position],
+                        budget,
+                    )?;
+                }
+            }
             MaterializedViewExpression::Column(_) => {}
             MaterializedViewExpression::Count(input) => {
                 if input
@@ -666,6 +788,72 @@ fn add_group_delta(
         }
     }
     Ok(())
+}
+
+fn merge_extremum(
+    expression: &MaterializedViewExpression,
+    candidate: &RelationalValue,
+    current: &mut RelationalValue,
+    budget: &mut MaintenanceBudget<'_>,
+) -> Result<(), RelationalError> {
+    if !matches!(candidate, RelationalValue::Null)
+        && (matches!(current, RelationalValue::Null)
+            || if matches!(expression, MaterializedViewExpression::Min(_)) {
+                candidate < current
+            } else {
+                candidate > current
+            })
+    {
+        *current = budget.copy_value(candidate)?;
+    }
+    Ok(())
+}
+
+fn merge_unchanged_extrema(
+    previous: &RelationalState,
+    definition: &MaterializedViewDefinition,
+    source: &RelationalTableSchema,
+    group: &RelationalKey,
+    changed: &BTreeSet<RelationalKey>,
+    delta: &mut GroupDelta,
+    budget: &mut MaintenanceBudget<'_>,
+) -> Result<(), RelationalError> {
+    let index = extrema_index(definition, source)?;
+    let mut result = Ok(());
+    // Indexes are refreshed after maintenance. Read the committed prefix and
+    // exclude every changed identity; new images are already in the delta.
+    let visited =
+        previous.visit_index_prefix_entries(&source.name, &index.name, group, |_, key| {
+            result = (|| {
+                if changed.contains(key) {
+                    return budget.charge(1, 0);
+                }
+                if let Some(row) = budget.read(previous, &source.name, key)?
+                    && matches_filter(definition, source, &row)?
+                {
+                    for (position, column) in definition.columns.iter().enumerate() {
+                        if let MaterializedViewExpression::Min(input)
+                        | MaterializedViewExpression::Max(input) = &column.expression
+                        {
+                            merge_extremum(
+                                &column.expression,
+                                value(source, &row, input),
+                                &mut delta.extrema[position],
+                                budget,
+                            )?;
+                        }
+                    }
+                }
+                Ok(())
+            })();
+            result.is_ok()
+        });
+    if visited.is_none() {
+        return Err(RelationalError::Corruption(
+            "materialized MIN/MAX source index is missing".into(),
+        ));
+    }
+    result
 }
 
 fn number(value: Option<&RelationalValue>) -> i128 {
@@ -711,6 +899,9 @@ fn apply_group_delta(
                     .position(|name| name == input)
                     .expect("group column");
                 budget.copy_value(&group.0[position])?
+            }
+            MaterializedViewExpression::Min(_) | MaterializedViewExpression::Max(_) => {
+                budget.copy_value(&delta.extrema[position])?
             }
             MaterializedViewExpression::Count(_) => {
                 bigint(number(old_value(position)) + delta.values[position])?

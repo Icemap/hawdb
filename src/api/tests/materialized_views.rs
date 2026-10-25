@@ -14,6 +14,8 @@
 
 use super::*;
 
+mod extrema;
+
 fn base(db: &mut Database) {
     db.query_sql("CREATE TABLE events (id BIGINT PRIMARY KEY, bucket TEXT, amount BIGINT, enabled BOOLEAN NOT NULL)").unwrap();
 }
@@ -357,12 +359,15 @@ fn materialized_foreign_key_cascades_retract_child_rows() {
         .unwrap();
     db.query_sql("INSERT INTO children (id, parent) VALUES (10, 1), (11, 1), (12, 2)")
         .unwrap();
-    db.query_sql("CREATE MATERIALIZED VIEW counts AS SELECT parent, COUNT(*) AS n FROM children GROUP BY parent").unwrap();
+    db.query_sql("CREATE INDEX children_parent ON children (parent)")
+        .unwrap();
+    db.query_sql("CREATE MATERIALIZED VIEW counts AS SELECT parent, COUNT(*) AS n, MIN(id) AS first_child FROM children GROUP BY parent").unwrap();
     db.query_sql("DELETE FROM parents WHERE id = 1").unwrap();
     let rows = db.query_sql("SELECT * FROM counts").unwrap().rows;
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0]["parent"], Value::Int(2));
     assert_eq!(rows[0]["n"], Value::Int(1));
+    assert_eq!(rows[0]["first_child"], Value::Int(12));
 }
 
 #[test]
@@ -492,7 +497,7 @@ fn materialized_ddl_and_write_guards() {
         "UPDATE mv SET amount = 2 WHERE id = 1",
         "DELETE FROM mv WHERE id = 1",
         "ALTER TABLE mv ADD COLUMN other BIGINT",
-        "CREATE INDEX invalid ON mv (id)",
+        "CREATE INDEX invalid ON mv (__hawdb_mv_key)",
         "CREATE MATERIALIZED VIEW nested AS SELECT id FROM mv",
         "DROP MATERIALIZED VIEW events",
         "CREATE MATERIALIZED VIEW events AS SELECT id FROM events",
