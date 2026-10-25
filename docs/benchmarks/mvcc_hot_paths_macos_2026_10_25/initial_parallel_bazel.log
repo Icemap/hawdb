@@ -1,0 +1,513 @@
+INFO: Invocation ID: 3edc54dd-ef18-4464-ad88-fbf66ab36c40
+INFO: Reading 'startup' options from /private/tmp/hawdb-mvcc-optimization-20261024/.bazelrc: --host_jvm_args=-Xmx2g, --unlimit_coredumps
+INFO: Reading 'startup' options from /Users/hawkingrei/.bazelrc: --output_base=~/tmp/bazel_shared_cache
+INFO: Options provided by the client:
+  Inherited 'common' options: --isatty=0 --terminal_columns=80
+INFO: Reading rc options for 'test' from /Users/hawkingrei/.bazelrc:
+  Inherited 'common' options: --repository_cache=~/tmp/bazel/repositories --experimental_install_base_gc_max_age=4d
+INFO: Reading rc options for 'test' from /private/tmp/hawdb-mvcc-optimization-20261024/.bazelrc:
+  Inherited 'build' options: --announce_rc --@rules_rust//rust/settings:extra_rustc_flags=-Copt-level=1,-Cdebuginfo=0,-Ccodegen-units=16,-Cdebug-assertions=yes,-Coverflow-checks=yes,-Cstrip=none --@rules_rust//rust/settings:lto=off --java_runtime_version=remotejdk_21 --tool_java_runtime_version=remotejdk_21 --enable_platform_specific_config
+INFO: Reading rc options for 'test' from /Users/hawkingrei/.bazelrc:
+  Inherited 'build' options: --disk_cache=~/tmp/bazel/action-cache --experimental_disk_cache_gc_max_size=150G
+INFO: Reading rc options for 'test' from /private/tmp/hawdb-mvcc-optimization-20261024/.bazelrc:
+  'test' options: --local_test_jobs=HOST_CPUS*0.5
+INFO: Found applicable config definition build:macos in file /private/tmp/hawdb-mvcc-optimization-20261024/.bazelrc: --@rules_rust//rust/settings:extra_exec_rustc_flags=-Cstrip=none
+Computing main repo mapping: 
+Loading: 
+Loading: 0 packages loaded
+Analyzing: 103 targets (2 packages loaded, 0 targets configured)
+Analyzing: 103 targets (2 packages loaded, 9 targets configured)
+
+INFO: Analyzed 103 targets (3 packages loaded, 207 targets configured).
+[1,044 / 1,288] 2 / 103 tests; Compiling Rust bin hawdb_inventory_health_fuzz_tests (21 files); 1s disk-cache, darwin-sandbox ... (16 actions running)
+[1,045 / 1,288] 2 / 103 tests; Compiling Rust bin hawdb_inventory_health_fuzz_tests (21 files); 4s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,046 / 1,289] 2 / 103 tests; Compiling Rust bin hawdb_inventory_health_fuzz_tests (21 files); 5s disk-cache, darwin-sandbox ... (16 actions running)
+[1,047 / 1,289] 2 / 103 tests; Compiling Rust bin hawdb_cypher_backtracking_fuzz_tests (21 files); 8s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,049 / 1,290] 2 / 103 tests; Compiling Rust bin hawdb_cypher_backtracking_fuzz_tests (21 files); 10s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,052 / 1,292] 2 / 103 tests; Compiling Rust bin hawdb_cypher_backtracking_fuzz_tests (21 files); 11s disk-cache, darwin-sandbox ... (16 actions running)
+[1,054 / 1,293] 2 / 103 tests; Compiling Rust bin hawdb_cypher_backtracking_fuzz_tests (21 files); 12s disk-cache, darwin-sandbox ... (16 actions running)
+[1,056 / 1,293] 2 / 103 tests; Compiling Rust bin hawdb_cypher_backtracking_fuzz_tests (21 files); 14s disk-cache, darwin-sandbox ... (15 actions, 14 running)
+[1,061 / 1,296] 3 / 103 tests; Compiling Rust bin hawdb_optimizer_candidate_fingerprint_fuzz_tests (47 files); 15s disk-cache, darwin-sandbox ... (16 actions running)
+[1,062 / 1,296] 4 / 103 tests; Compiling Rust bin hawdb_optimizer_candidate_fingerprint_fuzz_tests (47 files); 16s disk-cache, darwin-sandbox ... (16 actions running)
+[1,066 / 1,296] 8 / 103 tests; Compiling Rust bin hawdb_optimizer_candidate_fingerprint_fuzz_tests (47 files); 17s disk-cache, darwin-sandbox ... (16 actions running)
+[1,074 / 1,299] 10 / 103 tests; Compiling Rust rlib hawdb_storage (548 files); 18s disk-cache, darwin-sandbox ... (16 actions running)
+[1,075 / 1,299] 11 / 103 tests; Compiling Rust rlib hawdb_storage (548 files); 19s disk-cache, darwin-sandbox ... (16 actions running)
+[1,077 / 1,299] 13 / 103 tests; Compiling Rust rlib hawdb_storage (548 files); 20s disk-cache, darwin-sandbox ... (16 actions running)
+[1,078 / 1,299] 13 / 103 tests; Compiling Rust rlib hawdb_storage (548 files); 22s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,082 / 1,301] 14 / 103 tests; Compiling Rust rlib hawdb_storage (548 files); 23s disk-cache, darwin-sandbox ... (16 actions running)
+[1,083 / 1,301] 15 / 103 tests; Compiling Rust rlib hawdb_storage (548 files); 24s disk-cache, darwin-sandbox ... (16 actions running)
+[1,084 / 1,301] 15 / 103 tests; Compiling Rust rlib hawdb_storage (548 files); 29s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,088 / 1,303] 16 / 103 tests; Compiling Rust rlib hawdb_storage (548 files); 31s disk-cache, darwin-sandbox ... (16 actions running)
+[1,089 / 1,303] 17 / 103 tests; Compiling Rust rlib hawdb_storage (548 files); 32s disk-cache, darwin-sandbox ... (16 actions running)
+[1,089 / 1,303] 17 / 103 tests; Compiling Rust rlib hawdb_storage (548 files); 42s disk-cache, darwin-sandbox ... (16 actions running)
+[1,089 / 1,303] 17 / 103 tests; Compiling Rust rlib hawdb_storage (548 files); 73s disk-cache, darwin-sandbox ... (16 actions running)
+[1,090 / 1,303] 17 / 103 tests; Compiling Rust bin hawdb_storage_shadow_metadata_fuzz_tests (548 files); 88s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,090 / 1,303] 17 / 103 tests; Compiling Rust bin hawdb_storage_shadow_metadata_fuzz_tests (548 files); 90s disk-cache, darwin-sandbox ... (16 actions running)
+[1,090 / 1,303] 17 / 103 tests; Compiling Rust bin hawdb_storage_shadow_metadata_fuzz_tests (548 files); 100s disk-cache, darwin-sandbox ... (16 actions running)
+[1,090 / 1,303] 17 / 103 tests; Compiling Rust bin hawdb_storage_shadow_metadata_fuzz_tests (548 files); 130s disk-cache, darwin-sandbox ... (16 actions running)
+[1,091 / 1,303] 17 / 103 tests; Compiling Rust bin hawdb_storage_shadow_metadata_fuzz_tests (548 files); 174s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,092 / 1,304] 17 / 103 tests; Compiling Rust bin hawdb_storage_shadow_metadata_fuzz_tests (548 files); 176s disk-cache, darwin-sandbox ... (16 actions running)
+[1,092 / 1,304] 17 / 103 tests; Compiling Rust bin hawdb_storage_shadow_metadata_fuzz_tests (548 files); 186s disk-cache, darwin-sandbox ... (16 actions running)
+[1,092 / 1,304] 17 / 103 tests; Compiling Rust bin hawdb_storage_shadow_metadata_fuzz_tests (548 files); 216s disk-cache, darwin-sandbox ... (16 actions running)
+[1,092 / 1,304] 17 / 103 tests; Compiling Rust bin hawdb_storage_shadow_metadata_fuzz_tests (548 files); 276s disk-cache, darwin-sandbox ... (16 actions running)
+[1,092 / 1,304] 17 / 103 tests; Compiling Rust bin hawdb_storage_shadow_metadata_fuzz_tests (548 files); 337s disk-cache, darwin-sandbox ... (16 actions running)
+[1,092 / 1,304] 17 / 103 tests; Compiling Rust bin hawdb_storage_shadow_metadata_fuzz_tests (548 files); 397s disk-cache, darwin-sandbox ... (16 actions running)
+[1,092 / 1,304] 17 / 103 tests; Compiling Rust bin hawdb_storage_shadow_metadata_fuzz_tests (548 files); 450s disk-cache, darwin-sandbox ... (16 actions running)
+[1,094 / 1,305] 17 / 103 tests; Compiling Rust bin hawdb_storage_shadow_metadata_fuzz_tests (548 files); 451s disk-cache, darwin-sandbox ... (16 actions running)
+[1,094 / 1,305] 17 / 103 tests; Compiling Rust bin hawdb_storage_shadow_metadata_fuzz_tests (548 files); 461s disk-cache, darwin-sandbox ... (16 actions running)
+[1,094 / 1,305] 17 / 103 tests; Compiling Rust bin hawdb_storage_shadow_metadata_fuzz_tests (548 files); 492s disk-cache, darwin-sandbox ... (16 actions running)
+[1,094 / 1,305] 17 / 103 tests; Compiling Rust bin hawdb_storage_shadow_metadata_fuzz_tests (548 files); 552s disk-cache, darwin-sandbox ... (16 actions running)
+[1,095 / 1,305] 17 / 103 tests; Compiling Rust bin hawdb_storage_shadow_metadata_fuzz_tests (548 files); 572s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,096 / 1,306] 17 / 103 tests; Compiling Rust bin hawdb_storage_shadow_metadata_fuzz_tests (548 files); 574s disk-cache, darwin-sandbox ... (16 actions running)
+[1,097 / 1,306] 17 / 103 tests; Compiling Rust bin hawdb_storage_shadow_metadata_fuzz_tests (548 files); 579s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,098 / 1,307] 17 / 103 tests; Compiling Rust bin hawdb_storage_shadow_metadata_fuzz_tests (548 files); 581s disk-cache, darwin-sandbox ... (16 actions running)
+[1,100 / 1,308] 17 / 103 tests; Compiling Rust bin hawdb_storage_backup_hex_fuzz_tests (548 files); 582s disk-cache, darwin-sandbox ... (16 actions running)
+[1,102 / 1,309] 17 / 103 tests; Compiling Rust bin hawdb_storage_transaction_compaction_fuzz_tests (548 files); 573s disk-cache, darwin-sandbox ... (16 actions running)
+[1,103 / 1,309] 17 / 103 tests; Compiling Rust bin hawdb_storage_transaction_compaction_fuzz_tests (548 files); 574s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,104 / 1,310] 17 / 103 tests; Compiling Rust bin hawdb_storage_transaction_compaction_fuzz_tests (548 files); 576s disk-cache, darwin-sandbox ... (16 actions running)
+[1,105 / 1,310] 17 / 103 tests; Compiling Rust bin hawdb_storage_source_scan_fuzz_tests (548 files); 574s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,106 / 1,311] 17 / 103 tests; Compiling Rust bin hawdb_storage_source_scan_fuzz_tests (548 files); 576s disk-cache, darwin-sandbox ... (16 actions running)
+[1,107 / 1,311] 17 / 103 tests; Compiling Rust bin hawdb_storage_durable_manifest_fuzz_tests (548 files); 579s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,108 / 1,312] 17 / 103 tests; Compiling Rust bin hawdb_storage_durable_manifest_fuzz_tests (548 files); 580s disk-cache, darwin-sandbox ... (16 actions running)
+[1,110 / 1,313] 17 / 103 tests; Compiling Rust bin hawdb_storage_durable_manifest_fuzz_tests (548 files); 581s disk-cache, darwin-sandbox ... (16 actions running)
+[1,114 / 1,315] 17 / 103 tests; Compiling Rust bin hawdb_storage_projected_artifact_fuzz_tests (548 files); 579s disk-cache, darwin-sandbox ... (16 actions running)
+[1,116 / 1,316] 17 / 103 tests; Compiling Rust bin hawdb_storage_artifact_binding_fuzz_tests (548 files); 577s disk-cache, darwin-sandbox ... (16 actions running)
+[1,118 / 1,316] 19 / 103 tests; Compiling Rust bin hawdb_storage_artifact_binding_fuzz_tests (548 files); 578s disk-cache, darwin-sandbox ... (16 actions running)
+[1,119 / 1,316] 20 / 103 tests; Compiling Rust bin hawdb_storage_artifact_binding_fuzz_tests (548 files); 579s disk-cache, darwin-sandbox ... (16 actions running)
+[1,120 / 1,316] 21 / 103 tests; Compiling Rust bin hawdb_storage_artifact_binding_fuzz_tests (548 files); 580s disk-cache, darwin-sandbox ... (16 actions running)
+[1,124 / 1,317] 23 / 103 tests; Compiling Rust bin hawdb_storage_checkpoint_wal_verbatim_fuzz_tests (548 files); 579s disk-cache, darwin-sandbox ... (16 actions running)
+[1,126 / 1,318] 23 / 103 tests; Compiling Rust bin hawdb_storage_checkpoint_wal_verbatim_fuzz_tests (548 files); 580s disk-cache, darwin-sandbox ... (16 actions running)
+[1,128 / 1,318] 24 / 103 tests; Compiling Rust bin hawdb_storage_property_projection_hex_fuzz_tests (548 files); 573s disk-cache, darwin-sandbox ... (15 actions running)
+[1,129 / 1,319] 24 / 103 tests; Compiling Rust bin hawdb_storage_property_projection_hex_fuzz_tests (548 files); 574s disk-cache, darwin-sandbox ... (16 actions running)
+[1,129 / 1,319] 24 / 103 tests; Compiling Rust bin hawdb_storage_property_projection_hex_fuzz_tests (548 files); 576s disk-cache, darwin-sandbox ... (16 actions running)
+[1,130 / 1,319] 25 / 103 tests; Compiling Rust bin hawdb_storage_property_projection_hex_fuzz_tests (548 files); 577s disk-cache, darwin-sandbox ... (16 actions running)
+[1,131 / 1,319] 26 / 103 tests; Compiling Rust bin hawdb_storage_property_projection_hex_fuzz_tests (548 files); 578s disk-cache, darwin-sandbox ... (16 actions running)
+[1,132 / 1,319] 26 / 103 tests; Compiling Rust bin hawdb_storage_append_reader_fuzz_tests (548 files); 579s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,134 / 1,320] 27 / 103 tests; Compiling Rust bin hawdb_storage_append_reader_fuzz_tests (548 files); 581s disk-cache, darwin-sandbox ... (16 actions running)
+[1,134 / 1,320] 27 / 103 tests; Compiling Rust bin hawdb_storage_append_reader_fuzz_tests (548 files); 582s disk-cache, darwin-sandbox ... (16 actions running)
+[1,137 / 1,321] 28 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 41s disk-cache, darwin-sandbox ... (16 actions running)
+[1,138 / 1,321] 29 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 42s disk-cache, darwin-sandbox ... (16 actions running)
+[1,138 / 1,321] 29 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 43s disk-cache, darwin-sandbox ... (16 actions running)
+[1,139 / 1,321] 30 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 44s disk-cache, darwin-sandbox ... (16 actions running)
+[1,140 / 1,321] 31 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 45s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,140 / 1,321] 31 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 46s disk-cache, darwin-sandbox ... (16 actions running)
+[1,140 / 1,321] 31 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 47s disk-cache, darwin-sandbox ... (16 actions running)
+[1,142 / 1,321] 33 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 49s disk-cache, darwin-sandbox ... (16 actions running)
+[1,143 / 1,321] 34 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 50s disk-cache, darwin-sandbox ... (16 actions running)
+[1,143 / 1,321] 34 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 57s disk-cache, darwin-sandbox ... (16 actions running)
+[1,144 / 1,321] 35 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 58s disk-cache, darwin-sandbox ... (16 actions running)
+[1,145 / 1,321] 35 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 65s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,146 / 1,322] 35 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 67s disk-cache, darwin-sandbox ... (16 actions running)
+[1,147 / 1,322] 35 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 72s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,147 / 1,322] 35 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 73s disk-cache, darwin-sandbox ... (16 actions running)
+[1,147 / 1,322] 35 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 83s disk-cache, darwin-sandbox ... (16 actions running)
+[1,148 / 1,322] 35 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 109s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,149 / 1,323] 35 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 111s disk-cache, darwin-sandbox ... (16 actions running)
+[1,150 / 1,323] 35 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 118s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,151 / 1,324] 35 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 120s disk-cache, darwin-sandbox ... (16 actions running)
+[1,152 / 1,324] 35 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 122s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,153 / 1,325] 35 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 123s disk-cache, darwin-sandbox ... (16 actions running)
+[1,155 / 1,326] 35 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 124s disk-cache, darwin-sandbox ... (16 actions running)
+[1,157 / 1,327] 35 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 125s disk-cache, darwin-sandbox ... (16 actions running)
+[1,158 / 1,327] 35 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 126s disk-cache, darwin-sandbox ... (16 actions running)
+[1,159 / 1,327] 35 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 128s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,159 / 1,327] 35 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 129s disk-cache, darwin-sandbox ... (16 actions running)
+[1,160 / 1,327] 35 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 133s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,161 / 1,328] 35 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 134s disk-cache, darwin-sandbox ... (16 actions running)
+[1,162 / 1,328] 35 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 143s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,163 / 1,329] 35 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 145s disk-cache, darwin-sandbox ... (16 actions running)
+[1,163 / 1,329] 35 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 154s disk-cache, darwin-sandbox ... (16 actions running)
+[1,164 / 1,329] 35 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 179s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,165 / 1,330] 35 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 181s disk-cache, darwin-sandbox ... (16 actions running)
+[1,166 / 1,330] 35 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 188s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,167 / 1,331] 35 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 189s disk-cache, darwin-sandbox ... (16 actions running)
+[1,168 / 1,331] 35 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 192s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,169 / 1,332] 35 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 194s disk-cache, darwin-sandbox ... (16 actions running)
+[1,170 / 1,332] 35 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 203s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,171 / 1,333] 35 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 204s disk-cache, darwin-sandbox ... (16 actions running)
+[1,171 / 1,333] 35 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 207s disk-cache, darwin-sandbox ... (16 actions running)
+[1,172 / 1,333] 36 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 209s disk-cache, darwin-sandbox ... (16 actions running)
+[1,173 / 1,333] 37 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 210s disk-cache, darwin-sandbox ... (16 actions running)
+[1,174 / 1,333] 38 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 211s disk-cache, darwin-sandbox ... (16 actions running)
+[1,176 / 1,333] 40 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 212s disk-cache, darwin-sandbox ... (16 actions running)
+[1,177 / 1,333] 41 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 213s disk-cache, darwin-sandbox ... (16 actions running)
+[1,177 / 1,333] 41 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 224s disk-cache, darwin-sandbox ... (16 actions running)
+[1,177 / 1,333] 41 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 254s disk-cache, darwin-sandbox ... (16 actions running)
+[1,178 / 1,333] 41 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 300s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,179 / 1,334] 41 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 301s disk-cache, darwin-sandbox ... (16 actions running)
+[1,179 / 1,334] 41 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 311s disk-cache, darwin-sandbox ... (16 actions running)
+[1,180 / 1,334] 41 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 332s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,181 / 1,335] 41 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 333s disk-cache, darwin-sandbox ... (16 actions running)
+[1,181 / 1,335] 41 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 343s disk-cache, darwin-sandbox ... (16 actions running)
+[1,182 / 1,335] 41 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 353s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,183 / 1,336] 41 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 354s disk-cache, darwin-sandbox ... (16 actions running)
+[1,183 / 1,336] 41 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 365s disk-cache, darwin-sandbox ... (16 actions running)
+[1,183 / 1,336] 41 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 372s disk-cache, darwin-sandbox ... (16 actions running)
+[1,185 / 1,336] 43 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 373s disk-cache, darwin-sandbox ... (16 actions running)
+[1,185 / 1,336] 43 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 375s disk-cache, darwin-sandbox ... (16 actions running)
+[1,186 / 1,336] 44 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 376s disk-cache, darwin-sandbox ... (16 actions running)
+[1,187 / 1,336] 45 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 377s disk-cache, darwin-sandbox ... (16 actions running)
+[1,187 / 1,336] 45 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 383s disk-cache, darwin-sandbox ... (16 actions running)
+[1,188 / 1,336] 46 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 384s disk-cache, darwin-sandbox ... (16 actions running)
+[1,188 / 1,336] 46 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 395s disk-cache, darwin-sandbox ... (16 actions running)
+[1,188 / 1,336] 46 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 397s disk-cache, darwin-sandbox ... (16 actions running)
+[1,189 / 1,336] 47 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 399s disk-cache, darwin-sandbox ... (16 actions running)
+[1,190 / 1,336] 47 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 400s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,191 / 1,337] 47 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 402s disk-cache, darwin-sandbox ... (16 actions running)
+[1,191 / 1,337] 47 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 412s disk-cache, darwin-sandbox ... (16 actions running)
+[1,191 / 1,337] 47 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 442s disk-cache, darwin-sandbox ... (16 actions running)
+[1,192 / 1,337] 47 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 447s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,193 / 1,338] 47 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 449s disk-cache, darwin-sandbox ... (16 actions running)
+[1,193 / 1,338] 47 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 458s disk-cache, darwin-sandbox ... (16 actions running)
+[1,194 / 1,338] 47 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 461s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,194 / 1,338] 47 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 463s disk-cache, darwin-sandbox ... (16 actions running)
+[1,195 / 1,338] 47 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 469s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,195 / 1,338] 47 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 470s disk-cache, darwin-sandbox ... (16 actions running)
+[1,195 / 1,338] 47 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 480s disk-cache, darwin-sandbox ... (16 actions running)
+[1,196 / 1,338] 47 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 482s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,197 / 1,339] 47 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 484s disk-cache, darwin-sandbox ... (16 actions running)
+[1,197 / 1,339] 47 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 493s disk-cache, darwin-sandbox ... (16 actions running)
+[1,198 / 1,339] 47 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 501s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,198 / 1,339] 47 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 502s disk-cache, darwin-sandbox ... (16 actions running)
+[1,199 / 1,339] 47 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 505s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,199 / 1,339] 47 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 506s disk-cache, darwin-sandbox ... (16 actions running)
+[1,199 / 1,339] 47 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 516s disk-cache, darwin-sandbox ... (16 actions running)
+[1,200 / 1,339] 47 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 533s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,201 / 1,340] 47 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 534s disk-cache, darwin-sandbox ... (16 actions running)
+[1,202 / 1,340] 47 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 536s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,202 / 1,340] 47 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 537s disk-cache, darwin-sandbox ... (16 actions running)
+[1,203 / 1,340] 47 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 547s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,203 / 1,340] 47 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 548s disk-cache, darwin-sandbox ... (16 actions running)
+[1,204 / 1,340] 47 / 103 tests; Compiling Rust bin hawdb_storage_set_value_fuzz_tests (548 files); 549s disk-cache, darwin-sandbox ... (16 actions running)
+[1,206 / 1,341] 47 / 103 tests; Compiling Rust bin hawdb_storage_file_lock_fuzz_tests (548 files); 544s disk-cache, darwin-sandbox ... (16 actions running)
+[1,207 / 1,341] 47 / 103 tests; Compiling Rust bin hawdb_storage_file_lock_fuzz_tests (548 files); 545s disk-cache, darwin-sandbox ... (16 actions running)
+[1,208 / 1,341] 47 / 103 tests; Compiling Rust bin hawdb_storage_file_lock_fuzz_tests (548 files); 547s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,210 / 1,342] 47 / 103 tests; Compiling Rust bin hawdb_storage_file_lock_fuzz_tests (548 files); 549s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,213 / 1,344] 47 / 103 tests; Compiling Rust bin hawdb_storage_graph_overlay_fuzz_tests (548 files); 546s disk-cache, darwin-sandbox ... (16 actions running)
+[1,214 / 1,344] 47 / 103 tests; Compiling Rust bin hawdb_storage_positioned_read_fuzz_tests (548 files); 544s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,215 / 1,345] 47 / 103 tests; Compiling Rust bin hawdb_storage_positioned_read_fuzz_tests (548 files); 546s disk-cache, darwin-sandbox ... (16 actions running)
+[1,216 / 1,345] 47 / 103 tests; Compiling Rust bin hawdb_storage_positioned_read_fuzz_tests (548 files); 548s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,217 / 1,346] 47 / 103 tests; Compiling Rust bin hawdb_storage_positioned_read_fuzz_tests (548 files); 549s disk-cache, darwin-sandbox ... (16 actions running)
+[1,220 / 1,347] 48 / 103 tests; Compiling Rust bin hawdb_storage_relational_index_view_fuzz_tests (548 files); 545s disk-cache, darwin-sandbox ... (16 actions running)
+[1,221 / 1,347] 49 / 103 tests; Compiling Rust bin hawdb_storage_relational_index_view_fuzz_tests (548 files); 546s disk-cache, darwin-sandbox ... (16 actions running)
+[1,223 / 1,347] 50 / 103 tests; Compiling Rust bin hawdb_storage_relational_index_view_fuzz_tests (548 files); 547s disk-cache, darwin-sandbox ... (16 actions running)
+[1,223 / 1,347] 50 / 103 tests; Compiling Rust bin hawdb_storage_relational_index_view_fuzz_tests (548 files); 550s disk-cache, darwin-sandbox ... (16 actions running)
+[1,224 / 1,347] 51 / 103 tests; Compiling Rust bin hawdb_storage_relational_index_view_fuzz_tests (548 files); 551s disk-cache, darwin-sandbox ... (16 actions running)
+[1,226 / 1,348] 51 / 103 tests; Compiling Rust bin hawdb_storage_transaction_locks_fuzz_tests (548 files); 550s disk-cache, darwin-sandbox ... (16 actions running)
+[1,227 / 1,348] 51 / 103 tests; Compiling Rust bin hawdb_storage_transaction_locks_fuzz_tests (548 files); 551s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,229 / 1,349] 51 / 103 tests; Compiling Rust bin hawdb_relational_physical_plan_fuzz_tests (74 files); 222s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,232 / 1,351] 51 / 103 tests; Compiling Rust bin hawdb_search_manifest_budget_fuzz_tests (309 files); 176s disk-cache, darwin-sandbox ... (16 actions running)
+[1,233 / 1,351] 52 / 103 tests; Compiling Rust bin hawdb_search_manifest_budget_fuzz_tests (309 files); 177s disk-cache, darwin-sandbox ... (16 actions running)
+[1,233 / 1,351] 52 / 103 tests; Compiling Rust bin hawdb_search_manifest_budget_fuzz_tests (309 files); 178s disk-cache, darwin-sandbox ... (16 actions running)
+[1,234 / 1,351] 53 / 103 tests; Compiling Rust bin hawdb_search_manifest_budget_fuzz_tests (309 files); 180s disk-cache, darwin-sandbox ... (16 actions running)
+[1,235 / 1,351] 54 / 103 tests; Compiling Rust bin hawdb_search_manifest_budget_fuzz_tests (309 files); 181s disk-cache, darwin-sandbox ... (16 actions running)
+[1,235 / 1,351] 54 / 103 tests; Compiling Rust bin hawdb_search_manifest_budget_fuzz_tests (309 files); 182s disk-cache, darwin-sandbox ... (16 actions running)
+[1,236 / 1,351] 55 / 103 tests; Compiling Rust bin hawdb_search_manifest_budget_fuzz_tests (309 files); 183s disk-cache, darwin-sandbox ... (16 actions running)
+[1,237 / 1,351] 56 / 103 tests; Compiling Rust bin hawdb_search_manifest_budget_fuzz_tests (309 files); 184s disk-cache, darwin-sandbox ... (16 actions running)
+[1,238 / 1,351] 57 / 103 tests; Compiling Rust bin hawdb_search_manifest_budget_fuzz_tests (309 files); 185s disk-cache, darwin-sandbox ... (16 actions running)
+[1,239 / 1,351] 58 / 103 tests; Compiling Rust bin hawdb_search_manifest_budget_fuzz_tests (309 files); 186s disk-cache, darwin-sandbox ... (16 actions running)
+[1,239 / 1,351] 58 / 103 tests; Compiling Rust bin hawdb_search_manifest_budget_fuzz_tests (309 files); 192s disk-cache, darwin-sandbox ... (16 actions running)
+[1,240 / 1,351] 59 / 103 tests; Compiling Rust bin hawdb_search_manifest_budget_fuzz_tests (309 files); 193s disk-cache, darwin-sandbox ... (16 actions running)
+[1,243 / 1,352] 60 / 103 tests; Compiling Rust bin hawdb_search_manifest_budget_fuzz_tests (309 files); 195s disk-cache, darwin-sandbox ... (16 actions running)
+[1,244 / 1,352] 60 / 103 tests; Compiling Rust bin hawdb_search_manifest_budget_fuzz_tests (309 files); 199s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,245 / 1,353] 60 / 103 tests; Compiling Rust bin hawdb_search_manifest_budget_fuzz_tests (309 files); 200s disk-cache, darwin-sandbox ... (16 actions running)
+[1,248 / 1,354] 61 / 103 tests; Compiling Rust bin hawdb_search_manifest_budget_fuzz_tests (309 files); 202s disk-cache, darwin-sandbox ... (16 actions running)
+[1,249 / 1,354] 62 / 103 tests; Compiling Rust bin hawdb_search_manifest_budget_fuzz_tests (309 files); 203s disk-cache, darwin-sandbox ... (16 actions running)
+[1,250 / 1,354] 62 / 103 tests; Compiling Rust bin hawdb_search_manifest_budget_fuzz_tests (309 files); 205s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,252 / 1,355] 63 / 103 tests; Compiling Rust bin hawdb_search_manifest_budget_fuzz_tests (309 files); 207s disk-cache, darwin-sandbox ... (16 actions running)
+[1,252 / 1,355] 63 / 103 tests; Compiling Rust bin hawdb_search_manifest_budget_fuzz_tests (309 files); 217s disk-cache, darwin-sandbox ... (16 actions running)
+[1,252 / 1,355] 63 / 103 tests; Compiling Rust bin hawdb_search_manifest_budget_fuzz_tests (309 files); 220s disk-cache, darwin-sandbox ... (16 actions running)
+[1,253 / 1,355] 64 / 103 tests; Compiling Rust bin hawdb_search_manifest_budget_fuzz_tests (309 files); 222s disk-cache, darwin-sandbox ... (16 actions running)
+[1,254 / 1,355] 64 / 103 tests; Compiling Rust bin hawdb_search_manifest_budget_fuzz_tests (309 files); 223s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,255 / 1,356] 64 / 103 tests; Compiling Rust bin hawdb_search_manifest_budget_fuzz_tests (309 files); 225s disk-cache, darwin-sandbox ... (16 actions running)
+[1,255 / 1,356] 64 / 103 tests; Compiling Rust bin hawdb_search_manifest_budget_fuzz_tests (309 files); 232s disk-cache, darwin-sandbox ... (16 actions running)
+[1,256 / 1,356] 65 / 103 tests; Compiling Rust bin hawdb_search_manifest_budget_fuzz_tests (309 files); 233s disk-cache, darwin-sandbox ... (16 actions running)
+[1,258 / 1,357] 65 / 103 tests; Compiling Rust rlib hawdb_compat (13 files); 129s disk-cache, darwin-sandbox ... (16 actions running)
+[1,258 / 1,357] 65 / 103 tests; Compiling Rust rlib hawdb_compat (13 files); 132s disk-cache, darwin-sandbox ... (16 actions running)
+[1,259 / 1,357] 66 / 103 tests; Compiling Rust rlib hawdb_compat (13 files); 133s disk-cache, darwin-sandbox ... (16 actions running)
+[1,259 / 1,357] 66 / 103 tests; Compiling Rust rlib hawdb_compat (13 files); 144s disk-cache, darwin-sandbox ... (16 actions running)
+[1,259 / 1,357] 66 / 103 tests; Compiling Rust rlib hawdb_compat (13 files); 146s disk-cache, darwin-sandbox ... (16 actions running)
+[1,260 / 1,357] 67 / 103 tests; Compiling Rust rlib hawdb_compat (13 files); 147s disk-cache, darwin-sandbox ... (16 actions running)
+[1,260 / 1,357] 67 / 103 tests; Compiling Rust rlib hawdb_compat (13 files); 158s disk-cache, darwin-sandbox ... (16 actions running)
+[1,261 / 1,357] 68 / 103 tests; Compiling Rust rlib hawdb_compat (13 files); 159s disk-cache, darwin-sandbox ... (16 actions running)
+[1,262 / 1,357] 68 / 103 tests; Compiling Rust rlib hawdb_compat (13 files); 164s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,263 / 1,358] 68 / 103 tests; Compiling Rust rlib hawdb_compat (13 files); 165s disk-cache, darwin-sandbox ... (16 actions running)
+[1,263 / 1,358] 68 / 103 tests; Compiling Rust rlib hawdb_compat (13 files); 176s disk-cache, darwin-sandbox ... (16 actions running)
+[1,263 / 1,358] 68 / 103 tests; Compiling Rust rlib hawdb_compat (13 files); 206s disk-cache, darwin-sandbox ... (16 actions running)
+[1,264 / 1,358] 68 / 103 tests; Compiling Rust rlib hawdb_compat (13 files); 208s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,265 / 1,359] 68 / 103 tests; Compiling Rust rlib hawdb_compat (13 files); 210s disk-cache, darwin-sandbox ... (16 actions running)
+[1,265 / 1,359] 68 / 103 tests; Compiling Rust rlib hawdb_compat (13 files); 219s disk-cache, darwin-sandbox ... (16 actions running)
+[1,265 / 1,359] 68 / 103 tests; Compiling Rust rlib hawdb_compat (13 files); 249s disk-cache, darwin-sandbox ... (16 actions running)
+[1,266 / 1,359] 68 / 103 tests; Compiling Rust rlib hawdb_compat (13 files); 253s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,267 / 1,360] 68 / 103 tests; Compiling Rust rlib hawdb_compat (13 files); 255s disk-cache, darwin-sandbox ... (16 actions running)
+[1,268 / 1,360] 68 / 103 tests; Compiling Rust rlib hawdb_compat (13 files); 258s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,269 / 1,361] 68 / 103 tests; Compiling Rust rlib hawdb_compat (13 files); 260s disk-cache, darwin-sandbox ... (16 actions running)
+[1,269 / 1,361] 68 / 103 tests; Compiling Rust rlib hawdb_compat (13 files); 267s disk-cache, darwin-sandbox ... (16 actions running)
+[1,270 / 1,361] 69 / 103 tests; Compiling Rust rlib hawdb_compat (13 files); 268s disk-cache, darwin-sandbox ... (16 actions running)
+[1,271 / 1,361] 69 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 198s disk-cache, darwin-sandbox ... (16 actions running)
+[1,272 / 1,361] 70 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 199s disk-cache, darwin-sandbox ... (16 actions running)
+[1,273 / 1,361] 70 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 201s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,274 / 1,362] 70 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 203s disk-cache, darwin-sandbox ... (16 actions running)
+[1,275 / 1,362] 70 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 206s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,276 / 1,363] 70 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 207s disk-cache, darwin-sandbox ... (16 actions running)
+[1,278 / 1,364] 70 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 208s disk-cache, darwin-sandbox ... (16 actions running)
+[1,280 / 1,365] 70 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 209s disk-cache, darwin-sandbox ... (16 actions running)
+[1,280 / 1,365] 70 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 210s disk-cache, darwin-sandbox ... (16 actions running)
+[1,281 / 1,365] 71 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 212s disk-cache, darwin-sandbox ... (16 actions running)
+[1,281 / 1,365] 71 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 214s disk-cache, darwin-sandbox ... (16 actions running)
+[1,284 / 1,366] 72 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 215s disk-cache, darwin-sandbox ... (16 actions running)
+[1,284 / 1,366] 72 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 217s disk-cache, darwin-sandbox ... (16 actions running)
+[1,285 / 1,366] 73 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 218s disk-cache, darwin-sandbox ... (16 actions running)
+[1,285 / 1,366] 73 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 220s disk-cache, darwin-sandbox ... (16 actions running)
+[1,286 / 1,366] 74 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 222s disk-cache, darwin-sandbox ... (16 actions running)
+[1,287 / 1,366] 75 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 223s disk-cache, darwin-sandbox ... (16 actions running)
+[1,287 / 1,366] 75 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 234s disk-cache, darwin-sandbox ... (16 actions running)
+[1,288 / 1,366] 75 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 240s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,289 / 1,367] 75 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 242s disk-cache, darwin-sandbox ... (16 actions running)
+[1,290 / 1,367] 75 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 251s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,291 / 1,368] 75 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 252s disk-cache, darwin-sandbox ... (16 actions running)
+[1,291 / 1,368] 75 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 263s disk-cache, darwin-sandbox ... (16 actions running)
+[1,292 / 1,368] 75 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 285s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,292 / 1,368] 75 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 286s disk-cache, darwin-sandbox ... (16 actions running)
+[1,294 / 1,369] 75 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 287s disk-cache, darwin-sandbox ... (16 actions running)
+[1,294 / 1,369] 75 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 288s disk-cache, darwin-sandbox ... (16 actions running)
+[1,295 / 1,369] 75 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 289s disk-cache, darwin-sandbox ... (15 actions running)
+[1,297 / 1,370] 76 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 290s disk-cache, darwin-sandbox ... (16 actions running)
+[1,298 / 1,370] 76 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 292s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,298 / 1,370] 76 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 294s disk-cache, darwin-sandbox ... (16 actions running)
+[1,299 / 1,370] 77 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 295s disk-cache, darwin-sandbox ... (16 actions running)
+[1,300 / 1,370] 78 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 296s disk-cache, darwin-sandbox ... (16 actions running)
+[1,300 / 1,370] 78 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 298s disk-cache, darwin-sandbox ... (16 actions running)
+[1,302 / 1,371] 79 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 300s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,303 / 1,371] 79 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 301s disk-cache, darwin-sandbox ... (16 actions running)
+[1,305 / 1,372] 79 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 302s disk-cache, darwin-sandbox ... (16 actions running)
+[1,306 / 1,372] 79 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 303s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,307 / 1,372] 79 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 304s disk-cache, darwin-sandbox ... (16 actions running)
+[1,308 / 1,372] 79 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 305s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,309 / 1,372] 79 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 307s disk-cache, darwin-sandbox ... (15 actions running)
+[1,309 / 1,372] 79 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 308s disk-cache, darwin-sandbox ... (16 actions running)
+[1,309 / 1,372] 79 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 317s disk-cache, darwin-sandbox ... (16 actions running)
+[1,312 / 1,373] 79 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 318s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,313 / 1,373] 79 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 319s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,316 / 1,375] 79 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 321s disk-cache, darwin-sandbox ... (16 actions running)
+[1,317 / 1,375] 79 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 323s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,321 / 1,376] 79 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 324s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,324 / 1,377] 79 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 325s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,325 / 1,377] 79 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 326s disk-cache, darwin-sandbox ... (16 actions running)
+[1,325 / 1,377] 79 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 328s disk-cache, darwin-sandbox ... (16 actions running)
+[1,326 / 1,377] 79 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 330s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,329 / 1,377] 79 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 331s disk-cache, darwin-sandbox ... (16 actions running)
+[1,330 / 1,377] 79 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 332s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,330 / 1,377] 79 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 334s disk-cache, darwin-sandbox ... (16 actions running)
+[1,332 / 1,377] 79 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 335s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,332 / 1,377] 79 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 336s disk-cache, darwin-sandbox ... (16 actions running)
+[1,335 / 1,378] 79 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 337s disk-cache, darwin-sandbox ... (16 actions running)
+[1,337 / 1,378] 79 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 339s disk-cache, darwin-sandbox ... (15 actions, 14 running)
+[1,338 / 1,378] 79 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 340s disk-cache, darwin-sandbox ... (16 actions running)
+[1,339 / 1,378] 79 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 341s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,339 / 1,378] 79 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 343s disk-cache, darwin-sandbox ... (16 actions running)
+[1,341 / 1,378] 79 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 344s disk-cache, darwin-sandbox ... (16 actions running)
+[1,343 / 1,379] 79 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 345s disk-cache, darwin-sandbox ... (16 actions running)
+[1,344 / 1,379] 79 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 346s disk-cache, darwin-sandbox ... (16 actions running)
+[1,346 / 1,379] 79 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 347s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,346 / 1,379] 79 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 348s disk-cache, darwin-sandbox ... (16 actions running)
+[1,349 / 1,380] 79 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 349s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,350 / 1,380] 79 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 352s disk-cache, darwin-sandbox ... (16 actions, 14 running)
+[1,351 / 1,381] 79 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 354s disk-cache, darwin-sandbox ... (16 actions, 14 running)
+[1,351 / 1,381] 79 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 356s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,352 / 1,381] 80 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 357s disk-cache, darwin-sandbox ... (16 actions, 14 running)
+[1,352 / 1,381] 80 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 368s disk-cache, darwin-sandbox ... (16 actions, 14 running)
+[1,352 / 1,381] 80 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 376s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,353 / 1,381] 81 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 377s disk-cache, darwin-sandbox ... (16 actions, 14 running)
+[1,353 / 1,381] 81 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 378s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,354 / 1,381] 82 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 380s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,356 / 1,381] 84 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 381s disk-cache, darwin-sandbox ... (16 actions, 14 running)
+[1,356 / 1,381] 84 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 382s disk-cache, darwin-sandbox ... (16 actions, 15 running)
+[1,357 / 1,381] 85 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 383s disk-cache, darwin-sandbox ... (16 actions, 14 running)
+[1,357 / 1,381] 85 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 394s disk-cache, darwin-sandbox ... (16 actions, 14 running)
+[1,358 / 1,381] 85 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 397s disk-cache, darwin-sandbox ... (16 actions, 13 running)
+[1,363 / 1,384] 85 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 398s disk-cache, darwin-sandbox ... (16 actions, 12 running)
+[1,364 / 1,384] 85 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 402s disk-cache, darwin-sandbox ... (16 actions, 11 running)
+[1,365 / 1,385] 85 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 403s disk-cache, darwin-sandbox ... (16 actions, 11 running)
+[1,365 / 1,385] 85 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 404s disk-cache, darwin-sandbox ... (16 actions, 12 running)
+[1,366 / 1,385] 87 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 406s disk-cache, darwin-sandbox ... (16 actions, 12 running)
+[1,369 / 1,386] 87 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 407s disk-cache, darwin-sandbox ... (15 actions, 10 running)
+[1,369 / 1,386] 87 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 409s disk-cache, darwin-sandbox ... (15 actions, 11 running)
+[1,370 / 1,386] 88 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 410s disk-cache, darwin-sandbox ... (14 actions, 10 running)
+[1,371 / 1,386] 88 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 412s disk-cache, darwin-sandbox ... (14 actions, 9 running)
+[1,372 / 1,386] 88 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 414s disk-cache, darwin-sandbox ... (13 actions, 9 running)
+[1,372 / 1,386] 88 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 416s disk-cache, darwin-sandbox ... (13 actions, 10 running)
+[1,372 / 1,386] 88 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 417s disk-cache, darwin-sandbox ... (13 actions, 10 running)
+[1,373 / 1,386] 89 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 418s disk-cache, darwin-sandbox ... (12 actions, 9 running)
+[1,373 / 1,386] 89 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 430s disk-cache, darwin-sandbox ... (12 actions, 9 running)
+[1,374 / 1,386] 89 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 438s disk-cache, darwin-sandbox ... (12 actions, 8 running)
+[1,375 / 1,387] 89 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 440s disk-cache, darwin-sandbox ... (12 actions, 8 running)
+[1,375 / 1,387] 89 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 441s disk-cache, darwin-sandbox ... (12 actions, 8 running)
+[1,375 / 1,387] 89 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 450s disk-cache, darwin-sandbox ... (12 actions, 8 running)
+[1,375 / 1,387] 89 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 480s disk-cache, darwin-sandbox ... (12 actions, 8 running)
+[1,375 / 1,387] 89 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 491s disk-cache, darwin-sandbox ... (12 actions, 9 running)
+[1,375 / 1,387] 90 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 492s disk-cache, darwin-sandbox ... (12 actions, 9 running)
+[1,376 / 1,387] 90 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 494s disk-cache, darwin-sandbox ... (11 actions, 8 running)
+[1,376 / 1,387] 90 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 503s disk-cache, darwin-sandbox ... (11 actions, 9 running)
+[1,376 / 1,387] 90 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 504s disk-cache, darwin-sandbox ... (11 actions, 9 running)
+[1,376 / 1,387] 90 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 505s disk-cache, darwin-sandbox ... (11 actions, 9 running)
+[1,376 / 1,387] 90 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 506s disk-cache, darwin-sandbox ... (11 actions, 9 running)
+[1,377 / 1,387] 91 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 507s disk-cache, darwin-sandbox ... (10 actions, 8 running)
+[1,377 / 1,387] 91 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 518s disk-cache, darwin-sandbox ... (10 actions, 8 running)
+[1,377 / 1,387] 91 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 548s disk-cache, darwin-sandbox ... (10 actions, 8 running)
+[1,377 / 1,387] 91 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 568s disk-cache, darwin-sandbox ... (10 actions, 9 running)
+[1,377 / 1,387] 91 / 103 tests; Testing //crates/storage:hawdb_storage_tests; 569s disk-cache, darwin-sandbox ... (10 actions, 9 running)
+
+TIMEOUT: //:hawdb_scan_callback_fuzz_tests (Summary)
+      /private/tmp/hawdb-mvcc-bazel-20261024/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/hawdb_scan_callback_fuzz_tests/test.log
+[1,378 / 1,387] 92 / 103 tests, 1 failed; Testing //crates/storage:hawdb_storage_tests; 570s disk-cache, darwin-sandbox ... (9 actions, 8 running)
+[1,378 / 1,387] 92 / 103 tests, 1 failed; Testing //crates/storage:hawdb_storage_tests; 572s disk-cache, darwin-sandbox ... (9 actions running)
+[1,378 / 1,387] 92 / 103 tests, 1 failed; Testing //crates/storage:hawdb_storage_tests; 573s disk-cache, darwin-sandbox ... (9 actions running)
+[1,378 / 1,387] 92 / 103 tests, 1 failed; Testing //crates/storage:hawdb_storage_tests; 576s disk-cache, darwin-sandbox ... (9 actions running)
+[1,379 / 1,387] 93 / 103 tests, 1 failed; Testing //crates/storage:hawdb_storage_tests; 577s disk-cache, darwin-sandbox ... (8 actions running)
+[1,379 / 1,387] 93 / 103 tests, 1 failed; Testing //crates/storage:hawdb_storage_tests; 588s disk-cache, darwin-sandbox ... (8 actions running)
+[1,379 / 1,387] 93 / 103 tests, 1 failed; Testing //crates/storage:hawdb_storage_tests; 619s disk-cache, darwin-sandbox ... (8 actions running)
+[1,379 / 1,387] 93 / 103 tests, 1 failed; Testing //crates/storage:hawdb_storage_tests; 679s disk-cache, darwin-sandbox ... (8 actions running)
+[1,379 / 1,387] 93 / 103 tests, 1 failed; Testing //crates/storage:hawdb_storage_tests; 739s disk-cache, darwin-sandbox ... (8 actions running)
+[1,379 / 1,387] 93 / 103 tests, 1 failed; Testing //crates/storage:hawdb_storage_tests; 799s disk-cache, darwin-sandbox ... (8 actions running)
+[1,379 / 1,387] 93 / 103 tests, 1 failed; Testing //crates/storage:hawdb_storage_tests; 860s disk-cache, darwin-sandbox ... (8 actions running)
+[1,379 / 1,387] 93 / 103 tests, 1 failed; Testing //crates/storage:hawdb_storage_tests; 901s disk-cache, darwin-sandbox ... (8 actions running)
+
+TIMEOUT: //crates/storage:hawdb_storage_tests (Summary)
+      /private/tmp/hawdb-mvcc-bazel-20261024/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_tests/test.log
+[1,380 / 1,387] 94 / 103 tests, 2 failed; Testing //crates/search:hawdb_search_lexical_spill_fuzz_tests; 704s disk-cache, darwin-sandbox ... (7 actions running)
+[1,380 / 1,387] 94 / 103 tests, 2 failed; Testing //crates/search:hawdb_search_lexical_spill_fuzz_tests; 715s disk-cache, darwin-sandbox ... (7 actions running)
+[1,380 / 1,387] 94 / 103 tests, 2 failed; Testing //crates/search:hawdb_search_lexical_spill_fuzz_tests; 746s disk-cache, darwin-sandbox ... (7 actions running)
+[1,380 / 1,387] 94 / 103 tests, 2 failed; Testing //crates/search:hawdb_search_lexical_spill_fuzz_tests; 806s disk-cache, darwin-sandbox ... (7 actions running)
+[1,380 / 1,387] 94 / 103 tests, 2 failed; Testing //crates/search:hawdb_search_lexical_spill_fuzz_tests; 866s disk-cache, darwin-sandbox ... (7 actions running)
+[1,380 / 1,387] 94 / 103 tests, 2 failed; Testing //crates/search:hawdb_search_lexical_spill_fuzz_tests; 880s disk-cache, darwin-sandbox ... (7 actions running)
+[1,380 / 1,387] 94 / 103 tests, 2 failed; Testing //crates/search:hawdb_search_lexical_spill_fuzz_tests; 881s disk-cache, darwin-sandbox ... (7 actions running)
+[1,380 / 1,387] 94 / 103 tests, 2 failed; Testing //crates/search:hawdb_search_lexical_spill_fuzz_tests; 882s disk-cache, darwin-sandbox ... (7 actions running)
+[1,380 / 1,387] 94 / 103 tests, 2 failed; Testing //crates/search:hawdb_search_lexical_spill_fuzz_tests; 883s disk-cache, darwin-sandbox ... (7 actions running)
+[1,381 / 1,387] 95 / 103 tests, 2 failed; Testing //crates/search:hawdb_search_lexical_spill_fuzz_tests; 884s disk-cache, darwin-sandbox ... (6 actions running)
+[1,381 / 1,387] 95 / 103 tests, 2 failed; Testing //crates/search:hawdb_search_lexical_spill_fuzz_tests; 896s disk-cache, darwin-sandbox ... (6 actions running)
+[1,381 / 1,387] 95 / 103 tests, 2 failed; Testing //crates/search:hawdb_search_lexical_spill_fuzz_tests; 901s disk-cache, darwin-sandbox ... (6 actions running)
+[1,381 / 1,387] 95 / 103 tests, 2 failed; Testing //crates/search:hawdb_search_lexical_spill_fuzz_tests; 903s disk-cache, darwin-sandbox ... (6 actions running)
+
+TIMEOUT: //crates/search:hawdb_search_lexical_spill_fuzz_tests (Summary)
+      /private/tmp/hawdb-mvcc-bazel-20261024/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_lexical_spill_fuzz_tests/test.log
+[1,382 / 1,387] 96 / 103 tests, 3 failed; Testing //tools/shiro:shiro_fast_tests; 747s disk-cache, darwin-sandbox ... (5 actions running)
+[1,382 / 1,387] 96 / 103 tests, 3 failed; Testing //tools/shiro:shiro_fast_tests; 758s disk-cache, darwin-sandbox ... (5 actions running)
+
+Bazel caught interrupt signal; cancelling pending invocation.
+
+[1,385 / 1,387] 96 / 103 tests, 3 failed; Testing //:hawdb_linux_ci_fuzz_smoke_test; 731s disk-cache, darwin-sandbox ... (2 actions running)
+ERROR: build interrupted
+[1,387 / 1,387] 96 / 103 tests, 3 failed; no actions running
+INFO: Elapsed time: 2288.338s, Critical Path: 1448.02s
+INFO: 656 processes: 9 disk cache hit, 415 internal, 328 darwin-sandbox.
+ERROR: Build did NOT complete successfully
+//crates/route-ownership:hawdb_graph_route_ownership_fuzz_tests (cached) PASSED in 1.9s
+//crates/sql-syntax:hawdb_sql_alias_boundary_fuzz_tests         (cached) PASSED in 0.6s
+//:hawdb_graph_projection_residency_fuzz_first_half_tests             NO STATUS
+//:hawdb_graph_projection_residency_fuzz_second_half_tests            NO STATUS
+//:hawdb_linux_ci_fuzz_smoke_test                                     NO STATUS
+//:hawdb_unit_concurrent_tests                                        NO STATUS
+//:hawdb_unit_general_tests                                           NO STATUS
+//:hawdb_unit_recovery_tests                                          NO STATUS
+//tools/shiro:shiro_fast_tests                                        NO STATUS
+//:hawdb_concurrent_key_range_fuzz_tests                                 PASSED in 2.1s
+//:hawdb_unit_storage_crash_matrix_tests                                 PASSED in 504.7s
+//crates/compat:hawdb_compat_contract_fuzz_tests                         PASSED in 0.5s
+//crates/cypher:hawdb_cypher_backtracking_fuzz_tests                     PASSED in 0.9s
+//crates/evidence:hawdb_inventory_health_fuzz_tests                      PASSED in 3.2s
+//crates/evidence:hawdb_resource_profile_fuzz_tests                      PASSED in 1.8s
+//crates/evidence:hawdb_source_inventory_fuzz_tests                      PASSED in 1.6s
+//crates/executor:hawdb_batch_dispatch_fuzz_tests                        PASSED in 0.8s
+//crates/executor:hawdb_execution_lifecycle_fuzz_tests                   PASSED in 0.4s
+//crates/executor:hawdb_execution_report_value_fuzz_tests                PASSED in 1.2s
+//crates/executor:hawdb_graph_algorithm_fuzz_tests                       PASSED in 2.5s
+//crates/executor:hawdb_graph_hash_join_fuzz_tests                       PASSED in 28.2s
+//crates/executor:hawdb_morsel_oracle_fuzz_tests                         PASSED in 19.7s
+//crates/executor:hawdb_mutation_lowering_fuzz_tests                     PASSED in 0.4s
+//crates/executor:hawdb_mutation_preflight_fuzz_tests                    PASSED in 2.6s
+//crates/executor:hawdb_numeric_execution_fuzz_tests                     PASSED in 1.7s
+//crates/executor:hawdb_query_observer_fuzz_tests                        PASSED in 0.4s
+//crates/executor:hawdb_result_delivery_fuzz_tests                       PASSED in 1.3s
+//crates/executor:hawdb_sort_merge_account_fuzz_tests                    PASSED in 5.5s
+//crates/executor:hawdb_spill_compaction_fuzz_tests                      PASSED in 159.7s
+//crates/executor:hawdb_transform_fuzz_tests                             PASSED in 2.0s
+//crates/executor:hawdb_vector_seed_fuzz_tests                           PASSED in 0.6s
+//crates/optimizer-graph:hawdb_optimizer_candidate_fingerprint_fuzz_tests PASSED in 1.2s
+//crates/optimizer-graph:hawdb_optimizer_cardinality_defaults_fuzz_tests PASSED in 0.6s
+//crates/optimizer-graph:hawdb_optimizer_cardinality_metadata_fuzz_tests PASSED in 1.5s
+//crates/optimizer-graph:hawdb_optimizer_ddl_command_fuzz_tests          PASSED in 0.5s
+//crates/optimizer-graph:hawdb_optimizer_full_text_cost_fuzz_tests       PASSED in 0.6s
+//crates/optimizer-graph:hawdb_optimizer_trace_cost_fuzz_tests           PASSED in 0.5s
+//crates/optimizer-relational:hawdb_optimizer_access_cost_fuzz_tests     PASSED in 6.8s
+//crates/plan-cypher:hawdb_plan_cypher_explain_fuzz_tests                PASSED in 1.0s
+//crates/readiness:hawdb_graph_route_readiness_fuzz_tests                PASSED in 56.2s
+//crates/readiness:hawdb_integration_bundle_fuzz_tests                   PASSED in 31.0s
+//crates/readiness:hawdb_replacement_summary_fuzz_tests                  PASSED in 157.1s
+//crates/readiness:hawdb_source_mutation_readiness_fuzz_tests            PASSED in 8.1s
+//crates/relational:hawdb_relational_aggregate_state_fuzz_tests          PASSED in 13.2s
+//crates/relational:hawdb_relational_columnar_aggregate_fuzz_tests       PASSED in 3.7s
+//crates/relational:hawdb_relational_explain_report_fuzz_tests           PASSED in 14.3s
+//crates/relational:hawdb_relational_field_plan_fuzz_tests               PASSED in 2.2s
+//crates/relational:hawdb_relational_index_runtime_fuzz_tests            PASSED in 23.5s
+//crates/relational:hawdb_relational_physical_plan_fuzz_tests            PASSED in 4.7s
+//crates/relational:hawdb_relational_qualification_fuzz_tests            PASSED in 1.2s
+//crates/relational:hawdb_relational_row_runtime_fuzz_tests              PASSED in 7.9s
+//crates/relational:hawdb_relational_statement_fuzz_tests                PASSED in 0.8s
+//crates/search:hawdb_search_block_encoding_fuzz_tests                   PASSED in 2.8s
+//crates/search:hawdb_search_bounded_file_fuzz_tests                     PASSED in 1.3s
+//crates/search:hawdb_search_candidate_evidence_fuzz_tests               PASSED in 1.0s
+//crates/search:hawdb_search_compression_fuzz_tests                      PASSED in 1.8s
+//crates/search:hawdb_search_concurrent_read_fuzz_tests                  PASSED in 1.9s
+//crates/search:hawdb_search_document_analysis_fuzz_tests                PASSED in 6.7s
+//crates/search:hawdb_search_document_frequency_fuzz_tests               PASSED in 250.0s
+//crates/search:hawdb_search_hex_decoding_fuzz_tests                     PASSED in 0.8s
+//crates/search:hawdb_search_hydration_fuzz_tests                        PASSED in 2.6s
+//crates/search:hawdb_search_manifest_budget_fuzz_tests                  PASSED in 300.4s
+//crates/search:hawdb_search_manifest_encoding_fuzz_tests                PASSED in 1.0s
+//crates/search:hawdb_search_mini_delta_snapshot_fuzz_tests              PASSED in 1.7s
+//crates/search:hawdb_search_projection_evidence_fuzz_tests              PASSED in 81.8s
+//crates/search:hawdb_search_spool_decoding_fuzz_tests                   PASSED in 8.5s
+//crates/search:hawdb_search_spool_encoding_fuzz_tests                   PASSED in 1.6s
+//crates/search:hawdb_search_term_policy_fuzz_tests                      PASSED in 167.0s
+//crates/sql:hawdb_sql_clause_diagnostics_fuzz_tests                     PASSED in 1.2s
+//crates/sql:hawdb_sql_create_binding_fuzz_tests                         PASSED in 0.7s
+//crates/sql:hawdb_sql_frontend_corpus_fuzz_tests                        PASSED in 0.6s
+//crates/storage:hawdb_storage_append_reader_fuzz_tests                  PASSED in 6.4s
+//crates/storage:hawdb_storage_artifact_binding_fuzz_tests               PASSED in 4.7s
+//crates/storage:hawdb_storage_backup_hex_fuzz_tests                     PASSED in 0.9s
+//crates/storage:hawdb_storage_checkpoint_wal_verbatim_fuzz_tests        PASSED in 1.4s
+//crates/storage:hawdb_storage_durable_envelope_fuzz_tests               PASSED in 3.3s
+//crates/storage:hawdb_storage_durable_manifest_fuzz_tests               PASSED in 3.9s
+//crates/storage:hawdb_storage_file_lock_fuzz_tests                      PASSED in 2.2s
+//crates/storage:hawdb_storage_graph_constraints_fuzz_tests              PASSED in 1.0s
+//crates/storage:hawdb_storage_graph_overlay_fuzz_tests                  PASSED in 11.9s
+//crates/storage:hawdb_storage_positioned_read_fuzz_tests                PASSED in 1.0s
+//crates/storage:hawdb_storage_projected_artifact_fuzz_tests             PASSED in 6.9s
+//crates/storage:hawdb_storage_property_projection_hex_fuzz_tests        PASSED in 1.1s
+//crates/storage:hawdb_storage_relational_index_view_fuzz_tests          PASSED in 35.0s
+//crates/storage:hawdb_storage_relational_row_workspace_fuzz_tests       PASSED in 18.0s
+//crates/storage:hawdb_storage_set_value_fuzz_tests                      PASSED in 1.4s
+//crates/storage:hawdb_storage_shadow_metadata_fuzz_tests                PASSED in 1.0s
+//crates/storage:hawdb_storage_sharded_cache_fuzz_tests                  PASSED in 1.4s
+//crates/storage:hawdb_storage_source_scan_fuzz_tests                    PASSED in 29.0s
+//crates/storage:hawdb_storage_statistics_refresh_fuzz_tests             PASSED in 14.1s
+//crates/storage:hawdb_storage_text_fuzz_tests                           PASSED in 1.0s
+//crates/storage:hawdb_storage_transaction_compaction_fuzz_tests         PASSED in 5.0s
+//crates/storage:hawdb_storage_transaction_locks_fuzz_tests              PASSED in 1.4s
+//tools/shiro:shiro_append_cli_tests                                     PASSED in 36.0s
+//tools/shiro:shiro_append_replay_tests                                  PASSED in 55.4s
+//tools/shiro:shiro_append_seed_7_tests                                  PASSED in 60.9s
+//tools/shiro:shiro_cli_tests                                            PASSED in 1.1s
+//tools/shiro:shiro_parser_cli_tests                                     PASSED in 0.6s
+//tools/shiro:shiro_relational_join_rewrite_tests                        PASSED in 4.3s
+//tools/shiro:shiro_storage_tests                                        PASSED in 108.2s
+//:hawdb_scan_callback_fuzz_tests                                       TIMEOUT in 60.2s
+  /private/tmp/hawdb-mvcc-bazel-20261024/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/hawdb_scan_callback_fuzz_tests/test.log
+//crates/search:hawdb_search_lexical_spill_fuzz_tests                   TIMEOUT in 900.2s
+  /private/tmp/hawdb-mvcc-bazel-20261024/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_lexical_spill_fuzz_tests/test.log
+//crates/storage:hawdb_storage_tests                                    TIMEOUT in 900.1s
+  /private/tmp/hawdb-mvcc-bazel-20261024/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_tests/test.log
+
+Executed 94 out of 103 tests: 93 tests pass, 3 fail locally, and 7 were skipped.
+There were tests whose specified size is too big. Use the --test_verbose_timeout_warnings command line option to see which ones these are.

@@ -36,6 +36,7 @@ HAWDB_BENCHMARK_TARGETS = [
 HAWDB_MANUAL_BENCHMARKS = [
     "branch_catalog_inspection",
     "concurrent_snapshot_reads",
+    "mvcc_hot_paths",
     "concurrent_writers",
     "consumer_publication",
     "graph_analytics",

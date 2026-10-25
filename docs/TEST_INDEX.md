@@ -123,6 +123,27 @@ the macOS/Windows runtime lane. Existing request, lock and serializability
 families continue to cover the shared execution kernel; preparation counts are
 not latency or allocation measurements.
 
+The same family also pauses a sealed graph transaction between compaction and
+WAL encoding, proves a disjoint writer commits during that pause, and verifies
+that an intervening conflicting writer is rejected before WAL and stays rejected
+after reopen. `api::concurrent::publication::tests` covers borrowed read-only
+Cypher views across publication generations, mutable/EXPLAIN fallback, limits,
+cancellation, reports and private observation refresh. These additions retain
+the existing root general/concurrent owners, checked profile and timeouts.
+
+Storage's existing unit owner covers cached COW page weights through replacement,
+mutable guards, splitting, retain/unwind and saturating payload sizes;
+relationship record sharing preserves old snapshots and untouched payload
+addresses. `version::page_history_tests` exercises page-owned history charges,
+last-owner refunds, unmanaged-root adoption, epoch-cache invalidation and pruning
+without spare history budget. Existing retention, checkpoint admission and WAL
+codec/recovery families remain their complementary owners. Manual release-only
+`cargo bench --locked --bench mvcc_hot_paths` compares identical fixed-work
+harnesses on baseline and candidate for small/large COW pages, pinned/unpinned
+relationships, concurrent Cypher reads and synchronized graph commits including
+reopen validation. It is excluded from CI; measurements and limits are linked
+from [the MVCC validation protocol](MVCC_COMMIT_VALIDATION_PROTOCOL.md).
+
 `api::concurrent::autocommit::tests` covers ordinary Cypher writers sharing a
 label but updating distinct unique keys, readers progressing while private
 execution is suspended, intervening commits without replanning, excluded unique

@@ -1275,7 +1275,29 @@ pub(crate) fn commit_database_transaction_state(
     state: &mut DatabaseTransactionState,
     allow_stale_rebase: bool,
 ) -> Result<TransactionCommitResult> {
-    let result = commit_database_transaction_state_inner(db, state, allow_stale_rebase);
+    let result = (|| {
+        let prepared = state
+            .graph_transaction
+            .take()
+            .expect("database transaction must own a graph workspace")
+            .prepare_commit(
+                db.config.mutation_limits,
+                state.relational_transaction.writes.is_empty()
+                    && state.append_transaction.writes.is_empty(),
+            )?;
+        commit_database_transaction_state_inner(db, state, prepared, allow_stale_rebase)
+    })();
+    db.poison_on_storage_error(&result);
+    result
+}
+
+pub(super) fn commit_prepared_database_transaction_state(
+    db: &mut Database,
+    state: &mut DatabaseTransactionState,
+    prepared: crate::store::PreparedGraphMutationTransaction,
+    allow_stale_rebase: bool,
+) -> Result<TransactionCommitResult> {
+    let result = commit_database_transaction_state_inner(db, state, prepared, allow_stale_rebase);
     db.poison_on_storage_error(&result);
     result
 }
@@ -1283,6 +1305,7 @@ pub(crate) fn commit_database_transaction_state(
 pub(super) fn commit_database_transaction_state_inner(
     db: &mut Database,
     state: &mut DatabaseTransactionState,
+    graph_transaction: crate::store::PreparedGraphMutationTransaction,
     allow_stale_rebase: bool,
 ) -> Result<TransactionCommitResult> {
     db.ensure_writable()?;
@@ -1290,35 +1313,18 @@ pub(super) fn commit_database_transaction_state_inner(
         dependencies.validate(db)?;
     }
     let returning = std::mem::take(&mut state.relational_returning);
-    let graph_transaction = state
-        .graph_transaction
-        .take()
-        .expect("database transaction must own a graph workspace");
     let relational_transaction = std::mem::take(&mut state.relational_transaction);
     let append_transaction = std::mem::take(&mut state.append_transaction);
     let mut branch_runtime_access = db.runtime.get_mut()?;
     let branch_runtime = &mut *branch_runtime_access;
-    let summary = if allow_stale_rebase {
-        branch_runtime
-            .store
-            .commit_rebased_mutation_transaction_relational_and_append(
-                &mut branch_runtime.catalog,
-                graph_transaction,
-                relational_transaction,
-                append_transaction,
-                db.config.mutation_limits,
-            )?
-    } else {
-        branch_runtime
-            .store
-            .commit_mutation_transaction_relational_and_append(
-                &mut branch_runtime.catalog,
-                graph_transaction,
-                relational_transaction,
-                append_transaction,
-                db.config.mutation_limits,
-            )?
-    };
+    let summary = branch_runtime.store.commit_prepared_graph_transaction(
+        &mut branch_runtime.catalog,
+        graph_transaction,
+        relational_transaction,
+        append_transaction,
+        db.config.mutation_limits,
+        allow_stale_rebase,
+    )?;
     drop(branch_runtime_access);
     db.complete_required_relational_row_checkpoint("transaction commit")?;
     if returning.len() != summary.relational_mutation_outcomes.len() {

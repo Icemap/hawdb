@@ -25,6 +25,87 @@ fn parameters(id: i64, score: i64) -> BTreeMap<String, Value> {
     ])
 }
 
+#[test]
+fn sealed_commit_preparation_allows_other_commits_and_revalidates_before_wal() {
+    use std::sync::mpsc;
+    use std::thread;
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+    for conflicting in [false, true] {
+        let path = std::env::temp_dir().join(format!(
+            "hawdb-sealed-preparation-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let mut source = Database::open(&path).unwrap();
+        source.query("CREATE (:Counter {id: 1, score: 0})").unwrap();
+        source.query("CREATE (:Counter {id: 2, score: 0})").unwrap();
+        let database = source.into_concurrent();
+        let (ready, reached) = mpsc::channel();
+        let (resume, release) = mpsc::channel();
+        let writer_database = database.clone();
+        let writer = thread::spawn(move || {
+            let mut transaction = writer_database
+                .begin_transaction(ConcurrentTransactionOptions::optimistic())
+                .unwrap();
+            transaction
+                .query_with_params(UPDATE, &parameters(1, 11))
+                .unwrap();
+            set_graph_commit_preparation_hook(Box::new(move || {
+                ready.send(()).unwrap();
+                release.recv_timeout(Duration::from_secs(10)).unwrap();
+            }));
+            transaction.commit()
+        });
+        reached.recv_timeout(Duration::from_secs(5)).unwrap();
+        let (completed, progress) = mpsc::channel();
+        let other_database = database.clone();
+        let other = thread::spawn(move || {
+            let mut transaction = other_database
+                .begin_transaction(ConcurrentTransactionOptions::optimistic())
+                .unwrap();
+            transaction
+                .query_with_params(UPDATE, &parameters(if conflicting { 1 } else { 2 }, 22))
+                .unwrap();
+            transaction.commit().unwrap();
+            completed.send(()).unwrap();
+        });
+        let advanced_while_preparing = progress.recv_timeout(Duration::from_secs(5));
+        resume.send(()).unwrap();
+        let result = writer.join().unwrap();
+        other.join().unwrap();
+        assert!(
+            advanced_while_preparing.is_ok(),
+            "competing commit waited for preparation"
+        );
+        if conflicting {
+            assert!(matches!(
+                result,
+                Err(HawDBError::TransactionConflict { .. })
+            ));
+        } else {
+            result.unwrap();
+        }
+        let expected = if conflicting { 22 } else { 11 };
+        let query = "MATCH (n:Counter {id: 1}) RETURN n.score AS score";
+        assert_eq!(
+            database.query(query).unwrap().rows[0]["score"],
+            Value::Int(expected)
+        );
+        drop(database);
+        let mut reopened = Database::open(&path).unwrap();
+        assert_eq!(
+            reopened.query(query).unwrap().rows[0]["score"],
+            Value::Int(expected)
+        );
+        drop(reopened);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+}
+
 fn preparations(transaction: &ConcurrentDatabaseTransaction) -> u64 {
     transaction.runtime.plan_cache.borrow().stats().bypasses
 }

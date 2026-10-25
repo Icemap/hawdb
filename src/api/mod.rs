@@ -156,6 +156,7 @@ pub use publication::{PublicationLockDurationSnapshot, PublicationLockMetricsSna
 mod query_preparation_metrics;
 mod query_request;
 mod query_runtime;
+mod read_execution;
 #[cfg(feature = "qualification")]
 pub use query_preparation_metrics::{query_preparation_metrics, QueryPreparationMetricsSnapshot};
 mod sql_runtime;

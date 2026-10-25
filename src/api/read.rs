@@ -589,81 +589,27 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
         options: query_runtime::QueryExecutionOptions<'_>,
         external: &mut dyn executor::ExternalReadOperator,
     ) -> Result<(QueryOutput, QueryExecutionTrace)> {
-        let _planning_memory = prepared.planning_memory.take();
-        let task_context = options.task_context;
         self.store.ensure_usable()?;
-        query_runtime::query_runtime_checkpoint(task_context)?;
-        let max_rows =
-            restrictive_query_limit(self.read_result_row_limit(), options.output_limits.max_rows);
-        let max_payload_bytes = restrictive_query_limit(
-            self.config.max_read_result_payload_bytes,
-            options.output_limits.max_payload_bytes,
-        );
-        let prepared_optimized =
-            prepared.take_optimized(options.access_control, options.scoring)?;
-        let query_runtime::PreparedRuntimeExecution { statement, .. } = prepared;
-        let body = statement_body(&statement);
-        if let cypher::Statement::Explain(explain) = &statement {
+        query_runtime::query_runtime_checkpoint(options.task_context)?;
+        if let cypher::Statement::Explain(explain) = &prepared.statement {
+            let _planning_memory = prepared.planning_memory.take();
             let result =
                 self.execute_explain_request(cypher_text, explain, parameters, options, external)?;
-            let mut trace = QueryExecutionTrace::uncached(statement);
+            let mut trace = QueryExecutionTrace::uncached(prepared.statement);
             trace.execution_profile = Some(result.execution_profile);
             return Ok((result.output, trace));
         }
-        if matches!(body, cypher::Statement::Checkpoint) {
-            reject_transaction_control_parameters("CHECKPOINT", parameters)?;
-            return Err(HawDBError::Execution(
-                "CHECKPOINT is not allowed inside a read transaction".to_string(),
-            ));
-        }
-        if matches!(body, cypher::Statement::SetSystemVariable(_)) {
-            reject_system_variable_parameters(parameters)?;
-            return Err(HawDBError::Execution(
-                "SET system variable is not allowed inside a read transaction".to_string(),
-            ));
-        }
-        query_work_request_for_statement(&self.system_variables, &statement)?;
-        let optimized = match prepared_optimized {
-            Some(optimized) => optimized,
-            _ => self.optimized_query_plan_for_request(
-                cypher_text,
-                &statement,
-                parameters,
-                options.access_control,
-                PlanTraceMode::Template,
-                options.scoring,
-            )?,
-        };
-        if executor::is_mutation_plan(&optimized.physical_plan)? {
-            return Err(HawDBError::Execution(
-                "read transaction query must not be a mutation".to_string(),
-            ));
-        }
-        let profiled = executor::execute_with_request(
-            executor::ExecutionRequest::new(
-                &optimized.physical_plan,
-                parameters,
-                &self.config.execution_memory,
-            )
-            .with_output_limits(max_rows, max_payload_bytes)
-            .with_optional_task_context(task_context)
-            .with_optional_host_scorer(options.scoring.and_then(BoundScoringRequest::host_scorer)),
+        let prepared = self.prepare_read_execution(cypher_text, prepared, parameters, options)?;
+        let row_limit = self.read_result_row_limit();
+        let result = prepared.execute(
+            parameters,
+            options,
+            &self.config,
+            row_limit,
             executor::ExecutionResources::new(&mut self.catalog, &mut self.store, external),
         );
-        self.store.poison_on_storage_error(&profiled);
-        let profiled = profiled?;
-        query_runtime::query_runtime_checkpoint(task_context)?;
-        Ok((
-            QueryOutput {
-                rows: profiled.rows,
-            },
-            QueryExecutionTrace {
-                statement,
-                optimizer_trace: options.capture_trace.then_some(optimized.trace),
-                plan_cache_lookup: Some(optimized.plan_cache_lookup),
-                execution_profile: Some(profiled.profile),
-            },
-        ))
+        self.store.poison_on_storage_error(&result);
+        result
     }
 
     pub(super) fn execute_explain_request(

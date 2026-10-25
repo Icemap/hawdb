@@ -26,14 +26,9 @@ fn scheduler() -> LocalQosScheduler {
     })
 }
 
-fn chain(
-    size: u64,
-) -> (
-    CowSegmentedMap<NodeId, NodeRecord>,
-    CowSegmentedMap<RelId, RelRecord>,
-) {
+fn chain(size: u64) -> (CowSegmentedMap<NodeId, NodeRecord>, crate::cow::CowRelMap) {
     let mut nodes = CowSegmentedMap::default();
-    let mut relationships = CowSegmentedMap::default();
+    let mut relationships = crate::cow::CowRelMap::default();
     for id in 0..size {
         nodes.insert(
             NodeId(id),

@@ -2,8 +2,9 @@
 
 Issue Number: ref #1222
 
-The current implementation is based on main
-`80c4b84357757ac6344e90f8fd4b73dbf9bcd0d0`. Both checkouts use the pinned
+The implementation now includes main's MVCC snapshot/commit optimization
+`aebed63` (#1242). Recorded controls use the earlier main baseline
+`80c4b84357757ac6344e90f8fd4b73dbf9bcd0d0`. Both measured checkouts use the pinned
 Rust toolchain and ordinary repository bench profile. Identical scan and
 publication harnesses exercise baseline and candidate with fresh fixtures;
 source/binary/harness hashes identify each measurement. Logical scan units are
@@ -34,7 +35,7 @@ The subsequent [label-cardinality review](https://github.com/nowledge-co/hawdb/p
 changes label accumulation to retain distinct keys. The measurements below
 predate that correction and keep their original source attribution. New
 cardinality/admission/cancellation regressions verify its memory behavior; these
-historical timings do not qualify the later correction.
+historical timings do not qualify the later correction or the #1242 integration.
 
 All 36 publication runs checked 8,192 writes, 4,096 reads and complete final
 document content. Every enabled candidate run completed 16 real post-E advances

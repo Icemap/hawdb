@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use super::*;
+use crate::cow::CowSegmentedMap;
 use std::collections::BTreeSet;
 
 const TYPES: [(PropertyType, &str); 7] = [
@@ -101,7 +102,7 @@ fn node_map(records: Vec<NodeRecord>) -> CowSegmentedMap<NodeId, NodeRecord> {
         .into()
 }
 
-fn relationship_map(records: Vec<RelRecord>) -> CowSegmentedMap<RelId, RelRecord> {
+fn relationship_map(records: Vec<RelRecord>) -> crate::cow::CowRelMap {
     records
         .into_iter()
         .map(|record| (record.id, record))

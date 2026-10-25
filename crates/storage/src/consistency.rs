@@ -21,7 +21,7 @@ use crate::{
         AdjacencyPostingList,
     },
     cow::{CowSegment, CowSegmentedMap},
-    NodeId, RelId, RelRecord,
+    NodeId, RelId,
 };
 use hawdb_core::{BasicGraphStatistics, LabelId, RelTypeId, Value};
 use std::collections::{BTreeMap, BTreeSet};
@@ -94,9 +94,7 @@ pub fn maintained_adjacency_groups(
     groups
 }
 
-pub fn recompute_adjacency_groups(
-    relationships: &CowSegmentedMap<RelId, RelRecord>,
-) -> AdjacencyGroups {
+pub fn recompute_adjacency_groups(relationships: &crate::cow::CowRelMap) -> AdjacencyGroups {
     let mut groups = AdjacencyGroups::new();
     for relationship in relationships.values() {
         groups
@@ -129,7 +127,7 @@ pub fn compute_degree_statistics_from_adjacency(
 
 pub fn compute_degree_statistics_from_relationships(
     nodes: &impl NodeRecordRead,
-    relationships: &CowSegmentedMap<RelId, RelRecord>,
+    relationships: &crate::cow::CowRelMap,
 ) -> BTreeMap<DegreeStatisticsKey, DegreeStatisticsEntry> {
     compute_degree_statistics_from_groups(nodes, recompute_adjacency_groups(relationships))
 }
@@ -319,7 +317,7 @@ impl AdjacencyConsistencyReport {
         relationship_count: usize,
         maintained: AdjacencyGroups,
         recomputed: AdjacencyGroups,
-        relationships: &CowSegmentedMap<RelId, RelRecord>,
+        relationships: &crate::cow::CowRelMap,
     ) -> Self {
         let mut missing_group_count = 0;
         let mut extra_group_count = 0;
