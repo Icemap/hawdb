@@ -21,7 +21,15 @@ fn limits(work: usize, items: usize, bytes: usize) -> ProjectionFeedLimits {
     }
 }
 fn main() {
-    let root = std::env::args().nth(1).expect("new fixture root");
+    let mut arguments = std::env::args().skip(1);
+    let root = arguments
+        .next()
+        .filter(|argument| !argument.starts_with('-'))
+        .expect("usage: projection_label_source <new-fixture-root>");
+    assert!(
+        arguments.next().is_none(),
+        "expected only a new fixture root"
+    );
     let root = std::path::Path::new(&root);
     std::fs::create_dir(root).unwrap();
     let mut results = Vec::new();

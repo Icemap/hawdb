@@ -25,6 +25,11 @@ pub type SearchProjectionInitializer =
 /// Reusing a target with another version or scope is refused by the existing
 /// native registration/target fences. A new definition requires a fresh target
 /// and a complete bootstrap; it never adopts a legacy directory implicitly.
+///
+/// This is a trusted-host contract. Hosts retaining the raw consumer can use
+/// the raw catch-up and covered-update APIs, which bind the native consumer and
+/// operation without authenticating mapper semantics against this definition.
+/// Such callers must preserve this definition's mapper/scope/version agreement.
 #[derive(Clone)]
 pub struct SearchProjectionDefinition {
     name: SearchProjectionConsumerId,
@@ -120,8 +125,9 @@ impl SearchProjectionDefinition {
     }
 }
 
-/// Private bounded progress whose complete mapper and scope cannot be replaced
-/// independently of the versioned definition that captured the interval.
+/// Bounded progress retaining the complete mapper and scope of the definition
+/// that captured the interval. The trusted host can also create covered updates
+/// through raw consumer APIs and is responsible for their definition agreement.
 pub struct DefinedProjectionStagingSession<'consumer> {
     session: ProjectionConsumerStagingSession<'consumer>,
     definition: &'consumer SearchProjectionDefinition,

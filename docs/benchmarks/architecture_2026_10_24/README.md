@@ -30,6 +30,12 @@ three storage tests, documentation and optional benchmark output; its library
 production code is identical to `a02802e4`. These observations are distinct from
 the older controls above and are not a new macOS measurement.
 
+The subsequent [label-cardinality review](https://github.com/nowledge-co/hawdb/pull/1240#issuecomment-6391382005)
+changes label accumulation to retain distinct keys. The measurements below
+predate that correction and keep their original source attribution. New
+cardinality/admission/cancellation regressions verify its memory behavior; these
+historical timings do not qualify the later correction.
+
 All 36 publication runs checked 8,192 writes, 4,096 reads and complete final
 document content. Every enabled candidate run completed 16 real post-E advances
 with active writers. In the three detached repetitions, verified reads during

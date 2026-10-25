@@ -188,3 +188,9 @@ Descriptor enumeration reuses the task-admitted private checkpoint traversal,
 including Bloom-negative and serving-cache-warm decisions. Page/Bloom allocations
 precede decoding, and selected descriptor leases survive until cursor buffers
 drop. Descriptor pages and selected payloads use separate fresh task I/O waves.
+
+Projection definitions coordinate the trusted host's normal catch-up flow.
+Raw consumer access and the raw Database catch-up APIs remain available; covered
+updates authenticate their native consumer/operation without authenticating
+mapper semantics against a definition. Hosts using those APIs must preserve the
+definition's mapper, scope and version agreement themselves.

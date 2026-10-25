@@ -1282,6 +1282,11 @@ execution lane changes. See [the cost model](OPTIMIZER_COST_MODEL.md).
   sparse IDs, overlapping labels, pinned checkpoint/delta/tombstone membership,
   cancellation, corruption and sticky budget/IO/memory refusals. Existing
   checkpoint accumulator cut/retry tests also cover resumable label inventory.
+  Label Bloom cardinality cases compare one and 4,096 propertyless nodes with
+  one or three distinct labels in ordinary and admitted flushes, including
+  persisted descriptor round trips. Repeated labels retain the original memory
+  allocation. A distinct-label insertion case cancels at every work-unit cut
+  across two bounded shift blocks, then resumes without duplicate keys or leaks.
   Descriptor admission is checked before both matching and Bloom-negative
   decisions with cold and warm serving caches. Resident batches retain one
   pinned COW iterator per step and check cancellation between every delivered row.

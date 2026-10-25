@@ -142,12 +142,7 @@ impl CanonicalNodeLabelCursor {
             .next(&segment.bytes, &segment.descriptor)?
             .ok_or_else(|| CanonicalSegmentError::Corrupt("label cursor has no record".into()))?;
         let payload = &segment.bytes[frame.payload_start..frame.payload_end];
-        let mut input = SliceCursor::new(payload);
-        let count = input.read_u32()?;
-        let mut matches = false;
-        for _ in 0..count {
-            matches |= labels.binary_search(&LabelId(input.read_u32()?)).is_ok();
-        }
+        let matches = node_payload_has_any_label(payload, labels)?;
         segment.records.accept(frame);
         Ok(matches)
     }

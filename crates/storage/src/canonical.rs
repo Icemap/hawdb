@@ -1386,6 +1386,7 @@ struct SegmentAccumulator {
     source_endpoint_keys: Vec<u64>,
     target_endpoint_keys: Vec<u64>,
     node_property_keys: Vec<u64>,
+    // Sorted distinct labels; repeated nodes do not enlarge the label synopsis.
     node_label_keys: Vec<u64>,
 }
 
@@ -1464,7 +1465,14 @@ impl SegmentAccumulator {
         work: Option<&CheckpointWorkContext>,
     ) -> Result<(), CanonicalSegmentError> {
         for label in &node.labels {
-            self.node_label_keys.push(u64::from(label.0));
+            let unit = work.map(CheckpointWorkContext::start_unit).transpose()?;
+            let key = u64::from(label.0);
+            if let Err(index) = self.node_label_keys.binary_search(&key) {
+                self.node_label_keys.insert(index, key);
+            }
+            if let Some(unit) = unit {
+                unit.finish();
+            }
             for (property, value) in &node.properties {
                 let key = checkpoint_bloom::key(*label, property, value, work)?;
                 let unit = work.map(CheckpointWorkContext::start_unit).transpose()?;
@@ -3500,19 +3508,28 @@ pub struct CanonicalNodeInput<'a> {
     property_spills: Option<&'a PropertySpillReader>,
 }
 
+// The selected labels are sorted. Read the complete extent even after a match
+// so truncated trailing labels remain a corruption error.
+fn node_payload_has_any_label(
+    payload: &[u8],
+    labels: &[LabelId],
+) -> Result<bool, CanonicalSegmentError> {
+    let mut cursor = SliceCursor::new(payload);
+    let count = cursor.read_u32()?;
+    let mut matches = false;
+    for _ in 0..count {
+        matches |= labels.binary_search(&LabelId(cursor.read_u32()?)).is_ok();
+    }
+    Ok(matches)
+}
+
 impl CanonicalNodeInput<'_> {
     pub fn id(&self) -> NodeId {
         self.id
     }
 
     pub fn has_label(&self, label: LabelId) -> Result<bool, CanonicalSegmentError> {
-        let mut cursor = SliceCursor::new(self.payload);
-        let count = cursor.read_u32()?;
-        let mut matches = false;
-        for _ in 0..count {
-            matches |= cursor.read_u32()? == label.0;
-        }
-        Ok(matches)
+        node_payload_has_any_label(self.payload, std::slice::from_ref(&label))
     }
 
     pub fn decode_selected<P>(

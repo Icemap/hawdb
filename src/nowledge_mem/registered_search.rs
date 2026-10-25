@@ -115,6 +115,8 @@ impl NowledgeMemDefinedSearchProjectionConsumer {
         &self.definition
     }
 
+    /// Raw consumer access for trusted hosts. Raw catch-up APIs accept their
+    /// own mapper and scope; callers must preserve the definition's agreement.
     pub fn consumer(&self) -> &SearchProjectionConsumer {
         self.consumer.consumer()
     }
@@ -146,6 +148,9 @@ impl NowledgeMemDefinedSearchProjectionConsumer {
             )
     }
 
+    /// Prepare a covered update under the original native owner. The token
+    /// authenticates the consumer and operation; the trusted host must ensure
+    /// updates created through raw APIs use this definition's mapper and scope.
     pub fn prepare_covered_update(
         &mut self,
         covered: ProjectionCoveredConsumerUpdate,
