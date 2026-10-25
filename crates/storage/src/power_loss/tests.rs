@@ -44,6 +44,73 @@ impl Drop for Fixture {
 }
 
 #[test]
+fn observations_capture_root_barriers_and_descendants_without_accepting_escaped_paths() {
+    for boundary in [ObservationBoundary::Before, ObservationBoundary::After] {
+        let fixture = Fixture::new(ImageLimits::default());
+        let mut file = fs::File::create(fixture.root.join("candidate")).unwrap();
+        file.write_all(b"complete").unwrap();
+        file.sync_all().unwrap();
+        fixture
+            .model
+            .observe(ObservationPoint {
+                event: IoEvent::DirectorySync,
+                relative_path: PathBuf::new(),
+                boundary,
+                skip_matches: 0,
+                include_descendants: false,
+                keep_last: false,
+            })
+            .unwrap();
+        crate::durability::sync_directory(&fixture.root).unwrap();
+        let root = fixture.model.take_observation().unwrap().unwrap();
+        assert_eq!(root.observed_path(), Some(Path::new("")));
+        let lost = root.crash(&CrashPlan::default()).unwrap();
+        assert_eq!(
+            lost.bytes(Path::new("candidate")),
+            match boundary {
+                ObservationBoundary::Before => None,
+                ObservationBoundary::After => Some(b"complete".as_slice()),
+            }
+        );
+        for path in [".", "../escape", "nested/../escape", "/absolute"] {
+            assert!(
+                fixture
+                    .model
+                    .observe(ObservationPoint {
+                        event: IoEvent::Write,
+                        relative_path: path.into(),
+                        boundary: ObservationBoundary::After,
+                        skip_matches: 0,
+                        include_descendants: true,
+                        keep_last: false,
+                    })
+                    .is_err(),
+                "{path}"
+            );
+        }
+        fixture
+            .model
+            .observe(ObservationPoint {
+                event: IoEvent::Write,
+                relative_path: PathBuf::new(),
+                boundary: ObservationBoundary::After,
+                skip_matches: 0,
+                include_descendants: true,
+                keep_last: false,
+            })
+            .unwrap();
+        file.write_all(b"tail").unwrap();
+        let write = fixture.model.take_observation().unwrap().unwrap();
+        assert_eq!(write.observed_path(), Some(Path::new("candidate")));
+        assert!(!write
+            .uncovered_writes(Path::new("candidate"))
+            .unwrap()
+            .is_empty());
+        fixture.model.capture().unwrap();
+    }
+}
+
+#[test]
 fn observations_capture_actual_file_barriers_before_later_flushes() {
     for boundary in [ObservationBoundary::Before, ObservationBoundary::After] {
         let fixture = Fixture::new(ImageLimits::default());

@@ -74,6 +74,13 @@ fn vector_index_producer_waits_for_original_io_wave_before_writing_and_can_cance
         task,
         events: events.clone(),
     }));
+    let children = || {
+        std::fs::read_dir(&root)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect::<std::collections::BTreeSet<_>>()
+    };
+    let original_children = children();
     let index = vector_index(&root);
     let worker_permit = Arc::clone(&permit);
     let worker = std::thread::spawn(move || {
@@ -89,7 +96,7 @@ fn vector_index_producer_waits_for_original_io_wave_before_writing_and_can_cance
     });
     let event = receiver.recv_timeout(std::time::Duration::from_secs(30));
     // Cancellation and join happen before asserting, including the unfixed path.
-    let untouched = !root.join(crate::SEARCH_SNAPSHOT_FILE).exists();
+    let untouched = children() == original_children;
     cancellation.cancel();
     let (index, publication, result) = worker.join().unwrap();
     assert_eq!(event.unwrap(), Event::Acquiring);
@@ -158,6 +165,13 @@ fn vector_index(root: &std::path::Path) -> SearchIndex {
         .unwrap();
     index.path = Some(root.to_path_buf());
     index.source_graph_commit_epoch = Some(1);
+    index.consumer_binding = Some(crate::consumer::ConsumerBinding {
+        database_uuid: hawdb_core::generate_uuidv7().unwrap(),
+        projection_uuid: hawdb_core::generate_uuidv7().unwrap(),
+        consumer_id: "vector-io".into(),
+        registration_uuid: hawdb_core::generate_uuidv7().unwrap(),
+        checkpoint_uuid: hawdb_core::generate_uuidv7().unwrap(),
+    });
     index
 }
 

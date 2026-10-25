@@ -69,8 +69,8 @@ pub use uuidv7::generate_uuidv7;
 pub use value::{Value, ValueRef};
 pub use vector::{Vector, VectorDistance, VectorRef};
 pub use vector_index::{
-    VectorIndexBackend, VectorIndexDescriptor, VectorIndexQueryMode, VectorIndexReadIdentity,
-    VectorIndexTarget,
+    VectorIndexBackend, VectorIndexDescriptor, VectorIndexLsg, VectorIndexQueryMode,
+    VectorIndexReadIdentity, VectorIndexTarget,
 };
 
 #[doc(hidden)]

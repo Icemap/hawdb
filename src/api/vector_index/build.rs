@@ -1,5 +1,5 @@
 // Copyright 2026 Nowledge
-// Licensed under the Apache License, Version 2.0.
+// SPDX-License-Identifier: Apache-2.0
 
 //! Complete source capture under the existing registered Consumer publication.
 
@@ -21,6 +21,9 @@ use std::path::Path;
 #[cfg(all(test, feature = "vector-search"))]
 mod tests;
 
+mod incremental;
+pub use incremental::VectorIndexUpdateReport;
+
 #[derive(Debug, Clone)]
 pub struct VectorIndexBuildOptions {
     pub distance: VectorDistance,
@@ -39,11 +42,7 @@ impl Default for VectorIndexBuildOptions {
     fn default() -> Self {
         Self {
             distance: VectorDistance::Cosine,
-            backend: VectorIndexBackend::RaBitQ {
-                bit_width: 4,
-                segment_rows: 1024,
-                transform_seed: 0x534b_4549_4e56_5134,
-            },
+            backend: VectorIndexBackend::default(),
             memory_bytes: NonZeroUsize::new(32 << 20).unwrap(),
             max_documents: NonZeroUsize::new(100_000).unwrap(),
             max_row_payload_bytes: NonZeroUsize::new(1 << 20).unwrap(),
@@ -116,7 +115,7 @@ impl Database {
         let mut producer_memory = None;
         let result = self.create_consumer_with_initializer::<
             { hawdb_search::projection_consumer::MAX_CONSUMERS }, _
-        >(id, destination.as_ref(), consumer_options, build.task.clone(), |source, index, permit| {
+        >(id, destination.as_ref(), consumer_options, build.task.clone(), hawdb_search::consumer::RegisteredConsumerProjector::CanonicalVectorField, |source, index, permit| {
             let mapped = (|| {
                 producer_memory = Some(permit.reserve_retained_memory(build.memory_bytes.get() as u64)
                     .map_err(VectorIndexBuildError::Admission)?);
@@ -158,9 +157,7 @@ impl Database {
                             .reserve_retained_memory(build.memory_bytes.get() as u64)
                             .map_err(VectorIndexBuildError::Admission)?,
                     );
-                    let definition = previous
-                        .vector_index_descriptor()
-                        .ok_or_else(|| invalid("Consumer has no vector index definition"))?;
+                    let definition = previous;
                     let field = VectorIndexField::from_target(definition.target());
                     build_source(
                         source,
@@ -335,6 +332,7 @@ fn build_source(
         })?;
     }
     cursor.finish()?;
+    index.finish_canonical_vector_source(source.commit_epoch(), None, Vec::new())?;
     Ok(())
 }
 

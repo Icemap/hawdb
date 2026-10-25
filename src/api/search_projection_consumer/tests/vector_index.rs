@@ -1,5 +1,5 @@
 // Copyright 2026 Nowledge
-// Licensed under the Apache License, Version 2.0.
+// SPDX-License-Identifier: Apache-2.0
 
 //! Kernel acceptance; language-driven source mapping is tested separately.
 
@@ -8,6 +8,8 @@ use crate::{VectorDistance, VectorIndexBackend, VectorIndexDescriptor, VectorInd
 use hawdb_qos::RuntimeWorkRequest;
 use hawdb_search::{SearchDocument, SearchQueryError, VectorIndexQuery};
 use std::num::NonZeroUsize;
+
+mod incremental_recovery;
 
 fn initialize_bound_index(
     db: &mut Database,
@@ -142,10 +144,7 @@ fn vector_index_kernel_preserves_signed_distances_and_retained_reopen_results() 
         .unwrap();
     assert_eq!(output.hits(), reopened.hits());
     assert_eq!(output.report().generation, reopened.report().generation);
-    assert_eq!(
-        consumer.search_index().unwrap().vector_index_descriptor(),
-        Some(&binding)
-    );
+    assert_eq!(consumer.vector_index_descriptor().unwrap(), Some(&binding));
 }
 
 #[test]

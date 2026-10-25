@@ -57,6 +57,7 @@ fn vector(id: u64) -> Vec<f32> {
 fn build(path: &Path) -> Result<(), Box<dyn Error>> {
     std::fs::create_dir(path)?;
     let options = SearchOutOfCoreGenerationBuildOptions {
+        vector_backend: None,
         source_graph_commit_epoch: Some(1),
         embedding_manifest: Some(SearchEmbeddingManifest {
             model: "hawdb-rabitq-profile-xorshift64star".into(),

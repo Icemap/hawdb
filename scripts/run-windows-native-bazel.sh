@@ -91,7 +91,7 @@ case "$shard" in
     rust_case descriptor-capacity "$storage" storage_all positive 1 file_descriptors::tests::
     rust_case descriptor-facade "$root" facade_all positive 1 api::tests::descriptor_capacity::
     rust_case consumer-wal-admission "$storage" storage_all positive 1 captured_wal_append_prepays_post_write_descriptor_checks
-    rust_case consumer-failure-boundaries "$storage" storage_all positive 1 consumer_allocation::bootstrap_tests file_io::source_directory::control_candidate::tests held_wal_rollback captured_wal_first_rollback
+    rust_case consumer-failure-boundaries "$storage" storage_all positive 1 consumer_allocation::bootstrap_tests file_io::source_directory::control_candidate::tests held_wal_rollback captured_wal_first_rollback captured_link
     ;;
   search)
     rust_case held-generation-spool "$search" search_all positive 1 generation_spool
@@ -100,6 +100,7 @@ case "$shard" in
     ;;
   consumers)
     rust_case consumer-reclamation "$root" facade_all positive 1 consumer_reclamation
+    rust_case consumer-vector-incremental "$root" facade_all positive 1 vector_index_incremental vector_index_canonical_completion
     rust_case consumer-stationary-create "$root" facade_all 1 1 api::search_projection_consumer::tests::windows_registered_stationary_creation_catch_up_and_reopen --exact
     rust_case consumer-stationary-recovery "$root" facade_all positive 1 registered_stationary
     rust_case consumer-covered-catch-up //:hawdb_mvcc_staging_session_tests facade_all positive 1 registered_consumer

@@ -275,6 +275,7 @@ impl Database {
             destination,
             options,
             RuntimeTaskContext::default(),
+            hawdb_search::consumer::RegisteredConsumerProjector::HostMapping,
             |snapshot, index, _permit| initialize(snapshot, index),
         )
     }
@@ -285,6 +286,7 @@ impl Database {
         destination: &Path,
         options: SearchProjectionConsumerOptions,
         task: RuntimeTaskContext,
+        projector: hawdb_search::consumer::RegisteredConsumerProjector,
         initialize: F,
     ) -> SearchProjectionConsumerResult<SearchProjectionConsumer>
     where
@@ -432,6 +434,7 @@ impl Database {
                 limits: registered_creation_limits(),
                 recovery_memory,
                 previous: None,
+                projector,
             },
             |index| initialize(&mut snapshot, index, &permit),
         );
@@ -716,7 +719,7 @@ impl Database {
         ) -> Result<SearchProjectionRelationalDelta>,
     {
         let _descriptor_operation = self.internal_descriptor_operation()?;
-        if consumer.search_index()?.vector_index_descriptor().is_some() {
+        if consumer.vector_index_descriptor()?.is_some() {
             return Err(HawDBError::Semantic(
                 "schema-bound vector indexes require rebuild_vector_index maintenance".into(),
             )
@@ -787,6 +790,7 @@ impl Database {
                     limits: RegisteredConsumerLimits::default(),
                     recovery_memory,
                     previous: Some(consumer.projection()),
+                    projector: hawdb_search::consumer::RegisteredConsumerProjector::HostMapping,
                 },
                 |index| {
                     consumer.projection().copy_completed_documents_into(index)?;
@@ -845,7 +849,7 @@ impl Database {
             &mut DatabaseReadTransaction,
             &mut SearchIndex,
             &hawdb_qos::RuntimePermit,
-            &SearchIndex,
+            &hawdb_core::VectorIndexDescriptor,
         ) -> Result<()>,
     {
         if task.has_resource_controllers() {
@@ -856,6 +860,7 @@ impl Database {
         }
         task.checkpoint()
             .map_err(|reason| HawDBError::Execution(reason.to_string()))?;
+        let _descriptor_operation = self.internal_descriptor_operation()?;
         let root = self.consumer_writable_root()?;
         self.reload_consumer_registry_if_unavailable()?;
         self.validate_consumer_receipt(consumer)?;
@@ -884,8 +889,15 @@ impl Database {
                 limits: RegisteredConsumerLimits::default(),
                 recovery_memory,
                 previous: Some(consumer.projection()),
+                projector:
+                    hawdb_search::consumer::RegisteredConsumerProjector::CanonicalVectorField,
             },
-            |index| initialize(&mut snapshot, index, &permit, consumer.search_index()?),
+            |index| {
+                let definition = consumer.vector_index_descriptor()?.ok_or_else(|| {
+                    HawDBError::Semantic("Consumer has no vector index definition".into())
+                })?;
+                initialize(&mut snapshot, index, &permit, definition)
+            },
         );
         drop(snapshot);
         let prepared = match prepared {
@@ -1154,7 +1166,7 @@ impl Database {
             Err(Error::RebuildRequired(reason)) => status.state = State::RebuildRequired(reason),
             Err(error) => return Err(error),
         }
-        let freshness = consumer.search_index()?.projection_freshness();
+        let freshness = consumer.projection_freshness()?;
         let changefeed = status.changefeed.readiness_after(
             freshness.source_graph_commit_epoch,
             freshness.durable_source_graph_commit_epoch,
@@ -1335,7 +1347,7 @@ impl Database {
         if !consumer.projection().binding_is_valid() {
             return Err(Error::RebuildRequired(Reason::UntrackedProjectionMutation));
         }
-        let freshness = consumer.search_index()?.projection_freshness();
+        let freshness = consumer.projection_freshness()?;
         if freshness.source_graph_commit_epoch != Some(receipt.source_epoch)
             || freshness.has_uncheckpointed_changes
         {

@@ -13,7 +13,7 @@ all shard results and Clippy, rejecting failure, cancellation and skipped work.
 | transactions | `::serializable::` | facade all; one test thread |
 | storage | storage and facade descriptor capacity; captured WAL admission; allocation/control-candidate/rollback union | storage all / facade all; one thread |
 | search | generation spool; captured lease; Windows publication refusal | search all; one thread; refusal exactly one case |
-| consumers | reclamation; stationary creation; stationary recovery; registered Consumer integration | facade all; one thread; creation exactly one case |
+| consumers | reclamation and sealed-producer link/barrier recovery; canonical vector incremental CRUD and acknowledged power-loss images; stationary creation; stationary recovery; registered Consumer integration | facade all; one thread; creation exactly one case |
 | identities | facade/executor/Cypher `identity_898_`; facade `_1043_` | facade default / component default; one thread |
 | snapshots | portable, branch-open and unit-view identity | both facade default and minimal; exactly 1/2/3 cases respectively; original default threads |
 | bindings | FFI retained; retained node; retained Arrow; complete Go tests | bindings / facade default / facade all; original default threads; Go cache disabled; runtime-only FFI runfile |

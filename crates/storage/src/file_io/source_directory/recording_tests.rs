@@ -1,5 +1,5 @@
 // Copyright 2026 Nowledge
-// Licensed under the Apache License, Version 2.0.
+// SPDX-License-Identifier: Apache-2.0
 
 use super::*;
 use crate::file_descriptors::ProjectFileDescriptors;
@@ -71,6 +71,118 @@ impl Drop for Fixture {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.base);
     }
+}
+
+#[test]
+fn captured_link_records_the_held_directories_and_requires_a_real_target_barrier() {
+    for boundary in [ObservationBoundary::Before, ObservationBoundary::After] {
+        let fixture = Fixture::new(32, ImageLimits::default());
+        fixture.directory("source");
+        fixture.directory("target");
+        fixture.write("source/graph", b"original graph");
+        let source = fixture.source("source");
+        let target = fixture.source("target");
+        let context = fixture.project.io_context();
+        let file = source.open_child(&context, "graph").unwrap();
+        fs::rename(
+            fixture.root.join("source"),
+            fixture.root.join("moved-source"),
+        )
+        .unwrap();
+        fs::rename(
+            fixture.root.join("target"),
+            fixture.root.join("moved-target"),
+        )
+        .unwrap();
+        fixture.write("source/graph", b"foreign source");
+        fixture.write("target/link", b"foreign target");
+        fixture.observe(IoEvent::HardLink, "target/link", boundary);
+        source
+            .link_child_new(&context, "graph", &file, &target, "link")
+            .unwrap();
+        let cut = fixture.model().take_observation().unwrap().unwrap();
+        let destination = Path::new("moved-target/link");
+        let lost = cut.crash(&CrashPlan::default()).unwrap();
+        assert!(lost.bytes(destination).is_none());
+        assert_eq!(
+            lost.bytes(Path::new("moved-source/graph")).unwrap(),
+            b"original graph"
+        );
+        assert_eq!(
+            lost.bytes(Path::new("target/link")).unwrap(),
+            b"foreign target"
+        );
+        let persisted = cut.crash(&cut.persist_all_plan()).unwrap();
+        if boundary == ObservationBoundary::After {
+            assert_eq!(persisted.bytes(destination).unwrap(), b"original graph");
+            assert_eq!(
+                persisted.file_inode(destination),
+                persisted.file_inode(Path::new("moved-source/graph"))
+            );
+        } else {
+            assert!(persisted.bytes(destination).is_none());
+        }
+        target.sync(&context).unwrap();
+        source.remove_child(&context, "graph").unwrap();
+        source.sync(&context).unwrap();
+        let recovered = fixture
+            .model()
+            .capture()
+            .unwrap()
+            .crash(&CrashPlan::default())
+            .unwrap();
+        assert_eq!(recovered.bytes(destination).unwrap(), b"original graph");
+        assert!(recovered.bytes(Path::new("moved-source/graph")).is_none());
+        assert_eq!(
+            recovered.bytes(Path::new("source/graph")).unwrap(),
+            b"foreign source"
+        );
+    }
+}
+
+#[test]
+fn captured_link_model_refusal_keeps_native_namespace_and_existing_inode() {
+    let fixture = Fixture::new(32, ImageLimits::default());
+    fixture.directory("source");
+    fixture.directory("target");
+    fixture.write("source/graph", b"graph");
+    fixture.write("target/link", b"existing target");
+    let mut source = fixture.source("source");
+    let target = fixture.source("target");
+    let context = fixture.project.io_context();
+    let file = source.open_child(&context, "graph").unwrap();
+    assert_eq!(
+        source
+            .link_child_new(&context, "graph", &file, &target, "link")
+            .unwrap_err()
+            .kind(),
+        io::ErrorKind::AlreadyExists
+    );
+    let trace = source.trace.take();
+    assert_eq!(
+        source
+            .link_child_new(&context, "graph", &file, &target, "new-link")
+            .unwrap_err()
+            .kind(),
+        io::ErrorKind::Unsupported
+    );
+    assert!(!fixture.root.join("target/new-link").exists());
+    source.trace = trace;
+    let actual = fixture
+        .model()
+        .capture()
+        .unwrap()
+        .crash(&CrashPlan::default())
+        .unwrap();
+    assert_eq!(
+        actual.bytes(Path::new("target/link")).unwrap(),
+        b"existing target"
+    );
+    assert_eq!(actual.bytes(Path::new("source/graph")).unwrap(), b"graph");
+    assert_ne!(
+        actual.file_inode(Path::new("target/link")),
+        actual.file_inode(Path::new("source/graph"))
+    );
 }
 
 #[test]

@@ -9185,9 +9185,9 @@ mod tests {
         assert_eq!(report.executed_sample_count, 2);
         assert_eq!(
             report.approximate_backend,
-            "hawdb_rabitq_candidate_projection"
+            "hawdb_diskann_candidate_projection"
         );
-        assert!(report.validates_required_approximate_backend());
+        assert!(report.validates_default_approximate_backend());
     }
 
     #[test]
@@ -12628,6 +12628,8 @@ mod tests {
         }
         {
             let mut index = SearchIndex::open(&search_path).unwrap();
+            #[cfg(feature = "vector-search")]
+            index.set_rabitq_projection_build_options(Default::default());
             index
                 .apply_embedding_manifest(SearchEmbeddingManifest {
                     model: "bge-m3".to_string(),
@@ -12666,7 +12668,7 @@ mod tests {
         }
         let recall_report = SearchIndex::open(&search_path)
             .unwrap()
-            .validate_sampled_vector_recall(VectorRecallValidationOptions {
+            .validate_sampled_compressed_vector_recall(VectorRecallValidationOptions {
                 max_samples: 2,
                 top_k: 1,
                 candidate_limit: 1,

@@ -261,10 +261,27 @@ impl ImageEngine {
 
     pub fn hard_link(&mut self, source: &Path, destination: &Path) -> io::Result<()> {
         let inode = self.inode(source)?;
+        let (parent, name) = self.parent(destination)?;
+        self.link_inode(inode, parent, name)
+    }
+
+    /// Create an exclusive link between captured directory inodes. Neither
+    /// directory's former pathname participates in namespace resolution.
+    pub fn hard_link_at(
+        &mut self,
+        source: InodeId,
+        source_name: &Path,
+        target: InodeId,
+        target_name: &Path,
+    ) -> io::Result<()> {
+        let inode = self.child_inode(source, source_name)?;
+        self.link_inode(inode, target, child_name(target_name)?.to_os_string())
+    }
+
+    fn link_inode(&mut self, inode: InodeId, parent: InodeId, name: OsString) -> io::Result<()> {
         if self.is_directory(inode) {
             return Err(invalid("hard links to directories are not modeled"));
         }
-        let (parent, name) = self.parent(destination)?;
         self.require_absent(parent, &name)?;
         self.admit_operation(0)?;
         self.namespace(vec![EntryChange {

@@ -94,6 +94,30 @@ impl std::fmt::Debug for CandidateView {
 }
 
 impl CandidateView {
+    pub(crate) fn write_vector_successor(
+        &self,
+        index: &SearchIndex,
+        previous: &crate::consumer::ConsumerProjection,
+        target: &SearchProjectionPublishLease,
+        task: hawdb_core::RuntimeTaskContext,
+        generation_bytes: NonZeroU64,
+        permit: Arc<hawdb_qos::RuntimePermit>,
+    ) -> Result<crate::snapshot_writer::SearchSnapshotWriteReport> {
+        if !self.shares_governor_with(&permit) {
+            return Err(HawDBError::Execution(
+                "vector successor requires its original governor".into(),
+            ));
+        }
+        self.0.opened.write_vector_successor(
+            index,
+            previous,
+            target,
+            task,
+            generation_bytes,
+            permit,
+        )
+    }
+
     pub(crate) fn vector_index_query(
         &self,
         request: crate::VectorIndexQuery<'_>,
@@ -529,6 +553,10 @@ struct SearchOutOfCoreSegmentManifest<S = String> {
     lexical_manifest_checksum: u64,
     #[serde(default)]
     rabitq_artifact_file: Option<S>,
+    // The existing artifact slot and filename grammar carry either backend.
+    // This digest selects the graph format; readers also check the definition.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    diskann_source_digest: Option<[u8; 32]>,
     #[serde(default)]
     rabitq_artifact_len: Option<u64>,
     #[serde(default)]
@@ -889,6 +917,15 @@ impl<S: AsRef<str>> SearchOutOfCoreManifestBody<S> {
                 "conflicting resident snapshot ownership states".into(),
             ));
         }
+        if self
+            .resident_snapshot
+            .is_some_and(|snapshot| snapshot.metadata_only)
+            && self.vector_index_binding.is_none()
+        {
+            return Err(HawDBError::StorageIntegrity(
+                "metadata-only snapshot requires a vector index binding".into(),
+            ));
+        }
         if let Some(encoded) = &self.vector_index_binding {
             let descriptor = crate::vector_index::decode(encoded.as_ref())?;
             if self.embedding_dimension != Some(descriptor.dimension().get() as usize) {
@@ -1035,6 +1072,11 @@ impl<S: AsRef<str>> SearchOutOfCoreSegmentManifest<S> {
         {
             return Err(HawDBError::Storage(
                 "search out-of-core manifest has an incomplete RaBitQ identity".to_string(),
+            ));
+        }
+        if self.diskann_source_digest.is_some() && self.rabitq_artifact_file.is_none() {
+            return Err(HawDBError::StorageIntegrity(
+                "DiskANN identity has no candidate artifact".into(),
             ));
         }
         if let Some(name) = self.rabitq_artifact_file.as_ref().map(AsRef::as_ref)
@@ -2196,7 +2238,7 @@ impl SearchOutOfCoreReader {
                 payload_bytes: manifest.payload_bytes,
                 payload_checksum: manifest.payload_checksum,
                 format_version: manifest.format_version,
-                algorithm: manifest.algorithm.clone(),
+                algorithm: manifest.algorithm.to_owned(),
                 bit_width: manifest.bit_width,
                 dimension: manifest.dimension,
                 transform_seed: manifest.transform_seed,
@@ -2222,7 +2264,7 @@ impl SearchOutOfCoreReader {
                 .saturating_mul(manifest.dimension as u64)
                 .saturating_mul(std::mem::size_of::<f32>() as u64);
             Some(super::VectorProjectionResourceEvidence {
-                segment_count: manifest.segments.len(),
+                segment_count: manifest.segment_count,
                 requested_segment_rows: manifest.requested_segment_rows,
                 admitted_segment_rows: manifest.admitted_segment_rows,
                 configured_build_working_bytes: manifest.configured_build_working_bytes,
@@ -2299,6 +2341,27 @@ impl SearchOutOfCoreReader {
             mode,
             options,
             SearchOutOfCoreExecutionContext::scalar(),
+        )
+    }
+
+    /// Scores every eligible raw vector, bypassing approximate graph traversal.
+    pub fn search_with_options_exact(
+        &self,
+        query_text: &str,
+        query_embedding: Option<&[f32]>,
+        mode: SearchMode,
+        options: SearchQueryOptions,
+    ) -> Result<SearchOutOfCoreOutput> {
+        self.search_with_options_internal(
+            query_text,
+            query_embedding,
+            mode,
+            options,
+            SearchOutOfCoreExecutionContext {
+                vector_execution_options: VectorSearchExecutionOptions::default()
+                    .with_exact_search(),
+                ..SearchOutOfCoreExecutionContext::scalar()
+            },
         )
     }
 
@@ -2770,6 +2833,8 @@ impl SearchOutOfCoreReader {
                 vector_serving::ScanOptions {
                     compressed: compressed_vector_search_mode,
                     execution: vector_execution_options,
+                    #[cfg(feature = "vector-search")]
+                    candidate_window: options.rank_window,
                     query,
                 },
                 &mut metrics,
@@ -4069,8 +4134,22 @@ pub(super) fn validate_registered_artifact_closure(
 fn validate_resident_snapshot_manifest(index: &SearchIndex, bytes: &[u8]) -> Result<()> {
     let manifest = SearchOutOfCoreManifestBody::decode(bytes)?;
     let embedding = index.embedding_manifest.as_ref();
-    if manifest.document_count != index.documents.len()
-        || manifest.documents_digest != lexical_documents_digest(&index.documents)
+    let summary = index.vector_document_summary;
+    let digest = summary.map_or_else(
+        || lexical_documents_digest(&index.documents),
+        |summary| summary.documents_digest,
+    );
+    let snapshot_mismatch = summary.is_some_and(|summary| {
+        !manifest.resident_snapshot.is_some_and(|snapshot| {
+            snapshot.metadata_only
+                && snapshot.vector_document_count == summary.vector_document_count
+        })
+    }) || manifest
+        .resident_snapshot
+        .is_some_and(|snapshot| snapshot.metadata_only != summary.is_some());
+    if snapshot_mismatch
+        || manifest.document_count != index.document_count()
+        || manifest.documents_digest != digest
         || manifest.source_graph_commit_epoch != index.source_graph_commit_epoch
         || manifest.import_source_graph_commit_epoch != index.import_source_graph_commit_epoch
         || manifest.embedding_dimension != index.embedding_dimension
@@ -4291,6 +4370,7 @@ pub(super) struct ResidentRaBitQArtifact {
     pub(super) vector_document_count: usize,
     pub(super) payload_checksum: u32,
     pub(super) peak_build_working_bytes: usize,
+    pub(super) diskann_source_digest: Option<[u8; 32]>,
 }
 
 pub(super) struct ResidentPublicationPlan {
@@ -4304,13 +4384,11 @@ pub(super) fn write_resident_artifacts(
     root: &Path,
     snapshot: &crate::snapshot_writer::SearchSnapshotWriteReport,
     plan: ResidentPublicationPlan,
+    task: &hawdb_core::RuntimeTaskContext,
 ) -> Result<PublishedOutOfCoreProjection> {
     let generation = plan.generation;
-    // This legacy checkpoint has no host task parameter. Reuse its existing
-    // native publication accounting through every producer and verification.
-    let task = hawdb_core::RuntimeTaskContext::default();
-    let memory = crate::build_memory::BuildMemory::new(&task)?;
-    let io = generation_writer::io::GenerationIo::new(&memory, &task);
+    let memory = crate::build_memory::BuildMemory::new(task)?;
+    let io = generation_writer::io::GenerationIo::new(&memory, task);
     let mut descriptor = SearchSegmentDescriptor::build(&index.documents);
     let payload =
         super::write_search_segment_payloads(root, &index.documents, &mut descriptor, |file| {
@@ -4482,9 +4560,16 @@ fn publish_out_of_core_projection(
         resident_snapshot: Some(ResidentSnapshot {
             object: ArtifactObject::from_reference(snapshot.encoded_object)?,
             vector_document_count: snapshot.vector_document_count,
+            metadata_only: false,
         }),
         resident_snapshot_absent: false,
         segments: vec![SearchOutOfCoreSegmentManifest {
+            #[cfg(feature = "vector-search")]
+            diskann_source_digest: rabitq
+                .as_ref()
+                .and_then(|artifact| artifact.diskann_source_digest),
+            #[cfg(not(feature = "vector-search"))]
+            diskann_source_digest: None,
             objects,
             segment_id: 0,
             level: 0,
@@ -5178,6 +5263,17 @@ fn read_search_range(file: &File, offset: u64, bytes: &mut [u8]) -> Result<()> {
     }
 }
 
+#[cfg(feature = "vector-search")]
+pub(super) fn seal_resident_candidate(
+    file: &mut File,
+    task: &hawdb_core::RuntimeTaskContext,
+) -> Result<(hawdb_storage::immutable_object::ObjectReference, u64)> {
+    let memory = crate::build_memory::BuildMemory::new(task)?;
+    let (seal, checksum) =
+        generation_writer::io::GenerationIo::new(&memory, task).seal_file_with_checksum(file)?;
+    Ok((seal.reference, checksum))
+}
+
 #[cfg(test)]
 mod tests {
     #[cfg(feature = "full-text-search")]
@@ -5608,8 +5704,18 @@ mod tests {
     #[test]
     #[cfg(feature = "vector-search")]
     fn out_of_core_vector_execution_options_enforce_memory_and_cancellation() {
+        for diskann in [false, true] {
+            check_vector_execution_options(diskann);
+        }
+    }
+
+    #[cfg(feature = "vector-search")]
+    fn check_vector_execution_options(diskann: bool) {
         let path = test_dir("vector-execution-options");
         let mut index = SearchIndex::open(&path).unwrap();
+        if !diskann {
+            index.set_rabitq_projection_build_options(Default::default());
+        }
         index.upsert(document(0, "team")).unwrap();
         index.checkpoint().unwrap();
         let reader = SearchOutOfCoreReader::open(&path).unwrap();
@@ -5624,9 +5730,17 @@ mod tests {
                 VectorSearchExecutionOptions::bounded(NonZeroUsize::MIN, 64, None),
             )
             .unwrap_err();
-        assert!(memory_error
-            .to_string()
-            .contains("uniqueness check exceeds the admitted working memory"));
+        if diskann {
+            assert!(
+                matches!(&memory_error, HawDBError::ResourceBudgetExceeded(details)
+                    if details.resource == hawdb_core::ResourceBudgetKind::MemoryBytes),
+                "{memory_error:?}"
+            );
+        } else {
+            assert!(memory_error
+                .to_string()
+                .contains("uniqueness check exceeds the admitted working memory"));
+        }
 
         let cancellation = crate::RuntimeCancellationToken::new();
         let task_context = crate::RuntimeTaskContext::without_deadline(cancellation.clone());
@@ -5902,10 +6016,15 @@ mod tests {
     fn publish_two_artifact_manifest_with_initial_documents(
         path: &Path,
         initial_documents: Vec<SearchDocument>,
-        initial_options: SearchOutOfCoreGenerationBuildOptions,
+        mut initial_options: SearchOutOfCoreGenerationBuildOptions,
         next_document: SearchDocument,
-        next_options: SearchOutOfCoreGenerationBuildOptions,
+        mut next_options: SearchOutOfCoreGenerationBuildOptions,
     ) {
+        // This family qualifies legacy layered RaBitQ, including mixed
+        // quantization and budget fallback. Default graphs have their own CRUD
+        // and pin/reopen family in generation_writer::tests::diskann.
+        initial_options.vector_backend = None;
+        next_options.vector_backend = None;
         let mut initial = SearchOutOfCoreGenerationWriter::create(path, initial_options).unwrap();
         for document in initial_documents {
             initial.push(document).unwrap();
@@ -6523,7 +6642,7 @@ mod tests {
             )
             .unwrap();
             let error = reader.refresh().unwrap_err();
-            assert!(error.to_string().contains("RaBitQ identity"), "{error}");
+            assert!(error.to_string().contains("identity"), "{error}");
             assert_eq!(reader.generation(), generation);
             assert!(SearchOutOfCoreReader::open(&path).is_err());
         }
@@ -7038,8 +7157,14 @@ mod tests {
         });
         let mut reader = mutation_reader_for_test(&path);
         reader.config.max_vector_candidates = NonZeroUsize::new(1).unwrap();
-        let mut writer =
-            SearchOutOfCoreGenerationWriter::create(&merged_path, Default::default()).unwrap();
+        let mut writer = SearchOutOfCoreGenerationWriter::create(
+            &merged_path,
+            SearchOutOfCoreGenerationBuildOptions {
+                vector_backend: None,
+                ..Default::default()
+            },
+        )
+        .unwrap();
         writer.push(replacement).unwrap();
         writer.push(unchanged).unwrap();
         writer.finish().unwrap();
@@ -7087,8 +7212,14 @@ mod tests {
                 }
             });
             let reader = SearchOutOfCoreReader::open(&path).unwrap();
-            let mut merged =
-                SearchOutOfCoreGenerationWriter::create(&merged_path, Default::default()).unwrap();
+            let mut merged = SearchOutOfCoreGenerationWriter::create(
+                &merged_path,
+                SearchOutOfCoreGenerationBuildOptions {
+                    vector_backend: None,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
             merged.push(live.clone()).unwrap();
             merged.finish().unwrap();
             let merged = SearchOutOfCoreReader::open(&merged_path).unwrap();
@@ -7903,9 +8034,7 @@ mod tests {
                 CompressedVectorSearchMode::Required,
             )
             .unwrap_err();
-        assert!(error
-            .to_string()
-            .contains("matching bit widths and transform seeds"));
+        assert!(error.to_string().contains("matching backend parameters"));
         fs::remove_dir_all(path).unwrap();
     }
 

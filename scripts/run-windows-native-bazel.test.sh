@@ -64,8 +64,9 @@ done
 # Repeated filtered invocations must retain their own XML before overwrite.
 grep -qx instance-identity-default-views "$fixture/snapshots/testlogs/instance-identity-default-views/test.xml"
 grep -qx instance-identity-minimal-views "$fixture/snapshots/testlogs/instance-identity-minimal-views/test.xml"
-# Original 25 Rust selections, Go, and the separate daily eight-group selection.
-[[ "$(wc -l <"$fixture/commands.txt" | tr -d ' ')" == 27 ]]
+# Original 25 Rust selections, vector recovery, Go, and daily abandonment.
+[[ "$(wc -l <"$fixture/commands.txt" | tr -d ' ')" == 28 ]]
+grep -q -- '--test_arg=vector_index_incremental --test_arg=vector_index_canonical_completion' "$fixture/commands.txt"
 grep -q -- '--//:windows_native_profile=facade_all' "$fixture/commands.txt"
 grep -q -- '--test_arg=--test-threads=4' "$fixture/commands.txt"
 grep -q -- '--test_arg=-test.count=1' "$fixture/commands.txt"

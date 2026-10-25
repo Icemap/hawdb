@@ -225,7 +225,7 @@ pub use api::{
 pub use api::{
     VectorIndexBuildError, VectorIndexBuildOptions, VectorIndexField, VectorIndexLanguageBudget,
     VectorIndexLanguageReport, VectorIndexReadError, VectorIndexReadTransaction,
-    VectorIndexSqlReport, VectorIndexSqlRequest,
+    VectorIndexSqlReport, VectorIndexSqlRequest, VectorIndexUpdateReport,
 };
 pub use background_maintenance_evidence::nowledge_background_maintenance_evidence_json;
 pub use blackbox::{
@@ -331,7 +331,9 @@ pub use hawdb_core::{
     DEFAULT_GRAPH_RAG_MAX_ROUTES, GRAPH_RAG_SCHEMA_CONTEXT_PROTOCOL, MAX_GRAPH_RAG_QUERY_LIMIT,
 };
 pub use hawdb_core::{LogicalType, Vector, VectorDimension, VectorDistance, VectorRef};
-pub use hawdb_core::{VectorIndexBackend, VectorIndexDescriptor, VectorIndexTarget};
+pub use hawdb_core::{
+    VectorIndexBackend, VectorIndexDescriptor, VectorIndexLsg, VectorIndexTarget,
+};
 pub use hawdb_evidence::{
     ProductionEvidenceBinding, ProductionQualificationIdentity,
     PRODUCTION_QUALIFICATION_POLICY_VERSION,

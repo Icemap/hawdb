@@ -728,7 +728,7 @@ fn fault_plans(snapshot: &PowerLossSnapshot, event: IoEvent) -> Vec<CrashPlan> {
     plans
 }
 
-fn same_physical_image(
+pub(super) fn same_physical_image(
     left: &hawdb_storage::power_loss::image::CrashImage,
     right: &hawdb_storage::power_loss::image::CrashImage,
 ) -> bool {

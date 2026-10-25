@@ -69,6 +69,7 @@ pub enum ObservationBoundary {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ObservationPoint {
     pub event: IoEvent,
+    /// Normalized project-relative path; empty denotes the captured root.
     pub relative_path: PathBuf,
     pub boundary: ObservationBoundary,
     pub skip_matches: usize,
@@ -183,11 +184,10 @@ impl PowerLossModel {
         file_name_prefix: Option<String>,
     ) -> io::Result<()> {
         let _engine = self.core.lock()?;
-        if point.relative_path.as_os_str().is_empty()
-            || !point
-                .relative_path
-                .components()
-                .all(|component| matches!(component, std::path::Component::Normal(_)))
+        if !point
+            .relative_path
+            .components()
+            .all(|component| matches!(component, std::path::Component::Normal(_)))
         {
             return Err(invalid(
                 "observation path must be normalized and project-relative",

@@ -294,7 +294,7 @@ the cumulative snapshot ledger; ordinary reads keep their 8 KiB snapshot cap.
 | Scoped Consumer preparation (`cargo test --locked -p hawdb --all-features --test mvcc_staging_session registered_consumer_`) | Real writer commits between capture, reservation, construction and selection; repeated durable watermarks; graph/SQL/schema/source fences; reserved/prepared drop recovery and cold reopen | Root integration lane owns the tests. The split API is described in [Consumer progress and retention](CONSUMER_PROGRESS_AND_RETENTION.md); manual `consumer_publication` timing also records commits during native construction. |
 | Read-only conflict history (`cargo test --locked -p hawdb-storage --lib snapshot_retention_tests`) | Long readers release unrelated stamps; stale read-to-write upgrades fail closed; writable savepoints preserve delete/reinsert conflicts; snapshot allocation accounting | Storage unit lane owns the tests. Read data and dependency/write validation pins have separate lifetimes. |
 | Cross-crate FD refusal and owned cleanup (`spill::tests`, relational `descriptor_exhaustion`, vector `artifact::descriptor_tests`, Search descriptor/root-registry/stage-cleanup families, storage control-candidate and root derived-repair units) | Strict foreground rejection versus internal progress, native cleanup failure, lock custody and exact retry | Existing crate/root checked-profile CI owners and the complete Search feature matrix. Foreground refusal fixtures explicitly select strict mode, and repair metadata/database owners share that policy. Pressure loops stop at the configured target rather than running to OS exhaustion. Abandoned projection writers, private stages, stationary producers and publication locks must progress at occupied strict capacity while preserving pinned readers and peer exclusion. Captured publication leases use bounded directory duplicates, preserve foreign lock-path evidence on native failure, release failed registration, and retry under strict pressure; background-only/vector-only matrices must not use native process exhaustion as the fixture. Directory blockers or injected native unlink failures retain cleanup debt, bytes, host charges and retry dispositions; cancellation/memory refusal and root-alias/foreign-root registry isolation remain covered. Native Windows selects storage control-candidate, stationary Consumer and captured-publication lease families explicitly; the lease cases reuse the existing all-feature Search test binary and retain their own evidence file. No feature matrix, fixture, assertion budget or timeout is reduced. |
-| Consumer physical reclamation (`cargo test --locked -p hawdb --all-features --lib consumer_reclamation`) | Old snapshot and initial-lease protection, durable branch and pending-operation roots, bounded retries, unknown-evidence retention, FD/memory release and ledger retirement before unlink | Seven lifecycle cases belong to the root unit lane, including cleanup and retry at occupied strict foreground FD capacity; one recorder case belongs to the power-loss family. The recorder fixture and database opens explicitly share the strict 32-descriptor configuration. The Windows native contract lane selects all eight explicitly. The recorder explores lost/torn/reordered uncovered writes at the first unlink; close/reopen fixtures cover partial retirement but do not qualify the complete platform power-loss matrix. See [cleanup ownership](SEARCH_CLEANUP_OWNERSHIP.md). |
+| Consumer physical reclamation (`cargo test --locked -p hawdb --all-features --lib consumer_reclamation`) | Old snapshot and initial-lease protection, durable branch and pending-operation roots, bounded retries, unknown-evidence retention, FD/memory release and ledger retirement before unlink | Seven lifecycle cases belong to the root unit lane, including cleanup and retry at occupied strict foreground FD capacity; two recorder cases belong to the power-loss family. The recorder fixture and database opens explicitly share the strict 32-descriptor configuration. The Windows native contract lane selects all nine through its existing family filter. Recorder cases explore lost/torn/reordered uncovered writes at the first retirement unlink and verify sealed-producer inode sharing before the target-directory barrier, durable linked data after scratch retirement, scratch-removal synchronization and Consumer reopen. Replay the latter pair with `cargo test --locked -p hawdb --features test-support --lib api::tests::power_loss::consumer_reclamation`. Close/reopen fixtures do not qualify the complete platform power-loss matrix. See [cleanup ownership](SEARCH_CLEANUP_OWNERSHIP.md). |
 | Publication-owner admission (`api::publication::tests`) | A waiting admitted reader precedes later writers, an admitted writer precedes later readers, reader callbacks remain concurrent, and nonblocking writers honor the gate, retry after release and reject poisoned admission | Existing root unit lane, ordinary profile. Channel-controlled cases inspect only the private acquisition gate; they do not claim platform-wide FIFO fairness. Validation/publication exclusion and error/retry tests retain their existing ownership. No additional CI job. |
 | Registered covered-token reclamation (`registered_consumer_reclamation_preserves_continuously_invalidated_covered_base`) and manual `consumer_publication` benchmark | Actual post-E writer commits while preparation is paused, typed refusal and retained base during GC; outer publication-owner latency and watermark progress under 1/4/8 writers | Regression: default/minimal `mvcc_staging_session` and native Windows registered selection. Benchmark: manual only, repository bench profile, disabled/legacy/covered/scoped-blocking/detached controls and raw p95/p99 samples. The opt-in `--sustained true` detached workload continues publication until writers finish or its explicit attempt ceiling, with checkpoints every 16,384 foreground writes and retained checkpoint samples. Its finite-progress qualification is separate from latency controls and the original strict writer gate. Manual `python3 scripts/measure-consumer-publication.test.py` checks executable/profile matching and actual feature provenance; no default CI registration. The separate opt-in `--with-readers` driver cohort adds one pinned canonical reader per writer and phase-boundary Linux process RSS/high-water/CPU-tick/I/O observations. It checks every document identity/content and retains per-request owner wait and preparation-overlap intervals. Missing resources, zero reads or drain-only reads cannot qualify; process high-water marks do not prove phase heap ownership. Reader measurement remains manual and does not change the completed writer-only cohorts. Whole-Database post-E dependencies retain conservative refusals; Domains-scoped finite progress is qualified separately. The helper records intake/mapping call counts with a `2 * feed.items + 1` host bound for its Done-only/no-delta mapper, without changing feed/mapping resources. A 60,000-update manual regression exercises complete coverage and native publication past the old 100,000-call bound; no new CI job. Quiescent drains are not sustained progress. [Workload and qualification boundaries](CONSUMER_PUBLICATION_QUALIFICATION.md). |
 | `//:hawdb_system_sql_loom_tests` | Bounded modeled system-table publication interleavings | Model exploration; not a wall-clock fuzz campaign. |
@@ -351,8 +351,11 @@ workload does not change default or CI benchmark selection.
 | Ordered composite projection and overlay | Existing storage unit / Prow crates owner. Immutable ordered pages compare with a complete two-direction reference, including global block ordinals, exclusive continuation, deep descriptor work, cold/full versus warm/logarithmic block decoding, verified-cache capacity refusal and admitted scratch refund after refusal/Stop. Store pages merge canonical base with moved/deleted/inserted delta keys across retained views, checkpoint and reopen; the low-level domain consists of complete non-NULL keys, with canonical-query coverage proved separately by planning. Explicit ordered checkpoints preserve cancellation without payload probes or work-unit charges. Replay filters: `composite_ordered_pages`, `ordered_composite`, `ordered_scratch_checkpoint`. No new CI lane or compilation profile. |
 | Storage borrowed key intervals | Existing `//crates/storage:hawdb_storage_tests` / Prow crates ownership. Forward, reverse and alternating-end traversal matches a BTreeMap reference across immutable segment boundaries, empty/singleton/outside intervals and COW mutation with a retained snapshot. Replay: `cargo test --locked -p hawdb-storage --lib borrowed_key_interval`. No new feature/profile/lane or timed campaign. |
 | Storage, integrity, cascades and artifact/bootstrap | WAL/checkpoint, encoded artifacts, indexes, corruption/refusal and startup ownership. Projection capture covers 65,537-node commits, oversized-preimage gaps, cold node/adjacency/relationship/spill capture under strict foreground descriptor pressure, nested resource/cancellation refusals versus physical corruption across canonical readers, and cancellation across grouped replay work. |
+| Native projection keys and immutable reuse | Existing storage unit/native platform owners cover deleted native node candidates for built-in and custom labels, materialized/out-of-core residency, pinned feed end epochs, WAL failure/uncertain recovery, checkpoint and reopen (`cargo test --locked -p hawdb-storage --lib search_projection_capture`). `captured_link` cases in `file_io::source_directory` cover native inode reuse after both labels move, occupied names, foreign project/source identities, component validation, Unix symlinks and platform descriptor refusal/retry. The recorder cases model lost unsynchronized links, before/after cuts, required target-directory barriers and retention after source unlink; they do not qualify complete Consumer selection. Replay with `cargo test --locked -p hawdb-storage --lib captured_link` and `cargo test --locked -p hawdb-storage --lib power_loss`. Windows strict Clippy also owns its native FileLinkInformation path. Registered Consumer installation uses these links only for sealed immutable producer output; arbitrary source installation retains independent copying. No lane, profile, source-format or durability-default change. |
 | Search | Unit behavior plus nine explicit feature profiles; public streamed-document and source-policy lifecycle fixtures have independent owners below. |
-| Analytics and vector-projection | Streaming algorithms, projected artifact IO and vector representation behavior. |
+| Default resident DiskANN | Existing Search unit targets and the unchanged vector feature profiles own `resident_diskann` (`cargo test --locked -p hawdb-search --lib resident_diskann`). They compare default filtered graph candidates with explicit exhaustive scoring across replacement, deletion, NULL and reinsertion, preserve original graph identity, and cover zero/signed-cosine behavior, non-finite-source refusal, offset pagination, hybrid fusion versus exact scoring, validated delta atomicity, checkpoint/reopen, typed memory/work refusal, cancellation and retry, and retained runtime allocation ownership through cache destruction. Concurrent admission blocking must not retain the cache lock, and initialization wait obeys the query deadline. Checkpoint cases require HDANN002, actual native graph execution, unchanged retained-reader bytes/results, and explicit RaBitQ settings across reopen/replacement. Reopen must reuse a verified mapping, remain queryable below the construction envelope, and keep its original baseline across CRUD and clean checkpoint copying. Corruption cases retain quarantine evidence and reject stale-source fallback. Directory replacement, stale cleanup and memory/cancellation fixtures retain both explicit RaBitQ and default graph coverage. Native registered source/MVCC and persistent artifact qualification have separate owners below. No CI lane or profile change. |
+| Default out-of-core DiskANN | Existing Search targets and feature-matrix lanes own `generation_writer::tests::diskann` (`cargo test --locked -p hawdb-search --all-features --lib generation_writer::tests::diskann`). Filtered default queries compare with explicit exhaustive scoring after insert/replacement/delete/NULL deltas, with and without LSG. Guards check inherited topology settings, unchanged base graph bytes/native inode, retained old-reader results, abandoned-candidate rollback, cancellation and typed graph memory refusal, empty and deletion-only layers, legacy zero-cosine semantics across mixed graph/compatible layers, and refusal to satisfy explicit compression with a raw graph. Explicit RaBitQ parameters also survive default delta preparation. The ordinary reader-refresh identity case checks model/version/dimension drift against the persisted graph binding. These are standalone projection segment-reuse cases; schema-bound canonical source-feed publication and power-loss qualification remain separate. Existing RaBitQ fixtures select their backend explicitly. No feature matrix, profile or lane is removed. See [delivery contract](specs/FILTERED_DISKANN_SPEC.md). |
+| Analytics and vector-projection | Streaming algorithms, projected artifact IO and vector representation behavior. `//crates/vector-projection:hawdb_vector_projection_tests` also owns the Filtered DiskANN kernel/artifact family (`cargo test --locked -p hawdb-vector-projection --all-features diskann`; omit `--all-features` for standalone file I/O): Vamana full-beam/exhaustive distance parity, small-beam filtered recall against exhaustive ground truth, navigation without rejected-vector scoring, optional LSG and duplicate radii, deterministic construction, typed work/memory refusal, work-bounded workspace on a virtual large graph, and cancellation. File cases cover parameter/link/distance round trips, byte-identical mapped successor copying and cancelled-copy source retention, bounded header inspection, source/epoch/generation drift, truncation/trailing bytes/checksums, semantically invalid records with a matching checksum, admission refusal/retry and release of all charges. Core `projection_distance` tests also cover raw queries against unaligned byte-backed vectors and cooperative failure. Small synthetic fixtures use the repository profile; this is kernel/artifact evidence, not default-engine or database CRUD/MVCC qualification. See [delivery contract](specs/FILTERED_DISKANN_SPEC.md). |
 | QoS, cgroup, telemetry, resource-profile and runtime-tokio | Resource detection/admission, metrics and synchronous/async runtime boundaries. |
 | Readiness, evidence, route-ownership, nowledge-contracts, compat and qualification | Typed readiness, complete evidence identity, compatibility and host integration contracts. |
 | `crates/fuzz-contracts` | Production readiness contract values only. Its fast unit tests are not the Shiro generator/campaign. |
@@ -380,6 +383,130 @@ The [source 823e8e9c publication follow-up](benchmarks/publication_qualification
 retains the completed 18-cohort allocation, all nine read-latency regressions,
 and observational epoch/interval strata. These diagnostics do not change the
 manual execution lane, fixtures, exact checks or strict acceptance thresholds.
+
+The Filtered DiskANN kernel/artifact cases also run in the existing
+`vector-projection-platform` job in `.github/workflows/ci.yml`, through its
+standalone and `storage-io` Cargo test steps on Linux x86_64/aarch64, macOS
+aarch64 and Windows x86_64. The virtual-large-graph fixture allocates
+only its bounded query workspace; it does not create billions of records.
+
+Default vector recall probes execute the same resident DiskANN path as ordinary
+queries. `resident_diskann` owns sampled exact/graph parity, verified mapped
+qualification identity and refusal to qualify a changed overlay. The
+`recall_validation` units bind the reported backend to the artifact algorithm;
+RaBitQ recall cannot qualify a DiskANN graph. Existing compressed recall cases
+use the explicit compressed probe/qualification entrypoints. The production
+RaBitQ qualification family also selects its original codec and probes
+explicitly, including ACL cases; the compression advisor still requires RaBitQ
+evidence. The embedded facade checks default-graph sampled recall and its
+separate preferred-compression control. The minimum
+production dataset size and complete release binding remain required. Replay
+with `cargo test --locked -p hawdb-search --all-features --lib recall` and the
+resident family above. These cases stay in the existing Search feature profiles.
+The standalone/storage-io artifact family also checks the complete CRC32C
+fingerprint captured during admitted verification. The manual
+`rabitq_query_profile` example explicitly selects its original RaBitQ codec;
+its corpus, profile and query assertions are unchanged.
+
+The manual `filtered_diskann_qualification` example is a thin public-library
+fixture, outside automated test/CI execution. It builds a fresh clustered
+synthetic graph with an explicit memory envelope and optional LSG, then runs
+held-out synthetic queries with unfiltered, correlated and anti-correlated
+10%/1% filters against exhaustive eligible-domain ground truth. It refuses
+ineligible/duplicate hits, an unexpected/fallback backend, empty ground truth or
+mean recall below 950,000 per million for any filter family. JSON lines retain
+every sample's recall, per-family aggregate recall, build/open/query timing, graph
+identity, build resource evidence, scored-vector and read-byte counters; those
+admitted/counted bytes are not measured RSS or physical disk traffic. Build and
+query processes are separate, so process-lifetime RSS can be measured externally.
+Use the repository profile consistently across controls. Local replay:
+`cargo run --locked --example filtered_diskann_qualification -- build /tmp/new-diskann-fixture 1000 16 64 plain`,
+then `cargo run --locked --example filtered_diskann_qualification -- query /tmp/new-diskann-fixture 8`.
+Use another fresh path and `lsg` for the LSG control. The fixture retains its
+files, refuses existing build paths, and grants no canonical incremental/CRUD
+or production-data qualification by itself.
+
+The out-of-core DiskANN family also checks candidate-window propagation on a
+512-vector fixture: default navigation window, explicit rank window, configured
+ceiling, excess-window refusal and unchanged explicit exhaustive behavior.
+The ceiling must not silently become the requested candidate count. Replay with
+`cargo test --locked -p hawdb-search --all-features --lib default_graph_uses_the_requested_candidate_window`.
+
+The vector-projection DiskANN family also owns sorted-ID filtered entry points,
+small-domain ID lookup without rejected-link scanning, two-hop rejection bounds
+with poisoned rejected-vector reads, late bridge promotion in dense/sparse
+visited state, unknown-ID work refusal, parent work accounting, and deterministic
+unique entry selection at ordinal/address-space boundaries. Existing arbitrary
+provider multi-hop cases remain covered. Replay with
+`cargo test --locked -p hawdb-vector-projection --all-features diskann`.
+
+Resident read generations additionally retain default graph state and isolated
+CRUD retractions alongside shared immutable document pages. The existing Search
+owner covers old/current exact-result parity after insert, replacement, NULL and
+delete, with the graph created before or after capture. Generation capacity
+includes default graph construction/cache bounds and any mapped graph payload;
+explicit compressed lazy-projection admission remains covered independently.
+Replay with `cargo test --locked -p hawdb-search --all-features --lib resident_snapshot::`.
+
+The root vector-index family also owns
+`api::vector_index::build::tests::diskann` (Cargo replay:
+`cargo test --locked -p hawdb --lib vector_index`). It covers the schema-bound
+DiskANN default, optional-LSG SQL/node publication and reopen, both filtered
+language paths, large finite L2/zero-vector inputs, and old MVCC pins across a
+full-rebuild successor after update/delete/NULL/insert. Explicit RaBitQ controls
+remain in `search_projection_consumer::tests::vector_index`. These cases use
+the existing root unit/presubmit lane. A vector Consumer metadata-only case
+checks bounded snapshot size, no encoded resident rows, logical counts,
+descriptor/freshness access, refusal of resident-index access, native queries
+and reopen. Search's `vector_index` family rejects duplicate/mixed/unbound
+summaries and impossible counts. Ordinary Consumer coverage retains the full
+resident-index contract.
+
+`api::vector_index::build::tests::incremental` belongs to the same root unit lane
+and `vector_index` replay. It covers SQL/custom-node C..E updates with optional
+LSG, repeated keys, two-vector construction for four changed keys over a
+32-vector base, old graph byte/inode reuse, exact/filtered-ANN parity across
+layers, old MVCC domains, no-op generation stability, empty/delete-only/reinsert,
+checkpoint/reopen, rollback and cancellation, feed/memory/key pre-encoding refusal
+and retry, explicit RaBitQ and Euclidean-zero behavior, schema/backend drift, host
+origin spoof refusal and terminal builder invalidation. The sibling
+`api::search_projection_consumer::tests::vector_index::incremental_recovery`
+family replays fixed-field SQL/custom-node publication faults before reservation,
+after preparation, before/after selector publication and its barrier, before
+acknowledgement and before/after registry publication. Live resolution and cold
+reopen must preserve registration/operation identity after later source writes,
+return the selected complete C or E generation, refuse binding it to newer G,
+then catch up to G without reviving deleted/NULL vectors. Live old canonical
+domains and original graph bytes remain unchanged. Replay with
+`cargo test --locked -p hawdb --all-features --lib vector_index_incremental_publication_faults`;
+the existing root unit and Windows consumers owners retain this scope. Its
+`vector_index_incremental_prepared_fd_pressure` case covers both full rebuild
+and incremental maintenance for SQL/node fields before/after intent under
+occupied strict descriptor capacity. Original custody survives registry refresh,
+execution slots are released, and later source advancement uses a new operation.
+The acknowledged-image
+owner is `api::tests::power_loss::consumer_vector_incremental` with `test-support`;
+it checks SQL and custom-node sources under both durability policies, original
+source/index pairing, old pins and
+materialized power-loss reopen at strict 32-descriptor capacity. Its `faults`
+submodule captures the first installed native link, before/after the sealed
+candidate directory barrier that retires producer scratch, actual private selector writes, selector renames, and the final project
+root barrier. SQL/custom-node sources and both durability policies retain one
+atomic source transaction, original old pins, complete C/E data and exact native
+IDs after replay. Every lost/reordered/isolated/torn plan is evaluated; only
+identical full namespaces, inode aliases and bytes share a native reopen. This
+bounds repeated startup cost without dropping fault plans or assertions. A lost
+relaxed transaction may leave only C while an unselected E preparation exists;
+recovery settles that logical operation, preserves all candidate bytes and permits
+fresh catch-up. Selected E still requires its durable canonical source and full
+artifact verification. Source-bound logs report plan and distinct-reopen counts;
+these are known slow local replay families, not fuzz timeout durations. Replay
+with `cargo test --locked -p hawdb --all-features --lib vector_index_incremental_power_loss_`.
+The storage `observations_capture` family owns captured-root directory barriers
+and descendant writes, including rejection of escaped/non-normal paths. The
+existing root and Windows consumers owners retain all feature scopes, profiles
+and timeout ceilings. Recovery-publication cuts and K-proportional total I/O remain
+separate qualification items.
 
 ## Search feature and lifecycle matrix
 

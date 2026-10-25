@@ -1,5 +1,5 @@
 // Copyright 2026 Nowledge
-// Licensed under the Apache License, Version 2.0.
+// SPDX-License-Identifier: Apache-2.0
 
 //! Complete-E coverage handed directly to the registered publication protocol.
 
@@ -252,7 +252,7 @@ impl Database {
             );
         }
         let _descriptor_operation = self.internal_descriptor_operation()?;
-        if consumer.search_index()?.vector_index_descriptor().is_some() {
+        if consumer.vector_index_descriptor()?.is_some() {
             return Err(HawDBError::Semantic(
                 "schema-bound vector indexes require rebuild_vector_index maintenance".into(),
             )
