@@ -295,6 +295,18 @@ jobs:
             shard: wal-sync
           - os: windows-latest
             shard: remaining
+          - os: windows-latest
+            shard: abandonment
+          - os: windows-latest
+            shard: recovery-births
+          - os: windows-latest
+            shard: recovery-unselected
+          - os: windows-latest
+            shard: recovery-selected
+          - os: windows-latest
+            shard: recovery-lost-sql
+          - os: windows-latest
+            shard: recovery-lost-nodes
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -348,6 +360,12 @@ jobs:
             "$test_filter" -- "${test_arguments[@]}" 2>&1 \
             | tee branch-power-loss-results/test-output.txt
           test_status=$?
+          if [[ "$test_status" -eq 0 && ( "$POWER_LOSS_SHARD" == recovery-* || "$POWER_LOSS_SHARD" == full || "$POWER_LOSS_SHARD" == remaining ) ]]; then
+            python3 scripts/vector_recovery_cases.py "$POWER_LOSS_SHARD" \
+              --validate-log branch-power-loss-results/test-output.txt \
+              > branch-power-loss-results/recovery-coverage.json
+            test_status=$?
+          fi
           set -e
           df -Pk . "${TMPDIR:-/tmp}" > branch-power-loss-results/disk-after.txt
           namespace_assumption=posix-directory-sync

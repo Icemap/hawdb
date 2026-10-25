@@ -573,6 +573,29 @@ retain the original selection receipt, source/index epochs, candidate bytes and
 inode aliases. Stale C still refuses a current-E canonical binding. Native
 Windows artifact assertions check exact lengths and read only the expected
 bytes, including empty locked lease files, without an EOF probe.
+Windows weekly power-loss and required native-consumer matrices isolate these
+recovery cases in five required shards: births, unselected intents, selected
+intents, lost relaxed SQL sources and lost relaxed node sources. The first
+three retain 28 combinations each; the final pair retain 14 each, for the same
+112 combinations. Linux/macOS retain the complete family in one process.
+The Windows `remaining` and ordinary consumer selections exclude this module
+because the five exact selections own it. A shared selector validates actual
+Rust discovery and both workflow matrices; a runtime coverage check requires
+every `(origin, cut, durability, source family, source-updated)` combination
+exactly once. All fault plans, physical-image deduplication, two repeated reopens,
+single-process test concurrency, compiler profiles and 120-minute job ceilings
+remain unchanged. Native runner negative controls reject missing coverage even
+when the Rust test itself reports success. The former combined Windows lane
+reached its 120-minute ceiling after only 34 recovery combinations; isolated
+first-build and execution costs require final-head CI evidence. Replay the
+selector through `bazel test //:power_loss_partition_script_test` and the runner
+controls with `bash scripts/run-windows-native-bazel.test.sh`.
+The weekly Windows matrix also retains all eight branch-abandonment cases in
+their own serial shard; they consumed about 41 minutes before recovery began
+in the former combined lane. This preserves their assertions and the existing
+separate native GC campaign. The remaining partition is checked against actual
+discovery, with automatic checkpoints, recovery and abandonment excluded only
+because required sibling shards own them.
 The storage `power_loss::tests::recovery_` family owns recorder continuation,
 bounded baseline import, hard-link identity, second torn writes, native drift,
 active-handle refusal and failed-attachment cleanup; the Storage unit/native

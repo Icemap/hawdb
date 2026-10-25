@@ -545,6 +545,7 @@ fn check_recovery(
                 &snapshot,
                 &acknowledged,
                 recovery::Context {
+                    origin: cut,
                     root: &root,
                     target: &target,
                     id: &id,

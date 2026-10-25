@@ -331,6 +331,19 @@ E candidate bytes cannot authorize E data or require its lost transaction.
 Repeated recovery must retain the original selection receipt and immutable
 candidate bytes/inodes, and preserve source/index epoch matching or stale refusal.
 
+Native Windows verification partitions recovery into five exact Rust cases:
+births, unselected intents and selected intents retain 28 combinations each;
+lost relaxed SQL and node sources retain 14 each. The full 112-combination
+matrix, every physical fault plan and repeated native reopen remain intact.
+Weekly power-loss and required consumer jobs share this selection contract and
+validate emitted combination identities. Their remaining/ordinary selections
+exclude these cases because the five required shards own them. Linux/macOS
+still run the complete power-loss family together. Per-process concurrency,
+repository compiler profiles and 120-minute job ceilings remain unchanged.
+The weekly Windows matrix keeps all eight branch-abandonment cases together
+in a separate serial shard. Discovery must prove that its sibling selections
+and the remaining partition form the complete, disjoint family.
+
 Whole-generation byte verification and admitted reopen still read unchanged
 artifacts. These cases prove changed-content construction and native reuse, not
 end-to-end K-proportional maintenance or a scale improvement. Representative
@@ -439,5 +452,5 @@ serially, with sixteen samples per filter family and state. Its 180-minute ceili
 is a job timeout, not a claimed workload duration. The job records source/tree,
 toolchain, compiler profile and binary hash; first compilation and each lifecycle
 have separate process time and peak RSS measurements. Complete or partial JSON,
-stderr and exit outcomes survive failure. This dispatch changes no default or
-scheduled test lane and includes no fuzz tool.
+stderr and exit outcomes survive failure. This benchmark dispatch includes no
+fuzz tool; recovery sharding is owned by the separate native qualification lanes.

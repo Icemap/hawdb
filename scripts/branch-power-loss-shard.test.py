@@ -5,9 +5,12 @@
 """Verify discovery coverage and Python-to-Bash argument transport on Windows."""
 
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
+import re
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -19,6 +22,9 @@ if not SCRIPT.exists():
         / os.environ["TEST_WORKSPACE"]
         / "scripts/branch-power-loss-shard.py"
     )
+sys.path.insert(0, str(SCRIPT.parent))
+from vector_recovery_cases import expected_combinations, main as recovery_main, validate_log
+
 SPEC = importlib.util.spec_from_file_location("power_loss_shard", SCRIPT)
 SHARD = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(SHARD)
@@ -28,7 +34,11 @@ class PowerLossShardTests(unittest.TestCase):
     def setUp(self):
         self.names = [
             SHARD.AUTOMATIC_PREFIX + name for name in SHARD.AUTOMATIC_CASES.values()
-        ] + [SHARD.PREFIX + "recovery", SHARD.PREFIX + "retained_branch"]
+        ] + list(SHARD.RECOVERY_CASES.values()) + [
+            SHARD.ABANDONMENT_PREFIX + f"case_{index}" for index in range(8)
+        ] + [
+            SHARD.PREFIX + "recovery", SHARD.PREFIX + "retained_branch"
+        ]
         self.discovery = "\n".join(name + ": test" for name in self.names) + "\n"
 
     def test_windows_text_mode_preserves_bash_arguments_and_complete_membership(self):
@@ -45,7 +55,7 @@ class PowerLossShardTests(unittest.TestCase):
             root = Path(directory)
             discovery = root / "discovery.txt"
             discovery.write_bytes(self.discovery.replace("\n", "\r\n").encode("utf-8"))
-            for shard in ["full", *SHARD.AUTOMATIC_CASES, "remaining"]:
+            for shard in ["full", *SHARD.AUTOMATIC_CASES, *SHARD.RECOVERY_CASES, "abandonment", "remaining"]:
                 with self.subTest(shard=shard):
                     output = root / shard
                     with patch.object(Path, "open", windows_open), patch(
@@ -63,17 +73,19 @@ class PowerLossShardTests(unittest.TestCase):
                     arguments = (
                         (output / "test-arguments.txt").read_bytes().decode().split("\n")[:-1]
                     )
-                    if shard in SHARD.AUTOMATIC_CASES:
+                    if shard in SHARD.AUTOMATIC_CASES or shard in SHARD.RECOVERY_CASES:
                         self.assertEqual(arguments, ["--exact"])
                         selected = [name for name in self.names if name == test_filter]
                     else:
                         self.assertEqual(
                             arguments,
-                            ["--skip", SHARD.AUTOMATIC_PREFIX] if shard == "remaining" else [],
+                            ["--skip", SHARD.AUTOMATIC_PREFIX,
+                             "--skip", SHARD.RECOVERY_PREFIX,
+                             "--skip", SHARD.ABANDONMENT_PREFIX] if shard == "remaining" else [],
                         )
                         selected = [
                             name for name in self.names if test_filter in name
-                            and not (arguments and arguments[1] in name)
+                            and not any(prefix in name for prefix in arguments[1::2])
                         ]
                     manifest = json.loads((output / "partition.json").read_text())
                     self.assertEqual(
@@ -91,12 +103,70 @@ class PowerLossShardTests(unittest.TestCase):
             self.discovery + self.names[0] + ": test\n",
             self.discovery.replace(self.names[0] + ": test\n", ""),
             self.discovery + SHARD.AUTOMATIC_PREFIX + "unexpected: test\n",
+            self.discovery.replace(next(iter(SHARD.RECOVERY_CASES.values())) + ": test\n", ""),
+            self.discovery + SHARD.RECOVERY_PREFIX + "unexpected: test\n",
+            self.discovery.replace(SHARD.ABANDONMENT_PREFIX + "case_0: test\n", ""),
             "\n".join(name + ": test" for name in self.names[:4]) + "\n",
         ]
         for discovery in invalid:
             with self.subTest(discovery=discovery):
                 with self.assertRaises(ValueError):
                     SHARD.partition(discovery)
+
+    def test_recovery_selections_cover_actual_rust_cases_and_both_workflows(self):
+        root = SCRIPT.parent.parent
+        source = (root / "src/api/tests/power_loss/consumer_vector_incremental/faults/recovery.rs").read_text()
+        actual = {
+            SHARD.RECOVERY_PREFIX + name
+            for name in re.findall(r"#\[test\]\s+fn ([a-z_]+)\(", source)
+        }
+        self.assertEqual(actual, set(SHARD.RECOVERY_CASES.values()))
+        weekly = (root / ".github/workflows/ci.yml").read_text()
+        native = (root / ".github/workflows/native-bindings.yml").read_text()
+        self.assertCountEqual(
+            re.findall(r"shard: (recovery-[a-z-]+)", weekly), SHARD.RECOVERY_CASES
+        )
+        self.assertCountEqual(
+            re.findall(r"consumers-(recovery-[a-z-]+)", native), SHARD.RECOVERY_CASES
+        )
+
+    def test_runtime_coverage_rejects_missing_duplicate_and_wrong_source_cases(self):
+        all_combinations = []
+        all_lines = []
+        for shard in SHARD.RECOVERY_CASES:
+            combinations = sorted(expected_combinations(shard))
+            self.assertEqual(len(combinations), 14 if "lost" in shard else 28)
+            lines = [
+                "canonical-vector-recovery-power-v1 "
+                f"origin={origin} cut={cut} durability={durability} graph={graph} "
+                f"source_updated={updated} plans=7 distinct_reopens=3"
+                for origin, cut, durability, graph, updated in combinations
+            ]
+            self.assertEqual(validate_log(shard, "\n".join(lines))["combinations"], len(lines))
+            for invalid in (lines[:-1], lines + lines[:1],
+                            [lines[0].replace("source_updated=", "wrong_field=")] + lines[1:]):
+                with self.subTest(shard=shard):
+                    with self.assertRaises(ValueError):
+                        validate_log(shard, "\n".join(invalid))
+            all_combinations.extend(combinations)
+            all_lines.extend(lines)
+        self.assertEqual(len(all_combinations), 112)
+        self.assertEqual(len(set(all_combinations)), 112)
+        self.assertEqual(validate_log("full", "\n".join(all_lines))["combinations"], 112)
+        self.assertEqual(validate_log("remaining", "other test output")["combinations"], 0)
+        with self.assertRaises(ValueError):
+            validate_log("remaining", all_lines[0])
+
+    def test_recovery_cli_preserves_lf_for_windows_bash(self):
+        for arguments in (["--prefix"], ["recovery-selected"]):
+            with self.subTest(arguments=arguments):
+                buffer = io.BytesIO()
+                output = io.TextIOWrapper(buffer, encoding="utf-8", newline="\r\n")
+                with patch("sys.stdout", output), patch("sys.argv", ["selector", *arguments]):
+                    recovery_main()
+                    output.flush()
+                    self.assertNotIn(b"\r", buffer.getvalue())
+                    self.assertTrue(buffer.getvalue().endswith(b"\n"))
 
 
 if __name__ == "__main__":

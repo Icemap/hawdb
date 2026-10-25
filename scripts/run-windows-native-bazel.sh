@@ -83,6 +83,7 @@ rust_case() {
 root=//:hawdb_unit_test_binary
 storage=//crates/storage:hawdb_storage_tests
 search=//crates/search:hawdb_search_tests
+recovery_selector="$(native_path "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/vector_recovery_cases.py")"
 case "$shard" in
   transactions)
     rust_case serializable-transactions "$root" facade_all positive 1 ::serializable::
@@ -99,11 +100,18 @@ case "$shard" in
     rust_case consumer-publication-refusal "$search" search_all 1 1 consumer::tests::windows_publication_refusal_preserves_receipt_and_native_lease --exact
     ;;
   consumers)
+    recovery_prefix="$(python3 "$recovery_selector" --prefix)"
     rust_case consumer-reclamation "$root" facade_all positive 1 consumer_reclamation
-    rust_case consumer-vector-incremental "$root" facade_all positive 1 vector_index_incremental vector_index_canonical_completion
+    rust_case consumer-vector-incremental "$root" facade_all positive 1 vector_index_incremental vector_index_canonical_completion --skip "$recovery_prefix"
     rust_case consumer-stationary-create "$root" facade_all 1 1 api::search_projection_consumer::tests::windows_registered_stationary_creation_catch_up_and_reopen --exact
     rust_case consumer-stationary-recovery "$root" facade_all positive 1 registered_stationary
     rust_case consumer-covered-catch-up //:hawdb_mvcc_staging_session_tests facade_all positive 1 registered_consumer
+    ;;
+  consumers-recovery-*)
+    recovery_shard="${shard#consumers-}"
+    recovery_filter="$(python3 "$recovery_selector" "$recovery_shard")"
+    rust_case "$recovery_shard" "$root" facade_all 1 1 "$recovery_filter" --exact
+    python3 "$recovery_selector" "$recovery_shard" --validate-log "$(native_path "$results/$recovery_shard.txt")" >"$results/$recovery_shard.coverage.json"
     ;;
   identities)
     rust_case graph-identity-facade "$root" facade_default positive 1 identity_898_

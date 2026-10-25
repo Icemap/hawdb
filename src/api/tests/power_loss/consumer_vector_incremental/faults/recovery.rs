@@ -26,6 +26,7 @@ const CUTS: [Cut; 7] = [
 ];
 
 pub(super) struct Context<'a> {
+    pub(super) origin: super::Cut,
     pub(super) root: &'a Path,
     pub(super) target: &'a Path,
     pub(super) id: &'a SearchProjectionConsumerId,
@@ -162,7 +163,7 @@ impl Cut {
                 drop(database);
             }
         }
-        eprintln!("canonical-vector-recovery-power-v1 cut={self:?} abandoned={abandoned} durability={:?} graph={} source_epoch={} index_epoch={} plans={total} distinct_reopens={reopens}", context.durability, context.graph, context.source_epoch, context.index_epoch);
+        eprintln!("canonical-vector-recovery-power-v1 origin={:?} cut={self:?} abandoned={abandoned} durability={:?} graph={} source_epoch={} source_updated={} index_epoch={} plans={total} distinct_reopens={reopens}", context.origin, context.durability, context.graph, context.source_epoch, context.source_updated, context.index_epoch);
     }
 }
 
@@ -194,19 +195,26 @@ fn vector_index_incremental_power_loss_recovery_publication_completes_selected_i
     qualify(super::Cut::SelectorRename(ObservationBoundary::After));
 }
 
-#[test]
-fn vector_index_incremental_power_loss_recovery_publication_preserves_lost_relaxed_sources() {
+fn qualify_lost_relaxed_source(graph: bool) {
     for origin in [super::Cut::Link, super::Cut::SelectorWrite] {
-        for graph in [false, true] {
-            for cut in CUTS {
-                check_recovery(
-                    origin,
-                    DurabilityPolicy::SyncOnCheckpoint,
-                    graph,
-                    Some(cut),
-                    true,
-                );
-            }
+        for cut in CUTS {
+            check_recovery(
+                origin,
+                DurabilityPolicy::SyncOnCheckpoint,
+                graph,
+                Some(cut),
+                true,
+            );
         }
     }
+}
+
+#[test]
+fn vector_index_incremental_power_loss_recovery_publication_preserves_lost_relaxed_sql_sources() {
+    qualify_lost_relaxed_source(false);
+}
+
+#[test]
+fn vector_index_incremental_power_loss_recovery_publication_preserves_lost_relaxed_node_sources() {
+    qualify_lost_relaxed_source(true);
 }
