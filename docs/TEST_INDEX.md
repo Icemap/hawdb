@@ -249,6 +249,16 @@ with the captured out-of-core external operator. Plain/analyzed explain rows
 have an explicit 1 MiB diagnostic cap and debit their delivered row/payload from
 the cumulative snapshot ledger; ordinary reads keep their 8 KiB snapshot cap.
 
+The root general `nowledge_mem` family exercises out-of-core text, hydration,
+graph context and `CALL vector_search` with default DiskANN and explicit RaBitQ
+artifacts. It checks typed ANN/raw score sources and the raw-scan behavior of
+disabled compression. Replacement/shadow evidence fixtures explicitly select
+RaBitQ because their compression gate remains required; sampled default-backend
+recall retains DiskANN. `production_search::tests` likewise builds explicit
+RaBitQ artifacts for its required/preferred compression lifecycle probes.
+The default/minimal staging session family counts both deleted native keys and
+legacy document tombstones before reducing the complete pinned source interval.
+
 ## Execution lanes
 
 | Lane / entry point | Problems covered | Execution policy |

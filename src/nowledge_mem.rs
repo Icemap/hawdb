@@ -2422,8 +2422,12 @@ fn vector_score_source(value: &str) -> Result<hawdb_executor::VectorScoreSource>
     match value {
         "unavailable" | "none" => Ok(hawdb_executor::VectorScoreSource::Unavailable),
         "raw_vector" => Ok(hawdb_executor::VectorScoreSource::RawVector),
-        "ann_approximate" => Ok(hawdb_executor::VectorScoreSource::AnnApproximate),
-        "quantized_approximate" => Ok(hawdb_executor::VectorScoreSource::QuantizedApproximate),
+        "ann_approximate" | "graph_distance" => {
+            Ok(hawdb_executor::VectorScoreSource::AnnApproximate)
+        }
+        "quantized_approximate" | "quantized_projection" => {
+            Ok(hawdb_executor::VectorScoreSource::QuantizedApproximate)
+        }
         _ => Err(HawDBError::Execution(
             "vector search returned an unsupported score source".to_string(),
         )),
@@ -9160,7 +9164,7 @@ mod tests {
 
     #[test]
     fn embedded_store_handle_exposes_sampled_vector_recall_validation() {
-        let index = persisted_nowledge_projection_evidence_index("handle_recall_validation");
+        let index = persisted_nowledge_projection_evidence_index("handle_recall_validation", false);
         let projection = NowledgeMemSearchProjection::from_index(index);
         let graph =
             NowledgeMemGraph::from_database(Database::new(), NowledgeMemGraphMode::ShadowReadOnly);
@@ -9208,7 +9212,7 @@ mod tests {
 
     #[test]
     fn embedded_store_exposes_search_projection_replacement_evidence() {
-        let index = persisted_nowledge_projection_evidence_index("replacement_evidence");
+        let index = persisted_nowledge_projection_evidence_index("replacement_evidence", true);
         let projection = NowledgeMemSearchProjection::from_index(index);
         let graph =
             NowledgeMemGraph::from_database(Database::new(), NowledgeMemGraphMode::ShadowReadOnly);
@@ -9235,7 +9239,8 @@ mod tests {
 
     #[test]
     fn embedded_store_exposes_typed_search_projection_replacement_evidence() {
-        let index = persisted_nowledge_projection_evidence_index("typed_replacement_evidence");
+        let index =
+            persisted_nowledge_projection_evidence_index("typed_replacement_evidence", true);
         let projection = NowledgeMemSearchProjection::from_index(index);
         let graph =
             NowledgeMemGraph::from_database(Database::new(), NowledgeMemGraphMode::ShadowReadOnly);
@@ -9262,7 +9267,7 @@ mod tests {
 
     #[test]
     fn embedded_store_exposes_search_projection_shadow_evidence() {
-        let index = persisted_nowledge_projection_evidence_index("shadow_evidence");
+        let index = persisted_nowledge_projection_evidence_index("shadow_evidence", true);
         let projection = NowledgeMemSearchProjection::from_index(index);
         let graph =
             NowledgeMemGraph::from_database(Database::new(), NowledgeMemGraphMode::ShadowReadOnly);
@@ -10854,6 +10859,12 @@ mod tests {
 
     #[test]
     fn embedded_handle_serves_search_and_graph_context_without_document_residency() {
+        for compressed in [false, true] {
+            assert_out_of_core_serving_backend(compressed);
+        }
+    }
+
+    fn assert_out_of_core_serving_backend(compressed: bool) {
         let root = unique_nowledge_mem_test_dir("embedded_out_of_core_serving");
         let search_path = root.join("search");
         let mut graph =
@@ -10870,6 +10881,9 @@ mod tests {
         let graph_commit_epoch = graph.database().commit_epoch().unwrap();
         {
             let mut index = SearchIndex::open(&search_path).unwrap();
+            if compressed {
+                index.set_rabitq_projection_build_options(Default::default());
+            }
             index
                 .apply_embedding_manifest(SearchEmbeddingManifest {
                     model: "test-embedding".to_string(),
@@ -10972,6 +10986,29 @@ mod tests {
         assert_eq!(
             vector.output.rows[0].get("id"),
             Some(&Value::String("memory:mem-ooc".to_string()))
+        );
+
+        let report = &vector.report.vector_execution_reports[0];
+        // Disabled compression retains the raw scan for explicit RaBitQ files.
+        assert_eq!(
+            report.backend,
+            if compressed {
+                hawdb_executor::VectorExecutionBackend::ScalarFlat
+            } else {
+                hawdb_executor::VectorExecutionBackend::AnnProjection
+            }
+        );
+        assert_eq!(
+            report.candidate_score_source,
+            if compressed {
+                hawdb_executor::VectorScoreSource::RawVector
+            } else {
+                hawdb_executor::VectorScoreSource::AnnApproximate
+            }
+        );
+        assert_eq!(
+            report.final_score_source,
+            hawdb_executor::VectorScoreSource::RawVector
         );
 
         drop(handle);
@@ -13465,9 +13502,12 @@ mod tests {
         std::fs::remove_dir_all(root).unwrap();
     }
 
-    fn persisted_nowledge_projection_evidence_index(name: &str) -> SearchIndex {
+    fn persisted_nowledge_projection_evidence_index(name: &str, compressed: bool) -> SearchIndex {
         let path = unique_nowledge_mem_test_dir(name);
         let mut index = SearchIndex::open(&path).unwrap();
+        if compressed {
+            index.set_rabitq_projection_build_options(Default::default());
+        }
         index
             .apply_embedding_manifest(SearchEmbeddingManifest {
                 model: "bge-m3".to_string(),
