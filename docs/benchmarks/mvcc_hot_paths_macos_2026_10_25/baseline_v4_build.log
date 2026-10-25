@@ -1,2 +1,0 @@
-    Finished `bench` profile [optimized] target(s) in 1.31s
-  Executable benches/mvcc_hot_paths.rs (/private/tmp/hawdb-mvcc-baseline-perf-cargo/release/deps/mvcc_hot_paths-f344f68272ec9582)

@@ -45,30 +45,20 @@
   "machine": "Apple M3 Max",
   "logical_cpus": "16",
   "memory_bytes": "137438953472",
-  "cargo_profile": "# Repository-wide profiles, including independent developer tools and bindings.\n# Run Cargo from within this repository so its hierarchical config is loaded.\n# Keep every profile unstripped: Rust 1.97.1 stripping can corrupt Mach-O\n# LINKEDIT string pools, rejected by macOS 27 (rust-lang/rust#157750).\n\n[profile.dev]\nopt-level = 1\ndebug = 0\nstrip = \"none\"\ncodegen-units = 256\nlto = \"off\"\nincremental = true\npanic = \"unwind\"\ndebug-assertions = true\noverflow-checks = true\nrpath = false\n\n[profile.release]\nopt-level = 3\ndebug = false\nstrip = \"none\"\ncodegen-units = 1\nlto = \"thin\"\nincremental = false\npanic = \"unwind\"\ndebug-assertions = false\noverflow-checks = false\nrpath = false\n\n[profile.test]\nopt-level = 1\ndebug = 0\nstrip = \"none\"\ncodegen-units = 16\nlto = \"off\"\nincremental = true\ndebug-assertions = true\noverflow-checks = true\nrpath = false\n\n[profile.bench]\nopt-level = 3\ndebug = false\nstrip = \"none\"\ncodegen-units = 1\nlto = \"thin\"\nincremental = false\ndebug-assertions = false\noverflow-checks = false\nrpath = false\n",
+  "cargo_profile": {
+    "name": "bench",
+    "opt-level": 3,
+    "debug": false,
+    "strip": "none",
+    "codegen-units": 1,
+    "lto": "thin",
+    "incremental": false,
+    "debug-assertions": false,
+    "overflow-checks": false,
+    "rpath": false
+  },
   "feature_configuration": "default features, locked dependencies, repository release benchmark profile",
   "measurement_scope": "Manual fixed-work component/API diagnostic on a shared host; no CPU affinity, cold-cache eviction, reserved host, or power-loss qualification.",
-  "builds": {
-    "baseline_fresh_bench": "25m25s",
-    "candidate_fresh_bench": "27m45s",
-    "conditions": "Independent target directories; concurrent Bazel builds/tests and other host work. These are observed first-build costs, not CI speedup measurements. Candidate v4 incremental build1m11s. Baseline initial v4 command incorrectly considered the old v3 harness fresh; schema guard rejected that observation and forced a new benchmark source timestamp/rebuild.",
-    "baseline_v4_forced_rebuild": "4m00s; benchmark source timestamp refreshed, no source-content change; output schema verified v4"
-  },
-  "verification": {
-    "source_revision": "16cf0e8320fac237d6026c7a84ede91060d49c80",
-    "bazel": "103 targets pass; 93 cached, 10 executed; 2407.362 seconds wall for serial repeat",
-    "bazel_configuration": "Default checked profile; --jobs=4 --local_test_jobs=1; existing timeouts/cases/assertions unchanged. CARGO_BAZEL_ISOLATED=false CARGO_NET_OFFLINE=true and explicit task output_base reuse existing locked registry cache after an initial isolated cargo fetch timeout.",
-    "storage": "2192 passed,37 existing ignored (Cargo and final-source Bazel)",
-    "root_general": "1909 passed,1 existing ignored",
-    "root_concurrent": "176 passed,1 existing ignored",
-    "root_recovery": "187 passed,1 existing ignored; crash-matrix parent passed",
-    "sealed_commit": "Final-source exact deterministic disjoint/conflict writer and reopen test passed",
-    "manual_mvcc": "13384 complete cases in30011ms; final incremental compilation1m59s",
-    "fmt": "Passed on final evidence tree: cargo fmt --all -- --check",
-    "clippy": "Passed on final evidence tree: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings (0.49s cached check)",
-    "minimal": "cargo check --locked -p hawdb --no-default-features passed",
-    "prek": "Full-tree run has675 invalid historical headers across4116files, zero overlap with38 code-commit files. Staged HawkEye and individual all-file formatting/Clippy hooks pass. Preserve existing copyright evidence."
-  },
   "generated_utc": "2026-10-24T17:23:42.890777+00:00",
   "unchanged_configuration_sha256": {
     "Cargo.lock": "e527aab8afdb9fdc130ccebf6959b4e698d8e01eb525ec7e744e0d42fb3bbdcc",
@@ -78,26 +68,16 @@
   },
   "source_manifest_scope": "All non-Markdown files changed by code commit16cf relative to baseline80c4. Subsequent changes in this evidence commit are documentation/test-index/evidence only; the measured binary source is unchanged.",
   "artifact_sha256": {
-    "initial_parallel_bazel.log": "3404b794bea415c19ffb5a901042de7d30aa1bb7eec17b3f873897ac77cd0b59",
-    "final_serial_bazel.log": "39815c77ce5b515a96ff6a255ddd83a2b73e8583a1699187a1f855ffb9502fc9",
-    "candidate_v3_build.log": "520dd01442e4a43fbbb61a5411d3237d1f5c49764278eb95ad927a1dbeac1bff",
-    "excluded_schema_mismatch_resources.log": "c01ede35ccb3b94082a79b5bfbfa87237f3a2ae38720b2f30851d67f6523bfe3",
-    "final_mvcc_campaign.log": "d07ca763b7b95893f8fe226cd56ba6952d78bf533b9b864c9031869da5655d36",
-    "baseline_v4_forced_rebuild.log": "1f28a5d3ea9591949635bf37b070cda29b2a00558df39d45cd82c04af3a3f466",
-    "excluded_schema_mismatch.json": "fdac16d3b8ed51fad148fc0b5b2c42daa2eb0a6c058b876ac774b421353fcfcf",
-    "candidate_v4_build.log": "87ce9356d4a14179375333986f6aea7e2d409c14fd9093db5786b4dc40af2869",
-    "paired_v4_initial.json": "446b210cf70426719adb5726acbacaabe6b655d94237479111d3646543201556",
-    "README.md": "a65f9bb78e3f5f98ae8af715cd63225b14253d76fa929ad6ef09506c39005e50",
-    "baseline_v4_build.log": "f3ca0c9cf48097ca3c23d722ab6588ee28d18b630495d22f83160465808f0067",
+    "README.md": "ecd3094952ad30c259e9e5c9760322323648b703095ee9a926530a47a901cafe",
+    "exploratory_v3.json": "38bb5cd87f04b1b417579eb311c2fe8058b55397a257bd5f078f4abf7dac927b",
     "paired_v4_confirmation.json": "cbeedd598a8dfb79a4d9b6a5ef9c2dd9997d2c612858d2b1243b6231181679d7",
-    "exploratory_v3.json": "3733ea817f3d990d7e4d4173a11dac8f58e94aa538004a134fafba8bad5ac030",
-    "baseline_v3_build.log": "79f7bfaeefd1f44e66d935cdb280642cc0e50cd199120d07d15639e74b872ec1",
-    "initial_failures/crates/storage/hawdb_storage_tests/test.log": "43460598c6b2ddf59722bb55433df3dc995bb8e25507d3eade8d292b331fb99d",
-    "initial_failures/crates/search/hawdb_search_lexical_spill_fuzz_tests/test.log": "b5d8de793c35e9d0844d7f1332e8903961c53b8619b6ba173939509ffcaf5241",
-    "initial_failures/hawdb_scan_callback_fuzz_tests/test.log": "c3f890fed5f263d1f0d6774de30baf3b7c070048d404f71fecb0bcc40f97f00e",
-    "initial_failures/hawdb_unit_general_tests/test.log": "ab33978aecca045f4c78ca7af37fc7dfac6bd711383d60e5442636cfca72028a"
+    "paired_v4_initial.json": "446b210cf70426719adb5726acbacaabe6b655d94237479111d3646543201556"
   },
-  "baseline_probe_status": " M Cargo.toml\n?? benches/mvcc_hot_paths.rs\n",
-  "baseline_manifest_probe_diff": "diff --git a/Cargo.toml b/Cargo.toml\nindex 1eeb5da42..b9e4c7adf 100644\n--- a/Cargo.toml\n+++ b/Cargo.toml\n@@ -328,3 +328,7 @@ harness = false\n [[bench]]\n name = \"mem_query_concurrency\"\n harness = false\n+\n+[[bench]]\n+name = \"mvcc_hot_paths\"\n+harness = false\n",
-  "generated_bazel_module_lock_sha256": "7d5259e041fd438c72c224d777113abcc805db63e98d0bbc42064646fc30d410"
+  "baseline_harness_setup": {
+    "added_benchmark_source": "benches/mvcc_hot_paths.rs",
+    "cargo_bench_registration": {
+      "name": "mvcc_hot_paths",
+      "harness": false
+    }
+  }
 }

@@ -8,7 +8,6 @@
   ],
   "baseline_revision": "80c4b8435",
   "benchmark_sha256": "5af9d2a20d83ab0816c160615c81092b4da96ceebcb2c187ebf549d25ae28a5f",
-  "builds": "independent Cargo target directories; pinned Rust 1.97.1 release, default features, CARGO_BUILD_JOBS=8",
   "concurrent_work": "one serial Bazel test target may be active; other host work is uncontrolled",
   "runs": [
     {

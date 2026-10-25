@@ -1,3 +1,0 @@
-   Compiling hawdb v0.15.0 (/private/tmp/hawdb-mvcc-optimization-20261024)
-    Finished `bench` profile [optimized] target(s) in 1m 11s
-  Executable benches/mvcc_hot_paths.rs (/private/tmp/hawdb-mvcc-candidate-perf-cargo/release/deps/mvcc_hot_paths-f344f68272ec9582)
