@@ -18,9 +18,49 @@ pre-correction source. The original tracked report tree is also recoverable from
 [commit 9bb71b8](https://github.com/nowledge-co/hawdb/tree/9bb71b8c82120806a1304328dd6644c8f3a7dafc/docs/benchmarks/architecture_2026_10_24).
 
 Historical dense-resident regressions and zero-overlap controls are retained;
-they do not qualify the current descriptor-admission/resident-iteration
-corrections. Current-source measurements and remaining gates belong to this PR;
+they do not qualify the descriptor-admission/resident-iteration corrections.
 #1136's original-baseline and platform/sustained acceptance remains separate.
+
+## Corrected-source observations
+
+[PR #1240's measurement and validation tables](https://github.com/nowledge-co/hawdb/pull/1240)
+record the completed Linux controls: baseline `80c4b8435`, candidate runtime
+`2cc02adbf`, and test-only correction `a02802e4`. The later `4fb69a6` merge adds
+three storage tests, documentation and optional benchmark output; its library
+production code is identical to `a02802e4`. These observations are distinct from
+the older controls above and are not a new macOS measurement.
+
+All 36 publication runs checked 8,192 writes, 4,096 reads and complete final
+document content. Every enabled candidate run completed 16 real post-E advances
+with active writers. In the three detached repetitions, verified reads during
+preparation were 1,197/1,205/1,965 for small and 3,929/3,870/3,828 for bulk;
+successful writes also overlapped native construction. The projection stays
+fixed while unrelated SQL counters change; this does not exercise conflicting
+projection writes or prove starvation freedom.
+
+Median scan times in microseconds, with exact selected-ID equality in all
+36 baseline/candidate cases:
+
+| Fixture | Baseline | Candidate |
+| --- | ---: | ---: |
+| Small resident | 20.53 | 26.59 |
+| Bulk resident | 682.73 | 227.51 |
+| Bulk reopened OutOfCore | 63,116.54 | 195.16 |
+| Sparse reopened OutOfCore | 1,321,186.93 | 100.93 |
+
+Foreground and owner timing results are mixed. Small detached write p95/p99
+changed from 56.83/163.13 ms to 80.57/160.75 ms; bulk detached changed from
+38.96/126.17 ms to 35.87/141.55 ms. The PR retains all six mode/size comparisons,
+read p95/p99, concurrent owner wait/callback and quiet publication measurements.
+Callback duration is a lower bound on outer-owner hold; the newly available
+qualification-feature lock histograms are not measurements from this cohort.
+
+The Ryzen 7 7735HS / Btrfs / NVMe host was shared, with substantial system-wide
+swap activity. These observations do not establish a no-regression result.
+Current raw controls remain outside Git; their local manifest SHA-256 is
+`f7511152fa005221409b7062743f99290edb6f94367a2951293b31698c8c3c4a`, and
+run-index SHA-256 is
+`406d21b7ca2cdda45c4029b1e1da07e59ca653ccdc54fd3c85d3aff23a0a83e0`.
 
 ## Measurement contract
 
