@@ -441,6 +441,21 @@ Use another fresh path and `lsg` for the LSG control. The fixture retains its
 files, refuses existing build paths, and grants no canonical incremental/CRUD
 or production-data qualification by itself.
 
+The same manual example's `canonical` mode owns synthetic source ingestion,
+default-parameter plain/LSG builds and mixed replacement/delete/NULL/insert
+workloads at an explicit changed-key rate. It checks canonical exact recall and
+independent eligibility, retained old MVCC results, stale-source refusal, graph
+reuse, restore/reinsertion, no-op maintenance and cold reopen. Existing library
+tests retain their CI owners. The opt-in Native Bindings
+`canonical_vector_lifecycle` dispatch runs four fixed 100k-by-128 workloads
+serially: plain/LSG at 1%/10% changed keys, sixteen query samples per family and
+state, with a 180-minute job ceiling. It preserves partial JSON/timing evidence,
+source/tree/toolchain/profile and binary hash. Compilation and each full
+lifecycle have separate process time/RSS observations. Default/scheduled CI,
+existing test deadlines and repository compiler profiles are unchanged; no fuzz
+tool is registered. Replay and resource-evidence limits are documented in
+[the canonical lifecycle protocol](specs/FILTERED_DISKANN_SPEC.md#manual-canonical-lifecycle-qualification).
+
 The out-of-core DiskANN family also checks candidate-window propagation on a
 512-vector fixture: default navigation window, explicit rank window, configured
 ceiling, excess-window refusal and unchanged explicit exhaustive behavior.

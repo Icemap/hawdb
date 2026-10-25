@@ -370,3 +370,47 @@ Resource evidence sums complete graph and visibility artifact bytes and stored
 raw vectors across all layers; sequential construction envelopes use the maximum
 per-graph bound. Stored rows include retired versions, while identity row counts
 represent current visible vectors. This changes no durable encoding.
+
+### Manual canonical lifecycle qualification
+
+`filtered_diskann_qualification canonical` exercises the same typed `Database`
+source, build, catch-up and language-query APIs as an embedded host. It is a
+manual fixture wrapper in the existing example. For example:
+
+```sh
+cargo run --locked --all-features --example filtered_diskann_qualification -- canonical /tmp/hawdb-canonical-plain 100000 128 128 plain 10 16
+cargo run --locked --all-features --example filtered_diskann_qualification -- canonical /tmp/hawdb-canonical-lsg 100000 128 128 lsg 100 16
+```
+
+The root must not already exist. Arguments after the root specify vector count,
+dimension, build MiB, construction mode, changed keys per thousand and held-out
+query samples. The changed-key count rounds down to complete groups of four,
+with at least one group. Each group replaces one vector, deletes one row, sets
+one vector to NULL and inserts one new row; the next phase restores the original
+source. A coprime stride spreads mutations across cluster labels.
+
+At baseline, after both publications and after cold reopen, each of the five
+filter families compares ANN results with exhaustive canonical SQL distances,
+checks independent eligible counts, IDs and raw distances, and requires at least
+95% mean recall per family. Both publications also repeat the original ordered
+ANN results through the retained C read domain, refuse a current source bound to
+the stale index and verify unchanged baseline graph hashes and successor reuse
+(including native inode identity on Unix). No-op catch-up and persisted backend
+settings are checked separately.
+
+JSON output separates source ingestion/checkpoint, graph construction, mutation
+publication, query and cold-open time. It records source/generation/schema
+identity, changed-key mapping, logical query reads, retained index memory,
+governor admissions and native FD accounting. Logical read counters are not
+physical device I/O; phase snapshots are not peak RSS. Measure process resources
+externally when needed, keeping compilation cost separate from execution. These
+clustered synthetic workloads do not establish production-corpus qualification.
+
+The Native Bindings workflow exposes an explicit `canonical_vector_lifecycle`
+dispatch. It runs the four 100k-by-128 plain/LSG and 1%/10% changed-key controls
+serially, with sixteen samples per filter family and state. Its 180-minute ceiling
+is a job timeout, not a claimed workload duration. The job records source/tree,
+toolchain, compiler profile and binary hash; first compilation and each lifecycle
+have separate process time and peak RSS measurements. Complete or partial JSON,
+stderr and exit outcomes survive failure. This dispatch changes no default or
+scheduled test lane and includes no fuzz tool.

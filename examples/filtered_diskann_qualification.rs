@@ -15,6 +15,9 @@ use std::num::NonZeroUsize;
 use std::path::Path;
 use std::time::Instant;
 
+#[path = "filtered_diskann_qualification/canonical.rs"]
+mod canonical;
+
 const MODEL: &str = "hawdb-filtered-diskann-synthetic";
 const VERSION: &str = "clustered-xorshift64star-v1";
 const SEED: u64 = 0x94d0_49bb_1331_11eb;
@@ -284,6 +287,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             build(Path::new(&arguments[1]), arguments[2].parse()?, arguments[3].parse()?, memory, lsg)
         }
         Some("query") if arguments.len() == 3 => qualify(Path::new(&arguments[1]), arguments[2].parse()?),
-        _ => Err("usage: filtered_diskann_qualification build <new-root> <documents> <dimension> <memory-MiB> <plain|lsg> | query <root> <samples>".into()),
+        Some("canonical") => canonical::run(&arguments[1..]),
+        _ => Err("usage: filtered_diskann_qualification build <new-root> <documents> <dimension> <memory-MiB> <plain|lsg> | query <root> <samples> | canonical <new-root> <documents> <dimension> <memory-MiB> <plain|lsg> <mutation-per-mille> <samples>".into()),
     }
 }
