@@ -493,11 +493,21 @@ capacity refusal/success, single-background-slot and held-catalog admission with
 unchanged selection and retry, no-op behavior under saturation, and
 automatic-checkpoint feed preservation. The admission and automatic-checkpoint
 controls require `background-maintenance`;
-they remain in the existing root/Prow and native API lanes. Replay with
+the feed control waits for a real automatic checkpoint, then suspends the owner
+while validating the captured feed and catch-up so another checkpoint cannot
+reacquire the sole background slot between an idle observation and admission.
+They remain in the existing root/Prow and native API lanes. Replay with
 `cargo test --locked -p hawdb --all-features --lib api::vector_index:: -- --test-threads=1`.
 The existing Consumer vector uncertainty test also requires stationary-receipt
 refusal after selector publication, so a host cannot mistake an uncertain
 outcome for a safe retry.
+The same Consumer vector owner checks explicit reopen working-memory ceilings,
+host-capacity refusal, admission refunds, unchanged selected generation and
+successful retry through both default and explicitly funded opens. Replay with
+`cargo test --locked -p hawdb --all-features --lib vector_index_reopen_honors_explicit_working_memory_and_host_capacity`.
+The manual canonical qualification declares its existing 320 MiB construction
+envelope for cold reopen through `open_search_projection_consumer_with_task`;
+the public default, generation-size and resident compatibility limits stay fixed.
 
 The out-of-core DiskANN family also checks candidate-window propagation on a
 512-vector fixture: independent navigation coverage, default output window, explicit rank window, configured

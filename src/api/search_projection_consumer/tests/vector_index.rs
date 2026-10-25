@@ -86,6 +86,113 @@ fn vector_index_publication_cannot_exceed_host_memory_capacity() {
     assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
 }
 
+#[test]
+fn vector_index_reopen_honors_explicit_working_memory_and_host_capacity() {
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeMemorySnapshot,
+        RuntimeResourceBudget, RuntimeResourceSnapshot,
+    };
+
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    let suspension = db.runtime.suspend_automatic_checkpoint().unwrap();
+    if let Some(suspension) = &suspension {
+        suspension.wait_idle().unwrap();
+    }
+    let path = fixture.0.join("projection");
+    let (consumer, binding) = initialize_bound_index(&mut db, &path);
+    let receipt = consumer.projection().stationary_receipt().unwrap();
+    let generation = receipt.generation_name().to_owned();
+    let epoch = consumer.projection().receipt().source_epoch;
+    drop(consumer);
+    drop(suspension);
+    drop(db);
+    let governor = |bytes| {
+        let governor = RuntimeGovernor::new(
+            RuntimeGovernorConfig {
+                memory_budget_bytes: Some(bytes),
+                ..RuntimeGovernorConfig::shared_host()
+            },
+            RuntimeResourceSnapshot::from_parts(
+                RuntimeResourceBudget::from_limits(NonZeroUsize::new(2).unwrap(), None, None),
+                RuntimeMemorySnapshot::from_limits(Some(1 << 30), Some(1 << 30), None, None, None),
+            ),
+            IoConcurrencyBudget::new(1, 1),
+        );
+        governor.pin_resources();
+        governor
+    };
+    let task = |bytes| {
+        RuntimeTaskContext::default()
+            .with_memory_reservation(hawdb_core::RuntimeMemoryReservation::new(bytes, 0))
+    };
+    let constrained = governor(96 << 20);
+    let mut db = fixture.database();
+    db.set_runtime_governor(constrained.clone());
+    let suspension = db.runtime.suspend_automatic_checkpoint().unwrap();
+    if let Some(suspension) = &suspension {
+        suspension.wait_idle().unwrap();
+    }
+    let rejections = constrained.snapshot().admission_rejections;
+    assert!(db
+        .open_search_projection_consumer_with_task(&id("vectors.embedding"), &path, task(128 << 20))
+        .is_err());
+    assert_eq!(constrained.snapshot().admission_rejections, rejections + 1);
+    assert_eq!(constrained.snapshot().admitted_memory_bytes, 0);
+    let result =
+        db.open_search_projection_consumer_with_task(&id("vectors.embedding"), &path, task(1024));
+    assert!(
+        matches!(
+            result,
+            Err(Error::Database(HawDBError::ResourceBudgetExceeded(_)))
+        ),
+        "{result:?}"
+    );
+    assert_eq!(constrained.snapshot().active_background_tasks, 0);
+    assert_eq!(constrained.snapshot().admitted_memory_bytes, 0);
+
+    // Default callers retain their existing budget and can retry the same target.
+    let consumer = db
+        .open_search_projection_consumer(&id("vectors.embedding"), &path)
+        .unwrap();
+    assert_eq!(
+        consumer
+            .projection()
+            .stationary_receipt()
+            .unwrap()
+            .generation_name(),
+        generation
+    );
+    drop(consumer);
+    assert_eq!(constrained.snapshot().admitted_memory_bytes, 0);
+    drop(suspension);
+    drop(db);
+
+    let funded = governor(256 << 20);
+    let mut db = fixture.database();
+    db.set_runtime_governor(funded.clone());
+    let suspension = db.runtime.suspend_automatic_checkpoint().unwrap();
+    if let Some(suspension) = &suspension {
+        suspension.wait_idle().unwrap();
+    }
+    let consumer = db
+        .open_search_projection_consumer_with_task(&id("vectors.embedding"), &path, task(128 << 20))
+        .unwrap();
+    assert_eq!(
+        consumer
+            .projection()
+            .stationary_receipt()
+            .unwrap()
+            .generation_name(),
+        generation
+    );
+    assert_eq!(consumer.projection().receipt().source_epoch, epoch);
+    assert_eq!(consumer.vector_index_descriptor().unwrap(), Some(&binding));
+    assert_eq!(funded.snapshot().active_background_tasks, 0);
+    drop(consumer);
+    assert_eq!(funded.snapshot().admitted_memory_bytes, 0);
+}
+
 fn initialize_bound_index(
     db: &mut Database,
     path: &Path,

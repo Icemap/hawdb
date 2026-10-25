@@ -6,12 +6,12 @@
 use super::{vector, SEED, TOP_K, VERSION};
 use hawdb::{
     Database, DatabaseConfig, HawDBError, IoConcurrencyBudget, QueryStreamOptions, RuntimeGovernor,
-    RuntimeGovernorConfig, RuntimePermit, RuntimeWorkRequest, SearchProjectionConsumer,
-    SearchProjectionConsumerError, SearchProjectionConsumerId, SearchProjectionConsumerOptions,
-    StorageResidencyMode, Value, Vector, VectorDistance, VectorIndexBackend, VectorIndexBuildError,
-    VectorIndexBuildOptions, VectorIndexField, VectorIndexLanguageBudget, VectorIndexLsg,
-    VectorIndexReadError, VectorIndexReadTransaction, VectorIndexSqlRequest,
-    VectorIndexUpdateReport,
+    RuntimeGovernorConfig, RuntimeMemoryReservation, RuntimePermit, RuntimeTaskContext,
+    RuntimeWorkRequest, SearchProjectionConsumer, SearchProjectionConsumerError,
+    SearchProjectionConsumerId, SearchProjectionConsumerOptions, StorageResidencyMode, Value,
+    Vector, VectorDistance, VectorIndexBackend, VectorIndexBuildError, VectorIndexBuildOptions,
+    VectorIndexField, VectorIndexLanguageBudget, VectorIndexLsg, VectorIndexReadError,
+    VectorIndexReadTransaction, VectorIndexSqlRequest, VectorIndexUpdateReport,
 };
 use hawdb_integrity::IntegrityHasher;
 use hawdb_qos::RuntimeAdmissionCode;
@@ -596,6 +596,7 @@ pub(super) fn run(arguments: &[String]) -> Result<()> {
         "{}",
         json!({"phase": "configuration", "protocol": VERSION, "seed": SEED, "count": count,
         "dimension": dimension, "build_memory_bytes": memory, "feed_work_budget": build.feed.work.get(),
+        "cold_reopen_memory_bytes": memory,
         "lsg": lsg, "mutation_per_mille": rate,
         "changed_keys": changes, "samples": samples, "durability": "SyncOnEveryWrite",
         "source_change_capture_entries": change_capture.max_entries.get(),
@@ -697,9 +698,13 @@ pub(super) fn run(arguments: &[String]) -> Result<()> {
     let started = Instant::now();
     let mut db = Database::open_with_config(root, config)?;
     db.set_runtime_governor(governor.clone());
-    let consumer: SearchProjectionConsumer = db.open_search_projection_consumer(
+    let consumer: SearchProjectionConsumer = db.open_search_projection_consumer_with_task(
         &SearchProjectionConsumerId::new("canonical")?,
         &destination,
+        RuntimeTaskContext::default().with_memory_reservation(RuntimeMemoryReservation::new(
+            build.memory_bytes.get() as u64,
+            0,
+        )),
     )?;
     if consumer
         .vector_index_descriptor()?

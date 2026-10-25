@@ -481,6 +481,15 @@ propagate immediately. Admission and original native custody retain their
 ordering; this retry policy does not apply to uncertain publication. No-op maintenance
 requires no publication slot, even while that slot is occupied.
 
+Cold reopen declares the same 320 MiB working envelope as construction through
+`open_search_projection_consumer_with_task`. The host governor admits that
+envelope before opening the native generation, and verification, reader state
+and cancellation use the admitted task. A smaller task ceiling remains binding;
+an oversized request cannot bypass host capacity. The original open method
+retains its 64 MiB default. Generation-size and compatibility-resident limits
+are unchanged. Resource refusal releases admission and permits retrying the
+same selected generation without rebuilding or advancing its source cursor.
+
 At baseline, after both publications and after cold reopen, each of the five
 filter families compares ANN results with exhaustive canonical SQL distances,
 checks independent eligible counts, IDs and raw distances, and requires at least

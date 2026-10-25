@@ -587,6 +587,33 @@ impl Database {
         id: &SearchProjectionConsumerId,
         projection_directory: impl AsRef<Path>,
     ) -> SearchProjectionConsumerResult<SearchProjectionConsumer> {
+        self.open_search_projection_consumer_with_task(
+            id,
+            projection_directory,
+            RuntimeTaskContext::default(),
+        )
+    }
+
+    /// Reopen with an explicit working-memory ceiling and cancellation state.
+    /// The task must be unbound. Its memory reservation is admitted against the
+    /// host governor; an absent reservation retains the 64 MiB default.
+    /// Generation and resident compatibility limits remain unchanged.
+    pub fn open_search_projection_consumer_with_task(
+        &mut self,
+        id: &SearchProjectionConsumerId,
+        projection_directory: impl AsRef<Path>,
+        task: RuntimeTaskContext,
+    ) -> SearchProjectionConsumerResult<SearchProjectionConsumer> {
+        if task.has_resource_controllers() {
+            return Err(
+                HawDBError::Semantic("Consumer open requires an unbound task".into()).into(),
+            );
+        }
+        task.checkpoint()
+            .map_err(|reason| HawDBError::Execution(reason.to_string()))?;
+        let working_bytes = task
+            .memory_reservation()
+            .map_or(64 << 20, |reservation| reservation.memory_bytes());
         let _descriptor_operation = self.internal_descriptor_operation()?;
         self.ensure_writable()?;
         self.reload_consumer_registry_if_unavailable()?;
@@ -598,7 +625,7 @@ impl Database {
             .contains_key(id.as_str())
         {
             let destination = normalize_consumer_target(projection_directory.as_ref())?;
-            let permit = self.consumer_publication_permit()?;
+            let permit = self.consumer_publication_permit_with_limits(working_bytes, 0)?;
             let recovery = self
                 .runtime
                 .get_mut()?
@@ -614,13 +641,10 @@ impl Database {
                     .insert(id.as_str().into(), recovery);
                 return Err(Error::InvalidHandle);
             }
-            return match recovery.retry(&permit, RuntimeTaskContext::default()) {
-                Ok(Some(prepared)) => self.finish_consumer_creation(
-                    id.clone(),
-                    prepared,
-                    permit,
-                    RuntimeTaskContext::default(),
-                ),
+            return match recovery.retry(&permit, task.clone()) {
+                Ok(Some(prepared)) => {
+                    self.finish_consumer_creation(id.clone(), prepared, permit, task)
+                }
                 Ok(None) => Err(Error::InvalidHandle),
                 Err(error) => Err(self.retain_consumer_recovery(id, *error)?),
             };
@@ -652,7 +676,7 @@ impl Database {
         {
             return Err(Error::InvalidHandle);
         }
-        let permit = self.consumer_publication_permit()?;
+        let permit = self.consumer_publication_permit_with_limits(working_bytes, 0)?;
         let (request, context) = {
             let runtime = self.runtime.get()?;
             (
@@ -675,7 +699,7 @@ impl Database {
                 parent,
                 &destination,
                 permit,
-                RuntimeTaskContext::default(),
+                task,
                 RegisteredConsumerLimits::default(),
             )
         })() {

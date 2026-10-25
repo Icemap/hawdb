@@ -291,6 +291,10 @@ fn vector_index_incremental_feed_survives_automatic_checkpoint_with_one_backgrou
         );
         std::thread::sleep(Duration::from_millis(5));
     }
+    // The completed checkpoint is the observation under test. Stop the owner
+    // from reacquiring the sole background slot during the subsequent checks.
+    let suspension = db.runtime.suspend_automatic_checkpoint().unwrap().unwrap();
+    suspension.wait_idle().unwrap();
     let recovered = db
         .runtime
         .get()
