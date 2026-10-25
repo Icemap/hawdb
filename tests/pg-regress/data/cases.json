@@ -4,6 +4,11 @@
   "postgres_commit": "3d6a828938a5fa0444275d3d2f67b64ec3199eb7",
   "sources": [
     {
+      "file": "POSTGRESQL-LICENSE",
+      "upstream": "COPYRIGHT",
+      "sha256": "5ed3ce5c9373dff7f98b1fae7a6c7ccd98df7d734d46d24c1bcebf1240be8307"
+    },
+    {
       "file": "data/expected/boolean.out",
       "upstream": "src/test/regress/expected/boolean.out",
       "sha256": "d26265fe1695de91e102b575dd88806078568f2c42b39fc9bd2defb472250307"
@@ -12,6 +17,16 @@
       "file": "data/expected/int8.out",
       "upstream": "src/test/regress/expected/int8.out",
       "sha256": "df6fdbe14be3a951d596886c4bf673c749e0f76f0abfa343216b077480c481b8"
+    },
+    {
+      "file": "data/expected/select_having.out",
+      "upstream": "src/test/regress/expected/select_having.out",
+      "sha256": "14ea106d976003bfa237df0b0fc484141f1cb6041f4c9310bc74cf919cb5ac7e"
+    },
+    {
+      "file": "data/expected/select_implicit.out",
+      "upstream": "src/test/regress/expected/select_implicit.out",
+      "sha256": "4531ef0c077171c8176e6ff9b7629a23789c99ac225d57cd42dd48b32fad2b06"
     },
     {
       "file": "data/isolation/multiple-row-versions.spec",
@@ -39,14 +54,19 @@
       "sha256": "ae41ceec3cfb31f8cae17cc95a5ebae595288315a55d2444c9e2b55cec980bd4"
     },
     {
+      "file": "data/sql/select_having.sql",
+      "upstream": "src/test/regress/sql/select_having.sql",
+      "sha256": "bf8adb623f24960d979619f1e697612ba5d25f949af72db66c76666345f9c68f"
+    },
+    {
+      "file": "data/sql/select_implicit.sql",
+      "upstream": "src/test/regress/sql/select_implicit.sql",
+      "sha256": "6799daddc61a5558e2921c2d30f45dfe7e1eca8a0a62776329a86b54ffaa82c5"
+    },
+    {
       "file": "data/sql/test_setup.sql",
       "upstream": "src/test/regress/sql/test_setup.sql",
       "sha256": "1c5e005b488f306c41a349a55c768fe22a2882f0955ae8ae46d26d5baadcf7c3"
-    },
-    {
-      "file": "POSTGRESQL-LICENSE",
-      "upstream": "COPYRIGHT",
-      "sha256": "5ed3ce5c9373dff7f98b1fae7a6c7ccd98df7d734d46d24c1bcebf1240be8307"
     }
   ],
   "cases": [
@@ -2246,6 +2266,1291 @@
             "first_line": 88,
             "last_line": 88
           }
+        }
+      ]
+    },
+    {
+      "id": "adapted/int8/comparison-0",
+      "group": "adapted",
+      "steps": [
+        {
+          "sql": "CREATE TABLE INT8_TBL(q1 int8, q2 int8);",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 77,
+            "last_line": 77
+          },
+          "execute_sql": "CREATE TABLE INT8_TBL (_test_id BIGINT PRIMARY KEY, q1 BIGINT, q2 BIGINT);",
+          "adaptation": "Add a synthetic primary key while retaining duplicate q1/q2 values; spell int8 as BIGINT. Wildcard results include the same fixture key on both engines."
+        },
+        {
+          "sql": "INSERT INTO INT8_TBL VALUES\n  ('  123   ','  456'),\n  ('123   ','4567890123456789'),\n  ('4567890123456789','123'),\n  (+4567890123456789,'4567890123456789'),\n  ('+4567890123456789','-4567890123456789');",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 79,
+            "last_line": 84
+          },
+          "execute_sql": "INSERT INTO INT8_TBL (_test_id, q1, q2) VALUES\n  (1, 123, 456),\n  (2, 123, 4567890123456789),\n  (3, 4567890123456789, 123),\n  (4, 4567890123456789, 4567890123456789),\n  (5, 4567890123456789, -4567890123456789);",
+          "adaptation": "Provide explicit INSERT targets and synthetic keys; preserve all original integer values as numeric literals. String-to-integer input conversion is outside this fixture-adapted comparison."
+        },
+        {
+          "sql": "SELECT * FROM INT8_TBL WHERE q2 = 4567890123456789;",
+          "source": {
+            "file": "data/sql/int8.sql",
+            "first_line": 26,
+            "last_line": 26
+          }
+        }
+      ]
+    },
+    {
+      "id": "adapted/int8/comparison-1",
+      "group": "adapted",
+      "steps": [
+        {
+          "sql": "CREATE TABLE INT8_TBL(q1 int8, q2 int8);",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 77,
+            "last_line": 77
+          },
+          "execute_sql": "CREATE TABLE INT8_TBL (_test_id BIGINT PRIMARY KEY, q1 BIGINT, q2 BIGINT);",
+          "adaptation": "Add a synthetic primary key while retaining duplicate q1/q2 values; spell int8 as BIGINT. Wildcard results include the same fixture key on both engines."
+        },
+        {
+          "sql": "INSERT INTO INT8_TBL VALUES\n  ('  123   ','  456'),\n  ('123   ','4567890123456789'),\n  ('4567890123456789','123'),\n  (+4567890123456789,'4567890123456789'),\n  ('+4567890123456789','-4567890123456789');",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 79,
+            "last_line": 84
+          },
+          "execute_sql": "INSERT INTO INT8_TBL (_test_id, q1, q2) VALUES\n  (1, 123, 456),\n  (2, 123, 4567890123456789),\n  (3, 4567890123456789, 123),\n  (4, 4567890123456789, 4567890123456789),\n  (5, 4567890123456789, -4567890123456789);",
+          "adaptation": "Provide explicit INSERT targets and synthetic keys; preserve all original integer values as numeric literals. String-to-integer input conversion is outside this fixture-adapted comparison."
+        },
+        {
+          "sql": "SELECT * FROM INT8_TBL WHERE q2 <> 4567890123456789;",
+          "source": {
+            "file": "data/sql/int8.sql",
+            "first_line": 27,
+            "last_line": 27
+          }
+        }
+      ]
+    },
+    {
+      "id": "adapted/int8/comparison-2",
+      "group": "adapted",
+      "steps": [
+        {
+          "sql": "CREATE TABLE INT8_TBL(q1 int8, q2 int8);",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 77,
+            "last_line": 77
+          },
+          "execute_sql": "CREATE TABLE INT8_TBL (_test_id BIGINT PRIMARY KEY, q1 BIGINT, q2 BIGINT);",
+          "adaptation": "Add a synthetic primary key while retaining duplicate q1/q2 values; spell int8 as BIGINT. Wildcard results include the same fixture key on both engines."
+        },
+        {
+          "sql": "INSERT INTO INT8_TBL VALUES\n  ('  123   ','  456'),\n  ('123   ','4567890123456789'),\n  ('4567890123456789','123'),\n  (+4567890123456789,'4567890123456789'),\n  ('+4567890123456789','-4567890123456789');",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 79,
+            "last_line": 84
+          },
+          "execute_sql": "INSERT INTO INT8_TBL (_test_id, q1, q2) VALUES\n  (1, 123, 456),\n  (2, 123, 4567890123456789),\n  (3, 4567890123456789, 123),\n  (4, 4567890123456789, 4567890123456789),\n  (5, 4567890123456789, -4567890123456789);",
+          "adaptation": "Provide explicit INSERT targets and synthetic keys; preserve all original integer values as numeric literals. String-to-integer input conversion is outside this fixture-adapted comparison."
+        },
+        {
+          "sql": "SELECT * FROM INT8_TBL WHERE q2 < 4567890123456789;",
+          "source": {
+            "file": "data/sql/int8.sql",
+            "first_line": 28,
+            "last_line": 28
+          }
+        }
+      ]
+    },
+    {
+      "id": "adapted/int8/comparison-3",
+      "group": "adapted",
+      "steps": [
+        {
+          "sql": "CREATE TABLE INT8_TBL(q1 int8, q2 int8);",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 77,
+            "last_line": 77
+          },
+          "execute_sql": "CREATE TABLE INT8_TBL (_test_id BIGINT PRIMARY KEY, q1 BIGINT, q2 BIGINT);",
+          "adaptation": "Add a synthetic primary key while retaining duplicate q1/q2 values; spell int8 as BIGINT. Wildcard results include the same fixture key on both engines."
+        },
+        {
+          "sql": "INSERT INTO INT8_TBL VALUES\n  ('  123   ','  456'),\n  ('123   ','4567890123456789'),\n  ('4567890123456789','123'),\n  (+4567890123456789,'4567890123456789'),\n  ('+4567890123456789','-4567890123456789');",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 79,
+            "last_line": 84
+          },
+          "execute_sql": "INSERT INTO INT8_TBL (_test_id, q1, q2) VALUES\n  (1, 123, 456),\n  (2, 123, 4567890123456789),\n  (3, 4567890123456789, 123),\n  (4, 4567890123456789, 4567890123456789),\n  (5, 4567890123456789, -4567890123456789);",
+          "adaptation": "Provide explicit INSERT targets and synthetic keys; preserve all original integer values as numeric literals. String-to-integer input conversion is outside this fixture-adapted comparison."
+        },
+        {
+          "sql": "SELECT * FROM INT8_TBL WHERE q2 > 4567890123456789;",
+          "source": {
+            "file": "data/sql/int8.sql",
+            "first_line": 29,
+            "last_line": 29
+          }
+        }
+      ]
+    },
+    {
+      "id": "adapted/int8/comparison-4",
+      "group": "adapted",
+      "steps": [
+        {
+          "sql": "CREATE TABLE INT8_TBL(q1 int8, q2 int8);",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 77,
+            "last_line": 77
+          },
+          "execute_sql": "CREATE TABLE INT8_TBL (_test_id BIGINT PRIMARY KEY, q1 BIGINT, q2 BIGINT);",
+          "adaptation": "Add a synthetic primary key while retaining duplicate q1/q2 values; spell int8 as BIGINT. Wildcard results include the same fixture key on both engines."
+        },
+        {
+          "sql": "INSERT INTO INT8_TBL VALUES\n  ('  123   ','  456'),\n  ('123   ','4567890123456789'),\n  ('4567890123456789','123'),\n  (+4567890123456789,'4567890123456789'),\n  ('+4567890123456789','-4567890123456789');",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 79,
+            "last_line": 84
+          },
+          "execute_sql": "INSERT INTO INT8_TBL (_test_id, q1, q2) VALUES\n  (1, 123, 456),\n  (2, 123, 4567890123456789),\n  (3, 4567890123456789, 123),\n  (4, 4567890123456789, 4567890123456789),\n  (5, 4567890123456789, -4567890123456789);",
+          "adaptation": "Provide explicit INSERT targets and synthetic keys; preserve all original integer values as numeric literals. String-to-integer input conversion is outside this fixture-adapted comparison."
+        },
+        {
+          "sql": "SELECT * FROM INT8_TBL WHERE q2 <= 4567890123456789;",
+          "source": {
+            "file": "data/sql/int8.sql",
+            "first_line": 30,
+            "last_line": 30
+          }
+        }
+      ]
+    },
+    {
+      "id": "adapted/int8/comparison-5",
+      "group": "adapted",
+      "steps": [
+        {
+          "sql": "CREATE TABLE INT8_TBL(q1 int8, q2 int8);",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 77,
+            "last_line": 77
+          },
+          "execute_sql": "CREATE TABLE INT8_TBL (_test_id BIGINT PRIMARY KEY, q1 BIGINT, q2 BIGINT);",
+          "adaptation": "Add a synthetic primary key while retaining duplicate q1/q2 values; spell int8 as BIGINT. Wildcard results include the same fixture key on both engines."
+        },
+        {
+          "sql": "INSERT INTO INT8_TBL VALUES\n  ('  123   ','  456'),\n  ('123   ','4567890123456789'),\n  ('4567890123456789','123'),\n  (+4567890123456789,'4567890123456789'),\n  ('+4567890123456789','-4567890123456789');",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 79,
+            "last_line": 84
+          },
+          "execute_sql": "INSERT INTO INT8_TBL (_test_id, q1, q2) VALUES\n  (1, 123, 456),\n  (2, 123, 4567890123456789),\n  (3, 4567890123456789, 123),\n  (4, 4567890123456789, 4567890123456789),\n  (5, 4567890123456789, -4567890123456789);",
+          "adaptation": "Provide explicit INSERT targets and synthetic keys; preserve all original integer values as numeric literals. String-to-integer input conversion is outside this fixture-adapted comparison."
+        },
+        {
+          "sql": "SELECT * FROM INT8_TBL WHERE q2 >= 4567890123456789;",
+          "source": {
+            "file": "data/sql/int8.sql",
+            "first_line": 31,
+            "last_line": 31
+          }
+        }
+      ]
+    },
+    {
+      "id": "adapted/int8/comparison-6",
+      "group": "adapted",
+      "steps": [
+        {
+          "sql": "CREATE TABLE INT8_TBL(q1 int8, q2 int8);",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 77,
+            "last_line": 77
+          },
+          "execute_sql": "CREATE TABLE INT8_TBL (_test_id BIGINT PRIMARY KEY, q1 BIGINT, q2 BIGINT);",
+          "adaptation": "Add a synthetic primary key while retaining duplicate q1/q2 values; spell int8 as BIGINT. Wildcard results include the same fixture key on both engines."
+        },
+        {
+          "sql": "INSERT INTO INT8_TBL VALUES\n  ('  123   ','  456'),\n  ('123   ','4567890123456789'),\n  ('4567890123456789','123'),\n  (+4567890123456789,'4567890123456789'),\n  ('+4567890123456789','-4567890123456789');",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 79,
+            "last_line": 84
+          },
+          "execute_sql": "INSERT INTO INT8_TBL (_test_id, q1, q2) VALUES\n  (1, 123, 456),\n  (2, 123, 4567890123456789),\n  (3, 4567890123456789, 123),\n  (4, 4567890123456789, 4567890123456789),\n  (5, 4567890123456789, -4567890123456789);",
+          "adaptation": "Provide explicit INSERT targets and synthetic keys; preserve all original integer values as numeric literals. String-to-integer input conversion is outside this fixture-adapted comparison."
+        },
+        {
+          "sql": "SELECT * FROM INT8_TBL WHERE q2 = 456;",
+          "source": {
+            "file": "data/sql/int8.sql",
+            "first_line": 34,
+            "last_line": 34
+          }
+        }
+      ]
+    },
+    {
+      "id": "adapted/int8/comparison-7",
+      "group": "adapted",
+      "steps": [
+        {
+          "sql": "CREATE TABLE INT8_TBL(q1 int8, q2 int8);",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 77,
+            "last_line": 77
+          },
+          "execute_sql": "CREATE TABLE INT8_TBL (_test_id BIGINT PRIMARY KEY, q1 BIGINT, q2 BIGINT);",
+          "adaptation": "Add a synthetic primary key while retaining duplicate q1/q2 values; spell int8 as BIGINT. Wildcard results include the same fixture key on both engines."
+        },
+        {
+          "sql": "INSERT INTO INT8_TBL VALUES\n  ('  123   ','  456'),\n  ('123   ','4567890123456789'),\n  ('4567890123456789','123'),\n  (+4567890123456789,'4567890123456789'),\n  ('+4567890123456789','-4567890123456789');",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 79,
+            "last_line": 84
+          },
+          "execute_sql": "INSERT INTO INT8_TBL (_test_id, q1, q2) VALUES\n  (1, 123, 456),\n  (2, 123, 4567890123456789),\n  (3, 4567890123456789, 123),\n  (4, 4567890123456789, 4567890123456789),\n  (5, 4567890123456789, -4567890123456789);",
+          "adaptation": "Provide explicit INSERT targets and synthetic keys; preserve all original integer values as numeric literals. String-to-integer input conversion is outside this fixture-adapted comparison."
+        },
+        {
+          "sql": "SELECT * FROM INT8_TBL WHERE q2 <> 456;",
+          "source": {
+            "file": "data/sql/int8.sql",
+            "first_line": 35,
+            "last_line": 35
+          }
+        }
+      ]
+    },
+    {
+      "id": "adapted/int8/comparison-8",
+      "group": "adapted",
+      "steps": [
+        {
+          "sql": "CREATE TABLE INT8_TBL(q1 int8, q2 int8);",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 77,
+            "last_line": 77
+          },
+          "execute_sql": "CREATE TABLE INT8_TBL (_test_id BIGINT PRIMARY KEY, q1 BIGINT, q2 BIGINT);",
+          "adaptation": "Add a synthetic primary key while retaining duplicate q1/q2 values; spell int8 as BIGINT. Wildcard results include the same fixture key on both engines."
+        },
+        {
+          "sql": "INSERT INTO INT8_TBL VALUES\n  ('  123   ','  456'),\n  ('123   ','4567890123456789'),\n  ('4567890123456789','123'),\n  (+4567890123456789,'4567890123456789'),\n  ('+4567890123456789','-4567890123456789');",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 79,
+            "last_line": 84
+          },
+          "execute_sql": "INSERT INTO INT8_TBL (_test_id, q1, q2) VALUES\n  (1, 123, 456),\n  (2, 123, 4567890123456789),\n  (3, 4567890123456789, 123),\n  (4, 4567890123456789, 4567890123456789),\n  (5, 4567890123456789, -4567890123456789);",
+          "adaptation": "Provide explicit INSERT targets and synthetic keys; preserve all original integer values as numeric literals. String-to-integer input conversion is outside this fixture-adapted comparison."
+        },
+        {
+          "sql": "SELECT * FROM INT8_TBL WHERE q2 < 456;",
+          "source": {
+            "file": "data/sql/int8.sql",
+            "first_line": 36,
+            "last_line": 36
+          }
+        }
+      ]
+    },
+    {
+      "id": "adapted/int8/comparison-9",
+      "group": "adapted",
+      "steps": [
+        {
+          "sql": "CREATE TABLE INT8_TBL(q1 int8, q2 int8);",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 77,
+            "last_line": 77
+          },
+          "execute_sql": "CREATE TABLE INT8_TBL (_test_id BIGINT PRIMARY KEY, q1 BIGINT, q2 BIGINT);",
+          "adaptation": "Add a synthetic primary key while retaining duplicate q1/q2 values; spell int8 as BIGINT. Wildcard results include the same fixture key on both engines."
+        },
+        {
+          "sql": "INSERT INTO INT8_TBL VALUES\n  ('  123   ','  456'),\n  ('123   ','4567890123456789'),\n  ('4567890123456789','123'),\n  (+4567890123456789,'4567890123456789'),\n  ('+4567890123456789','-4567890123456789');",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 79,
+            "last_line": 84
+          },
+          "execute_sql": "INSERT INTO INT8_TBL (_test_id, q1, q2) VALUES\n  (1, 123, 456),\n  (2, 123, 4567890123456789),\n  (3, 4567890123456789, 123),\n  (4, 4567890123456789, 4567890123456789),\n  (5, 4567890123456789, -4567890123456789);",
+          "adaptation": "Provide explicit INSERT targets and synthetic keys; preserve all original integer values as numeric literals. String-to-integer input conversion is outside this fixture-adapted comparison."
+        },
+        {
+          "sql": "SELECT * FROM INT8_TBL WHERE q2 > 456;",
+          "source": {
+            "file": "data/sql/int8.sql",
+            "first_line": 37,
+            "last_line": 37
+          }
+        }
+      ]
+    },
+    {
+      "id": "adapted/int8/comparison-10",
+      "group": "adapted",
+      "steps": [
+        {
+          "sql": "CREATE TABLE INT8_TBL(q1 int8, q2 int8);",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 77,
+            "last_line": 77
+          },
+          "execute_sql": "CREATE TABLE INT8_TBL (_test_id BIGINT PRIMARY KEY, q1 BIGINT, q2 BIGINT);",
+          "adaptation": "Add a synthetic primary key while retaining duplicate q1/q2 values; spell int8 as BIGINT. Wildcard results include the same fixture key on both engines."
+        },
+        {
+          "sql": "INSERT INTO INT8_TBL VALUES\n  ('  123   ','  456'),\n  ('123   ','4567890123456789'),\n  ('4567890123456789','123'),\n  (+4567890123456789,'4567890123456789'),\n  ('+4567890123456789','-4567890123456789');",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 79,
+            "last_line": 84
+          },
+          "execute_sql": "INSERT INTO INT8_TBL (_test_id, q1, q2) VALUES\n  (1, 123, 456),\n  (2, 123, 4567890123456789),\n  (3, 4567890123456789, 123),\n  (4, 4567890123456789, 4567890123456789),\n  (5, 4567890123456789, -4567890123456789);",
+          "adaptation": "Provide explicit INSERT targets and synthetic keys; preserve all original integer values as numeric literals. String-to-integer input conversion is outside this fixture-adapted comparison."
+        },
+        {
+          "sql": "SELECT * FROM INT8_TBL WHERE q2 <= 456;",
+          "source": {
+            "file": "data/sql/int8.sql",
+            "first_line": 38,
+            "last_line": 38
+          }
+        }
+      ]
+    },
+    {
+      "id": "adapted/int8/comparison-11",
+      "group": "adapted",
+      "steps": [
+        {
+          "sql": "CREATE TABLE INT8_TBL(q1 int8, q2 int8);",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 77,
+            "last_line": 77
+          },
+          "execute_sql": "CREATE TABLE INT8_TBL (_test_id BIGINT PRIMARY KEY, q1 BIGINT, q2 BIGINT);",
+          "adaptation": "Add a synthetic primary key while retaining duplicate q1/q2 values; spell int8 as BIGINT. Wildcard results include the same fixture key on both engines."
+        },
+        {
+          "sql": "INSERT INTO INT8_TBL VALUES\n  ('  123   ','  456'),\n  ('123   ','4567890123456789'),\n  ('4567890123456789','123'),\n  (+4567890123456789,'4567890123456789'),\n  ('+4567890123456789','-4567890123456789');",
+          "source": {
+            "file": "data/sql/test_setup.sql",
+            "first_line": 79,
+            "last_line": 84
+          },
+          "execute_sql": "INSERT INTO INT8_TBL (_test_id, q1, q2) VALUES\n  (1, 123, 456),\n  (2, 123, 4567890123456789),\n  (3, 4567890123456789, 123),\n  (4, 4567890123456789, 4567890123456789),\n  (5, 4567890123456789, -4567890123456789);",
+          "adaptation": "Provide explicit INSERT targets and synthetic keys; preserve all original integer values as numeric literals. String-to-integer input conversion is outside this fixture-adapted comparison."
+        },
+        {
+          "sql": "SELECT * FROM INT8_TBL WHERE q2 >= 456;",
+          "source": {
+            "file": "data/sql/int8.sql",
+            "first_line": 39,
+            "last_line": 39
+          }
+        }
+      ]
+    },
+    {
+      "id": "adapted/select_having/min-max-equal",
+      "group": "adapted",
+      "steps": [
+        {
+          "sql": "CREATE TABLE test_having (a int, b int, c char(8), d char);",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 6,
+            "last_line": 6
+          },
+          "execute_sql": "CREATE TABLE test_having (a BIGINT PRIMARY KEY, b BIGINT, c TEXT, d TEXT);",
+          "adaptation": "Use the already-unique a column as the primary key, widen INT fixture columns to BIGINT, and use TEXT for CHAR fixtures. CHAR padding, width and integer-width behavior are not covered."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (0, 1, 'XXXX', 'A');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 7,
+            "last_line": 7
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (0, 1, 'XXXX', 'A');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (1, 2, 'AAAA', 'b');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 8,
+            "last_line": 8
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (1, 2, 'AAAA', 'b');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (2, 2, 'AAAA', 'c');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 9,
+            "last_line": 9
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (2, 2, 'AAAA', 'c');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (3, 3, 'BBBB', 'D');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 10,
+            "last_line": 10
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (3, 3, 'BBBB', 'D');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (4, 3, 'BBBB', 'e');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 11,
+            "last_line": 11
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (4, 3, 'BBBB', 'e');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (5, 3, 'bbbb', 'F');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 12,
+            "last_line": 12
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (5, 3, 'bbbb', 'F');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (6, 4, 'cccc', 'g');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 13,
+            "last_line": 13
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (6, 4, 'cccc', 'g');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (7, 4, 'cccc', 'h');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 14,
+            "last_line": 14
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (7, 4, 'cccc', 'h');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (8, 4, 'CCCC', 'I');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 15,
+            "last_line": 15
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (8, 4, 'CCCC', 'I');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (9, 4, 'CCCC', 'j');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 16,
+            "last_line": 16
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (9, 4, 'CCCC', 'j');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "SELECT min(a), max(a) FROM test_having HAVING min(a) = max(a);",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 36,
+            "last_line": 36
+          }
+        }
+      ]
+    },
+    {
+      "id": "adapted/select_having/min-max-less",
+      "group": "adapted",
+      "steps": [
+        {
+          "sql": "CREATE TABLE test_having (a int, b int, c char(8), d char);",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 6,
+            "last_line": 6
+          },
+          "execute_sql": "CREATE TABLE test_having (a BIGINT PRIMARY KEY, b BIGINT, c TEXT, d TEXT);",
+          "adaptation": "Use the already-unique a column as the primary key, widen INT fixture columns to BIGINT, and use TEXT for CHAR fixtures. CHAR padding, width and integer-width behavior are not covered."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (0, 1, 'XXXX', 'A');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 7,
+            "last_line": 7
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (0, 1, 'XXXX', 'A');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (1, 2, 'AAAA', 'b');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 8,
+            "last_line": 8
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (1, 2, 'AAAA', 'b');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (2, 2, 'AAAA', 'c');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 9,
+            "last_line": 9
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (2, 2, 'AAAA', 'c');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (3, 3, 'BBBB', 'D');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 10,
+            "last_line": 10
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (3, 3, 'BBBB', 'D');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (4, 3, 'BBBB', 'e');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 11,
+            "last_line": 11
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (4, 3, 'BBBB', 'e');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (5, 3, 'bbbb', 'F');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 12,
+            "last_line": 12
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (5, 3, 'bbbb', 'F');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (6, 4, 'cccc', 'g');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 13,
+            "last_line": 13
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (6, 4, 'cccc', 'g');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (7, 4, 'cccc', 'h');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 14,
+            "last_line": 14
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (7, 4, 'cccc', 'h');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (8, 4, 'CCCC', 'I');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 15,
+            "last_line": 15
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (8, 4, 'CCCC', 'I');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (9, 4, 'CCCC', 'j');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 16,
+            "last_line": 16
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (9, 4, 'CCCC', 'j');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "SELECT min(a), max(a) FROM test_having HAVING min(a) < max(a);",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 37,
+            "last_line": 37
+          }
+        }
+      ]
+    },
+    {
+      "id": "adapted/select_having/ungrouped-projection-error",
+      "group": "adapted",
+      "steps": [
+        {
+          "sql": "CREATE TABLE test_having (a int, b int, c char(8), d char);",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 6,
+            "last_line": 6
+          },
+          "execute_sql": "CREATE TABLE test_having (a BIGINT PRIMARY KEY, b BIGINT, c TEXT, d TEXT);",
+          "adaptation": "Use the already-unique a column as the primary key, widen INT fixture columns to BIGINT, and use TEXT for CHAR fixtures. CHAR padding, width and integer-width behavior are not covered."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (0, 1, 'XXXX', 'A');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 7,
+            "last_line": 7
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (0, 1, 'XXXX', 'A');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (1, 2, 'AAAA', 'b');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 8,
+            "last_line": 8
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (1, 2, 'AAAA', 'b');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (2, 2, 'AAAA', 'c');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 9,
+            "last_line": 9
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (2, 2, 'AAAA', 'c');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (3, 3, 'BBBB', 'D');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 10,
+            "last_line": 10
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (3, 3, 'BBBB', 'D');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (4, 3, 'BBBB', 'e');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 11,
+            "last_line": 11
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (4, 3, 'BBBB', 'e');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (5, 3, 'bbbb', 'F');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 12,
+            "last_line": 12
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (5, 3, 'bbbb', 'F');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (6, 4, 'cccc', 'g');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 13,
+            "last_line": 13
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (6, 4, 'cccc', 'g');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (7, 4, 'cccc', 'h');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 14,
+            "last_line": 14
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (7, 4, 'cccc', 'h');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (8, 4, 'CCCC', 'I');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 15,
+            "last_line": 15
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (8, 4, 'CCCC', 'I');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (9, 4, 'CCCC', 'j');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 16,
+            "last_line": 16
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (9, 4, 'CCCC', 'j');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "SELECT a FROM test_having HAVING min(a) < max(a);",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 40,
+            "last_line": 40
+          },
+          "expected_error": {
+            "pg_sqlstate": "42803",
+            "hawdb_kind": "semantic"
+          }
+        }
+      ]
+    },
+    {
+      "id": "adapted/select_having/ungrouped-having-error",
+      "group": "adapted",
+      "steps": [
+        {
+          "sql": "CREATE TABLE test_having (a int, b int, c char(8), d char);",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 6,
+            "last_line": 6
+          },
+          "execute_sql": "CREATE TABLE test_having (a BIGINT PRIMARY KEY, b BIGINT, c TEXT, d TEXT);",
+          "adaptation": "Use the already-unique a column as the primary key, widen INT fixture columns to BIGINT, and use TEXT for CHAR fixtures. CHAR padding, width and integer-width behavior are not covered."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (0, 1, 'XXXX', 'A');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 7,
+            "last_line": 7
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (0, 1, 'XXXX', 'A');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (1, 2, 'AAAA', 'b');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 8,
+            "last_line": 8
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (1, 2, 'AAAA', 'b');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (2, 2, 'AAAA', 'c');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 9,
+            "last_line": 9
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (2, 2, 'AAAA', 'c');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (3, 3, 'BBBB', 'D');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 10,
+            "last_line": 10
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (3, 3, 'BBBB', 'D');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (4, 3, 'BBBB', 'e');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 11,
+            "last_line": 11
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (4, 3, 'BBBB', 'e');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (5, 3, 'bbbb', 'F');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 12,
+            "last_line": 12
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (5, 3, 'bbbb', 'F');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (6, 4, 'cccc', 'g');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 13,
+            "last_line": 13
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (6, 4, 'cccc', 'g');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (7, 4, 'cccc', 'h');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 14,
+            "last_line": 14
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (7, 4, 'cccc', 'h');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (8, 4, 'CCCC', 'I');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 15,
+            "last_line": 15
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (8, 4, 'CCCC', 'I');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (9, 4, 'CCCC', 'j');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 16,
+            "last_line": 16
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (9, 4, 'CCCC', 'j');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "SELECT 1 AS one FROM test_having HAVING a > 1;",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 41,
+            "last_line": 41
+          },
+          "expected_error": {
+            "pg_sqlstate": "42803",
+            "hawdb_kind": "semantic"
+          }
+        }
+      ]
+    },
+    {
+      "id": "adapted/select_having/constant-false",
+      "group": "adapted",
+      "steps": [
+        {
+          "sql": "CREATE TABLE test_having (a int, b int, c char(8), d char);",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 6,
+            "last_line": 6
+          },
+          "execute_sql": "CREATE TABLE test_having (a BIGINT PRIMARY KEY, b BIGINT, c TEXT, d TEXT);",
+          "adaptation": "Use the already-unique a column as the primary key, widen INT fixture columns to BIGINT, and use TEXT for CHAR fixtures. CHAR padding, width and integer-width behavior are not covered."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (0, 1, 'XXXX', 'A');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 7,
+            "last_line": 7
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (0, 1, 'XXXX', 'A');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (1, 2, 'AAAA', 'b');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 8,
+            "last_line": 8
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (1, 2, 'AAAA', 'b');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (2, 2, 'AAAA', 'c');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 9,
+            "last_line": 9
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (2, 2, 'AAAA', 'c');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (3, 3, 'BBBB', 'D');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 10,
+            "last_line": 10
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (3, 3, 'BBBB', 'D');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (4, 3, 'BBBB', 'e');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 11,
+            "last_line": 11
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (4, 3, 'BBBB', 'e');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (5, 3, 'bbbb', 'F');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 12,
+            "last_line": 12
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (5, 3, 'bbbb', 'F');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (6, 4, 'cccc', 'g');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 13,
+            "last_line": 13
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (6, 4, 'cccc', 'g');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (7, 4, 'cccc', 'h');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 14,
+            "last_line": 14
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (7, 4, 'cccc', 'h');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (8, 4, 'CCCC', 'I');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 15,
+            "last_line": 15
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (8, 4, 'CCCC', 'I');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (9, 4, 'CCCC', 'j');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 16,
+            "last_line": 16
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (9, 4, 'CCCC', 'j');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "SELECT 1 AS one FROM test_having HAVING 1 > 2;",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 44,
+            "last_line": 44
+          }
+        }
+      ]
+    },
+    {
+      "id": "adapted/select_having/constant-true",
+      "group": "adapted",
+      "steps": [
+        {
+          "sql": "CREATE TABLE test_having (a int, b int, c char(8), d char);",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 6,
+            "last_line": 6
+          },
+          "execute_sql": "CREATE TABLE test_having (a BIGINT PRIMARY KEY, b BIGINT, c TEXT, d TEXT);",
+          "adaptation": "Use the already-unique a column as the primary key, widen INT fixture columns to BIGINT, and use TEXT for CHAR fixtures. CHAR padding, width and integer-width behavior are not covered."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (0, 1, 'XXXX', 'A');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 7,
+            "last_line": 7
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (0, 1, 'XXXX', 'A');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (1, 2, 'AAAA', 'b');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 8,
+            "last_line": 8
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (1, 2, 'AAAA', 'b');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (2, 2, 'AAAA', 'c');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 9,
+            "last_line": 9
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (2, 2, 'AAAA', 'c');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (3, 3, 'BBBB', 'D');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 10,
+            "last_line": 10
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (3, 3, 'BBBB', 'D');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (4, 3, 'BBBB', 'e');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 11,
+            "last_line": 11
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (4, 3, 'BBBB', 'e');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (5, 3, 'bbbb', 'F');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 12,
+            "last_line": 12
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (5, 3, 'bbbb', 'F');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (6, 4, 'cccc', 'g');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 13,
+            "last_line": 13
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (6, 4, 'cccc', 'g');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (7, 4, 'cccc', 'h');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 14,
+            "last_line": 14
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (7, 4, 'cccc', 'h');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (8, 4, 'CCCC', 'I');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 15,
+            "last_line": 15
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (8, 4, 'CCCC', 'I');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_having VALUES (9, 4, 'CCCC', 'j');",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 16,
+            "last_line": 16
+          },
+          "execute_sql": "INSERT INTO test_having (a, b, c, d) VALUES (9, 4, 'CCCC', 'j');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "SELECT 1 AS one FROM test_having HAVING 1 < 2;",
+          "source": {
+            "file": "data/sql/select_having.sql",
+            "first_line": 45,
+            "last_line": 45
+          }
+        }
+      ]
+    },
+    {
+      "id": "adapted/select_implicit/non-projected-order-key",
+      "group": "adapted",
+      "steps": [
+        {
+          "sql": "CREATE TABLE test_missing_target (a int, b int, c char(8), d char);",
+          "source": {
+            "file": "data/sql/select_implicit.sql",
+            "first_line": 10,
+            "last_line": 10
+          },
+          "execute_sql": "CREATE TABLE test_missing_target (a BIGINT PRIMARY KEY, b BIGINT, c TEXT, d TEXT);",
+          "adaptation": "Use the already-unique a column as the primary key, widen INT fixture columns to BIGINT, and use TEXT for CHAR fixtures. CHAR padding, width and integer-width behavior are not covered."
+        },
+        {
+          "sql": "INSERT INTO test_missing_target VALUES (0, 1, 'XXXX', 'A');",
+          "source": {
+            "file": "data/sql/select_implicit.sql",
+            "first_line": 11,
+            "last_line": 11
+          },
+          "execute_sql": "INSERT INTO test_missing_target (a, b, c, d) VALUES (0, 1, 'XXXX', 'A');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_missing_target VALUES (1, 2, 'ABAB', 'b');",
+          "source": {
+            "file": "data/sql/select_implicit.sql",
+            "first_line": 12,
+            "last_line": 12
+          },
+          "execute_sql": "INSERT INTO test_missing_target (a, b, c, d) VALUES (1, 2, 'ABAB', 'b');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_missing_target VALUES (2, 2, 'ABAB', 'c');",
+          "source": {
+            "file": "data/sql/select_implicit.sql",
+            "first_line": 13,
+            "last_line": 13
+          },
+          "execute_sql": "INSERT INTO test_missing_target (a, b, c, d) VALUES (2, 2, 'ABAB', 'c');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_missing_target VALUES (3, 3, 'BBBB', 'D');",
+          "source": {
+            "file": "data/sql/select_implicit.sql",
+            "first_line": 14,
+            "last_line": 14
+          },
+          "execute_sql": "INSERT INTO test_missing_target (a, b, c, d) VALUES (3, 3, 'BBBB', 'D');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_missing_target VALUES (4, 3, 'BBBB', 'e');",
+          "source": {
+            "file": "data/sql/select_implicit.sql",
+            "first_line": 15,
+            "last_line": 15
+          },
+          "execute_sql": "INSERT INTO test_missing_target (a, b, c, d) VALUES (4, 3, 'BBBB', 'e');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_missing_target VALUES (5, 3, 'bbbb', 'F');",
+          "source": {
+            "file": "data/sql/select_implicit.sql",
+            "first_line": 16,
+            "last_line": 16
+          },
+          "execute_sql": "INSERT INTO test_missing_target (a, b, c, d) VALUES (5, 3, 'bbbb', 'F');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_missing_target VALUES (6, 4, 'cccc', 'g');",
+          "source": {
+            "file": "data/sql/select_implicit.sql",
+            "first_line": 17,
+            "last_line": 17
+          },
+          "execute_sql": "INSERT INTO test_missing_target (a, b, c, d) VALUES (6, 4, 'cccc', 'g');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_missing_target VALUES (7, 4, 'cccc', 'h');",
+          "source": {
+            "file": "data/sql/select_implicit.sql",
+            "first_line": 18,
+            "last_line": 18
+          },
+          "execute_sql": "INSERT INTO test_missing_target (a, b, c, d) VALUES (7, 4, 'cccc', 'h');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_missing_target VALUES (8, 4, 'CCCC', 'I');",
+          "source": {
+            "file": "data/sql/select_implicit.sql",
+            "first_line": 19,
+            "last_line": 19
+          },
+          "execute_sql": "INSERT INTO test_missing_target (a, b, c, d) VALUES (8, 4, 'CCCC', 'I');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "INSERT INTO test_missing_target VALUES (9, 4, 'CCCC', 'j');",
+          "source": {
+            "file": "data/sql/select_implicit.sql",
+            "first_line": 20,
+            "last_line": 20
+          },
+          "execute_sql": "INSERT INTO test_missing_target (a, b, c, d) VALUES (9, 4, 'CCCC', 'j');",
+          "adaptation": "Use explicit INSERT targets without changing any fixture value."
+        },
+        {
+          "sql": "SELECT c FROM test_missing_target ORDER BY a;",
+          "source": {
+            "file": "data/sql/select_implicit.sql",
+            "first_line": 41,
+            "last_line": 41
+          },
+          "ordered": true
         }
       ]
     }
