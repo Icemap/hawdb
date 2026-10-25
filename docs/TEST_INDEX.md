@@ -525,6 +525,13 @@ fresh catch-up. Selected E still requires its durable canonical source and full
 artifact verification. Source-bound logs report plan and distinct-reopen counts;
 these are known slow local replay families, not fuzz timeout durations. Replay
 with `cargo test --locked -p hawdb --all-features --lib vector_index_incremental_power_loss_`.
+The root general `search_projection_graph_delta` family preserves the legacy
+batch API's live-node candidate contract before applying its operation ceiling.
+Materialized/out-of-core checkpoint reopens retain raw deleted native keys for
+fixed projectors while a one-operation legacy delete remains admissible. The
+point visibility check tests immutable record membership without owning property
+values; existing segment I/O still applies. Whole-commit refusal and legacy
+tombstones remain unchanged.
 The storage `observations_capture` family owns captured-root directory barriers
 and descendant writes, including rejection of escaped/non-normal paths. The
 existing root and Windows consumers owners retain all feature scopes, profiles

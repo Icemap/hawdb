@@ -10881,6 +10881,7 @@ mod tests {
         let graph_commit_epoch = graph.database().commit_epoch().unwrap();
         {
             let mut index = SearchIndex::open(&search_path).unwrap();
+            #[cfg(feature = "vector-search")]
             if compressed {
                 index.set_rabitq_projection_build_options(Default::default());
             }
@@ -13502,10 +13503,11 @@ mod tests {
         std::fs::remove_dir_all(root).unwrap();
     }
 
-    fn persisted_nowledge_projection_evidence_index(name: &str, compressed: bool) -> SearchIndex {
+    fn persisted_nowledge_projection_evidence_index(name: &str, _compressed: bool) -> SearchIndex {
         let path = unique_nowledge_mem_test_dir(name);
         let mut index = SearchIndex::open(&path).unwrap();
-        if compressed {
+        #[cfg(feature = "vector-search")]
+        if _compressed {
             index.set_rabitq_projection_build_options(Default::default());
         }
         index
