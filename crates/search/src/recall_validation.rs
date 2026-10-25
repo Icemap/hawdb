@@ -181,6 +181,8 @@ pub struct VectorProjectionQualificationIdentity {
     pub document_count: usize,
     pub source_digest: u64,
     pub payload_bytes: u64,
+    /// Raw projection checksum, or the complete selected-manifest fingerprint
+    /// for out-of-core DiskANN graph/visibility artifact closures.
     pub payload_checksum: u32,
     pub format_version: u32,
     pub algorithm: String,

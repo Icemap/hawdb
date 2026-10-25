@@ -262,6 +262,8 @@ mod reuse;
 mod root_registry;
 mod text_seed;
 #[cfg(feature = "vector-search")]
+mod vector_qualification;
+#[cfg(feature = "vector-search")]
 mod vector_reader;
 #[cfg(test)]
 mod vector_selection_tests;
@@ -2228,6 +2230,9 @@ impl SearchOutOfCoreReader {
     ) -> Option<super::VectorProjectionQualificationIdentity> {
         #[cfg(feature = "vector-search")]
         {
+            if self.has_diskann_projection() {
+                return self.diskann_qualification().map(|(identity, _)| identity);
+            }
             let projection = self.primary_segment().rabitq_projection.as_ref()?;
             let manifest = projection.manifest();
             Some(super::VectorProjectionQualificationIdentity {
@@ -2258,6 +2263,9 @@ impl SearchOutOfCoreReader {
     ) -> Option<super::VectorProjectionResourceEvidence> {
         #[cfg(feature = "vector-search")]
         {
+            if self.has_diskann_projection() {
+                return self.diskann_qualification().map(|(_, resources)| resources);
+            }
             let projection = self.primary_segment().rabitq_projection.as_ref()?;
             let manifest = projection.manifest();
             let raw_vector_bytes = (manifest.document_count as u64)
@@ -4009,16 +4017,26 @@ fn load_artifact_closure_with_context(
         .iter()
         .zip(&manifest.mutation_runs)
         .filter_map(|(run, reference)| {
-            let reusable = previous.is_some_and(|reader| {
-                reader.manifest.mutation_runs.contains(reference)
-                    && run.entries().iter().all(|entry| {
+            let reusable = previous
+                .and_then(|reader| {
+                    let index = reader
+                        .manifest
+                        .mutation_runs
+                        .iter()
+                        .position(|candidate| candidate == reference)?;
+                    if run.entries().iter().all(|entry| {
                         let target = manifest
                             .segments
                             .iter()
                             .find(|segment| segment.segment_id == entry.target_segment_id);
                         target.is_some_and(|target| reader.manifest.segments.contains(target))
-                    })
-            });
+                    }) {
+                        reader.visibility.vector_retraction_count(index)
+                    } else {
+                        None
+                    }
+                })
+                .is_some_and(|count| run.record_vector_retraction_count(count).is_ok());
             if reusable {
                 refresh.reused_retractions += run.entries().len();
                 None

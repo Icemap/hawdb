@@ -80,6 +80,141 @@ fn assert_default_graph(reader: &SearchOutOfCoreReader) {
 }
 
 #[test]
+fn default_graph_qualification_binds_all_segments_and_visible_vectors() {
+    let root = Directory(test_dir("diskann_qualification_closure"));
+    let mut writer = SearchOutOfCoreGenerationWriter::create(
+        &root.0,
+        SearchOutOfCoreGenerationBuildOptions {
+            max_content_documents: std::num::NonZeroUsize::new(2).unwrap(),
+            source_graph_commit_epoch: Some(11),
+            embedding_manifest: Some(crate::SearchEmbeddingManifest {
+                model: "qualification-fixture".into(),
+                version: Some("1".into()),
+                dimension: 2,
+            }),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    for number in 0..7 {
+        writer
+            .push(
+                row(
+                    number,
+                    (number >= 2 && number != 4).then(|| vec![1.0, number as f32 / 10.0]),
+                )
+                .into_document(),
+            )
+            .unwrap();
+    }
+    writer.finish().unwrap();
+    let mut reader = SearchOutOfCoreReader::open(&root.0).unwrap();
+    let pinned = SearchOutOfCoreReader::open(&root.0).unwrap();
+    assert!(reader.manifest.segments.len() > 1);
+    assert!(reader.primary_segment().rabitq_projection.is_none());
+    let original = reader.vector_projection_qualification_identity().unwrap();
+    assert_eq!(original.document_count, 4);
+    assert_eq!(original.projection_generation, reader.generation());
+    assert_eq!(original.source_graph_commit_epoch, Some(11));
+    let mut previous = original.clone();
+    for (epoch, upserts, deletes, visible, stored, reused) in [
+        (
+            12,
+            vec![
+                row(2, None),
+                row(4, Some(vec![1.0, 0.4])),
+                row(7, Some(vec![1.0, 0.7])),
+            ],
+            vec![
+                row(1, None).into_document().id,
+                row(3, None).into_document().id,
+            ],
+            4,
+            6,
+            0,
+        ),
+        (
+            13,
+            vec![row(5, None), row(7, Some(vec![1.0, 0.1]))],
+            vec![row(0, None).into_document().id],
+            3,
+            7,
+            4,
+        ),
+        (14, vec![], vec![row(7, None).into_document().id], 2, 7, 7),
+        (15, vec![row(4, None)], vec![], 1, 7, 8),
+        (16, vec![], vec![row(6, None).into_document().id], 0, 7, 9),
+    ] {
+        SearchOutOfCoreGenerationWriter::prepare_delta(
+            &reader,
+            SearchProjectionDelta {
+                upserts,
+                deletes,
+                source_graph_commit_epoch: Some(epoch),
+                ..Default::default()
+            },
+            Default::default(),
+        )
+        .unwrap()
+        .finish()
+        .unwrap();
+        let refresh = reader.refresh().unwrap();
+        assert_eq!(refresh.reused_retractions, reused);
+        let identity = reader.vector_projection_qualification_identity().unwrap();
+        assert_eq!(identity.algorithm, "diskann");
+        assert_eq!(identity.document_count, visible);
+        assert_eq!(identity.projection_generation, reader.generation());
+        assert_eq!(identity.source_graph_commit_epoch, Some(epoch));
+        assert_ne!(identity.source_digest, previous.source_digest);
+        assert_ne!(identity.payload_checksum, previous.payload_checksum);
+        let resources = reader.vector_projection_resource_evidence().unwrap();
+        assert_eq!(resources.raw_vector_bytes, stored * 2 * 4);
+        assert_eq!(
+            resources.segment_count,
+            reader
+                .segments
+                .iter()
+                .filter(|segment| segment.rabitq_projection.is_some())
+                .count()
+        );
+        let bytes = reader
+            .manifest
+            .segments
+            .iter()
+            .filter_map(|segment| segment.rabitq_artifact_len)
+            .sum::<u64>()
+            + reader
+                .manifest
+                .mutation_runs
+                .iter()
+                .map(|run| run.len)
+                .sum::<u64>();
+        assert_eq!(identity.payload_bytes, bytes);
+        assert_eq!(resources.projection_payload_bytes, bytes);
+        let reopened = SearchOutOfCoreReader::open(&root.0).unwrap();
+        assert_eq!(
+            reopened.vector_projection_qualification_identity().unwrap(),
+            identity
+        );
+        assert_eq!(
+            reopened.vector_projection_resource_evidence().unwrap(),
+            resources
+        );
+        assert_eq!(
+            pinned.vector_projection_qualification_identity().unwrap(),
+            original
+        );
+        if visible != 0 {
+            assert_default_graph(&reader);
+        } else {
+            assert!(query(&reader, false).result.hits.is_empty());
+            assert!(query(&reader, true).result.hits.is_empty());
+        }
+        previous = identity;
+    }
+}
+
+#[test]
 fn default_graph_uses_the_requested_candidate_window_within_its_ceiling() {
     let root = Directory(test_dir("default_diskann_candidate_window"));
     let mut writer = SearchOutOfCoreGenerationWriter::create(&root.0, Default::default()).unwrap();
@@ -498,4 +633,6 @@ fn ordinary_zero_vectors_preserve_absent_cosine_scores_across_delta_and_reopen()
         .as_ref()
         .unwrap()
         .is_diskann());
+    assert!(reader.vector_projection_qualification_identity().is_none());
+    assert!(reader.vector_projection_resource_evidence().is_none());
 }

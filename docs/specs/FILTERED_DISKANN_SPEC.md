@@ -345,3 +345,17 @@ paths retain their own selection policies. The manual clustered-corpus fixture
 records per-sample and per-filter-family recall against held-out synthetic
 queries and exhaustive filtered ground truth; it is not a production corpus or
 canonical incremental maintenance qualification.
+
+Out-of-core graph qualification binds the current logical generation/epoch and
+the complete selected manifest, including every graph/content reference and
+visibility run. Its checksum fingerprints this closure rather than the first
+graph's record payload. Count only visible vectors: existing target validation
+records a runtime-only vector retraction count, reusing it only when the run and
+all target references match the previous verified reader. Querying qualification
+adds no artifact read or document hydration; admitted collection sizes include
+the cached scalar state. Deletion-only, NULL-only and empty-vector heads retain
+accurate identities. Mixed graph/legacy-codec closures remain unqualified.
+Resource evidence sums complete graph and visibility artifact bytes and stored
+raw vectors across all layers; sequential construction envelopes use the maximum
+per-graph bound. Stored rows include retired versions, while identity row counts
+represent current visible vectors. This changes no durable encoding.
