@@ -31,6 +31,34 @@ struct ObservedIo {
     task: RuntimeTaskContext,
     events: mpsc::Sender<Event>,
 }
+
+#[test]
+fn canonical_vector_builder_uses_the_admitted_memory_ceiling() {
+    use hawdb_vector_projection::diskann::{DiskAnnBuildConfig, DiskAnnIndex};
+    let root = super::super::tests::test_dir("vector-consumer-memory");
+    let index = vector_index_with_backend(&root, hawdb_core::VectorIndexBackend::default());
+    let governor = governor();
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(128 << 20))
+        .unwrap();
+    let task = permit.bind_task_context(RuntimeTaskContext::default());
+    let memory = BuildMemory::new(&task).unwrap();
+    let options =
+        consumer_options(&index, NonZeroU64::new(256 << 20).unwrap(), &memory, &task).unwrap();
+    let required = DiskAnnIndex::build_memory_bound(
+        100_000,
+        128,
+        DiskAnnBuildConfig {
+            max_working_bytes: options.rabitq_build_memory_bytes.get(),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert!(required > 64 << 20);
+    assert!(required < 128 << 20);
+    assert_eq!(options.rabitq_build_memory_bytes.get(), 128 << 20);
+    let _construction = memory.retained.reserve(required).unwrap();
+}
 impl RuntimeIoWaveController for ObservedIo {
     fn try_acquire(
         &self,
@@ -141,6 +169,20 @@ fn governor() -> RuntimeGovernor {
 }
 
 fn vector_index(root: &std::path::Path) -> SearchIndex {
+    vector_index_with_backend(
+        root,
+        hawdb_core::VectorIndexBackend::RaBitQ {
+            bit_width: 4,
+            segment_rows: 64,
+            transform_seed: 42,
+        },
+    )
+}
+
+fn vector_index_with_backend(
+    root: &std::path::Path,
+    backend: hawdb_core::VectorIndexBackend,
+) -> SearchIndex {
     let mut index = SearchIndex::in_memory();
     index
         .bind_vector_index(
@@ -153,11 +195,7 @@ fn vector_index(root: &std::path::Path) -> SearchIndex {
                 },
                 hawdb_core::VectorDimension::new(2).unwrap(),
                 hawdb_core::VectorDistance::Cosine,
-                hawdb_core::VectorIndexBackend::RaBitQ {
-                    bit_width: 4,
-                    segment_rows: 64,
-                    transform_seed: 42,
-                },
+                backend,
                 [7; 32],
             )
             .unwrap(),

@@ -314,7 +314,13 @@ impl Database {
             .verify_search_consumer_allocation_evidence()?;
         let destination = normalize_consumer_target(destination)?;
         let destination = destination.as_path();
-        let permit = self.consumer_publication_permit()?;
+        let permit = if projector
+            == hawdb_search::consumer::RegisteredConsumerProjector::CanonicalVectorField
+        {
+            self.vector_consumer_publication_permit(&task)?
+        } else {
+            self.consumer_publication_permit()?
+        };
         let recovery = self
             .runtime
             .get_mut()?
@@ -864,7 +870,7 @@ impl Database {
         let root = self.consumer_writable_root()?;
         self.reload_consumer_registry_if_unavailable()?;
         self.validate_consumer_receipt(consumer)?;
-        let permit = self.consumer_publication_permit()?;
+        let permit = self.vector_consumer_publication_permit(&task)?;
         let mut snapshot = self.begin_read_transaction_with_context(&task)?;
         let recovery_memory = permit
             .reserve_retained_memory(
@@ -1240,9 +1246,27 @@ impl Database {
         &mut self,
         result_bytes: u64,
     ) -> Result<Arc<hawdb_qos::RuntimePermit>> {
+        self.consumer_publication_permit_with_limits(64 << 20, result_bytes)
+    }
+
+    fn vector_consumer_publication_permit(
+        &mut self,
+        task: &RuntimeTaskContext,
+    ) -> Result<Arc<hawdb_qos::RuntimePermit>> {
+        let working_bytes = task.memory_reservation().map_or(64 << 20, |reservation| {
+            reservation.memory_bytes().max(64 << 20)
+        });
+        self.consumer_publication_permit_with_limits(working_bytes, 0)
+    }
+
+    fn consumer_publication_permit_with_limits(
+        &mut self,
+        working_bytes: u64,
+        result_bytes: u64,
+    ) -> Result<Arc<hawdb_qos::RuntimePermit>> {
         self.consumer_governor()?
             .try_admit(
-                hawdb_qos::RuntimeWorkRequest::background_maintenance(64 * 1024 * 1024)
+                hawdb_qos::RuntimeWorkRequest::background_maintenance(working_bytes)
                     .with_result_bytes(result_bytes)
                     .with_io_wave_slots(1),
             )

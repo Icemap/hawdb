@@ -11,6 +11,81 @@ use std::num::NonZeroUsize;
 
 mod incremental_recovery;
 
+#[test]
+fn vector_index_publication_funds_the_explicit_task_memory_envelope() {
+    use hawdb_search::consumer::RegisteredConsumerProjector::{CanonicalVectorField, HostMapping};
+    for (projector, requested, admitted, effective) in [
+        (CanonicalVectorField, None, 64 << 20, 64 << 20),
+        (CanonicalVectorField, Some(32 << 20), 64 << 20, 32 << 20),
+        (CanonicalVectorField, Some(128 << 20), 128 << 20, 128 << 20),
+        (HostMapping, Some(128 << 20), 64 << 20, 64 << 20),
+    ] {
+        let fixture = Fixture::new();
+        let mut db = fixture.database();
+        let task = requested.map_or_else(RuntimeTaskContext::default, |bytes| {
+            RuntimeTaskContext::default()
+                .with_memory_reservation(hawdb_core::RuntimeMemoryReservation::new(bytes, bytes))
+        });
+        let observed = std::cell::Cell::new(false);
+        let result = db.create_consumer_with_initializer::<
+            { hawdb_search::projection_consumer::MAX_CONSUMERS },
+            _,
+        >(
+            id("budget"),
+            &fixture.0.join("budget"),
+            options(100),
+            task.clone(),
+            projector,
+            |_, _, permit| {
+                observed.set(true);
+                assert_eq!(permit.request().memory_bytes, admitted);
+                let controlled = permit.bind_task_context(task.clone());
+                assert_eq!(controlled.memory_reservation().unwrap().memory_bytes(), effective);
+                let memory = controlled.reserve_working_memory(1024).unwrap();
+                assert!(controlled.reserve_working_memory(effective + 1).is_err());
+                drop(memory);
+                Err(HawDBError::Execution("budget probe complete".into()))
+            },
+        );
+        assert!(observed.get());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("budget probe complete"));
+    }
+}
+
+#[test]
+fn vector_index_publication_cannot_exceed_host_memory_capacity() {
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeMemorySnapshot,
+        RuntimeResourceBudget, RuntimeResourceSnapshot,
+    };
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    let governor = RuntimeGovernor::new(
+        RuntimeGovernorConfig {
+            memory_budget_bytes: Some(64 << 20),
+            ..RuntimeGovernorConfig::shared_host()
+        },
+        RuntimeResourceSnapshot::from_parts(
+            RuntimeResourceBudget::from_limits(NonZeroUsize::new(2).unwrap(), None, None),
+            RuntimeMemorySnapshot::from_limits(Some(1 << 30), Some(1 << 30), None, None, None),
+        ),
+        IoConcurrencyBudget::new(1, 1),
+    );
+    db.set_runtime_governor(governor.clone());
+    let task = RuntimeTaskContext::default().with_memory_reservation(
+        hawdb_core::RuntimeMemoryReservation::new(128 << 20, 128 << 20),
+    );
+    assert!(db.vector_consumer_publication_permit(&task).is_err());
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    let permit = db.consumer_publication_permit().unwrap();
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 64 << 20);
+    drop(permit);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+}
+
 fn initialize_bound_index(
     db: &mut Database,
     path: &Path,

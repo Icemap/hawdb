@@ -30,6 +30,8 @@ pub struct VectorIndexBuildOptions {
     pub backend: VectorIndexBackend,
     /// Private source mapping and resident producer envelope, separately funded
     /// from the Consumer publication and retained-reader envelopes.
+    /// A larger explicit envelope also raises canonical publication admission;
+    /// publication remains a separate host charge and honors the task ceiling.
     pub memory_bytes: NonZeroUsize,
     pub max_documents: NonZeroUsize,
     pub max_row_payload_bytes: NonZeroUsize,

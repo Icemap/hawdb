@@ -124,6 +124,13 @@ tradeoff independently of these kernel invariants.
 Registered Consumer construction now reserves the complete private graph source
 and construction envelope before copying vectors, writes and synchronizes the
 graph, and seals it through the existing artifact-reference/publication path.
+Canonical vector publication admits at least its existing 64 MiB request and
+raises that separately funded request for a larger explicit task envelope.
+The private graph builder receives the effective admitted task ceiling, including
+any smaller caller limit. Initial construction, rebuild and incremental catch-up
+share this policy; host admission and positive/representable memory checks remain
+mandatory. Preflight/admission regressions cover a 100,000-by-128 graph envelope
+without allocating that graph and do not establish its actual build cost.
 The existing candidate-artifact filename and legacy `rabitq_*` manifest slots
 are shared storage plumbing: a full graph source digest selects the graph format,
 the descriptor names the real algorithm, and opening checks graph parameters,

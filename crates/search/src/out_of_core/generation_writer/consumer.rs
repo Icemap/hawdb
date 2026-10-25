@@ -125,6 +125,15 @@ fn consumer_options(
     let options_memory = memory
         .retained
         .reserve(definition.retained_bytes() + 4096)?;
+    let working_bytes = task
+        .memory_reservation()
+        .map_or(64 << 20, |reservation| reservation.memory_bytes());
+    let build_memory_bytes = usize::try_from(working_bytes)
+        .ok()
+        .and_then(NonZeroUsize::new)
+        .ok_or_else(|| {
+            HawDBError::Execution("Consumer build requires representable positive memory".into())
+        })?;
     let options = SearchOutOfCoreGenerationBuildOptions {
         max_documents: NonZeroUsize::new(index.documents.len().max(1)).unwrap(),
         max_content_documents: NonZeroUsize::new(index.documents.len().max(1)).unwrap(),
@@ -137,6 +146,7 @@ fn consumer_options(
         vector_index_descriptor: Some(definition.clone()),
         rabitq_segment_rows: NonZeroUsize::new(segment_rows as usize).unwrap(),
         rabitq_transform_seed: transform_seed,
+        rabitq_build_memory_bytes: build_memory_bytes,
         #[cfg(feature = "vector-search")]
         rabitq_bit_width: match bit_width {
             1 => hawdb_vector_projection::RaBitQBitWidth::One,

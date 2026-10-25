@@ -448,6 +448,15 @@ includes default graph construction/cache bounds and any mapped graph payload;
 explicit compressed lazy-projection admission remains covered independently.
 Replay with `cargo test --locked -p hawdb-search --all-features --lib resident_snapshot::`.
 
+Canonical vector construction additionally verifies publication admission for
+default, smaller and larger explicit task memory, over-budget refusal, and
+propagation into the private graph builder. A pure 100,000-by-128 preflight and
+governed reservation crosses the former 64 MiB ceiling without allocating graph
+vectors. This is budget propagation evidence, not a large-graph build benchmark.
+The existing root/Search owners retain these tests; replay with
+`cargo test --locked -p hawdb --all-features --lib vector_index_publication_funds`
+and `cargo test --locked -p hawdb-search --all-features --lib canonical_vector_builder_uses`.
+
 The root vector-index family also owns
 `api::vector_index::build::tests::diskann` (Cargo replay:
 `cargo test --locked -p hawdb --lib vector_index`). It covers the schema-bound
