@@ -308,13 +308,24 @@ source transaction was lost. This releases logical operation capacity without
 reconstructing a producer from a pathname or deleting unpublished contents.
 The selected-E branch still requires the captured canonical source epoch and
 complete marker/metadata/artifact verification before granting read custody.
-Completed selector barriers cannot fall back to C. Recovery-publication cuts
-remain a separate qualification item.
+Completed selector barriers cannot fall back to C. Recovery-publication tests
+continue recording from exact native materializations of a first crash. They
+cover abandoned births, unselected intents and selected intents, with subsequent
+write, file-sync, rename and root-directory cuts under both durability modes and
+both source families. Each surviving image becomes a stable baseline for the
+next crash; importing it first verifies bytes, names and hard-link aliases and
+does not imply an acknowledgement of the interrupted original operation.
+Relaxed-mode cases also lose the complete unbarriered E transaction before
+intent and during private-selector preparation. They require the source to
+actually reopen at C before interrupting recovery publication again; surviving
+E candidate bytes cannot authorize E data or require its lost transaction.
+Repeated recovery must retain the original selection receipt and immutable
+candidate bytes/inodes, and preserve source/index epoch matching or stale refusal.
 
 Whole-generation byte verification and admitted reopen still read unchanged
 artifacts. These cases prove changed-content construction and native reuse, not
-end-to-end K-proportional maintenance or a scale improvement. Recovery-publication
-interruption cuts and selective/anti-correlated scale qualification remain required. The full
+end-to-end K-proportional maintenance or a scale improvement. Representative
+update/delete-rate, resource and large canonical-build qualification remain required. The full
 requested default-engine/CRUD/MVCC objective is not complete.
 
 Default sampled recall now compares exhaustive results with the actual default

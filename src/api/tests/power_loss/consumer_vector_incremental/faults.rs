@@ -10,6 +10,8 @@ use std::cell::Cell;
 use std::rc::Rc;
 use std::sync::Arc;
 
+mod recovery;
+
 const LEDGER: &str = "consumer-allocations.hawdb";
 
 #[derive(Debug, Clone, Copy)]
@@ -25,6 +27,54 @@ fn ledger(root: &Path) -> serde_json::Value {
     let bytes = std::fs::read(root.join(LEDGER)).unwrap();
     let start = bytes.iter().position(|byte| *byte == b'\n').unwrap() + 1;
     serde_json::from_slice(&bytes[start..bytes.len() - 4]).unwrap()
+}
+
+fn is_candidate(path: &Path) -> bool {
+    path.components().next().is_some_and(|component| {
+        let component = component.as_os_str().to_string_lossy();
+        component == "projection" || component.starts_with("hawdb-generation-")
+    })
+}
+
+fn assert_preserved_artifacts(
+    root: &Path,
+    physical: &hawdb_storage::power_loss::image::CrashImage,
+) {
+    for path in physical.paths().filter(|path| is_candidate(path)) {
+        let expected = physical.bytes(path).unwrap();
+        let mut file = std::fs::File::open(root.join(path)).unwrap();
+        assert_eq!(file.metadata().unwrap().len(), expected.len() as u64);
+        // Windows locks can cover bytes past an empty lease file's EOF. Check
+        // its length and read exactly the expected bytes without an EOF probe.
+        let mut actual = vec![0; expected.len()];
+        std::io::Read::read_exact(&mut file, &mut actual).unwrap();
+        assert_eq!(
+            actual, expected,
+            "recovery changed Consumer evidence at {path:?}"
+        );
+    }
+}
+
+fn selected_ids(
+    consumer: &SearchProjectionConsumer,
+    permit: &hawdb_qos::RuntimePermit,
+) -> Vec<String> {
+    let pin = consumer.pin(permit).unwrap();
+    let output = pin
+        .query_vector_index(
+            permit,
+            Default::default(),
+            hawdb_search::VectorIndexQuery {
+                descriptor: consumer.vector_index_descriptor().unwrap().unwrap(),
+                mode: hawdb_core::VectorIndexQueryMode::AnnWindow,
+                eligible: None,
+                embedding: &[1.0, 0.0],
+                candidate_limit: NonZeroUsize::new(8).unwrap(),
+                top_k: NonZeroUsize::new(8).unwrap(),
+            },
+        )
+        .unwrap();
+    output.hits().iter().map(|hit| hit.id.clone()).collect()
 }
 
 fn mutate(database: &mut Database, graph: bool) {
@@ -111,16 +161,26 @@ fn assert_source(database: &mut Database, graph: bool, updated: bool) {
 }
 
 fn plans(snapshot: &PowerLossSnapshot, cut: Cut) -> (Vec<CrashPlan>, usize) {
+    plans_with_torn_writes(
+        snapshot,
+        matches!(cut, Cut::SelectorWrite).then_some("consumer-selector-"),
+    )
+}
+
+fn plans_with_torn_writes(
+    snapshot: &PowerLossSnapshot,
+    prefix: Option<&str>,
+) -> (Vec<CrashPlan>, usize) {
     let mut plans = publication_fault_plans(snapshot);
     let mut torn = 0;
-    if matches!(cut, Cut::SelectorWrite) {
+    if let Some(prefix) = prefix {
         let path = snapshot.observed_path().unwrap();
         assert!(path
             .file_name()
             .unwrap()
             .to_str()
             .unwrap()
-            .starts_with("consumer-selector-"));
+            .starts_with(prefix));
         let writes = snapshot.uncovered_writes(path).unwrap();
         assert!(!writes.is_empty());
         for write in writes {
@@ -147,6 +207,16 @@ fn plans(snapshot: &PowerLossSnapshot, cut: Cut) -> (Vec<CrashPlan>, usize) {
 }
 
 fn check(cut: Cut, durability: DurabilityPolicy, graph: bool) {
+    check_recovery(cut, durability, graph, None, false);
+}
+
+fn check_recovery(
+    cut: Cut,
+    durability: DurabilityPolicy,
+    graph: bool,
+    recovery: Option<recovery::Cut>,
+    lose_source: bool,
+) {
     let root = std::fs::canonicalize(std::env::temp_dir())
         .unwrap()
         .join(format!(
@@ -313,8 +383,24 @@ fn check(cut: Cut, durability: DurabilityPolicy, graph: bool) {
             "candidate directory cut must retain its sealed artifacts: {boundary:?}"
         );
     }
-    let (mut schedules, torn) = plans(&snapshot, cut);
-    assert_eq!(torn > 0, matches!(cut, Cut::SelectorWrite));
+    let (mut schedules, torn) = if recovery.is_some() {
+        // Each recovery case begins at one exact surviving physical image.
+        // The ordinary family above still evaluates every first-crash plan.
+        (
+            vec![if lose_source {
+                CrashPlan::default()
+            } else {
+                snapshot.persist_all_plan()
+            }],
+            0,
+        )
+    } else {
+        plans(&snapshot, cut)
+    };
+    assert_eq!(
+        torn > 0,
+        recovery.is_none() && matches!(cut, Cut::SelectorWrite)
+    );
     eprintln!("canonical-vector-power-v1 cut={cut:?} durability={durability:?} graph={graph} plans={} torn={torn}", schedules.len());
     let complete = acknowledged.crash(&CrashPlan::default()).unwrap();
     drop(old);
@@ -325,12 +411,14 @@ fn check(cut: Cut, durability: DurabilityPolicy, graph: bool) {
     drop(model);
     drop(project);
     drop(original);
-    schedules.push(CrashPlan::default());
+    if recovery.is_none() {
+        schedules.push(CrashPlan::default());
+    }
     let total = schedules.len();
     let mut seen = Vec::new();
     let mut replayed = 0;
     for (ordinal, plan) in schedules.into_iter().enumerate() {
-        let acknowledged = ordinal + 1 == total;
+        let acknowledged = recovery.is_none() && ordinal + 1 == total;
         let physical = if acknowledged {
             complete.clone()
         } else {
@@ -348,9 +436,24 @@ fn check(cut: Cut, durability: DurabilityPolicy, graph: bool) {
         seen.push(physical.clone());
         let image = MaterializedImage(root.clone());
         physical.materialize(&image).unwrap();
+        let recovery_project = recovery
+            .map(|_| ProjectFileDescriptors::acquire_with_capacity_limit(&root, 32, true).unwrap());
+        let recovery_model = recovery_project.as_ref().map(|project| {
+            PowerLossModel::resume_from_image(project, &physical, ImageLimits::default()).unwrap()
+        });
         replayed += 1;
         let mut recovered = open(&image, durability);
+        if let Some(recovery_cut) = recovery {
+            recovery_cut.observe(recovery_model.as_ref().unwrap(), matches!(cut, Cut::Link));
+        }
         let source_epoch = recovered.commit_epoch().unwrap();
+        if lose_source {
+            assert_eq!(durability, DurabilityPolicy::SyncOnCheckpoint);
+            assert_eq!(
+                source_epoch, c,
+                "the relaxed E transaction must actually be lost"
+            );
+        }
         assert!(
             source_epoch == c || source_epoch == e,
             "{cut:?}: source={source_epoch} C={c} E={e}"
@@ -371,23 +474,22 @@ fn check(cut: Cut, durability: DurabilityPolicy, graph: bool) {
                 panic!("{cut:?} {durability:?} graph={graph} plan={plan:?}: {error:?}")
             });
         let index_epoch = consumer.canonical_vector_source_epoch().unwrap().unwrap();
+        let receipt = consumer.projection().stationary_receipt().unwrap().clone();
+        let recovery_snapshot = recovery.map(|_| {
+            let model = recovery_model.as_ref().unwrap();
+            // Complete native traversal proves recovery has no unrecorded IO.
+            let acknowledged = model.capture().unwrap();
+            (
+                model
+                    .take_observation()
+                    .unwrap()
+                    .expect("recovery must execute the actual publication boundary"),
+                acknowledged,
+            )
+        });
         // Logical recovery must preserve every existing candidate byte. It
         // grants no right to adopt a partial producer or delete unknown files.
-        for path in physical.paths() {
-            let component = path
-                .components()
-                .next()
-                .unwrap()
-                .as_os_str()
-                .to_string_lossy();
-            if component == "projection" || component.starts_with("hawdb-generation-") {
-                assert_eq!(
-                    std::fs::read(root.join(path)).unwrap(),
-                    physical.bytes(path).unwrap(),
-                    "recovery changed Consumer evidence at {path:?}"
-                );
-            }
-        }
+        assert_preserved_artifacts(&root, &physical);
         assert!(index_epoch == c || index_epoch == e);
         assert!(index_epoch <= source_epoch);
         if acknowledged || matches!(cut, Cut::SelectorDirectory(ObservationBoundary::After)) {
@@ -411,31 +513,7 @@ fn check(cut: Cut, durability: DurabilityPolicy, graph: bool) {
         } else {
             vec![after[&4].clone(), after[&1].clone()]
         };
-        let pin = consumer.pin(&admission).unwrap();
-        let output = pin
-            .query_vector_index(
-                &admission,
-                Default::default(),
-                hawdb_search::VectorIndexQuery {
-                    descriptor: consumer.vector_index_descriptor().unwrap().unwrap(),
-                    mode: hawdb_core::VectorIndexQueryMode::AnnWindow,
-                    eligible: None,
-                    embedding: &[1.0, 0.0],
-                    candidate_limit: NonZeroUsize::new(8).unwrap(),
-                    top_k: NonZeroUsize::new(8).unwrap(),
-                },
-            )
-            .unwrap();
-        assert_eq!(
-            output
-                .hits()
-                .iter()
-                .map(|hit| hit.id.clone())
-                .collect::<Vec<_>>(),
-            expected
-        );
-        drop(output);
-        drop(pin);
+        assert_eq!(selected_ids(&consumer, &admission), expected);
         if index_epoch != source_epoch {
             assert!(matches!(
                 recovered
@@ -458,6 +536,30 @@ fn check(cut: Cut, durability: DurabilityPolicy, graph: bool) {
         );
         drop(consumer);
         drop(recovered);
+        drop(admission);
+        drop(recovery_model);
+        drop(recovery_project);
+        drop(image);
+        if let Some((snapshot, acknowledged)) = recovery_snapshot {
+            recovery.unwrap().replay(
+                &snapshot,
+                &acknowledged,
+                recovery::Context {
+                    root: &root,
+                    target: &target,
+                    id: &id,
+                    durability,
+                    graph,
+                    source_epoch,
+                    source_updated: source_epoch == e,
+                    index_epoch,
+                    expected: &expected,
+                    original: &physical,
+                    receipt: &receipt,
+                },
+                matches!(cut, Cut::Link),
+            );
+        }
     }
     eprintln!("canonical-vector-power-replay-v1 cut={cut:?} durability={durability:?} graph={graph} plans={total} distinct_reopens={replayed}");
 }

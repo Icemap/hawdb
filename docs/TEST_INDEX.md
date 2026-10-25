@@ -525,6 +525,24 @@ fresh catch-up. Selected E still requires its durable canonical source and full
 artifact verification. Source-bound logs report plan and distinct-reopen counts;
 these are known slow local replay families, not fuzz timeout durations. Replay
 with `cargo test --locked -p hawdb --all-features --lib vector_index_incremental_power_loss_`.
+Its `faults::recovery` family continues the actual recorder from a verified
+physical image, then interrupts recovery publication before intent, with an
+unselected intent and with a selected intent. Seven cuts cover the private
+recovery write, both file-sync boundaries, both rename boundaries and both root
+barriers, for SQL/custom nodes and both durability modes (84 combinations), plus
+28 relaxed-mode combinations where E is actually lost before intent or during
+private selector preparation. Recovery must preserve the surviving C source.
+Every lost, isolated, reordered and applicable torn plan is evaluated; identical
+physical states share reopening. Acknowledged recovery and two repeated reopens
+retain the original selection receipt, source/index epochs, candidate bytes and
+inode aliases. Stale C still refuses a current-E canonical binding. Native
+Windows artifact assertions check exact lengths and read only the expected
+bytes, including empty locked lease files, without an EOF probe.
+The storage `power_loss::tests::recovery_` family owns recorder continuation,
+bounded baseline import, hard-link identity, second torn writes, native drift,
+active-handle refusal and failed-attachment cleanup; the Storage unit/native
+owners run it. `resume_from_image` accepts only an exact native materialization
+before runtime open, and treats the surviving image as the new durable baseline.
 The root general `search_projection_graph_delta` family preserves the legacy
 batch API's live-node candidate contract before applying its operation ceiling.
 Materialized/out-of-core checkpoint reopens retain raw deleted native keys for
