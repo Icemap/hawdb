@@ -457,7 +457,8 @@ pub(super) fn run(arguments: &[String]) -> Result<()> {
     };
     let governor = RuntimeGovernor::detect(
         RuntimeGovernorConfig {
-            memory_budget_bytes: Some(1 << 30),
+            // Source staging, publication and retained read domains coexist.
+            memory_budget_bytes: Some(2 << 30),
             ..RuntimeGovernorConfig::shared_host()
         },
         IoConcurrencyBudget::new(2, 1),

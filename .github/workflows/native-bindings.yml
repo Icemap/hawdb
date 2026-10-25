@@ -512,7 +512,7 @@ jobs:
               name="canonical-100000-128-$mode-rate$rate"
               if /usr/bin/time -v -o "$evidence/$name.time.txt" \
                 "$CARGO_TARGET_DIR/debug/examples/filtered_diskann_qualification" canonical \
-                "$RUNNER_TEMP/$name" 100000 128 128 "$mode" "$rate" 16 \
+                "$RUNNER_TEMP/$name" 100000 128 320 "$mode" "$rate" 16 \
                 > "$evidence/$name.jsonl" 2> "$evidence/$name.stderr.txt"; then
                 printf '%s PASS\n' "$name" | tee -a "$evidence/status.txt"
               else

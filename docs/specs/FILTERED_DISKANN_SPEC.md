@@ -378,8 +378,8 @@ source, build, catch-up and language-query APIs as an embedded host. It is a
 manual fixture wrapper in the existing example. For example:
 
 ```sh
-cargo run --locked --all-features --example filtered_diskann_qualification -- canonical /tmp/hawdb-canonical-plain 100000 128 128 plain 10 16
-cargo run --locked --all-features --example filtered_diskann_qualification -- canonical /tmp/hawdb-canonical-lsg 100000 128 128 lsg 100 16
+cargo run --locked --all-features --example filtered_diskann_qualification -- canonical /tmp/hawdb-canonical-plain 100000 128 320 plain 10 16
+cargo run --locked --all-features --example filtered_diskann_qualification -- canonical /tmp/hawdb-canonical-lsg 100000 128 320 lsg 100 16
 ```
 
 The root must not already exist. Arguments after the root specify vector count,
@@ -392,6 +392,16 @@ Initial loading commits 1,000 rows per transaction and checkpoints every 10,000
 rows and at the end, before capturing C. This keeps the default bounded live-row
 overlay intact; each checkpoint's time is recorded separately. Both CRUD phases
 remain complete transactions after the retained baseline is captured.
+
+The build option funds canonical source staging and its resident producer,
+separately from publication and retained-reader admission. Source staging charges
+a conservative 2 KiB per document in addition to its ID and vector payload; the
+point-query workspace also needs funding. Thus the 100k-by-128 controls request
+320 MiB rather than 128 MiB. The graph kernel's smaller construction preflight
+does not qualify the full canonical source envelope. The fixture's host governor
+declares 2 GiB for coexisting staging, publication, query and old/current readers.
+These are explicit workload settings; library defaults, source accounting,
+resource-refusal cases and the query thresholds remain unchanged.
 
 At baseline, after both publications and after cold reopen, each of the five
 filter families compares ANN results with exhaustive canonical SQL distances,
