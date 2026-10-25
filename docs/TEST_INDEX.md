@@ -488,7 +488,11 @@ LSG, repeated keys, two-vector construction for four changed keys over a
 layers, old MVCC domains, no-op generation stability, empty/delete-only/reinsert,
 checkpoint/reopen, rollback and cancellation, feed/memory/key pre-encoding refusal
 and retry, explicit RaBitQ and Euclidean-zero behavior, schema/backend drift, host
-origin spoof refusal and terminal builder invalidation. The sibling
+origin spoof refusal and terminal builder invalidation. Incremental construction
+must complete with its single admitted I/O wave: nested writer phases borrow
+the synchronous phase instead of acquiring another governor slot. Search's
+`generation_writer::tests::io_waves` and Consumer producer family also verify
+wave waiting, cancellation, idle release and cleanup. The sibling
 `api::search_projection_consumer::tests::vector_index::incremental_recovery`
 family replays fixed-field SQL/custom-node publication faults before reservation,
 after preparation, before/after selector publication and its barrier, before

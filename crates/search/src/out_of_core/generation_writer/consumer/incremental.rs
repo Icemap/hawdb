@@ -35,12 +35,12 @@ impl SearchOutOfCoreGenerationWriter {
                 "incremental producer source epochs differ",
             ));
         }
-        let _io = task
-            .acquire_io_wave(NonZeroUsize::MIN)
-            .map_err(|error| HawDBError::Execution(error.to_string()))?
-            .ok_or_else(|| {
-                HawDBError::Execution("incremental vector producer requires I/O admission".into())
-            })?;
+        let mut memory = BuildMemory::new(&task)?;
+        memory.host_admission = Some(permit);
+        // Nested writer phases borrow this synchronous wave instead of waiting
+        // for a second slot while the producer already holds its only slot.
+        let scope = io_phase::Scope::acquire(&task, &memory)?;
+        let task = scope.task();
         if !publication.matches_source_directory(root)? {
             return Err(crate::vector_index::invalid(
                 "incremental producer changed native root",
@@ -50,8 +50,6 @@ impl SearchOutOfCoreGenerationWriter {
             .generation()
             .checked_add(1)
             .ok_or_else(|| crate::vector_index::invalid("vector generation overflow"))?;
-        let mut memory = BuildMemory::new(&task)?;
-        memory.host_admission = Some(permit);
         if discovery::active_identity(root, &memory, &task)?.is_some() {
             return Err(crate::vector_index::invalid(
                 "incremental private producer is not empty",
@@ -80,6 +78,7 @@ impl SearchOutOfCoreGenerationWriter {
         }
         previous.seed_vector_producer(publication, &memory, &task, generation_bytes.get())?;
         let mut writer = Self::create_with_memory(root, options, task, memory)?;
+        scope.install(&mut writer);
         writer.embedding_dimension = reader.manifest.embedding_dimension;
         writer.expected_active_generation = Some(reader.generation());
         writer.active_manifest_update = Some(ActiveManifestUpdate::Mutate {
