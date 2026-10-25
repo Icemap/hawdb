@@ -288,13 +288,21 @@ jobs:
           - os: windows-latest
             shard: head
           - os: windows-latest
-            shard: manifest
+            shard: manifest-every-write
+          - os: windows-latest
+            shard: manifest-checkpoint
           - os: windows-latest
             shard: root
           - os: windows-latest
             shard: wal-sync
           - os: windows-latest
             shard: remaining
+          - os: windows-latest
+            shard: consumer-publication
+          - os: windows-latest
+            shard: search-publication
+          - os: windows-latest
+            shard: branch-gc
           - os: windows-latest
             shard: abandonment
           - os: windows-latest
@@ -360,11 +368,25 @@ jobs:
             "$test_filter" -- "${test_arguments[@]}" 2>&1 \
             | tee branch-power-loss-results/test-output.txt
           test_status=$?
-          if [[ "$test_status" -eq 0 && ( "$POWER_LOSS_SHARD" == recovery-* || "$POWER_LOSS_SHARD" == full || "$POWER_LOSS_SHARD" == remaining ) ]]; then
-            python3 scripts/vector_recovery_cases.py "$POWER_LOSS_SHARD" \
+          if [[ "$test_status" -eq 0 ]]; then
+            recovery_scope=remaining
+            automatic_scope=remaining
+            case "$POWER_LOSS_SHARD" in
+              recovery-*|full) recovery_scope="$POWER_LOSS_SHARD" ;;
+            esac
+            case "$POWER_LOSS_SHARD" in
+              head|root|wal-sync|manifest-*|full) automatic_scope="$POWER_LOSS_SHARD" ;;
+            esac
+            python3 scripts/vector_recovery_cases.py "$recovery_scope" \
               --validate-log branch-power-loss-results/test-output.txt \
               > branch-power-loss-results/recovery-coverage.json
             test_status=$?
+            if [[ "$test_status" -eq 0 ]]; then
+              python3 scripts/automatic_checkpoint_cases.py "$automatic_scope" \
+                --validate-log branch-power-loss-results/test-output.txt \
+                > branch-power-loss-results/automatic-coverage.json
+              test_status=$?
+            fi
           fi
           set -e
           df -Pk . "${TMPDIR:-/tmp}" > branch-power-loss-results/disk-after.txt

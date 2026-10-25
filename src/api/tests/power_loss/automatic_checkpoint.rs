@@ -171,11 +171,18 @@ fn automatic_fault_plans(snapshot: &PowerLossSnapshot) -> Vec<CrashPlan> {
 }
 
 fn qualify_automatic_cut(cut: AutomaticCut) {
+    qualify_automatic_policies(
+        cut,
+        &[
+            DurabilityPolicy::SyncOnEveryWrite,
+            DurabilityPolicy::SyncOnCheckpoint,
+        ],
+    );
+}
+
+fn qualify_automatic_policies(cut: AutomaticCut, durabilities: &[DurabilityPolicy]) {
     let mut images = 0;
-    for durability in [
-        DurabilityPolicy::SyncOnEveryWrite,
-        DurabilityPolicy::SyncOnCheckpoint,
-    ] {
+    for &durability in durabilities {
         for boundary in [ObservationBoundary::Before, ObservationBoundary::After] {
             let mut fixture = Fixture::new();
             let mut database = Database::open_with_durability_and_config(
@@ -291,7 +298,7 @@ fn qualify_automatic_cut(cut: AutomaticCut) {
             }
         }
     }
-    println!("automatic {cut:?} qualification: {images} physical crash images, 3 generations, 2 durability modes, both boundaries");
+    println!("automatic {cut:?} qualification: {images} physical crash images, 3 generations, {} durability modes, both boundaries", durabilities.len());
 }
 
 #[test]
@@ -310,6 +317,17 @@ fn automatic_root_cuts_preserve_mixed_transactions_across_three_generations() {
 }
 
 #[test]
-fn automatic_manifest_cuts_preserve_mixed_transactions_across_three_generations() {
-    qualify_automatic_cut(AutomaticCut::Manifest);
+fn automatic_manifest_cuts_preserve_synchronous_transactions_across_three_generations() {
+    qualify_automatic_policies(
+        AutomaticCut::Manifest,
+        &[DurabilityPolicy::SyncOnEveryWrite],
+    );
+}
+
+#[test]
+fn automatic_manifest_cuts_preserve_relaxed_transactions_across_three_generations() {
+    qualify_automatic_policies(
+        AutomaticCut::Manifest,
+        &[DurabilityPolicy::SyncOnCheckpoint],
+    );
 }

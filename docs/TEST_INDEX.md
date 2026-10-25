@@ -596,6 +596,25 @@ in the former combined lane. This preserves their assertions and the existing
 separate native GC campaign. The remaining partition is checked against actual
 discovery, with automatic checkpoints, recovery and abandonment excluded only
 because required sibling shards own them.
+The subsequent Windows run at `60f8b596` also reached the unchanged 120-minute
+ceiling in the combined remaining selection and the automatic manifest case.
+Its consumer publication cases consumed about 31 minutes and its single
+deletion/GC case about 48 minutes before later cases could finish. Windows now
+owns consumer publication, Search projection publication and that GC case in
+separate required shards; the core remaining selection retains all other cases.
+The manifest test is split by `SyncOnEveryWrite` and `SyncOnCheckpoint`, retaining
+both observation boundaries and all three successive generations per policy.
+This changes four automatic Rust tests to five, and the complete root power-loss
+discovery from 48 to 49 cases, while preserving all 48 automatic
+`(cut, policy, boundary, generation)` configurations and the same physical plans.
+A runtime checker requires each automatic configuration exactly once and a
+positive physical-image completion summary for every selected test. Missing or
+duplicate records fail even after a successful Rust exit. Linux/macOS still run
+the entire family; Windows partitions must remain disjoint, exhaustive and
+nonempty against compiled discovery. Compiler profiles, assertions, fixtures,
+single-process concurrency and the 120-minute job ceilings are unchanged.
+Complete discovery, first-build logs, execution logs and coverage receipts remain
+artifacts; a partition change alone is not a final-head speedup claim.
 The storage `power_loss::tests::recovery_` family owns recorder continuation,
 bounded baseline import, hard-link identity, second torn writes, native drift,
 active-handle refusal and failed-attachment cleanup; the Storage unit/native
@@ -980,9 +999,12 @@ preserves worker errors separately from a missing callback or timeout.
 
 ### Windows power-loss partitions
 
-The weekly Branch Power Loss lane runs each of the four automatic checkpoint cut
-families in a separate Windows job, plus a disjoint remainder. Linux/macOS retain
-the full suite. `scripts/branch-power-loss-shard.py` derives selected tests from
+The weekly Branch Power Loss lane gives head, root and WAL-sync automatic cuts
+one Windows job each, and manifest cuts one job per durability policy. Consumer
+publication, Search projection publication, deletion/GC, abandonment and vector
+recovery have required sibling selections, plus a disjoint core remainder.
+Linux/macOS retain the full 49-case suite.
+`scripts/branch-power-loss-shard.py` derives selected tests from
 Cargo's actual discovery and rejects missing/new automatic families, duplicates,
 empty partitions or an incomplete union. Each artifact records complete discovery,
 all partition membership and the selected test names. Recorder and configuration
@@ -991,7 +1013,10 @@ checked-profile settings, `--test-threads=1` isolation and 120-minute job ceilin
 are unchanged. This trades repeated build/setup cost for completing independent
 fault groups before the job ceiling. Source `83eab403` run 39959116101 stopped
 inside the automatic manifest case at 120 minutes; that is incomplete coverage,
-not a 120-minute fuzz campaign. Final-source runtime durations remain required.
+not a 120-minute fuzz campaign. Source `60f8b596` again reached that ceiling after
+starting 10 of 12 manifest configurations. The policy split retains all twelve;
+runtime coverage also checks all 48 configurations across the four cut families
+and positive completion summaries. Final-source runtime durations remain required.
 
 `//:power_loss_partition_script_test` and the platform job's preflight check
 exercise actual selector output under simulated Windows default CRLF translation,
