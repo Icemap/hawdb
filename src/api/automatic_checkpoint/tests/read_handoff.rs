@@ -302,9 +302,7 @@ fn concurrent_read_only_traffic_adopts_and_releases_checkpoint_admission() {
 
 #[test]
 fn invalid_read_handoff_fails_closed_and_preserves_disk_authority() {
-    let (fixture, mut db, control, resume, handoff) = fixture_with_seal_pause();
-    resume.send(()).unwrap();
-    wait_for_handoff_pause(&control, &handoff);
+    // Unrelated persistent setup must not consume the owner's bounded pause.
     let other_fixture = Fixture::new();
     let mut other = Database::open(&other_fixture.0).unwrap();
     other.query("CREATE (:Memory {id: 'other'})").unwrap();
@@ -315,6 +313,9 @@ fn invalid_read_handoff_fails_closed_and_preserves_disk_authority() {
         .store
         .checkpoint_source_identity()
         .unwrap();
+    let (fixture, mut db, control, resume, handoff) = fixture_with_seal_pause();
+    resume.send(()).unwrap();
+    wait_for_handoff_pause(&control, &handoff);
     control.lock().unwrap().selected.as_mut().unwrap().expected = wrong_identity;
     let error = db.query("MATCH (n:Memory) RETURN n.id").unwrap_err();
     assert!(matches!(error, HawDBError::StorageIntegrity(_)));
