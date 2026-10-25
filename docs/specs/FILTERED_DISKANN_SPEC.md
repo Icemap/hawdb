@@ -290,6 +290,18 @@ and resource refusals cannot advance a partial source cursor. A rebuild remains
 explicit. The same algorithm options must accompany maintenance; they cannot
 change the persisted definition.
 
+Canonical SQL point mutations derive their hydration working set from complete
+primary-key equalities, including conjunctions with residual predicates. Every
+primary-key column must be bound, in schema order; residual predicates still
+execute normally. OR, NOT, NULL equality, non-key filters and incomplete composite
+keys retain the existing scan path and resource refusal. Destination-key and
+constraint closure remains mandatory for primary-key changes. This bounds the
+working set of ordinary point CRUD by its distinct keys without raising the
+100,000-entry WAL replay-access budget. The WAL encoding, mutation execution and
+exact replay-access comparison retain their existing contracts, including
+previously recorded full-scan access sets. This working-set bound does not imply
+that all transaction execution or generation maintenance is O(K).
+
 Root regressions cover SQL and custom node-table CRUD, repeated-key reduction,
 optional LSG, exact/filtered-ANN language parity across old/new layers, graph
 byte/inode reuse, a two-vector graph for four changed keys over a 32-vector base,
@@ -472,6 +484,16 @@ across sixteen queries, versus 41,111 at width 128; this is a quality/cost
 tradeoff, not a latency improvement. These plain in-memory diagnostic results
 do not qualify LSG or the complete canonical CRUD/MVCC lifecycle; the unchanged
 four-control 100k CI protocol must be rerun on the repaired source.
+
+The subsequent four-control run completed all baseline queries with the repaired
+navigation: minimum family mean recall was 96.25% for plain and 98.75% for LSG.
+Every control then refused its first mixed CRUD transaction because primary-key
+UPDATE/DELETE hydration still scanned the whole 100k table and exhausted the
+unchanged WAL replay-access entry budget. The live hydration planner now derives
+complete primary-key point reads as described above. A 16-row canonical-page
+regression changes three keys under a four-entry budget and checks source-view,
+WAL replay and constraint parity. This bounded regression does not qualify the
+complete 100k lifecycle; all four controls still require a final-source rerun.
 
 The Native Bindings workflow exposes an explicit `canonical_vector_lifecycle`
 dispatch. It runs the four 100k-by-128 plain/LSG and 1%/10% changed-key controls

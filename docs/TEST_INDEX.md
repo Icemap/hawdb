@@ -465,6 +465,18 @@ existing test deadlines and repository compiler profiles are unchanged; no fuzz
 tool is registered. Replay and resource-evidence limits are documented in
 [the canonical lifecycle protocol](specs/FILTERED_DISKANN_SPEC.md#manual-canonical-lifecycle-qualification).
 
+Canonical SQL point CRUD is additionally covered by Storage's
+`relational_row_workspace::tests::primary_key_mutations` in the existing
+`//crates/storage:hawdb_storage_tests` / Prow crates owner. Replay with
+`cargo test --locked -p hawdb-storage --all-features --lib relational_row_workspace::tests -- --test-threads=1`.
+A native 16-row fixture changes three keys under a four-entry budget, compares
+captures with the materialized oracle, encodes/decodes WAL, replays the exact
+working set and checks unchanged old views. Residual NULL/contradictory/missing
+key predicates, rekey destination closure/collision, complete composite-key
+ordering, scan-only refusal, and legacy full-scan WAL recovery with strict drift
+rejection are separate controls. Existing differential smoke and manual campaign
+ownership, profiles and CI lanes remain unchanged.
+
 The out-of-core DiskANN family also checks candidate-window propagation on a
 512-vector fixture: independent navigation coverage, default output window, explicit rank window, configured
 ceiling, excess-window refusal and unchanged explicit exhaustive behavior.

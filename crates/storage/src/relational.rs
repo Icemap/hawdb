@@ -4603,10 +4603,20 @@ impl RelationalState {
                         }
                     }));
                 }
-                RelationalWrite::DeleteWhere { table, .. }
-                | RelationalWrite::UpdateWhere { table, .. } => {
-                    self.sparse_plan_table_schema(table)?;
-                    scan_tables.insert(table.clone());
+                RelationalWrite::DeleteWhere { table, predicate }
+                | RelationalWrite::UpdateWhere {
+                    table, predicate, ..
+                } => {
+                    let schema = self.sparse_plan_table_schema(table)?;
+                    validate_predicate(schema, predicate)?;
+                    if let Some(primary_key) = mutation_primary_key(schema, predicate) {
+                        point_access.insert(RelationalReplayAccess {
+                            table: table.clone(),
+                            primary_key,
+                        });
+                    } else {
+                        scan_tables.insert(table.clone());
+                    }
                 }
                 RelationalWrite::CreateTable(_)
                 | RelationalWrite::AddColumn { .. }
@@ -6099,6 +6109,39 @@ pub enum RelationalPredicate {
         column: String,
         negated: bool,
     },
+}
+
+/// Every matching row must have this complete key. Residual predicates remain
+/// on the write and are evaluated normally against the hydrated row.
+fn mutation_primary_key(
+    schema: &RelationalTableSchema,
+    predicate: &RelationalPredicate,
+) -> Option<RelationalKey> {
+    fn equality<'a>(
+        predicate: &'a RelationalPredicate,
+        column: &str,
+    ) -> Option<&'a RelationalValue> {
+        match predicate {
+            RelationalPredicate::And(left, right) => {
+                equality(left, column).or_else(|| equality(right, column))
+            }
+            RelationalPredicate::Compare {
+                column: name,
+                op: RelationalComparisonOp::Eq,
+                value,
+            } if name == column && !matches!(value, RelationalValue::Null) => Some(value),
+            _ => None,
+        }
+    }
+    if schema.primary_key.is_empty() {
+        return None;
+    }
+    schema
+        .primary_key
+        .iter()
+        .map(|column| equality(predicate, column).cloned())
+        .collect::<Option<Vec<_>>>()
+        .map(RelationalKey)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
