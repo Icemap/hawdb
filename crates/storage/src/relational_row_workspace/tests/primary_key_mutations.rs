@@ -33,6 +33,211 @@ fn policy() -> RelationalSparseLiveHydrationOptions {
 }
 
 #[test]
+fn resident_primary_key_mutations_fit_the_same_bounded_replay_budget() {
+    let fixture = Fixture::with_foreign_keys(8, false);
+    let transaction = RelationalTransaction {
+        writes: vec![
+            update(equals("id", RelationalValue::BigInt(3))),
+            RelationalWrite::DeleteWhere {
+                table: "nodes".into(),
+                predicate: equals("id", RelationalValue::BigInt(5)),
+            },
+            update(equals("id", RelationalValue::BigInt(7))),
+        ],
+    };
+    let policy = policy();
+    let (next, indexes, rows, access) = fixture
+        .materialized
+        .stage_transaction_with_index_row_and_replay_access(
+            transaction.clone(),
+            policy.mutation_limits,
+            policy.overflow_config,
+            policy.index_capture_limits,
+            policy.row_capture_limits,
+        )
+        .expect("resident point CRUD must not capture unrelated rows");
+    assert_eq!(access.entries().len(), 3);
+    let (recovered, recovered_indexes, recovered_rows) = fixture
+        .materialized
+        .stage_transaction_for_authoritative_recovery_with_replay_access(
+            transaction,
+            policy.mutation_limits,
+            policy.overflow_config,
+            policy.index_capture_limits,
+            policy.row_capture_limits,
+            &access,
+        )
+        .expect("bounded resident WAL also recovers through authoritative indexes");
+    assert_eq!(recovered_indexes, indexes);
+    assert_eq!(recovered_rows, rows);
+    assert_eq!(recovered.row_count("nodes"), next.row_count("nodes"));
+    let original =
+        RelationalTransactionRowView::new(Arc::clone(&fixture.view), policy.row_capture_limits);
+    let successor = original.stage_advance(rows).unwrap();
+    fixture.assert_rows(Arc::clone(original.read_view()), &fixture.materialized);
+    fixture.assert_rows(Arc::clone(successor.read_view()), &next);
+}
+
+#[test]
+fn resident_recovery_preserves_legacy_and_point_access_with_transient_and_rekeyed_rows() {
+    let fixture = Fixture::with_foreign_keys(8, false);
+    let mut policy = options(false);
+    let transaction = RelationalTransaction {
+        writes: vec![
+            RelationalWrite::DeleteByPrimaryKey {
+                table: "nodes".into(),
+                keys: vec![RelationalKey(vec![RelationalValue::BigInt(1)])],
+            },
+            RelationalWrite::UpdateWhere {
+                table: "nodes".into(),
+                assignments: vec![RelationalUpdateAssignment {
+                    column: "id".into(),
+                    value: RelationalUpdateValue::Value(RelationalValue::BigInt(23)),
+                }],
+                predicate: equals("id", RelationalValue::BigInt(3)),
+            },
+            RelationalWrite::Insert {
+                table: "nodes".into(),
+                rows: vec![row(31, None, 0)],
+                mode: RelationalInsertMode::Error,
+            },
+            update(equals("id", RelationalValue::BigInt(31))),
+            RelationalWrite::DeleteWhere {
+                table: "nodes".into(),
+                predicate: equals("id", RelationalValue::BigInt(31)),
+            },
+            update(equals("id", RelationalValue::BigInt(90))),
+        ],
+    };
+    let (_, legacy_indexes, legacy_rows, legacy_access) = fixture
+        .materialized
+        .stage_transaction_with_authoritative_replay_access(
+            transaction.clone(),
+            policy.mutation_limits,
+            policy.overflow_config,
+            policy.index_capture_limits,
+            policy.row_capture_limits,
+            &MaterializedIndex(&fixture.materialized),
+        )
+        .unwrap();
+    assert_eq!(legacy_access.entries().len(), 18);
+    policy.row_capture_limits.max_entries = NonZeroUsize::new(4).unwrap();
+    let (_, indexes, rows, access) = fixture
+        .materialized
+        .stage_transaction_with_index_row_and_replay_access(
+            transaction.clone(),
+            policy.mutation_limits,
+            policy.overflow_config,
+            policy.index_capture_limits,
+            policy.row_capture_limits,
+        )
+        .unwrap();
+    assert_eq!(access.entries().len(), 4);
+    assert_eq!(indexes, legacy_indexes);
+    assert_eq!(rows, legacy_rows);
+    for expected_access in [&access, &legacy_access] {
+        let capture_limits = if expected_access == &legacy_access {
+            options(false).row_capture_limits
+        } else {
+            policy.row_capture_limits
+        };
+        let (_, recovered_indexes, recovered_rows) = fixture
+            .materialized
+            .stage_transaction_for_authoritative_recovery_with_replay_access(
+                transaction.clone(),
+                policy.mutation_limits,
+                policy.overflow_config,
+                policy.index_capture_limits,
+                capture_limits,
+                expected_access,
+            )
+            .unwrap();
+        assert_eq!(recovered_indexes, indexes);
+        assert_eq!(recovered_rows, rows);
+    }
+    let mut extra = access.entries().to_vec();
+    extra.push(crate::relational::RelationalReplayAccess {
+        table: "nodes".into(),
+        primary_key: RelationalKey(vec![RelationalValue::BigInt(9)]),
+    });
+    extra.sort();
+    let extra = RelationalReplayAccessSet::from_decoded_entries(extra).unwrap();
+    let error = fixture
+        .materialized
+        .stage_transaction_for_authoritative_recovery_with_replay_access(
+            transaction,
+            policy.mutation_limits,
+            policy.overflow_config,
+            policy.index_capture_limits,
+            options(false).row_capture_limits,
+            &extra,
+        )
+        .unwrap_err();
+    assert!(matches!(error, RelationalError::Corruption(_)), "{error:?}");
+}
+
+#[test]
+fn resident_primary_key_residuals_match_the_legacy_scan_oracle() {
+    let fixture = Fixture::with_foreign_keys(8, false);
+    let policy = options(false);
+    for predicate in [
+        RelationalPredicate::And(
+            Box::new(equals("id", RelationalValue::BigInt(3))),
+            Box::new(RelationalPredicate::IsNull {
+                column: "parent".into(),
+                negated: false,
+            }),
+        ),
+        RelationalPredicate::And(
+            Box::new(equals("id", RelationalValue::BigInt(3))),
+            Box::new(equals("id", RelationalValue::BigInt(5))),
+        ),
+        equals("id", RelationalValue::BigInt(90)),
+        equals("id", RelationalValue::Null),
+        RelationalPredicate::Or(
+            Box::new(equals("id", RelationalValue::BigInt(3))),
+            Box::new(equals("id", RelationalValue::BigInt(5))),
+        ),
+        RelationalPredicate::Not(Box::new(equals("id", RelationalValue::BigInt(3)))),
+    ] {
+        for write in [
+            update(predicate.clone()),
+            RelationalWrite::DeleteWhere {
+                table: "nodes".into(),
+                predicate,
+            },
+        ] {
+            let transaction = RelationalTransaction {
+                writes: vec![write],
+            };
+            let (_, indexes, rows, _) = fixture
+                .materialized
+                .stage_transaction_with_index_row_and_replay_access(
+                    transaction.clone(),
+                    policy.mutation_limits,
+                    policy.overflow_config,
+                    policy.index_capture_limits,
+                    policy.row_capture_limits,
+                )
+                .unwrap();
+            let (_, legacy_indexes, legacy_rows, _) = fixture
+                .materialized
+                .stage_transaction_with_authoritative_replay_access(
+                    transaction,
+                    policy.mutation_limits,
+                    policy.overflow_config,
+                    policy.index_capture_limits,
+                    policy.row_capture_limits,
+                    &MaterializedIndex(&fixture.materialized),
+                )
+                .unwrap();
+            assert_eq!(indexes, legacy_indexes);
+            assert_eq!(rows, legacy_rows);
+        }
+    }
+}
+
+#[test]
 fn primary_key_mutations_bound_hydration_and_replay_without_changing_old_views() {
     let fixture = Fixture::with_foreign_keys(8, false);
     let transaction = RelationalTransaction {

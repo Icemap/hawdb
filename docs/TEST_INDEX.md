@@ -476,6 +476,11 @@ key predicates, rekey destination closure/collision, complete composite-key
 ordering, scan-only refusal, and legacy full-scan WAL recovery with strict drift
 rejection are separate controls. Existing differential smoke and manual campaign
 ownership, profiles and CI lanes remain unchanged.
+The same owner also checks retained-row Materialized CRUD under that four-entry
+budget, compares residual UPDATE/DELETE captures with the legacy scan oracle,
+and recovers both access shapes with transient rows and primary-key changes.
+Surplus access entries must fail exact replay validation. Storage's existing
+checkpoint-admission cases also exercise controlled point-key allocation.
 
 The out-of-core DiskANN family also checks candidate-window propagation on a
 512-vector fixture: independent navigation coverage, default output window, explicit rank window, configured

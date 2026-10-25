@@ -297,9 +297,14 @@ execute normally. OR, NOT, NULL equality, non-key filters and incomplete composi
 keys retain the existing scan path and resource refusal. Destination-key and
 constraint closure remains mandatory for primary-key changes. This bounds the
 working set of ordinary point CRUD by its distinct keys without raising the
-100,000-entry WAL replay-access budget. The WAL encoding, mutation execution and
-exact replay-access comparison retain their existing contracts, including
-previously recorded full-scan access sets. This working-set bound does not imply
+100,000-entry WAL replay-access budget. Retained-row Materialized UPDATE/DELETE
+also use the complete key to select candidates and evaluate the full predicate.
+The WAL encoding and exact replay-access comparison retain their existing
+contracts. Resident authoritative recovery distinguishes previously recorded
+full scans by coverage of the original table keys, including keys removed
+earlier in the transaction; it accepts a point-access record only when execution
+reproduces that record's complete access set. Sparse recovery keeps its existing
+authenticated workspace semantics. This working-set bound does not imply
 that all transaction execution or generation maintenance is O(K).
 
 Root regressions cover SQL and custom node-table CRUD, repeated-key reduction,
