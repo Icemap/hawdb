@@ -23,6 +23,9 @@ fn captured_link_reuses_the_original_inode_after_both_directory_labels_move() {
     fs::write(source_path.join("graph"), b"original immutable graph").unwrap();
     let source = fixture.capture(&source_path);
     let target = fixture.capture(&target_path);
+    // Windows can refuse moving a directory with an open descendant. Capture
+    // the file through the retained directory after replacing both labels.
+    #[cfg(not(windows))]
     let original = source.open_child(&context, "graph").unwrap();
     fs::rename(&source_path, fixture.root.join("moved-source")).unwrap();
     fs::rename(&target_path, fixture.root.join("moved-target")).unwrap();
@@ -30,6 +33,11 @@ fn captured_link_reuses_the_original_inode_after_both_directory_labels_move() {
     fs::create_dir(&target_path).unwrap();
     fs::write(source_path.join("graph"), b"foreign source").unwrap();
     fs::write(target_path.join("graph"), b"foreign target").unwrap();
+    #[cfg(windows)]
+    let original = source.open_child(&context, "graph").unwrap();
+    assert!(!original
+        .matches_native_path(source_path.join("graph"))
+        .unwrap());
     source
         .link_child_new(&context, "graph", &original, &target, "graph")
         .unwrap();
@@ -63,6 +71,65 @@ fn captured_link_reuses_the_original_inode_after_both_directory_labels_move() {
         fs::read(fixture.root.join("moved-target/graph")).unwrap(),
         b"original immutable graph"
     );
+    drop((original, target, source));
+    assert_eq!(fixture.project.metrics().open, 0);
+}
+
+#[cfg(windows)]
+#[test]
+fn captured_link_retains_authority_when_an_open_file_prevents_ancestor_rename() {
+    let fixture = Fixture::new(16);
+    let context = fixture.project.io_context();
+    let source_path = fixture.root.join("source");
+    let moved = fixture.root.join("moved-source");
+    let target_path = fixture.root.join("target");
+    fs::create_dir(&source_path).unwrap();
+    fs::create_dir(&target_path).unwrap();
+    fs::write(source_path.join("graph"), b"original graph").unwrap();
+    let source = fixture.capture(&source_path);
+    let target = fixture.capture(&target_path);
+    let original = source.open_child(&context, "graph").unwrap();
+    let renamed = match fs::rename(&source_path, &moved) {
+        Ok(()) => {
+            assert!(!source_path.exists());
+            fs::create_dir(&source_path).unwrap();
+            fs::write(source_path.join("graph"), b"foreign source").unwrap();
+            true
+        }
+        Err(error) => {
+            assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
+            assert!(source_path.is_dir());
+            assert!(!moved.exists());
+            false
+        }
+    };
+    source
+        .link_child_new(&context, "graph", &original, &target, "link")
+        .unwrap();
+    assert!(target
+        .matches_child_file(&context, "link", &original)
+        .unwrap());
+    assert_eq!(
+        fs::read(target_path.join("link")).unwrap(),
+        b"original graph"
+    );
+    source.remove_child(&context, "graph").unwrap();
+    assert!(target
+        .matches_child_file(&context, "link", &original)
+        .unwrap());
+    assert_eq!(
+        fs::read(target_path.join("link")).unwrap(),
+        b"original graph"
+    );
+    if renamed {
+        assert_eq!(
+            fs::read(source_path.join("graph")).unwrap(),
+            b"foreign source"
+        );
+        assert!(!moved.join("graph").exists());
+    } else {
+        assert!(!source_path.join("graph").exists());
+    }
     drop((original, target, source));
     assert_eq!(fixture.project.metrics().open, 0);
 }

@@ -83,6 +83,7 @@ fn captured_link_records_the_held_directories_and_requires_a_real_target_barrier
         let source = fixture.source("source");
         let target = fixture.source("target");
         let context = fixture.project.io_context();
+        #[cfg(not(windows))]
         let file = source.open_child(&context, "graph").unwrap();
         fs::rename(
             fixture.root.join("source"),
@@ -96,6 +97,13 @@ fn captured_link_records_the_held_directories_and_requires_a_real_target_barrier
         .unwrap();
         fixture.write("source/graph", b"foreign source");
         fixture.write("target/link", b"foreign target");
+        // Windows moves the captured directory before opening its descendant;
+        // the retained directory must still resolve the original file.
+        #[cfg(windows)]
+        let file = source.open_child(&context, "graph").unwrap();
+        assert!(!file
+            .matches_native_path(fixture.root.join("source/graph"))
+            .unwrap());
         fixture.observe(IoEvent::HardLink, "target/link", boundary);
         source
             .link_child_new(&context, "graph", &file, &target, "link")
