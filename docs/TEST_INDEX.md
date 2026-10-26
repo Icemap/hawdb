@@ -425,6 +425,18 @@ manual execution lane, fixtures, exact checks or strict acceptance thresholds.
 
 ## Search feature and lifecycle matrix
 
+The pinned dictionary loader's `cjk_dictionary::tests` family verifies the
+complete upstream byte digest and 48 upstream token/offset fixtures with HMM
+enabled and disabled. It remains in every existing Search unit profile; the
+standalone `hawdb_search_analyzer_workspace_allocation_tests` target imports the
+same loader and retains its complete scratch/TLS qualification. Bazel declares
+the compressed resource as compile data, including direct-source unit profiles.
+Replay with `cargo test --locked -p hawdb-search --lib cjk_dictionary` or
+`bazel test //crates/search:hawdb_search_tests --test_arg=cjk_dictionary`.
+The [unregistered component probe](benchmarks/jieba_dictionary_loading_2026_10_27/README.md)
+compares the old and new loaders outside the production dependency graph. It
+must not be added to CI, a workspace, or a published library archive.
+
 See [SEARCH_FEATURE_TESTS.md](SEARCH_FEATURE_TESTS.md) for feature-specific
 expectations. The concrete profile set is default, acl, minimal, text_only,
 vector_only, background_only, text_vector, text_background and vector_background.
