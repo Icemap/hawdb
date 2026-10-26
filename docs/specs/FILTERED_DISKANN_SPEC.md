@@ -366,20 +366,23 @@ The weekly Windows matrix keeps all eight branch-abandonment cases together
 in a separate serial shard. Discovery must prove that its sibling selections
 and the remaining partition form the complete, disjoint family.
 Windows also owns consumer publication, Search projection publication and the
-single deletion/GC case in separate required shards. Automatic manifest
-qualification has one exact case per durability policy; both boundaries and
-three generations remain in each. This retains all 48 automatic configurations
-across the four cuts, with five Rust cases instead of four. Complete root
-discovery is now 49 cases. Runtime coverage requires every configuration and
+single deletion/GC case in separate required shards. Automatic manifest, root
+and candidate-WAL-sync qualification each have one exact case per durability
+policy; both boundaries and three successive generations remain in each fixture.
+Head qualification retains both policies in one case. This retains all 48
+automatic configurations across the four cuts, with seven Rust cases. Complete
+root discovery is 51 cases. Runtime coverage requires every configuration and
 positive completion summaries exactly once; compiled discovery must prove that
 no sibling selection overlaps or omits a case. Every physical fault plan and
 assertion is retained under the same profile, serial execution and job ceilings.
 
 Whole-generation byte verification and admitted reopen still read unchanged
 artifacts. These cases prove changed-content construction and native reuse, not
-end-to-end K-proportional maintenance or a scale improvement. Representative
-update/delete-rate, resource and large canonical-build qualification remain required. The full
-requested default-engine/CRUD/MVCC objective is not complete.
+end-to-end K-proportional maintenance or a scale improvement. Update/delete-rate,
+resource and large canonical-build evidence belongs to the separate canonical
+lifecycle protocol below. Completing this delivery also requires the complete
+native/portable matrix and source-bound runtime recovery evidence; these bounded
+recovery cases alone do not close the requested default-engine/CRUD/MVCC contract.
 
 Default sampled recall now compares exhaustive results with the actual default
 DiskANN query strategy, including its minimum navigation window. Explicit
@@ -547,3 +550,33 @@ hash, including its own first-build cost; compilation and each lifecycle
 have separate process time and peak RSS measurements. Complete or partial JSON,
 stderr and exit outcomes survive failure. This benchmark dispatch includes no
 fuzz tool; recovery sharding is owned by the separate native qualification lanes.
+
+## Recorded canonical lifecycle evidence
+
+Revision `ad4eaab50d7fa5868ca7d689a1d589a70bd9d1f8`, tree
+`c8163a24afea7fe90452f56e388b9f552c016005`, completed all four fixed 100k-by-128
+controls in [run 40238969246](https://github.com/nowledge-co/hawdb/actions/runs/40238969246).
+Each control covers five filter families with sixteen samples, six qualifications
+of eighty cases, and eight hundred exact/ANN query records. The two retained-old
+qualifications preserve ordered baseline results at epoch 104 / generation 2.
+Current domains reach epoch 106 / generation 8, with identical ordered results
+after restore and cold reopen. Publication maps exactly 1,000 or 10,000 changed
+keys and reuses the original graph artifacts. The final rerank window remains
+128 and the family recall floor remains 95%.
+
+| Mode / changed-key rate | Minimum family recall | First compilation | Complete lifecycle | Peak runtime RSS, reported kbytes |
+| --- | --- | --- | --- | --- |
+| Plain / 1% | 96.25% | 168.60s | 2278.42s | 1,446,040 |
+| Plain / 10% | 96.25% | 164.55s | 2798.85s | 1,380,540 |
+| LSG / 1% | 98.75% | 203.78s | 3045.86s | 1,429,492 |
+| LSG / 10% | 98.75% | 192.12s | 3754.00s | 1,432,508 |
+
+All four artifacts bind their source/tree, toolchain, repository compiler profile
+and binary hash. Complete raw query records permit independently recomputing
+recall and checking backend/epoch/generation, old-pin results, publication counts
+and resource receipts. These measurements use the checked repository profile.
+Cold reopen closes handles without dropping OS caches; logical counters do not
+measure physical device I/O. They establish neither total O(K) maintenance nor
+production-corpus, release-performance or hardware power-loss qualification.
+Later CI results must retain their own revision and actual checkout identity;
+this recorded run must not be relabeled as execution on a later commit.
