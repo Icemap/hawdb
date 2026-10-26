@@ -317,8 +317,23 @@ the transaction context normally.
 notebooks, and other hosts that already hold their data. It answers the same
 `execute` / `execute_sql` calls through the same embedded admission path;
 `close()` discards everything and a later `open()` does not see it.
-`db.path` is `None` for in-memory handles. Unlike `sqlite3`, `":memory:"` is
-not an in-memory path: `hawdb.open(":memory:")` raises `ValueError`.
+`db.path` is `None` for in-memory handles. `open`, `Database` and `connect`
+share the same path validation: omit the path or pass `None` for an in-memory
+database; `""` and `":memory:"` raise `ValueError` (including read-only opens).
+Unlike `sqlite3`, `":memory:"` does not select an in-memory database.
+
+Durable paths accept strings and `os.PathLike[str]`. A bare relative name
+creates or opens a project in the current directory. `Database.path` and its
+`repr` report an absolute path without resolving symlinks, so the saved path
+can reopen the same project after `os.chdir`. A regular file is refused with
+a `StorageError` naming the path and is left untouched. Writable opens refuse
+known missing parents with `StorageError`; permission and other filesystem
+errors retain their underlying cause instead of reporting a missing parent.
+Read-only opens require an existing project. DB-API `connect` preserves these
+native exception types while also mapping them into its PEP 249 hierarchy.
+The parent check is advisory: removal between validation and engine open can
+still race with the engine's parent creation. It is not an atomic
+no-parent-creation guarantee.
 
 ```python
 db = hawdb.open()

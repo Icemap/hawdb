@@ -18,11 +18,11 @@ use hawdb::{
     DatabaseConfig, DatabaseReadTransaction, DurabilityPolicy, EmbeddedDeploymentProfile,
     HawDBEmbedded, HawDBEmbeddedOpenOptions, QueryOutput, Value,
 };
-use pyo3::exceptions::PyRuntimeError;
+use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PySequenceMethods};
 
-use crate::errors::{format_embedded_error, format_hawdb_error, Error};
+use crate::errors::{format_embedded_error, format_hawdb_error, StorageError};
 use crate::value::{
     parameter_sequence, py_dict_to_params, py_list_to_params, py_sequence_to_params, value_to_py,
 };
@@ -60,9 +60,7 @@ impl Database {
         };
         let Some(path) = path else {
             if read_only {
-                return Err(pyo3::exceptions::PyValueError::new_err(
-                    "read_only requires a database path",
-                ));
+                return Err(PyValueError::new_err("read_only requires a database path"));
             }
             return Ok(Self {
                 inner: Some(HawDBEmbedded::open_in_memory_with_config(with_read_limits(
@@ -71,6 +69,7 @@ impl Database {
                 path: None,
             });
         };
+        let path = prepare_database_path(&path, read_only)?;
         let inner = if read_only {
             let config = with_read_limits(DatabaseConfig {
                 read_only: true,
@@ -123,6 +122,55 @@ impl Database {
     }
 }
 
+fn prepare_database_path(path: &Path, read_only: bool) -> PyResult<PathBuf> {
+    if path.as_os_str().is_empty() {
+        return Err(PyValueError::new_err(
+            "database path is empty; pass no path for an in-memory database",
+        ));
+    }
+    if path == Path::new(":memory:") {
+        return Err(PyValueError::new_err(
+            "\":memory:\" is not supported; pass no path for an in-memory database",
+        ));
+    }
+    // Keep the handle's path reusable after chdir without resolving symlinks.
+    let path = std::path::absolute(path).map_err(|error| {
+        StorageError::new_err(format!(
+            "cannot resolve database path {}: {error}",
+            path.display()
+        ))
+    })?;
+    match path.metadata() {
+        Ok(metadata) if !metadata.is_dir() => {
+            return Err(StorageError::new_err(format!(
+                "database path is not a directory: {}",
+                path.display()
+            )));
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            // Refuse known missing parents before the engine can create them.
+            // Other lookup failures retain their cause in engine admission.
+            if !read_only
+                && let Some(parent) = path.parent()
+                && matches!(parent.try_exists(), Ok(false))
+            {
+                return Err(StorageError::new_err(format!(
+                    "parent directory does not exist: {}",
+                    parent.display()
+                )));
+            }
+        }
+        Err(error) => {
+            return Err(StorageError::new_err(format!(
+                "cannot inspect database path {}: {error}",
+                path.display()
+            )));
+        }
+        Ok(_) => {}
+    }
+    Ok(path)
+}
+
 #[pymethods]
 impl Database {
     #[new]
@@ -141,8 +189,8 @@ impl Database {
         )
     }
 
-    /// Project path this database is bound to, or None for an in-memory
-    /// database.
+    /// Absolute project path this database is bound to, without resolving
+    /// symlinks, or None for an in-memory database.
     #[getter]
     fn path(&self) -> Option<String> {
         self.path.as_ref().map(|path| path.display().to_string())
@@ -853,7 +901,8 @@ impl ReadTransaction {
 ///
 /// Called without `path` it returns an empty in-memory database: no project
 /// directory is created and closing the handle discards all data. Unlike
-/// sqlite3, `":memory:"` is not an in-memory path and raises ValueError.
+/// sqlite3, `":memory:"` is not an in-memory path and raises ValueError, as does
+/// an empty path. Filesystem path errors raise StorageError.
 /// `read_only=True` requires a path and opens an existing database read-only.
 /// Optional read budgets pass through to the engine; None keeps its defaults.
 #[pyfunction]
@@ -864,32 +913,6 @@ pub fn open(
     max_read_result_rows: Option<usize>,
     max_read_result_payload_bytes: Option<usize>,
 ) -> PyResult<Database> {
-    // Here ":memory:" would name a durable project directory, which is not
-    // what a caller used to sqlite3 or DuckDB expects.
-    if path.as_deref() == Some(Path::new(":memory:")) {
-        return Err(pyo3::exceptions::PyValueError::new_err(
-            "\":memory:\" is not supported; pass no path for an in-memory database",
-        ));
-    }
-    if let Some(path) = &path
-        && !read_only
-        && !path.exists()
-    {
-        // HawDB creates the database on open; surface a hint only when the
-        // parent directory is missing so a typo fails loudly instead of
-        // creating a stray directory tree. A bare file name such as
-        // "app.db" has an empty parent: the name resolves against the
-        // current directory, so there is no parent to check.
-        if let Some(parent) = path.parent()
-            && !parent.as_os_str().is_empty()
-            && !parent.exists()
-        {
-            return Err(Error::new_err(format!(
-                "parent directory does not exist: {}",
-                parent.display()
-            )));
-        }
-    }
     Database::open_impl(
         path,
         read_only,

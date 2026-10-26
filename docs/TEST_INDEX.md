@@ -645,11 +645,16 @@ construction. They cover a pending `PanicException` and a panicking release call
 may cross the C destructor; descriptors are still released and ordinary pending
 Python exceptions restored.
 
-Python `open` path checks (`bindings/python/tests/test_file.py` and
+Python `open` / `Database` / DB-API `connect` path checks (`bindings/python/tests/test_file.py` and
 `test_memory.py`) run in `//bindings/python:hawdb_python_tests` and the Python
-Bindings `pytest` step. A bare relative name opens or creates the project in
-the current directory, `":memory:"` is refused, and a missing parent is refused
-before any directory is created. No lane, feature or profile change.
+Bindings `pytest` step. They cover missing parents, read-only refusal, regular
+files and non-directory ancestors, `":memory:"` and empty paths (including an
+existing project as the current directory), with rejected opens leaving files
+and directories intact. POSIX permission cases preserve the underlying error
+and skip only when the user can bypass directory permissions. Native handles
+retain absolute paths across `chdir`, preserve symlink spelling on POSIX, and
+reopen persisted data. The parent check remains non-atomic with engine open.
+No lane, feature or profile change.
 
 The `registered_consumer_embedded` cases in
 `tests/support/embedded_consumer_coverage.rs` belong to `mvcc_staging_session`
