@@ -307,13 +307,35 @@ fn automatic_head_cuts_preserve_mixed_transactions_across_three_generations() {
 }
 
 #[test]
-fn automatic_wal_sync_cuts_preserve_mixed_transactions_across_three_generations() {
-    qualify_automatic_cut(AutomaticCut::CandidateWalSync);
+fn automatic_wal_sync_cuts_preserve_synchronous_transactions_across_three_generations() {
+    qualify_automatic_policies(
+        AutomaticCut::CandidateWalSync,
+        &[DurabilityPolicy::SyncOnEveryWrite],
+    );
 }
 
 #[test]
-fn automatic_root_cuts_preserve_mixed_transactions_across_three_generations() {
-    qualify_automatic_cut(AutomaticCut::SealedRoot);
+fn automatic_wal_sync_cuts_preserve_relaxed_transactions_across_three_generations() {
+    qualify_automatic_policies(
+        AutomaticCut::CandidateWalSync,
+        &[DurabilityPolicy::SyncOnCheckpoint],
+    );
+}
+
+#[test]
+fn automatic_root_cuts_preserve_synchronous_transactions_across_three_generations() {
+    qualify_automatic_policies(
+        AutomaticCut::SealedRoot,
+        &[DurabilityPolicy::SyncOnEveryWrite],
+    );
+}
+
+#[test]
+fn automatic_root_cuts_preserve_relaxed_transactions_across_three_generations() {
+    qualify_automatic_policies(
+        AutomaticCut::SealedRoot,
+        &[DurabilityPolicy::SyncOnCheckpoint],
+    );
 }
 
 #[test]

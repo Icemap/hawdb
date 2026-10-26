@@ -17,10 +17,18 @@ AUTOMATIC_CASES = {
     "head": "automatic_head_cuts_preserve_mixed_transactions_across_three_generations",
     "manifest-every-write": "automatic_manifest_cuts_preserve_synchronous_transactions_across_three_generations",
     "manifest-checkpoint": "automatic_manifest_cuts_preserve_relaxed_transactions_across_three_generations",
-    "root": "automatic_root_cuts_preserve_mixed_transactions_across_three_generations",
-    "wal-sync": "automatic_wal_sync_cuts_preserve_mixed_transactions_across_three_generations",
+    "root-every-write": "automatic_root_cuts_preserve_synchronous_transactions_across_three_generations",
+    "root-checkpoint": "automatic_root_cuts_preserve_relaxed_transactions_across_three_generations",
+    "wal-sync-every-write": "automatic_wal_sync_cuts_preserve_synchronous_transactions_across_three_generations",
+    "wal-sync-checkpoint": "automatic_wal_sync_cuts_preserve_relaxed_transactions_across_three_generations",
 }
-CUTS = {"head": "Head", "root": "SealedRoot", "wal-sync": "CandidateWalSync"}
+CUTS = {
+    "head": "Head",
+    "root-every-write": "SealedRoot",
+    "root-checkpoint": "SealedRoot",
+    "wal-sync-every-write": "CandidateWalSync",
+    "wal-sync-checkpoint": "CandidateWalSync",
+}
 POLICIES = ("SyncOnEveryWrite", "SyncOnCheckpoint")
 
 
@@ -33,9 +41,9 @@ def expected_combinations(shard):
         raise ValueError(f"unknown automatic checkpoint shard: {shard}")
     cut = CUTS.get(shard, "Manifest")
     policies = POLICIES
-    if shard == "manifest-every-write":
+    if shard.endswith("-every-write"):
         policies = POLICIES[:1]
-    elif shard == "manifest-checkpoint":
+    elif shard.endswith("-checkpoint"):
         policies = POLICIES[1:]
     return set(itertools.product([cut], policies, ["Before", "After"], range(1, 4)))
 

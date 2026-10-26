@@ -292,9 +292,13 @@ jobs:
           - os: windows-latest
             shard: manifest-checkpoint
           - os: windows-latest
-            shard: root
+            shard: root-every-write
           - os: windows-latest
-            shard: wal-sync
+            shard: root-checkpoint
+          - os: windows-latest
+            shard: wal-sync-every-write
+          - os: windows-latest
+            shard: wal-sync-checkpoint
           - os: windows-latest
             shard: remaining
           - os: windows-latest
@@ -375,7 +379,7 @@ jobs:
               recovery-*|full) recovery_scope="$POWER_LOSS_SHARD" ;;
             esac
             case "$POWER_LOSS_SHARD" in
-              head|root|wal-sync|manifest-*|full) automatic_scope="$POWER_LOSS_SHARD" ;;
+              head|root-*|wal-sync-*|manifest-*|full) automatic_scope="$POWER_LOSS_SHARD" ;;
             esac
             python3 scripts/vector_recovery_cases.py "$recovery_scope" \
               --validate-log branch-power-loss-results/test-output.txt \

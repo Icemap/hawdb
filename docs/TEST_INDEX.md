@@ -1053,11 +1053,11 @@ preserves worker errors separately from a missing callback or timeout.
 
 ### Windows power-loss partitions
 
-The weekly Branch Power Loss lane gives head, root and WAL-sync automatic cuts
-one Windows job each, and manifest cuts one job per durability policy. Consumer
+The weekly Branch Power Loss lane gives head cuts one Windows job, and root,
+WAL-sync and manifest cuts one job per durability policy. Consumer
 publication, Search projection publication, deletion/GC, abandonment and vector
 recovery have required sibling selections, plus a disjoint core remainder.
-Linux/macOS retain the full 49-case suite.
+Linux/macOS retain the full 51-case suite.
 `scripts/branch-power-loss-shard.py` derives selected tests from
 Cargo's actual discovery and rejects missing/new automatic families, duplicates,
 empty partitions or an incomplete union. Each artifact records complete discovery,
@@ -1071,6 +1071,19 @@ not a 120-minute fuzz campaign. Source `60f8b596` again reached that ceiling aft
 starting 10 of 12 manifest configurations. The policy split retains all twelve;
 runtime coverage also checks all 48 configurations across the four cut families
 and positive completion summaries. Final-source runtime durations remain required.
+
+At `ad4eaab5`, the separate Windows root and candidate-WAL-sync cases also
+exceeded the unchanged 120-minute ceiling. Complete source-bound job logs show
+roughly 15--18 minutes of compilation/setup before those cases; progress reached
+8/12 and 11/12 configuration starts respectively, without a Rust completion
+summary. These starts do not establish completed coverage. Root and WAL-sync now
+follow the manifest policy split, retaining both boundaries and all three
+successive generations in each policy fixture. The shared qualification body,
+physical plans, assertions, compiler profile and job ceilings are unchanged.
+Automatic Rust discovery grows from five to seven tests, and full power-loss
+discovery from 49 to 51; the runtime validator still requires exactly the same
+48 distinct configurations and positive completion summaries for every selected
+automatic test. Missing/duplicate configuration and completion controls remain.
 
 `//:power_loss_partition_script_test` and the platform job's preflight check
 exercise actual selector output under simulated Windows default CRLF translation,
