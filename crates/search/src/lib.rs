@@ -5384,10 +5384,10 @@ fn window_ranks(
         .collect()
 }
 
-fn top_ranked_ids(ranks: &BTreeMap<String, usize>, limit: usize) -> Vec<String> {
+fn top_ranked_ids<K: AsRef<str> + Ord>(ranks: &BTreeMap<K, usize>, limit: usize) -> Vec<String> {
     let mut ranked = ranks
         .iter()
-        .map(|(id, rank)| (id.clone(), *rank))
+        .map(|(id, rank)| (id.as_ref().to_owned(), *rank))
         .collect::<Vec<_>>();
     ranked.sort_by(|(left_id, left_rank), (right_id, right_rank)| {
         left_rank
@@ -5401,19 +5401,21 @@ fn top_ranked_ids(ranks: &BTreeMap<String, usize>, limit: usize) -> Vec<String> 
         .collect()
 }
 
-fn top_ranked_candidates(
-    ranks: &BTreeMap<String, usize>,
+fn top_ranked_candidates<K: AsRef<str> + Ord>(
+    ranks: &BTreeMap<K, usize>,
     scores: &BTreeMap<String, f64>,
     limit: usize,
 ) -> Vec<SearchRetrieverCandidate> {
     let mut ranked = ranks
         .iter()
         .filter_map(|(id, rank)| {
-            scores.get(id).map(|score| SearchRetrieverCandidate {
-                id: id.clone(),
-                rank: *rank,
-                score: *score,
-            })
+            scores
+                .get(id.as_ref())
+                .map(|score| SearchRetrieverCandidate {
+                    id: id.as_ref().to_owned(),
+                    rank: *rank,
+                    score: *score,
+                })
         })
         .collect::<Vec<_>>();
     ranked.sort_by(|left, right| {
