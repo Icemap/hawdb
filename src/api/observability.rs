@@ -53,6 +53,7 @@ pub(super) fn sql_statement_kind(statement: &SqlStatement) -> &'static str {
 
 pub(super) fn admit_append_explain(
     rows: Vec<executor::Row>,
+    analyze: bool,
     config: &super::DatabaseConfig,
     options: QueryStreamOptions,
     task_context: Option<&hawdb_core::RuntimeTaskContext>,
@@ -67,9 +68,21 @@ pub(super) fn admit_append_explain(
         hawdb_executor::QueryMemoryLedger::for_query(&config.execution_memory, task_context)?;
     let (result_budget, budget_option) =
         enforced_result_memory_budget_with_option(&config.execution_memory, task_context)?;
-    let mut output = hawdb_executor::QueryRowsBuilder::with_row_capacity(rows.len());
+    let schema = hawdb_relational::explain::sql_explain_schema(analyze);
+    let mut output = hawdb_executor::QueryRowsBuilder::with_schema(schema.clone(), 0);
     {
-        let mut consumer = |row| output.push_named_row(row);
+        let mut consumer = |mut row: executor::Row| {
+            if row.len() != schema.len() {
+                return Err(HawDBError::Execution(
+                    "SQL EXPLAIN row does not match its declared schema".into(),
+                ));
+            }
+            output.try_push_values(schema.columns().iter().map(|name| {
+                row.remove(name).ok_or_else(|| {
+                    HawDBError::Execution(format!("SQL EXPLAIN row has no column {name}"))
+                })
+            }))
+        };
         let mut accumulator = QueryOutputAccumulator::new_with_budget_option(
             OutputLimits {
                 max_rows: options.max_rows,
@@ -677,6 +690,7 @@ impl Database {
                 };
                 return admit_append_explain(
                     format_append_explain(&plan, report.as_ref()),
+                    plan.analyze,
                     &self.config,
                     QueryStreamOptions {
                         max_rows,

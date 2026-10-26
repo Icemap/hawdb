@@ -842,6 +842,7 @@ pub(super) fn execute_database_transaction_prepared_sql(
         };
         return observability::admit_append_explain(
             crate::relational_sql::format_append_explain(&plan, report.as_ref()),
+            plan.analyze,
             &runtime.config,
             QueryStreamOptions {
                 max_rows,

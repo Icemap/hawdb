@@ -146,6 +146,7 @@ mod relational_update_delete_outcomes;
 mod relationship_patterns;
 mod relationship_property_mutations;
 mod relationship_reads;
+mod result_column_order;
 mod runtime_capabilities;
 mod schema_indexes;
 mod schema_migrations;
