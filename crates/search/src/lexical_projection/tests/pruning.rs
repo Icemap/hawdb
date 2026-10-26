@@ -236,8 +236,10 @@ fn block_max_stream_seek_skips_intermediate_payloads() {
     fs::create_dir_all(&root).unwrap();
     let config = pruning_config(4);
     let reader = pruning_corpus_reader(&root, config);
-    let mut exhaustive = TermPostingStream::new(&reader, "storage");
-    let mut pruned = TermPostingStream::new(&reader, "storage");
+    let exhaustive_buffer = RefCell::new(PostingReadBuffer::default());
+    let pruned_buffer = RefCell::new(PostingReadBuffer::default());
+    let mut exhaustive = TermPostingStream::new(&reader, "storage", &exhaustive_buffer);
+    let mut pruned = TermPostingStream::new(&reader, "storage", &pruned_buffer);
     assert_eq!(pruned.peek_ordinal().unwrap(), Some(0));
     pruned.skip_to(400).unwrap();
     while exhaustive

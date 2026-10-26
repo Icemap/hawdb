@@ -36,7 +36,8 @@ fn lexical_query_posting_allocations_grow_with_buffers_not_entries() {
         let root = OwnedDirectory::new("posting-allocations");
         let (reader, _) = allocation_fixture(&root, count, "");
         let blocks = reader.posting_blocks("needle").count();
-        let mut stream = TermPostingStream::new(&reader, "needle");
+        let encoded = RefCell::new(PostingReadBuffer::default());
+        let mut stream = TermPostingStream::new(&reader, "needle", &encoded);
         let (visited, allocations) = count_allocations(|| {
             let mut visited = 0;
             while let Some(ordinal) = stream.peek_ordinal().unwrap() {
