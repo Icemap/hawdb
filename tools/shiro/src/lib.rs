@@ -2213,6 +2213,7 @@ fn error_class(error: &HawDBError) -> &'static str {
         | HawDBError::BranchReclamationBlocked { .. } => "storage",
         HawDBError::BranchEvidenceBudgetExceeded { .. } => "execution",
         HawDBError::CapabilityUnavailable { .. } => "capability_unavailable",
+        HawDBError::UnsupportedStorageFormat(_) => "unsupported_storage_format",
     }
 }
 
