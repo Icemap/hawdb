@@ -684,8 +684,7 @@ pub fn decode_relational_checkpoint_with_index_load(
     )
 }
 
-/// Check a selected checkpoint envelope without materializing its rows.
-/// Canonical schema manifests are validated separately before recovery writes.
+/// Check a selected checkpoint's envelope and schemas without retaining its rows.
 pub(crate) fn validate_relational_checkpoint_file_format(
     path: &Path,
 ) -> Result<(), RelationalError> {
@@ -699,9 +698,33 @@ pub(crate) fn validate_relational_checkpoint_file_format(
         ));
     }
     let (_, input) = FileDecodeInput::open_checkpoint(path, length, limits)?;
-    let version = input.version;
-    input.verify_remaining()?;
-    validate_codec_version(version)
+    if let Err(error) = validate_codec_version(input.version) {
+        input.verify_remaining()?;
+        return Err(error);
+    }
+    let mut decoder = Decoder::new(input, limits, false);
+    let table_count = decoder.count(limits.max_tables, "checkpoint tables")?;
+    for _ in 0..table_count {
+        let name = decoder.string()?;
+        let schema = match decoder.table_schema() {
+            Err(error @ RelationalError::UnsupportedFormat(_)) => {
+                decoder.input.verify_remaining()?;
+                return Err(error);
+            }
+            result => result?,
+        };
+        if name != schema.name {
+            return Err(RelationalError::Corruption(format!(
+                "checkpoint has a mismatched table {name}"
+            )));
+        }
+        let row_count = decoder.row_count()?;
+        for _ in 0..row_count {
+            // Reuse value decoding to reach the next schema without building row maps.
+            drop(decoder.row()?);
+        }
+    }
+    decoder.input.verify_remaining()
 }
 
 pub fn decode_relational_checkpoint_file(

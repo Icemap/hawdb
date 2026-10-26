@@ -78,16 +78,16 @@ the schema format, feature name, and numeric tag. Current relational schema tags
 This change does not add a feature bitmap or change any encoded bytes.
 
 Compatibility refusal is distinct from malformed data, invalid reserved fields,
-truncation, or checksum failure. Streaming checkpoint readers finish integrity
+truncation, or checksum failure in supported formats. Streaming checkpoint readers finish integrity
 verification before reporting an unsupported capability, retaining cooperative
 cancellation and I/O admission. A checksum-invalid envelope is still corruption.
 The Python binding uses `StorageError` with `kind="unsupported_storage_format"`,
 not `IntegrityError`; readiness reports retain the same distinct error class.
 
 Project metadata may open without admitting a branch's data. Data admission and
-Mem startup propagate compatibility refusal before publishing readiness. Branch
-admission checks selected checkpoint schemas and complete sealed/active WAL
-records before replacing runtime files. This adds a bounded validation pass over
+Mem startup propagate compatibility refusal before publishing readiness. Legacy and branch
+admission check selected checkpoint envelopes/schemas and complete sealed/active
+WAL records before cleanup or runtime initialization. This adds a bounded validation pass over
 those records; it uses the captured active WAL handle and existing decode limits.
 WAL doctor planning, apply revalidation, and automatic repair require the same
 capabilities, including when resuming an interrupted repair. An unsupported

@@ -193,12 +193,16 @@ pub(super) fn validate_wal_formats_from_file(
             } => {
                 if let Some(entries) = &mut remaining.max_entries {
                     *entries = entries.checked_sub(1).ok_or_else(|| {
-                        HawDBError::Storage("branch WAL replay entry budget exceeded".into())
+                        HawDBError::Storage(
+                            "WAL replay entry limit exceeded during format admission".into(),
+                        )
                     })?;
                 }
                 if let Some(bytes) = &mut remaining.max_bytes {
                     *bytes = bytes.checked_sub(encoded_len).ok_or_else(|| {
-                        HawDBError::Storage("branch WAL replay byte budget exceeded".into())
+                        HawDBError::Storage(
+                            "WAL replay byte limit exceeded during format admission".into(),
+                        )
                     })?;
                 }
                 epoch = epoch

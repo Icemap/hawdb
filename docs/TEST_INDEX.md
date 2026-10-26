@@ -1417,8 +1417,7 @@ streaming-file, and cooperatively controlled checkpoint reads. Core tests preser
 typed causes through nested I/O wrappers. The existing `branch_project_open`
 integration owner covers public branch admission, Mem startup, doctor planning,
 automatic/interrupted repair refusal, canonical checkpoint schemas, full-checkpoint
-versions, and byte-for-byte file
-preservation. Python error tests keep compatibility refusal separate from integrity
+versions/features, and byte-for-byte file preservation. Python error tests keep compatibility refusal separate from integrity
 errors. No CI lane or fuzz target is added.
 
 Focused replays: `cargo test --locked -p hawdb-storage compatibility_tests`,

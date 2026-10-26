@@ -1819,16 +1819,48 @@ impl GraphStore {
         durable_manifest_open_micros: u64,
         replay: impl FnOnce(&mut Self, &mut Catalog, WalReplayConfig) -> Result<StorageRecoveryReport>,
     ) -> Result<(Self, Catalog)> {
+        // Legacy stores do not pass through immutable branch admission.
+        // Check all selected codec capabilities before cleanup or runtime writes.
+        if durable.wal_path.parent() == Some(durable.root_path.as_path()) {
+            let manifest = DurableManifest::load(durable.manifest_path())?;
+            let mut limits = replay_config;
+            format_admission::validate_checkpoint_formats(manifest, limits, |name| {
+                Ok(durable.root_path.join(name))
+            })?;
+            if fs::try_exists(&durable.wal_path)? && fs::metadata(&durable.wal_path)?.len() != 0 {
+                format_admission::validate_wal_formats(
+                    &durable.wal_path,
+                    manifest.checkpoint_commit_epoch,
+                    &mut limits,
+                    true,
+                )?;
+            }
+        }
+        if !durable.read_only {
+            cleanup_abandoned_checkpoint_preparations(
+                &durable.root_path,
+                durable.checkpoint_epoch,
+            )?;
+        }
         let projection_generation_root = durable.root_path.join("projection-generations");
-        let projection_generations = if projection_generation_root.exists() {
+        let projection_generations = if durable.read_only {
+            if projection_generation_root.exists() {
+                Some(
+                    hawdb_storage::projection_generation::ProjectionGenerationStore::open_existing(
+                        &projection_generation_root,
+                    )
+                    .map_err(HawDBError::from_storage_error)?,
+                )
+            } else {
+                None
+            }
+        } else {
             Some(
-                hawdb_storage::projection_generation::ProjectionGenerationStore::open_existing(
+                hawdb_storage::projection_generation::ProjectionGenerationStore::open(
                     &projection_generation_root,
                 )
                 .map_err(HawDBError::from_storage_error)?,
             )
-        } else {
-            None
         };
         let mut store = Self {
             next_node_id: 0,
@@ -1934,22 +1966,6 @@ impl GraphStore {
             post_replay_open_micros: elapsed_micros(post_replay_open_started),
             total_open_micros: 0,
         };
-        if let Some(durable) = &store.durable
-            && !durable.read_only
-        {
-            if store.projection_generations.is_none() {
-                store.projection_generations = Some(
-                    hawdb_storage::projection_generation::ProjectionGenerationStore::open(
-                        &projection_generation_root,
-                    )
-                    .map_err(HawDBError::from_storage_error)?,
-                );
-            }
-            cleanup_abandoned_checkpoint_preparations(
-                &durable.root_path,
-                durable.checkpoint_epoch,
-            )?;
-        }
         store.storage_recovery_report = storage_recovery_report;
         Ok((store, checkpoint_catalog))
     }

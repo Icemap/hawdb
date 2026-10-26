@@ -71,6 +71,12 @@ fn unknown_expression(encoded: &mut [u8]) {
     encoded[offset] = 255;
 }
 
+fn refresh_envelope_checksum(encoded: &mut [u8]) {
+    let digest = hawdb_integrity::integrity_digest(&encoded[64..]);
+    encoded[28..32].copy_from_slice(&digest.crc32c.get().to_le_bytes());
+    encoded[32..64].copy_from_slice(digest.sha256.as_bytes());
+}
+
 fn unsupported_record(kind: &str, epoch: u64) -> (WalOp, StorageFormatError) {
     let (mut encoded, format, supported) = match kind {
         "append" => (
@@ -91,9 +97,7 @@ fn unsupported_record(kind: &str, epoch: u64) -> (WalOp, StorageFormatError) {
     };
     let expected = if kind == "feature" {
         unknown_expression(&mut encoded);
-        let digest = hawdb_integrity::integrity_digest(&encoded[64..]);
-        encoded[28..32].copy_from_slice(&digest.crc32c.get().to_le_bytes());
-        encoded[32..64].copy_from_slice(digest.sha256.as_bytes());
+        refresh_envelope_checksum(&mut encoded);
         StorageFormatError::UnsupportedFeature {
             format: "relational schema",
             feature: "materialized view expression",
@@ -143,6 +147,17 @@ fn files(root: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
     let mut output = BTreeMap::new();
     visit(root, root, &mut output);
     output
+}
+
+fn seed_unpublished_recovery_evidence(path: &Path) {
+    std::fs::write(
+        path.join("relational.999999.hawdb"),
+        b"unpublished future artifact",
+    )
+    .unwrap();
+    let candidate = path.join(".checkpoint.999999.prepare");
+    std::fs::create_dir(&candidate).unwrap();
+    std::fs::write(candidate.join("evidence"), b"retain candidate evidence").unwrap();
 }
 
 fn assert_refusal(error: HawDBError, expected: &StorageFormatError) {
@@ -283,6 +298,7 @@ fn unknown_checkpoint_expression_refuses_without_cleanup_or_repair() {
         .unwrap()
         .write_all(b"torn")
         .unwrap();
+    seed_unpublished_recovery_evidence(&project.0);
     let before = files(&project.0);
     let expected = StorageFormatError::UnsupportedFeature {
         format: "relational schema",
@@ -311,76 +327,94 @@ fn unknown_checkpoint_expression_refuses_without_cleanup_or_repair() {
 }
 
 #[test]
-fn unsupported_full_checkpoint_version_preserves_recovery_files() {
-    let project = Project::new();
-    let mut catalog = hawdb_core::Catalog::default();
-    let mut store = GraphStore::open(&project.0, &mut catalog).unwrap();
-    store
-        .commit_relational_transaction(&mut catalog, view_transaction())
-        .unwrap();
-    store.checkpoint(&catalog).unwrap();
-    drop(store);
-    let manifest_path = project.0.join("manifest.hawdb");
-    let mut manifest =
-        hawdb_storage::durable_manifest::DurableManifest::load(&manifest_path).unwrap();
-    let path = project.0.join(
-        hawdb_storage::artifact_files::relational_checkpoint_generation_file(
-            manifest.checkpoint_generation.unwrap(),
-        ),
-    );
-    let mut encoded = std::fs::read(&path).unwrap();
-    encoded[8..10].copy_from_slice(&3_u16.to_le_bytes());
-    let digest = hawdb_integrity::integrity_digest(&encoded);
-    std::fs::write(path, encoded).unwrap();
-    let checkpoint_path = manifest.checkpoint_path(&project.0);
-    let text = hawdb_storage::store::read_durable_text(&checkpoint_path, "checkpoint").unwrap();
-    let (body, _) = hawdb_storage::checkpoint::split_checkpoint_checksum(&text).unwrap();
-    let mut updated = String::new();
-    for line in body.lines() {
-        if line.starts_with("relational_checkpoint_encoded_checksum\t") {
-            updated.push_str(&format!(
-                "relational_checkpoint_encoded_checksum\t{}\n",
-                digest.crc32c.get()
-            ));
-        } else if line.starts_with("relational_checkpoint_encoded_sha256\t") {
-            updated.push_str(&format!(
-                "relational_checkpoint_encoded_sha256\t{}\n",
-                digest.sha256
-            ));
+fn unsupported_full_checkpoint_preserves_recovery_files() {
+    for feature in [false, true] {
+        let project = Project::new();
+        let mut catalog = hawdb_core::Catalog::default();
+        let mut store = GraphStore::open(&project.0, &mut catalog).unwrap();
+        store
+            .commit_relational_transaction(&mut catalog, view_transaction())
+            .unwrap();
+        store.checkpoint(&catalog).unwrap();
+        drop(store);
+        let manifest_path = project.0.join("manifest.hawdb");
+        let mut manifest =
+            hawdb_storage::durable_manifest::DurableManifest::load(&manifest_path).unwrap();
+        let path = project.0.join(
+            hawdb_storage::artifact_files::relational_checkpoint_generation_file(
+                manifest.checkpoint_generation.unwrap(),
+            ),
+        );
+        let mut encoded = std::fs::read(&path).unwrap();
+        if feature {
+            unknown_expression(&mut encoded);
+            refresh_envelope_checksum(&mut encoded);
         } else {
-            updated.push_str(line);
-            updated.push('\n');
+            encoded[8..10].copy_from_slice(&3_u16.to_le_bytes());
         }
+        let digest = hawdb_integrity::integrity_digest(&encoded);
+        std::fs::write(path, encoded).unwrap();
+        let checkpoint_path = manifest.checkpoint_path(&project.0);
+        let text = hawdb_storage::store::read_durable_text(&checkpoint_path, "checkpoint").unwrap();
+        let (body, _) = hawdb_storage::checkpoint::split_checkpoint_checksum(&text).unwrap();
+        let mut updated = String::new();
+        for line in body.lines() {
+            if line.starts_with("relational_checkpoint_encoded_checksum\t") {
+                updated.push_str(&format!(
+                    "relational_checkpoint_encoded_checksum\t{}\n",
+                    digest.crc32c.get()
+                ));
+            } else if line.starts_with("relational_checkpoint_encoded_sha256\t") {
+                updated.push_str(&format!(
+                    "relational_checkpoint_encoded_sha256\t{}\n",
+                    digest.sha256
+                ));
+            } else {
+                updated.push_str(line);
+                updated.push('\n');
+            }
+        }
+        updated.push_str(&format!(
+            "checksum\t{}\n",
+            hawdb_integrity::checksum_u64(updated.as_bytes())
+        ));
+        let encoded =
+            hawdb_storage::store::encode_durable_text(&updated, Default::default()).unwrap();
+        let digest = hawdb_integrity::integrity_digest(&encoded);
+        manifest.checkpoint_encoded_len = Some(encoded.len() as u64);
+        manifest.checkpoint_encoded_checksum = Some(u64::from(digest.crc32c.get()));
+        manifest.checkpoint_encoded_sha256 = Some(digest.sha256);
+        std::fs::write(checkpoint_path, encoded).unwrap();
+        manifest.write(&manifest_path).unwrap();
+        let wal = manifest.wal_path(&project.0);
+        std::fs::OpenOptions::new()
+            .append(true)
+            .open(wal)
+            .unwrap()
+            .write_all(b"torn")
+            .unwrap();
+        seed_unpublished_recovery_evidence(&project.0);
+        let before = files(&project.0);
+        let expected = if feature {
+            StorageFormatError::UnsupportedFeature {
+                format: "relational schema",
+                feature: "materialized view expression",
+                tag: 255,
+            }
+        } else {
+            StorageFormatError::UnsupportedVersion {
+                format: "relational durable codec",
+                found: 3,
+                supported: 2,
+            }
+        };
+        assert_refusal(
+            DatabaseDoctor::plan_wal_tail_repair(&project.0, WalDoctorOptions::default())
+                .unwrap_err(),
+            &expected,
+        );
+        assert_eq!(files(&project.0), before);
+        assert_refusal(Database::open(&project.0).unwrap_err(), &expected);
+        assert_eq!(files(&project.0), before);
     }
-    updated.push_str(&format!(
-        "checksum\t{}\n",
-        hawdb_integrity::checksum_u64(updated.as_bytes())
-    ));
-    let encoded = hawdb_storage::store::encode_durable_text(&updated, Default::default()).unwrap();
-    let digest = hawdb_integrity::integrity_digest(&encoded);
-    manifest.checkpoint_encoded_len = Some(encoded.len() as u64);
-    manifest.checkpoint_encoded_checksum = Some(u64::from(digest.crc32c.get()));
-    manifest.checkpoint_encoded_sha256 = Some(digest.sha256);
-    std::fs::write(checkpoint_path, encoded).unwrap();
-    manifest.write(&manifest_path).unwrap();
-    let wal = manifest.wal_path(&project.0);
-    std::fs::OpenOptions::new()
-        .append(true)
-        .open(wal)
-        .unwrap()
-        .write_all(b"torn")
-        .unwrap();
-    let before = files(&project.0);
-    let expected = StorageFormatError::UnsupportedVersion {
-        format: "relational durable codec",
-        found: 3,
-        supported: 2,
-    };
-    assert_refusal(
-        DatabaseDoctor::plan_wal_tail_repair(&project.0, WalDoctorOptions::default()).unwrap_err(),
-        &expected,
-    );
-    assert_eq!(files(&project.0), before);
-    assert_refusal(Database::open(&project.0).unwrap_err(), &expected);
-    assert_eq!(files(&project.0), before);
 }

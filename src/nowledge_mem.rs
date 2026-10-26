@@ -2572,6 +2572,9 @@ impl NowledgeMemEmbeddedStore {
             graph_config,
             runtime_governor,
         )?;
+        // Project metadata can open without recovering main's data runtime.
+        // Readiness requires data admission before any host schema mutation.
+        graph.database().commit_epoch()?;
         for registry in &options.system_schema_registries {
             report.system_schema_upgrades.push(
                 graph

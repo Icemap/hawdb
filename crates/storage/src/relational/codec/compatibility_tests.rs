@@ -37,6 +37,10 @@ fn verify_checkpoint(encoded: &[u8], expected: &StorageFormatError) {
     ));
     std::fs::write(&path, encoded).unwrap();
     assert_unsupported(
+        validate_relational_checkpoint_file_format(&path).unwrap_err(),
+        expected,
+    );
+    assert_unsupported(
         decode_relational_checkpoint_file(&path, limits).unwrap_err(),
         expected,
     );
@@ -55,6 +59,10 @@ fn verify_checkpoint(encoded: &[u8], expected: &StorageFormatError) {
     let mut corrupt = encoded.to_vec();
     *corrupt.last_mut().unwrap() ^= 1;
     std::fs::write(&path, &corrupt).unwrap();
+    assert!(matches!(
+        validate_relational_checkpoint_file_format(&path),
+        Err(RelationalError::Corruption(_))
+    ));
     assert!(matches!(
         decode_relational_checkpoint(&corrupt, limits),
         Err(RelationalError::Corruption(_))
