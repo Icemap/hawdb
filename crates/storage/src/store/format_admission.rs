@@ -35,7 +35,17 @@ pub(super) fn validate_checkpoint_formats(
         ))?;
         let limit = limits.max_checkpoint_encoded_bytes.unwrap_or(u64::MAX);
         let mut encoded = Vec::new();
-        File::open(&path)?
+        File::open(&path)
+            .map_err(|error| {
+                if error.kind() == std::io::ErrorKind::NotFound {
+                    HawDBError::StorageIntegrity(format!(
+                        "missing checkpoint artifact {}",
+                        path.display()
+                    ))
+                } else {
+                    error.into()
+                }
+            })?
             .take(limit.saturating_add(1))
             .read_to_end(&mut encoded)?;
         if encoded.len() as u64 > limit {
@@ -81,17 +91,10 @@ pub(super) fn validate_checkpoint_formats(
         let path = resolve(&relational_row_page_manifest_generation_file(
             binding.generation,
         ))?;
-        let artifact = binding.manifest_artifact;
-        super::verify_file_integrity(
-            &path,
-            artifact.encoded_len,
-            u64::from(artifact.encoded_crc32c),
-            artifact.encoded_sha256,
-            "relational row manifest",
-        )?;
-        let decoded = RelationalRowPageRootManifest::read_file(
+        let decoded = RelationalRowPageRootManifest::read_bound_file(
             &path,
             RelationalRowPagePublicationConfig::default(),
+            binding.manifest_artifact,
         )
         .map_err(HawDBError::from_storage_error)?;
         if decoded.generation != binding.generation

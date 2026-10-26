@@ -1361,7 +1361,7 @@ impl GraphStore {
             }
             Ok(())
         };
-        check_formats().map_err(BranchAdmissionError::Recovery)?;
+        let format_result = check_formats();
 
         let runtime_directory = branch_directory.join("runtime");
         // Mutable WAL dependencies survive disposable-runtime cleanup. They
@@ -1371,6 +1371,7 @@ impl GraphStore {
             validate_captured_admission_namespace(project, &branch_lease, branch_directory)?;
         }
         let result = (|| {
+            format_result.map_err(BranchAdmissionError::Recovery)?;
             mount_branch_runtime(
                 &objects,
                 &root,
@@ -1519,7 +1520,10 @@ impl GraphStore {
                 // A known replaced/uncertain locator cannot authorize unlink.
                 // Relative cleanup and the remaining runtime paths are still
                 // pending; retain this evidence when the legacy fence refuses.
-                if project.is_none_or(|project| {
+                if !matches!(
+                    error,
+                    BranchAdmissionError::Recovery(HawDBError::UnsupportedStorageFormat(_))
+                ) && project.is_none_or(|project| {
                     validate_captured_admission_namespace(project, &branch_lease, branch_directory)
                         .is_ok()
                 }) {

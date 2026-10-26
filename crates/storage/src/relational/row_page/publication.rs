@@ -313,10 +313,11 @@ fn durability(
 mod tests;
 
 impl RelationalRowPageRootManifest {
-    pub(crate) fn read_file(
+    pub(crate) fn read_bound_file(
         path: &Path,
         config: RelationalRowPagePublicationConfig,
+        expected: RelationalRowPageArtifactMetadata,
     ) -> Result<Self, RelationalRowPagePublicationError> {
-        manifest::read_manifest(path, config)
+        manifest::read_bound_manifest(path, config, expected)
     }
 }
