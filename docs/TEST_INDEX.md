@@ -1053,11 +1053,11 @@ preserves worker errors separately from a missing callback or timeout.
 
 ### Windows power-loss partitions
 
-The weekly Branch Power Loss lane gives head cuts one Windows job, and root,
-WAL-sync and manifest cuts one job per durability policy. Consumer
+The weekly Branch Power Loss lane gives head, root, WAL-sync and manifest cuts
+one Windows job per durability policy. Consumer
 publication, Search projection publication, deletion/GC, abandonment and vector
 recovery have required sibling selections, plus a disjoint core remainder.
-Linux/macOS retain the full 51-case suite.
+Linux/macOS retain the full 52-case suite.
 `scripts/branch-power-loss-shard.py` derives selected tests from
 Cargo's actual discovery and rejects missing/new automatic families, duplicates,
 empty partitions or an incomplete union. Each artifact records complete discovery,
@@ -1084,6 +1084,17 @@ Automatic Rust discovery grows from five to seven tests, and full power-loss
 discovery from 49 to 51; the runtime validator still requires exactly the same
 48 distinct configurations and positive completion summaries for every selected
 automatic test. Missing/duplicate configuration and completion controls remain.
+
+At `a9f9e0ef`, all six policy-specific manifest/root/WAL-sync selections completed,
+but the remaining mixed-policy head case exceeded the same 120-minute ceiling
+in run 40249469385. Native check annotations confirm the job timeout; its partial
+log contains 8/12 configuration starts and no Rust or automatic completion
+summary. Starts are not completed coverage. Head now uses the same independent
+policy fixtures, preserving both boundaries, all three successive generations,
+the shared qualification body and every physical fault plan/assertion. Discovery
+is eight automatic tests and 52 full power-loss tests, with exactly the same 48
+configuration identities. Profiles, serial execution and job ceilings are
+unchanged. Source-bound runtime completion remains required for both head jobs.
 
 `//:power_loss_partition_script_test` and the platform job's preflight check
 exercise actual selector output under simulated Windows default CRLF translation,

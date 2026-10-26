@@ -170,16 +170,6 @@ fn automatic_fault_plans(snapshot: &PowerLossSnapshot) -> Vec<CrashPlan> {
     plans
 }
 
-fn qualify_automatic_cut(cut: AutomaticCut) {
-    qualify_automatic_policies(
-        cut,
-        &[
-            DurabilityPolicy::SyncOnEveryWrite,
-            DurabilityPolicy::SyncOnCheckpoint,
-        ],
-    );
-}
-
 fn qualify_automatic_policies(cut: AutomaticCut, durabilities: &[DurabilityPolicy]) {
     let mut images = 0;
     for &durability in durabilities {
@@ -302,8 +292,13 @@ fn qualify_automatic_policies(cut: AutomaticCut, durabilities: &[DurabilityPolic
 }
 
 #[test]
-fn automatic_head_cuts_preserve_mixed_transactions_across_three_generations() {
-    qualify_automatic_cut(AutomaticCut::Head);
+fn automatic_head_cuts_preserve_synchronous_transactions_across_three_generations() {
+    qualify_automatic_policies(AutomaticCut::Head, &[DurabilityPolicy::SyncOnEveryWrite]);
+}
+
+#[test]
+fn automatic_head_cuts_preserve_relaxed_transactions_across_three_generations() {
+    qualify_automatic_policies(AutomaticCut::Head, &[DurabilityPolicy::SyncOnCheckpoint]);
 }
 
 #[test]

@@ -366,14 +366,13 @@ The weekly Windows matrix keeps all eight branch-abandonment cases together
 in a separate serial shard. Discovery must prove that its sibling selections
 and the remaining partition form the complete, disjoint family.
 Windows also owns consumer publication, Search projection publication and the
-single deletion/GC case in separate required shards. Automatic manifest, root
-and candidate-WAL-sync qualification each have one exact case per durability
+single deletion/GC case in separate required shards. Automatic head, manifest,
+root and candidate-WAL-sync qualification each have one exact case per durability
 policy; both boundaries and three successive generations remain in each fixture.
-Head qualification retains both policies in one case. This retains all 48
-automatic configurations across the four cuts, with seven Rust cases. Complete
-root discovery is 51 cases. Runtime coverage requires every configuration and
-positive completion summaries exactly once; compiled discovery must prove that
-no sibling selection overlaps or omits a case. Every physical fault plan and
+This retains all 48 automatic configurations across the four cuts, with eight
+Rust cases. Complete root discovery is 52 cases. Runtime coverage requires every
+configuration and positive completion summaries exactly once; compiled discovery
+must prove that no sibling selection overlaps or omits a case. Every physical fault plan and
 assertion is retained under the same profile, serial execution and job ceilings.
 
 Whole-generation byte verification and admitted reopen still read unchanged

@@ -14,7 +14,8 @@ import sys
 
 AUTOMATIC_PREFIX = "api::tests::power_loss::automatic_checkpoint::"
 AUTOMATIC_CASES = {
-    "head": "automatic_head_cuts_preserve_mixed_transactions_across_three_generations",
+    "head-every-write": "automatic_head_cuts_preserve_synchronous_transactions_across_three_generations",
+    "head-checkpoint": "automatic_head_cuts_preserve_relaxed_transactions_across_three_generations",
     "manifest-every-write": "automatic_manifest_cuts_preserve_synchronous_transactions_across_three_generations",
     "manifest-checkpoint": "automatic_manifest_cuts_preserve_relaxed_transactions_across_three_generations",
     "root-every-write": "automatic_root_cuts_preserve_synchronous_transactions_across_three_generations",
@@ -23,7 +24,8 @@ AUTOMATIC_CASES = {
     "wal-sync-checkpoint": "automatic_wal_sync_cuts_preserve_relaxed_transactions_across_three_generations",
 }
 CUTS = {
-    "head": "Head",
+    "head-every-write": "Head",
+    "head-checkpoint": "Head",
     "root-every-write": "SealedRoot",
     "root-checkpoint": "SealedRoot",
     "wal-sync-every-write": "CandidateWalSync",

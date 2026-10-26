@@ -186,7 +186,7 @@ class PowerLossShardTests(unittest.TestCase):
         actual = {name for name in re.findall(r"#\[test\]\s+fn ([a-z_]+)\(", automatic)}
         self.assertEqual(actual, set(SHARD.AUTOMATIC_CASES.values()))
         self.assertCountEqual(
-            re.findall(r"shard: (head|(?:root|wal-sync|manifest)-[a-z-]+)\n", weekly),
+            re.findall(r"shard: ((?:head|root|wal-sync|manifest)-[a-z-]+)\n", weekly),
             SHARD.AUTOMATIC_CASES,
         )
         for shard in SHARD.FAMILY_SHARDS:
@@ -206,9 +206,7 @@ class PowerLossShardTests(unittest.TestCase):
         all_combinations = []
         for shard in [*SHARD.AUTOMATIC_CASES, "full"]:
             combinations = sorted(automatic_combinations(shard))
-            expected_count = (
-                48 if shard == "full" else 12 if shard == "head" else 6
-            )
+            expected_count = 48 if shard == "full" else 6
             self.assertEqual(len(combinations), expected_count)
             if shard != "full":
                 all_combinations.extend(combinations)
