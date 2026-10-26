@@ -70,6 +70,7 @@ mod bounded_file;
 mod build_control;
 mod build_memory;
 mod build_term;
+mod cjk_dictionary;
 mod cjk_tokenizer;
 #[cfg(test)]
 mod compression_tests;

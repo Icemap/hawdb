@@ -30,6 +30,7 @@ _SEARCH_DEFAULT_FEATURES = [
 ]
 
 _IO_WAVE_TEST_FAMILY = "out_of_core::generation_writer::tests::io_waves::"
+_SEARCH_COMPILE_DATA = ["src/data/jieba-0.11.0.dict.txt.zst"]
 
 # Share exact feature sets between the unit and public integration owners.
 _SEARCH_TEST_PROFILES = {
@@ -80,6 +81,7 @@ rust_library(
     crate_root = "src/lib.rs",
     crate_features = windows_native_features("hawdb-search", _SEARCH_DEFAULT_FEATURES),
     srcs = glob(["src/**/*.rs"]) + ["tests/support/live_allocation.rs"],
+    compile_data = _SEARCH_COMPILE_DATA,
     edition = "2024",
     aliases = aliases(),
     deps = _SEARCH_DEPS,
@@ -93,6 +95,7 @@ rust_library(
     crate_name = "hawdb_search",
     crate_root = "src/lib.rs",
     srcs = glob(["src/**/*.rs"]) + ["tests/support/live_allocation.rs"],
+    compile_data = _SEARCH_COMPILE_DATA,
     edition = "2024",
     aliases = aliases(),
     deps = _SEARCH_BASE_DEPS,
@@ -112,6 +115,7 @@ rust_library(
     crate_root = "src/lib.rs",
     crate_features = ["full-text-search"],
     srcs = glob(["src/**/*.rs"]) + ["tests/support/live_allocation.rs"],
+    compile_data = _SEARCH_COMPILE_DATA,
     edition = "2024",
     aliases = aliases(),
     deps = _SEARCH_BASE_DEPS,
@@ -133,6 +137,7 @@ rust_library(
     crate_root = "src/lib.rs",
     crate_features = _SEARCH_DEFAULT_FEATURES + ["acl"],
     srcs = glob(["src/**/*.rs"]) + ["tests/support/live_allocation.rs"],
+    compile_data = _SEARCH_COMPILE_DATA,
     edition = "2024",
     aliases = aliases(),
     deps = _SEARCH_DEPS,
@@ -168,6 +173,7 @@ rust_test(
         crate_root = "src/lib.rs",
         crate_features = settings[0],
         srcs = glob(["src/**/*.rs"]) + ["tests/support/live_allocation.rs"],
+        compile_data = _SEARCH_COMPILE_DATA,
         edition = "2024",
         aliases = aliases(),
         deps = _SEARCH_BASE_DEPS + (_SEARCH_VECTOR_DEPS if "vector-search" in settings[0] else []),
@@ -587,6 +593,7 @@ rust_test(
         crate_root = "src/lib.rs",
         crate_features = settings[0],
         srcs = glob(["src/**/*.rs"]) + ["tests/support/live_allocation.rs"],
+        compile_data = _SEARCH_COMPILE_DATA,
         edition = "2024",
         aliases = aliases(
             normal = True,
@@ -653,7 +660,10 @@ rust_test(
 rust_test(
     name = "hawdb_search_analyzer_workspace_allocation_tests",
     crate_root = "tests/analyzer_workspace_allocation.rs",
+    compile_data = _SEARCH_COMPILE_DATA,
     srcs = [
+        "src/cjk_dictionary.rs",
+        "src/cjk_dictionary/tests.rs",
         "src/analyzer_workspace/bounds.rs",
         "src/analyzer_workspace/bounds/tests.rs",
         "tests/analyzer_workspace_allocation.rs",
@@ -662,6 +672,8 @@ rust_test(
     edition = "2024",
     deps = [
         "@crate_index//:jieba-rs",
+        "@crate_index//:zstd",
+        "//crates/integrity:hawdb_integrity",
         "@crate_index//:regex",
         "@crate_index//:regex-automata",
         "@crate_index//:regex-syntax",
