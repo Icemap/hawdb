@@ -1,5 +1,6 @@
 load("@crate_index//:defs.bzl", "aliases", "all_crate_deps")
 load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
 
 load("//:windows_native_features.bzl", "windows_native_features")
 
@@ -27,6 +28,8 @@ _SEARCH_DEFAULT_FEATURES = [
     "graph-analytics",
     "vector-search",
 ]
+
+_IO_WAVE_TEST_FAMILY = "out_of_core::generation_writer::tests::io_waves::"
 
 # Share exact feature sets between the unit and public integration owners.
 _SEARCH_TEST_PROFILES = {
@@ -144,6 +147,7 @@ rust_library(
 
 rust_test(
     name = "hawdb_search_tests",
+    args = ["--skip", _IO_WAVE_TEST_FAMILY],
     # Streamed document lifecycle coverage includes 128 MiB fixtures.
     timeout = "long",
     crate = ":hawdb_search",
@@ -577,6 +581,7 @@ rust_test(
 [
     rust_test(
         name = "hawdb_search_%s_tests" % profile,
+        args = ["--skip", _IO_WAVE_TEST_FAMILY],
         timeout = "eternal" if profile in ["text_only", "text_background"] else "long",
         crate_name = "hawdb_search",
         crate_root = "src/lib.rs",
@@ -595,6 +600,30 @@ rust_test(
     for profile, settings in _SEARCH_TEST_PROFILES.items()
     if profile != "default"
 ]
+
+# Reuse each complete unit executable; only deadline-sensitive wave ownership
+# runs separately, without competing unit cases or other Bazel test actions.
+[
+    sh_test(
+        name = "hawdb_search_io_wave_tests" if profile == "default" else "hawdb_search_%s_io_wave_tests" % profile,
+        timeout = "eternal" if profile in ["text_only", "text_background"] else "long",
+        tags = ["exclusive"],
+        srcs = ["tests/run-unit-family.sh"],
+        args = [
+            "$(location :hawdb_search_tests)" if profile == "default" else "$(location :hawdb_search_%s_tests)" % profile,
+            _IO_WAVE_TEST_FAMILY,
+            "--test-threads=1",
+        ],
+        data = [":hawdb_search_tests" if profile == "default" else ":hawdb_search_%s_tests" % profile],
+    )
+    for profile in _SEARCH_TEST_PROFILES
+]
+
+sh_test(
+    name = "search_unit_family_script_test",
+    srcs = ["tests/run-unit-family.test.sh"],
+    data = ["tests/run-unit-family.sh"],
+)
 
 rust_test(
     name = "hawdb_search_segment_allocation_tests",

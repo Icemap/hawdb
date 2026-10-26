@@ -431,7 +431,8 @@ vector_only, background_only, text_vector, text_background and vector_background
 
 | Target pattern | What it detects | Cost and known issues |
 | --- | --- | --- |
-| `//crates/search:hawdb_search_tests` and `hawdb_search_<profile>_tests` | Search unit, persistence/recovery and feature capability behavior | Large lifecycle fixtures include 128-MiB sources. The three admitted-root heap-reclamation probes run in exact-case child processes because staging-registry nodes are shared across operations; all peak and final-zero assertions remain. Repository test profile; the full matrix still runs. Existing deadlines remain unchanged. |
+| `//crates/search:hawdb_search_tests` and `hawdb_search_<profile>_tests` | Search unit, persistence/recovery and feature capability behavior | Large lifecycle fixtures include 128-MiB sources. The three admitted-root heap-reclamation probes run in exact-case child processes because staging-registry nodes are shared across operations; all peak and final-zero assertions remain. The `io_waves` family runs through the isolated owners below, using these same executables. Repository test profile; the full matrix still runs. Existing deadlines remain unchanged. |
+| `hawdb_search_io_wave_tests` and `hawdb_search_<profile>_io_wave_tests` | Complete standalone writer Task/Wave admission, idle release, cancellation and cleanup contracts | All nine unit feature profiles reuse their existing executable. Required crate presubmits run this family with one libtest thread and Bazel `exclusive`; no additional Rust executable or compilation profile. The runner rejects empty discovery and overlapping skips and preserves caller arguments and failures. The existing 20-second task deadlines and enclosing target timeouts are unchanged. Replay: `bazel test //crates/search:hawdb_search_text_background_io_wave_tests`; the runner itself is covered by `//crates/search:search_unit_family_script_test`. |
 | Search BM25 decode and filter reuse (`lexical_projection::`, `text_seed`) | Reusable posting buffers, corrupt-frame rollback, stable internal predicates, arbitrary callback semantics, exact metadata routing and memory ownership | Existing Search unit feature-matrix owners and repository checked profile; public text-seed cases require `full-text-search`. Allocation probes serialize through the existing measurement gate and cover 8/128/4096 postings; filter cases cover false results, cancellation, complete/window counts and sparse overlapping layers. Local replay: `bazel test //crates/search:hawdb_search_tests --test_arg=lexical_projection:: --test_arg=text_seed --test_arg=--nocapture`. Existing ignored differential campaigns remain local-only. Ref [#1206](https://github.com/nowledge-co/hawdb/issues/1206). |
 | Search BM25 cursor selection (`lexical_projection::tests::cursor_selection`) | Exact score bits, tie-breaking, exhaustive match counts and callback order across empty/unknown and 1/4/16/32-term queries; pruning eligibility before the rank window fills | Existing Search unit feature-matrix owners and repository checked profile; existing pruning regressions cover active WAND and overlays. Replay: `bazel test //crates/search:hawdb_search_tests --test_arg=lexical_projection::`. The ignored 4096-document warmed timing probe is local-only: `cargo test --locked -p hawdb-search --lib cursor_selection_query_measurement -- --ignored --nocapture --test-threads=1`; two warmups and 21 repetitions per query, including statistics reads, excluding fixture construction. Ref [#1208](https://github.com/nowledge-co/hawdb/issues/1208). |
 | Search BM25 global windows and shared physical buffers | Global bounded segment merge versus exhaustive scores, exact text counts/offsets/ties, duplicate-live-layer refusal, inherited WAND floors before the local heap fills, one physical read for co-located terms, cancelled cache hits and failed-read retry, borrowed wide ranking IDs and admission refunds | Existing Search feature-matrix owners; window integration requires `full-text-search`, buffer/ranking/pruning guards run in minimal profiles too. Replay with `--test_arg=lexical_projection:: --test_arg=out_of_core::tests::bm25_windows --test_arg=out_of_core::query_ranking::`. The ignored `bm25_window_allocation_measurement` and `rank_id_allocation_measurement` probes are manual allocation measurements under the repository test profile, not latency/RSS benchmarks or CI gates: `cargo test --locked -p hawdb-search --all-features --lib -- bm25_window_allocation_measurement rank_id_allocation_measurement --ignored --nocapture --test-threads=1`. Fixtures are built outside the allocator observation; probes use the existing serial measurement gate. |
@@ -476,7 +477,7 @@ These remain existing storage/root and native branch-power-loss CI families.
 
 ### Standalone Search writer I/O waves
 
-The existing Search crate unit target owns
+The isolated `hawdb_search_io_wave_tests` and profile variants own
 `out_of_core::generation_writer::tests::io_waves`: post-create refusal cleanup with no retained stage debt under one-slot Task/Wave reservations, original-governor contention
 before native creation, cancellation (including the exact post-mkdir,
 pre-return boundary in `spool::stage::tests`), zero-slot refusal, idle token release,
@@ -494,7 +495,9 @@ original-governor wave acquisitions, includes final spool flush and excludes
 artifact build/publication. Replay with `cargo test --locked -p hawdb-search
 --lib manual_bulk_input_admission_profile -- --ignored --nocapture
 --test-threads=1`; it has no throughput threshold and is not an extra CI job.
-No CI lane/profile/timeout/fixture scope changes. See [the admission contract](SEARCH_WRITER_IO_ADMISSION.md).
+All nine feature selections, fixture scopes and timeouts remain unchanged;
+only Bazel execution ownership is isolated. Native Cargo discovery is unchanged.
+See [the admission contract](SEARCH_WRITER_IO_ADMISSION.md).
 
 ## CI benchmark smoke owners
 
@@ -716,7 +719,10 @@ in the existing TLA suite; native capacity-band tests own Tokio waiter renewal.
 ## PR #1217 root CI scheduling
 
 - `//:hawdb_unit_checkpoint_headroom_tests` owns the complete
-  `api::automatic_checkpoint::tests::headroom::` namespace, including capacity,
+  `api::automatic_checkpoint::tests::headroom::` namespace and the two sustained
+  `delta_pressure_sustains_generations_and_preserves_all_values_after_reopen`
+  and `soft_wal_pressure_sustains_multiple_generations_without_host_checkpoints`
+  cases, including capacity,
   notification, foreground and preparation-backoff submodules. It is included
   through the existing required root unit suites and excluded from general by
   the same inventory partitioner. It reuses the ordinary root executable and
@@ -742,6 +748,21 @@ in the existing TLA suite; native capacity-band tests own Tokio waiter renewal.
   `bazel test //:hawdb_unit_checkpoint_headroom_tests`; no CI-only flags or
   special compiler profile are required. Final-head CI must establish runtime
   acceptance; target isolation alone is not a measured speedup.
+
+PR #1277 scheduling evidence is bound to head `66920d194a` and base `84d5ed46e`.
+The complete Prow BEP records one uncached failed Search text/background unit
+attempt (197.851 seconds, 1,031 passed and one failed) and one uncached failed
+root general attempt (191.404 seconds, 1,939 passed and two failed). Search
+failed at its internal 20-second task deadline during preparation; the two
+root sustained cases hit the five-second no-progress checkpoint capacity
+refusal. These are internal refusals, not Bazel timeout ceilings. The existing
+isolated checkpoint partition passed in the same root job (23.086 seconds).
+The original logs and BEP remain available in the
+[crate job](https://prow.nowledge.co/view/gs/ci-cd-503413-prow-public/artifacts/native/pr-logs/pull/nowledge-co_hawdb/1277/pull-skein-bazel-test-crates/2114716414920101888)
+and [root job](https://prow.nowledge.co/view/gs/ci-cd-503413-prow-public/artifacts/native/pr-logs/pull/nowledge-co_hawdb/1277/pull-skein-bazel-test-root/2114716414613917696).
+Contention is a scheduling hypothesis; final-head remote execution must still
+establish whether isolation resolves these failures. No production deadline,
+caller retry, fixture assertion or target timeout is changed.
 
 ## Windows native contract ownership
 
