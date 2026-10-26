@@ -36,6 +36,9 @@ mod qualification;
 #[path = "branch_project_open/runtime_roots.rs"]
 mod runtime_roots;
 
+#[path = "branch_project_open/storage_format.rs"]
+mod storage_format;
+
 struct Project(PathBuf);
 impl Project {
     fn new() -> Self {

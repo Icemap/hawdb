@@ -66,7 +66,7 @@ pub(crate) use codec::{
     decode_relational_table_schema, decode_relational_wal_batch_owned, decode_row_owned,
     decode_schema_owned, encode_relational_checkpoint_with_work_context,
     encode_relational_row_payload, encode_relational_row_payload_with_work_context,
-    encode_relational_table_schema, CheckpointOutputIo,
+    encode_relational_table_schema, validate_relational_checkpoint_file_format, CheckpointOutputIo,
 };
 #[doc(hidden)]
 pub use compaction::relational_row_page_compaction_publication_config;
@@ -6414,6 +6414,7 @@ pub enum RelationalError {
     Constraint(String),
     Durability(String),
     FileDescriptors(hawdb_core::error::FileDescriptorError),
+    UnsupportedFormat(hawdb_core::error::StorageFormatError),
     Corruption(String),
 }
 
@@ -6426,6 +6427,7 @@ impl fmt::Display for RelationalError {
                 write!(formatter, "relational constraint violation: {message}")
             }
             Self::FileDescriptors(error) => fmt::Display::fmt(error, formatter),
+            Self::UnsupportedFormat(error) => fmt::Display::fmt(error, formatter),
             Self::Durability(message) => {
                 write!(formatter, "relational durability error: {message}")
             }
@@ -6440,6 +6442,7 @@ impl std::error::Error for RelationalError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::FileDescriptors(error) => Some(error),
+            Self::UnsupportedFormat(error) => Some(error),
             _ => None,
         }
     }

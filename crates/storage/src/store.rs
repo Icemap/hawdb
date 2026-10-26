@@ -130,6 +130,7 @@ mod read_dependencies;
 pub use read_dependencies::ReadDependencyValidationFailures;
 #[doc(hidden)]
 pub use read_dependencies::{GraphReadDependencies, GraphReadDependencyError};
+mod format_admission;
 #[path = "store/graph_recovery.rs"]
 mod graph_recovery;
 #[path = "store/immutable_root.rs"]
@@ -1819,24 +1820,15 @@ impl GraphStore {
         replay: impl FnOnce(&mut Self, &mut Catalog, WalReplayConfig) -> Result<StorageRecoveryReport>,
     ) -> Result<(Self, Catalog)> {
         let projection_generation_root = durable.root_path.join("projection-generations");
-        let projection_generations = if durable.read_only {
-            if projection_generation_root.exists() {
-                Some(
-                    hawdb_storage::projection_generation::ProjectionGenerationStore::open_existing(
-                        &projection_generation_root,
-                    )
-                    .map_err(HawDBError::from_storage_error)?,
-                )
-            } else {
-                None
-            }
-        } else {
+        let projection_generations = if projection_generation_root.exists() {
             Some(
-                hawdb_storage::projection_generation::ProjectionGenerationStore::open(
+                hawdb_storage::projection_generation::ProjectionGenerationStore::open_existing(
                     &projection_generation_root,
                 )
                 .map_err(HawDBError::from_storage_error)?,
             )
+        } else {
+            None
         };
         let mut store = Self {
             next_node_id: 0,
@@ -1942,6 +1934,22 @@ impl GraphStore {
             post_replay_open_micros: elapsed_micros(post_replay_open_started),
             total_open_micros: 0,
         };
+        if let Some(durable) = &store.durable
+            && !durable.read_only
+        {
+            if store.projection_generations.is_none() {
+                store.projection_generations = Some(
+                    hawdb_storage::projection_generation::ProjectionGenerationStore::open(
+                        &projection_generation_root,
+                    )
+                    .map_err(HawDBError::from_storage_error)?,
+                );
+            }
+            cleanup_abandoned_checkpoint_preparations(
+                &durable.root_path,
+                durable.checkpoint_epoch,
+            )?;
+        }
         store.storage_recovery_report = storage_recovery_report;
         Ok((store, checkpoint_catalog))
     }

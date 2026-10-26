@@ -690,6 +690,7 @@ fn seed_search_metadata_workload_fixture(graph: &mut NowledgeMemGraph) -> Result
 
 fn error_class(error: &crate::HawDBError) -> String {
     match error {
+        crate::HawDBError::UnsupportedStorageFormat(_) => "unsupported_storage_format",
         crate::HawDBError::Parse(_) => "parse",
         crate::HawDBError::Semantic(_) => "semantic",
         crate::HawDBError::Execution(_)

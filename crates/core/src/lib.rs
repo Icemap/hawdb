@@ -41,7 +41,7 @@ pub use cancellation::{
 pub use capability::{RuntimeCapabilities, RuntimeCapability};
 pub use error::{
     HawDBError, ReadBudgetError, ReadBudgetResource, ResourceBudgetError, ResourceBudgetKind,
-    ResourceBudgetScope, Result,
+    ResourceBudgetScope, Result, StorageFormatError,
 };
 pub use graph::RelationshipDirection;
 pub use graph_rag::{

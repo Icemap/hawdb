@@ -65,6 +65,43 @@ Files:
   remain available while pinned and are reclaimed only after the final pin is
   released.
 
+### Reader compatibility refusals
+
+Relational WAL and full-checkpoint envelopes currently use codec version 2;
+embedded append WAL records (including checkpoint schema records) use version 3.
+A reader accepts its supported version exactly. An intact envelope requiring a
+different version returns `HawDBError::UnsupportedStorageFormat` with
+`StorageFormatError::UnsupportedVersion { format, found, supported }`.
+An unknown materialized-view expression tag returns `UnsupportedFeature` with
+the schema format, feature name, and numeric tag. Current relational schema tags
+0 through 5 represent column, COUNT(*), COUNT(column), SUM, MIN, and MAX.
+This change does not add a feature bitmap or change any encoded bytes.
+
+Compatibility refusal is distinct from malformed data, invalid reserved fields,
+truncation, or checksum failure. Streaming checkpoint readers finish integrity
+verification before reporting an unsupported capability, retaining cooperative
+cancellation and I/O admission. A checksum-invalid envelope is still corruption.
+The Python binding uses `StorageError` with `kind="unsupported_storage_format"`,
+not `IntegrityError`; readiness reports retain the same distinct error class.
+
+Project metadata may open without admitting a branch's data. Data admission and
+Mem startup propagate compatibility refusal before publishing readiness. Branch
+admission checks selected checkpoint schemas and complete sealed/active WAL
+records before replacing runtime files. This adds a bounded validation pass over
+those records; it uses the captured active WAL handle and existing decode limits.
+WAL doctor planning, apply revalidation, and automatic repair require the same
+capabilities, including when resuming an interrupted repair. An unsupported
+record followed by a torn tail never authorizes truncation or quarantine.
+
+Upgrade the reader to a release that supports the writer's codecs and features;
+do not downgrade a database containing features that the older reader lacks.
+Older binaries cannot acquire this classification retroactively and may still
+report corruption. Development-only databases may be explicitly recreated when
+their baseline changes, but an open or doctor refusal must not do that implicitly.
+No compatibility migration, stable Mem inclusion, or production activation is
+authorized by this error-classification change. Retain the original database and
+recovery evidence when a reader refuses it.
+
 Recovery:
 
 1. Load `manifest.hawdb` when present and verify its checksum.

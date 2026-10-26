@@ -1217,6 +1217,9 @@ pub(super) fn map_transaction_append_error(
     error: hawdb_storage::append_table::AppendTableError,
 ) -> HawDBError {
     match error {
+        hawdb_storage::append_table::AppendTableError::UnsupportedFormat(error) => {
+            HawDBError::UnsupportedStorageFormat(error)
+        }
         hawdb_storage::append_table::AppendTableError::FileDescriptors(error) => {
             HawDBError::FileDescriptors(error)
         }
@@ -1245,6 +1248,9 @@ pub(super) fn map_transaction_relational_error(
     error: hawdb_storage::relational::RelationalError,
 ) -> HawDBError {
     match error {
+        hawdb_storage::relational::RelationalError::UnsupportedFormat(error) => {
+            HawDBError::UnsupportedStorageFormat(error)
+        }
         hawdb_storage::relational::RelationalError::FileDescriptors(error) => {
             HawDBError::FileDescriptors(error)
         }

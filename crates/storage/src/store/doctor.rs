@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use super::format_admission::{validate_checkpoint_formats, validate_sealed_formats};
+
 use super::{
     file_checksum, sync_parent_dir, DurableManifest, WalCursorEvent, WalOpenOutcome,
     WalRecordCursor, MANIFEST_FILE,
@@ -42,6 +44,7 @@ struct WalRepairBoundary {
     wal_generation: u64,
     wal_replay_start_lsn: u64,
     published_prefix_len: u64,
+    commit_epoch: u64,
 }
 
 /// Missing selectors still belong to their project's branch namespace. Never
@@ -60,18 +63,27 @@ fn is_branch_directory(path: &Path) -> Result<bool> {
 }
 
 impl WalRepairBoundary {
-    fn load(path: &Path, max_wal_bytes: Option<u64>) -> Result<Self> {
+    fn load(path: &Path, options: WalDoctorOptions) -> Result<Self> {
+        let mut format_limits = crate::config::WalReplayConfig {
+            max_bytes: options.max_wal_bytes,
+            max_record_bytes: options.max_record_bytes,
+            max_batch_operations: options.max_batch_operations,
+            max_entries: None,
+            ..Default::default()
+        };
         let head_path = path.join("branch.head");
         if !is_branch_directory(path)? {
             let manifest_path = path.join(MANIFEST_FILE);
             let manifest = DurableManifest::load(&manifest_path)?;
             manifest.validate()?;
             validate_checkpoint_boundary(path, manifest)?;
+            validate_checkpoint_formats(manifest, format_limits, |name| Ok(path.join(name)))?;
             return Ok(Self {
                 selector_path: manifest_path,
                 wal_generation: manifest.wal_generation,
                 wal_replay_start_lsn: manifest.wal_replay_start_lsn,
                 published_prefix_len: 0,
+                commit_epoch: manifest.checkpoint_commit_epoch,
             });
         }
         let head =
@@ -155,13 +167,14 @@ impl WalRepairBoundary {
                 .read(reference)
                 .map_err(HawDBError::from_storage_error)?;
         }
+        validate_sealed_formats(&objects, &root, manifest, &mut format_limits)?;
         let wal_path = path.join(crate::artifact_files::wal_generation_file(
             head.active_wal.generation,
         ));
         crate::branch_head::validate_active_wal_prefix_from_file(
             &wal_path,
             head.active_wal,
-            max_wal_bytes.unwrap_or(u64::MAX),
+            options.max_wal_bytes.unwrap_or(u64::MAX),
         )
         .map_err(HawDBError::from_storage_error)?;
         Ok(Self {
@@ -169,6 +182,7 @@ impl WalRepairBoundary {
             wal_generation: head.active_wal.generation,
             wal_replay_start_lsn: head.active_wal.replay_start_lsn,
             published_prefix_len: head.active_wal.byte_length,
+            commit_epoch: root.commit_epoch,
         })
     }
 
@@ -361,7 +375,7 @@ fn validate_acknowledgement(
 }
 
 fn inspect_wal_tail_locked(path: &Path, options: WalDoctorOptions) -> Result<WalTailRepairPlan> {
-    let boundary = WalRepairBoundary::load(path, options.max_wal_bytes)?;
+    let boundary = WalRepairBoundary::load(path, options)?;
     let wal_path = boundary.wal_path(path);
     let wal_len = fs::metadata(&wal_path)
         .map_err(|error| {
@@ -409,6 +423,7 @@ fn inspect_wal_tail_locked(path: &Path, options: WalDoctorOptions) -> Result<Wal
         )));
     }
     let mut expected_lsn = boundary.wal_replay_start_lsn;
+    let mut epoch = boundary.commit_epoch;
     loop {
         let (entry, record_start) = match cursor.next()? {
             WalCursorEvent::Eof => break,
@@ -455,16 +470,14 @@ fn inspect_wal_tail_locked(path: &Path, options: WalDoctorOptions) -> Result<Wal
                 entry.lsn
             )));
         }
-        if let super::WalOp::Batch(operations) = &entry.op
-            && options
-                .max_batch_operations
-                .is_some_and(|limit| operations.len() > limit)
-        {
-            return Err(HawDBError::Storage(format!(
-                "WAL doctor batch operation limit exceeded: max_batch_operations={}",
-                options.max_batch_operations.unwrap_or_default()
-            )));
-        }
+        epoch = epoch.checked_add(1).ok_or_else(|| {
+            HawDBError::StorageIntegrity("WAL transaction epoch overflow during doctor scan".into())
+        })?;
+        super::immutable_root::validate_source_wal_op(
+            &entry.op,
+            epoch,
+            options.max_batch_operations,
+        )?;
         expected_lsn = expected_lsn.checked_add(1).ok_or_else(|| {
             HawDBError::Storage("WAL LSN overflow during doctor scan".to_string())
         })?;
@@ -559,7 +572,7 @@ fn apply_wal_tail_repair_locked(
         ));
     }
 
-    let boundary = WalRepairBoundary::load(path, options.max_wal_bytes)?;
+    let boundary = WalRepairBoundary::load(path, options)?;
     if boundary.wal_generation != requested_plan.wal_generation
         || boundary.wal_replay_start_lsn != requested_plan.wal_replay_start_lsn
     {
@@ -595,6 +608,9 @@ fn apply_wal_tail_repair_locked(
                 "pending WAL doctor repair record does not match the requested plan".to_string(),
             ));
         }
+        // The retained prefix may have been prepared by a different reader.
+        // Revalidate its capabilities before publishing a resumed repair.
+        inspect_wal_tail_locked(path, options)?;
         return finalize_repair(path, pending, true);
     }
     if !original_matches {
@@ -728,7 +744,7 @@ fn finalize_repair(
 }
 
 fn validate_manifest_identity(path: &Path, plan: &WalTailRepairPlan) -> Result<()> {
-    let boundary = WalRepairBoundary::load(path, None)?;
+    let boundary = WalRepairBoundary::load(path, WalDoctorOptions::default())?;
     let identity = file_checksum(&boundary.selector_path)?;
     if file_identity_matches(
         identity,
@@ -774,7 +790,7 @@ fn validate_pending_truncated_wal(path: &Path, record: &WalRepairAuditRecord) ->
         ));
     }
     validate_manifest_identity(path, &record.plan)?;
-    let boundary = WalRepairBoundary::load(path, None)?;
+    let boundary = WalRepairBoundary::load(path, WalDoctorOptions::default())?;
     let identity = file_checksum(&boundary.wal_path(path))?;
     if !file_identity_matches(
         identity,
@@ -974,3 +990,7 @@ fn file_name(path: &Path) -> Result<String> {
         .map(str::to_string)
         .ok_or_else(|| HawDBError::Storage("WAL doctor path has no valid file name".to_string()))
 }
+
+#[cfg(test)]
+#[path = "doctor/format_tests.rs"]
+mod format_tests;

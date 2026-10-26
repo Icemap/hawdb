@@ -1408,3 +1408,19 @@ release benchmark; `-- --shapes` adds wide projections, many joins and rejected
 inputs. It emits nine samples after grammar warmup and is not a CI timing gate.
 See [SQL PEG parser](SQL_PEG_PARSER.md) for the matcher/transformer boundary,
 budget accounting and explicit production-routing limitations.
+
+### Unsupported storage format classification (#1260)
+
+Existing storage unit ownership covers relational/append codec version refusal,
+unknown materialized-view expression tags, and checksum precedence for slice,
+streaming-file, and cooperatively controlled checkpoint reads. Core tests preserve
+typed causes through nested I/O wrappers. The existing `branch_project_open`
+integration owner covers public branch admission, Mem startup, doctor planning,
+automatic/interrupted repair refusal, canonical checkpoint schemas, full-checkpoint
+versions, and byte-for-byte file
+preservation. Python error tests keep compatibility refusal separate from integrity
+errors. No CI lane or fuzz target is added.
+
+Focused replays: `cargo test --locked -p hawdb-storage compatibility_tests`,
+`cargo test --locked -p hawdb-storage append_wal_versions`, and
+`cargo test --locked -p hawdb --test branch_project_open storage_format`.
