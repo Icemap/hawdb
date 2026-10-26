@@ -335,3 +335,160 @@ fn long_invalid_tokens_keep_exact_final_error_text_and_span() {
     assert_eq!(error.found.as_deref(), Some(sql.as_str()));
     assert_eq!(error.expected, Some("SELECT"));
 }
+
+#[test]
+fn backtracking_and_lookahead_discard_captures_but_keep_memoized_nodes() {
+    let attempt = || S(vec![R("Prefix"), K("MISSING")]);
+    let grammar = Grammar::<()>::compile(vec![
+        (
+            "Root",
+            S(vec![
+                Expression::Ahead(Box::new(R("Prefix")), "prefix"),
+                Not(Box::new(attempt()), "no MISSING"),
+                Optional(Box::new(attempt())),
+                Repeat(Box::new(attempt())),
+                Choice(vec![attempt(), R("Prefix")]),
+                R("Tail"),
+                Tok(TokenKind::End, "end"),
+            ]),
+        ),
+        ("Prefix", K("SELECT")),
+        ("Tail", K("FROM")),
+    ])
+    .unwrap();
+    let tree = parse(&grammar, "SELECT FROM", Limits::default()).unwrap();
+    let children = tree.children(tree.root);
+    assert_eq!(children.len(), 2);
+    assert_eq!(tree.nodes[children[0]].name, Some("Prefix"));
+    assert_eq!(tree.nodes[children[1]].name, Some("Tail"));
+    assert_eq!(tree.nodes.len(), 3);
+    assert_eq!(tree.memo_entries, 3);
+    assert_eq!(tree.memo_hits, 5);
+}
+
+#[test]
+fn repeated_memo_references_each_count_toward_the_edge_budget() {
+    let grammar = Grammar::<()>::compile(vec![
+        (
+            "Root",
+            S(vec![
+                R("Empty"),
+                R("Empty"),
+                R("Empty"),
+                R("Empty"),
+                R("Empty"),
+                K("SELECT"),
+            ]),
+        ),
+        ("Empty", S(vec![])),
+    ])
+    .unwrap();
+    let tree = parse(
+        &grammar,
+        "SELECT",
+        Limits {
+            nodes: 5,
+            ..Limits::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(tree.nodes.len(), 2);
+    assert_eq!(tree.children(tree.root).len(), 5);
+    assert!(tree.children(tree.root).iter().all(|child| *child == 0));
+    assert_eq!(
+        parse(
+            &grammar,
+            "SELECT",
+            Limits {
+                nodes: 4,
+                ..Limits::default()
+            }
+        )
+        .err()
+        .unwrap()
+        .code,
+        SyntaxErrorCode::ParserLimitExceeded,
+    );
+}
+
+#[test]
+fn memoized_native_value_survives_capture_rollback_without_cloning() {
+    let grammar = Grammar::compile(vec![
+        (
+            "Root",
+            Choice(vec![S(vec![R("Native"), K("MISSING")]), R("Native")]),
+        ),
+        (
+            "Native",
+            Expression::Native {
+                matcher: |_, _, position| NativeMatch {
+                    end: position + 1,
+                    value: Ok(String::from("value")),
+                },
+                nullable: false,
+            },
+        ),
+    ])
+    .unwrap();
+    let mut tree = grammar
+        .parse(
+            "SELECT",
+            &tokenize("SELECT").unwrap(),
+            "Root",
+            Limits::default(),
+        )
+        .unwrap();
+    assert_eq!(tree.memo_hits, 1);
+    assert_eq!(tree.nodes.len(), 3);
+    let native = tree.required(tree.root, "Native");
+    assert_eq!(tree.take(native), "value");
+}
+
+#[test]
+fn memo_keeps_successes_and_failures_at_multiple_positions_with_exact_accounting() {
+    let prefix = || {
+        vec![
+            R("Word"),
+            Optional(Box::new(R("Missing"))),
+            R("Word"),
+            Optional(Box::new(R("Missing"))),
+        ]
+    };
+    let mut rejected = prefix();
+    rejected.push(K("STOP"));
+    let mut accepted = prefix();
+    accepted.push(Tok(TokenKind::End, "end"));
+    let grammar = Grammar::<()>::compile(vec![
+        ("Root", Choice(vec![S(rejected), S(accepted)])),
+        ("Word", Tok(TokenKind::Word, "word")),
+        ("Missing", K("SELECT")),
+    ])
+    .unwrap();
+    let tree = parse(
+        &grammar,
+        "one two",
+        Limits {
+            memo_entries: 5,
+            ..Limits::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(tree.memo_entries, 5);
+    assert_eq!(tree.memo_hits, 4);
+    assert_eq!(tree.nodes.len(), 3);
+    assert_eq!(tree.children(tree.root).len(), 2);
+    assert_eq!(
+        parse(
+            &grammar,
+            "one two",
+            Limits {
+                memo_entries: 4,
+                ..Limits::default()
+            }
+        )
+        .err()
+        .unwrap()
+        .code,
+        SyntaxErrorCode::ParserLimitExceeded,
+    );
+}

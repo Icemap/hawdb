@@ -15,9 +15,12 @@
 //! Token PEG matching is independent of syntax AST construction.
 
 use std::collections::HashMap;
+use std::ops::Range;
 use std::sync::Arc;
 
 use crate::{Span, SyntaxError, SyntaxErrorCode, Token, TokenKind};
+
+use memo::MemoTable;
 
 pub(crate) type NodeId = usize;
 pub(crate) type NativeMatcher<T> = fn(&str, &[Token], usize) -> NativeMatch<T>;
@@ -27,10 +30,10 @@ pub(crate) struct NativeMatch<T> {
     pub value: Result<T, SyntaxError>,
 }
 
-pub(crate) enum Expression<T> {
+pub(crate) enum Expression<T, R = &'static str> {
     Keyword(&'static str),
     Token(TokenKind, &'static str),
-    Rule(&'static str),
+    Rule(R),
     Sequence(Vec<Self>),
     Choice(Vec<Self>),
     Optional(Box<Self>),
@@ -44,7 +47,7 @@ pub(crate) enum Expression<T> {
 }
 
 pub(crate) struct Grammar<T> {
-    rules: Vec<(&'static str, Expression<T>)>,
+    rules: Vec<(&'static str, Expression<T, usize>)>,
     names: HashMap<&'static str, usize>,
 }
 
@@ -59,6 +62,10 @@ impl<T> Grammar<T> {
                 return Err(format!("duplicate PEG rule: {name}"));
             }
         }
+        let rules = rules
+            .into_iter()
+            .map(|(name, expression)| Ok((name, expression.resolve(&names)?)))
+            .collect::<Result<_, String>>()?;
         let grammar = Self { rules, names };
         grammar.validate()?;
         Ok(grammar)
@@ -76,9 +83,11 @@ impl<T> Grammar<T> {
             input,
             tokens,
             limits,
-            memo: HashMap::new(),
+            memo: MemoTable::new(self.rules.len()),
             nodes: Vec::new(),
-            edges: 0,
+            edges: Vec::new(),
+            captures: Vec::new(),
+            values: Vec::new(),
             steps: 0,
             depth: 0,
             farthest: None,
@@ -90,6 +99,8 @@ impl<T> Grammar<T> {
         match matched {
             Ok((_, root)) => Ok(ParseTree {
                 nodes: parser.nodes,
+                edges: parser.edges,
+                values: parser.values,
                 root,
                 #[cfg(test)]
                 steps: parser.steps,
@@ -126,16 +137,18 @@ impl Default for Limits {
     }
 }
 
-pub(crate) struct Node<T> {
+pub(crate) struct Node {
     pub name: Option<&'static str>,
     pub start: usize,
     pub end: usize,
-    pub children: Vec<NodeId>,
-    pub value: Option<T>,
+    children: Range<usize>,
+    value: Option<usize>,
 }
 
 pub(crate) struct ParseTree<T> {
-    pub nodes: Vec<Node<T>>,
+    pub nodes: Vec<Node>,
+    edges: Vec<NodeId>,
+    values: Vec<Option<T>>,
     pub root: NodeId,
     #[cfg(test)]
     pub steps: usize,
@@ -147,8 +160,7 @@ pub(crate) struct ParseTree<T> {
 
 impl<T> ParseTree<T> {
     pub fn child(&self, node: NodeId, name: &str) -> Option<NodeId> {
-        self.nodes[node]
-            .children
+        self.children(node)
             .iter()
             .copied()
             .find(|child| self.nodes[*child].name == Some(name))
@@ -159,10 +171,14 @@ impl<T> ParseTree<T> {
             .expect("matched grammar has the required child")
     }
 
+    pub fn children(&self, node: NodeId) -> &[NodeId] {
+        &self.edges[self.nodes[node].children.clone()]
+    }
+
     pub fn take(&mut self, node: NodeId) -> T {
-        let native = self.nodes[node].children[0];
-        self.nodes[native]
-            .value
+        let native = self.children(node)[0];
+        let value = self.nodes[native].value.expect("native node has a value");
+        self.values[value]
             .take()
             .expect("native value is transformed exactly once")
     }
@@ -201,16 +217,20 @@ enum Failure {
     Fatal(SyntaxError),
 }
 
-type MatchResult = Result<(usize, Vec<NodeId>), Failure>;
+type MatchResult = Result<usize, Failure>;
 
 struct Matcher<'a, T> {
     grammar: &'a Grammar<T>,
     input: &'a str,
     tokens: &'a [Token],
     limits: Limits,
-    memo: HashMap<(usize, usize), Memo>,
-    nodes: Vec<Node<T>>,
-    edges: usize,
+    memo: MemoTable,
+    nodes: Vec<Node>,
+    edges: Vec<NodeId>,
+    // Only captures roll back. Memoized nodes, edges and native values remain
+    // append-only so a later alternative can reuse their IDs.
+    captures: Vec<NodeId>,
+    values: Vec<Option<T>>,
     steps: usize,
     depth: usize,
     farthest: Option<Diagnostic>,
@@ -287,21 +307,42 @@ impl<T> Matcher<'_, T> {
         Failure::Mismatch
     }
 
-    fn push(&mut self, node: Node<T>) -> Result<NodeId, Failure> {
+    fn push(
+        &mut self,
+        name: Option<&'static str>,
+        start: usize,
+        end: usize,
+        children_start: usize,
+        value: Option<T>,
+    ) -> Result<NodeId, Failure> {
+        let children = &self.captures[children_start..];
         if self.nodes.len() >= self.limits.nodes
-            || node.children.len() > self.limits.nodes.saturating_sub(self.edges)
+            || children.len() > self.limits.nodes.saturating_sub(self.edges.len())
         {
-            return Err(self.limit(node.start, "PEG nodes and edges within the parser limit"));
+            return Err(self.limit(start, "PEG nodes and edges within the parser limit"));
         }
-        self.edges += node.children.len();
+        let edges_start = self.edges.len();
+        self.edges.extend_from_slice(children);
+        self.captures.truncate(children_start);
+        let value = value.map(|value| {
+            let id = self.values.len();
+            self.values.push(Some(value));
+            id
+        });
         let id = self.nodes.len();
-        self.nodes.push(node);
+        self.nodes.push(Node {
+            name,
+            start,
+            end,
+            children: edges_start..self.edges.len(),
+            value,
+        });
         Ok(id)
     }
 
     fn rule(&mut self, rule: usize, position: usize) -> Result<(usize, NodeId), Failure> {
         self.charge(1, position)?;
-        if let Some(memo) = self.memo.get(&(rule, position)) {
+        if let Some(memo) = self.memo.get(rule, position) {
             #[cfg(test)]
             {
                 self.memo_hits += 1;
@@ -326,10 +367,11 @@ impl<T> Matcher<'_, T> {
         if self.memo.len() >= self.limits.memo_entries {
             return Err(self.limit(position, "PEG memo entries within the parser limit"));
         }
-        self.memo.insert((rule, position), Memo::Pending);
+        self.memo.insert(rule, position, Memo::Pending);
         // Cache rule-local failures so lookahead can discard diagnostics without
         // making a later memo hit lose its source location.
         let outer_error = self.farthest.take();
+        let children_start = self.captures.len();
         let result = self.expression(&self.grammar.rules[rule].1, position);
         let local_error = self.farthest.take();
         self.farthest = outer_error;
@@ -337,39 +379,46 @@ impl<T> Matcher<'_, T> {
             self.remember(error);
         }
         match result {
-            Ok((end, children)) => {
-                let node = self.push(Node {
-                    name: Some(self.grammar.rules[rule].0),
-                    start: position,
+            Ok(end) => {
+                let node = self.push(
+                    Some(self.grammar.rules[rule].0),
+                    position,
                     end,
-                    children,
-                    value: None,
-                })?;
+                    children_start,
+                    None,
+                )?;
                 self.memo
-                    .insert((rule, position), Memo::Matched(end, node, local_error));
+                    .insert(rule, position, Memo::Matched(end, node, local_error));
                 Ok((end, node))
             }
             Err(Failure::Mismatch) => {
-                self.memo
-                    .insert((rule, position), Memo::Failed(local_error));
+                self.memo.insert(rule, position, Memo::Failed(local_error));
                 Err(Failure::Mismatch)
             }
             Err(fatal) => Err(fatal),
         }
     }
 
-    fn expression(&mut self, expression: &Expression<T>, position: usize) -> MatchResult {
+    fn expression(&mut self, expression: &Expression<T, usize>, position: usize) -> MatchResult {
         self.charge(1, position)?;
         if self.depth >= self.limits.depth {
             return Err(self.limit(position, "PEG nesting within the parser limit"));
         }
         self.depth += 1;
+        let captures_start = self.captures.len();
         let result = self.match_expression(expression, position);
+        if result.is_err() {
+            self.captures.truncate(captures_start);
+        }
         self.depth -= 1;
         result
     }
 
-    fn optional_attempt(&mut self, expression: &Expression<T>, position: usize) -> MatchResult {
+    fn optional_attempt(
+        &mut self,
+        expression: &Expression<T, usize>,
+        position: usize,
+    ) -> MatchResult {
         let saved = self.farthest.clone();
         let result = self.expression(expression, position);
         if matches!(result, Err(Failure::Mismatch))
@@ -385,34 +434,37 @@ impl<T> Matcher<'_, T> {
         result
     }
 
-    fn match_expression(&mut self, expression: &Expression<T>, position: usize) -> MatchResult {
+    fn match_expression(
+        &mut self,
+        expression: &Expression<T, usize>,
+        position: usize,
+    ) -> MatchResult {
         match expression {
             Expression::Keyword(keyword) => {
                 if self.token(position).is_keyword(self.input, keyword) {
-                    Ok((position + 1, Vec::new()))
+                    Ok(position + 1)
                 } else {
                     Err(self.mismatch(position, keyword))
                 }
             }
             Expression::Token(kind, expected) => {
                 if self.token(position).kind == *kind {
-                    Ok((position + usize::from(*kind != TokenKind::End), Vec::new()))
+                    Ok(position + usize::from(*kind != TokenKind::End))
                 } else {
                     Err(self.mismatch(position, expected))
                 }
             }
-            Expression::Rule(name) => self
-                .rule(self.grammar.names[name], position)
-                .map(|(end, node)| (end, vec![node])),
+            Expression::Rule(rule) => {
+                let (end, node) = self.rule(*rule, position)?;
+                self.captures.push(node);
+                Ok(end)
+            }
             Expression::Sequence(expressions) => {
                 let mut end = position;
-                let mut children = Vec::new();
                 for expression in expressions {
-                    let (next, nodes) = self.expression(expression, end)?;
-                    end = next;
-                    children.extend(nodes);
+                    end = self.expression(expression, end)?;
                 }
-                Ok((end, children))
+                Ok(end)
             }
             Expression::Choice(expressions) => {
                 for expression in expressions {
@@ -424,20 +476,16 @@ impl<T> Matcher<'_, T> {
                 Err(Failure::Mismatch)
             }
             Expression::Optional(expression) => match self.optional_attempt(expression, position) {
-                Err(Failure::Mismatch) => Ok((position, Vec::new())),
+                Err(Failure::Mismatch) => Ok(position),
                 result => result,
             },
             Expression::Repeat(expression) => {
                 let mut end = position;
-                let mut children = Vec::new();
                 loop {
                     match self.optional_attempt(expression, end) {
-                        Ok((next, nodes)) if next > end => {
-                            end = next;
-                            children.extend(nodes);
-                        }
+                        Ok(next) if next > end => end = next,
                         Ok(_) => return Err(self.limit(end, "a consuming PEG repetition")),
-                        Err(Failure::Mismatch) => return Ok((end, children)),
+                        Err(Failure::Mismatch) => return Ok(end),
                         Err(fatal) => return Err(fatal),
                     }
                 }
@@ -445,11 +493,13 @@ impl<T> Matcher<'_, T> {
             Expression::Ahead(inner, expected) | Expression::Not(inner, expected) => {
                 let positive = matches!(expression, Expression::Ahead(..));
                 let saved = self.farthest.take();
+                let captures_start = self.captures.len();
                 let result = self.expression(inner, position);
+                self.captures.truncate(captures_start);
                 self.farthest = saved;
                 match result {
-                    Ok(_) if positive => Ok((position, Vec::new())),
-                    Err(Failure::Mismatch) if !positive => Ok((position, Vec::new())),
+                    Ok(_) if positive => Ok(position),
+                    Err(Failure::Mismatch) if !positive => Ok(position),
                     Ok(_) | Err(Failure::Mismatch) => Err(self.mismatch(position, expected)),
                     Err(fatal) => Err(fatal),
                 }
@@ -465,14 +515,15 @@ impl<T> Matcher<'_, T> {
                         if !nullable && matched.end == position {
                             return Err(self.limit(position, "a consuming native terminal"));
                         }
-                        let node = self.push(Node {
-                            name: None,
-                            start: position,
-                            end: matched.end,
-                            children: Vec::new(),
-                            value: Some(value),
-                        })?;
-                        Ok((matched.end, vec![node]))
+                        let node = self.push(
+                            None,
+                            position,
+                            matched.end,
+                            self.captures.len(),
+                            Some(value),
+                        )?;
+                        self.captures.push(node);
+                        Ok(matched.end)
                     }
                     Err(error)
                         if matches!(
@@ -490,6 +541,7 @@ impl<T> Matcher<'_, T> {
     }
 }
 
+mod memo;
 #[cfg(test)]
 mod tests;
 mod validation;

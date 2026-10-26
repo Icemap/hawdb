@@ -28,9 +28,9 @@ macro_rules! take_native {
 
 impl Transformer<'_> {
     pub(super) fn output(&mut self, root: &str) -> Output {
-        let mut node = self.tree.nodes[self.tree.root].children[0];
+        let mut node = self.tree.children(self.tree.root)[0];
         if root == "SqlInput" {
-            node = self.tree.nodes[node].children[0];
+            node = self.tree.children(node)[0];
         }
         match self.tree.nodes[node].name {
             Some("Select") => Output::Select(Box::new(self.select(node))),
@@ -47,21 +47,17 @@ impl Transformer<'_> {
             .is_some_and(|quantifier| self.tree.child(quantifier, "Distinct").is_some());
         let projection = take_native!(self, node, "Projection", Projection);
         let from = self.tree.required(node, "From");
-        let from = self.tree.nodes[from]
-            .children
-            .clone()
-            .into_iter()
-            .map(|source| {
+        let from = (0..self.tree.children(from).len())
+            .map(|index| {
+                let source = self.tree.children(from)[index];
                 let relation = self.transform_from_item(self.tree.required(source, "FromItem"));
-                let joins = self.tree.nodes[source]
-                    .children
-                    .clone()
-                    .into_iter()
-                    .filter(|child| self.tree.nodes[*child].name == Some("Join"))
-                    .collect::<Vec<_>>()
-                    .into_iter()
-                    .map(|join| self.join(join))
-                    .collect();
+                let mut joins = Vec::new();
+                for index in 0..self.tree.children(source).len() {
+                    let child = self.tree.children(source)[index];
+                    if self.tree.nodes[child].name == Some("Join") {
+                        joins.push(self.join(child));
+                    }
+                }
                 PostgresFromSyntax {
                     relation,
                     joins,
@@ -118,7 +114,7 @@ impl Transformer<'_> {
     }
 
     fn transform_from_item(&mut self, node: NodeId) -> PostgresFromItemSyntax {
-        let child = self.tree.nodes[node].children[0];
+        let child = self.tree.children(node)[0];
         if self.tree.nodes[child].name == Some("GraphTable") {
             PostgresFromItemSyntax::GraphTable(self.graph_table(child))
         } else {
@@ -130,7 +126,7 @@ impl Transformer<'_> {
     }
 
     fn join(&mut self, node: NodeId) -> PostgresJoinSyntax {
-        let node = self.tree.nodes[node].children[0];
+        let node = self.tree.children(node)[0];
         let kind = match self.tree.nodes[node].name {
             Some("InnerJoin") => PostgresJoinKind::Inner,
             Some("LeftJoin") => PostgresJoinKind::Left,

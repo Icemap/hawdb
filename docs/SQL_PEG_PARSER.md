@@ -29,8 +29,10 @@ features, not consequences of using PEG.
 combinators: token/keyword, sequence, ordered choice, optional, repetition,
 and positive/negative lookahead. Keywords match unquoted words case-insensitively.
 The SQL grammar exports `Statement` and `FromItem` alternatives; PGQ prepends
-its rules before immutable compilation. In particular, GRAPH_TABLE composes
-inside joins and FROM lists rather than retrying after a SQL parse error.
+its rules before immutable compilation. Compilation resolves named references
+to numeric rule IDs, so matching does not hash rule names. In particular,
+GRAPH_TABLE composes inside joins and FROM lists rather than retrying after a
+SQL parse error.
 A negative keyword guard prevents a broken GRAPH_TABLE prefix from becoming
 an ordinary relation.
 
@@ -52,8 +54,19 @@ The AST transformer and grammar form one internal contract and change together.
 
 A parser invocation owns its memo table and capture arena. Successful and
 failed named rules are cached by rule ID and token position; successful hits
-reuse capture IDs instead of cloning syntax trees. Token failures store positions
-and static expectations, rendering source text only for the final error; native
+reuse capture IDs instead of cloning syntax trees. Each rule's first memo entry
+uses a direct indexed slot; other positions use a sparse hash table. Both tiers
+share the same entry budget and retain successful and failed results. The direct
+slots are bounded by the compiled grammar's 256-rule cap, not the input length.
+
+Capture children are ranges in one edge arena, and native values occupy a
+separate arena instead of enlarging every named node. A reusable scratch vector
+collects children during matching. Failed expressions and lookahead roll back
+only that scratch vector; nodes, edges and values remain append-only because
+memoized results may reference them. The AST transformer reads child ranges
+without cloning temporary child lists.
+
+Token failures store positions and static expectations, rendering source text only for the final error; native
 errors share their existing diagnostic. Cached diagnostics preserve
 the farthest failure through later reuse. Lookahead discards its own speculative diagnostic. Optional/repeated
 branches discard absent-prefix mismatches while preserving deeper failures. Ordinary syntax errors select the farthest byte
@@ -84,8 +97,23 @@ have exponential cost without failure memoization, cache reuse, source spans,
 and exact budget boundaries. Source-bound local parser campaigns supplement
 those cases. See [test ownership](TEST_INDEX.md#owned-sqlpgq-token-peg).
 
-This migration adds matching/capture overhead to the owned frontend; it does
-not claim a throughput improvement. Full production SQL activation still
-requires statement-family positive/negative parity, executable lowering,
+The local parser-only benchmark is reproducible with:
+
+```console
+cargo bench --locked -p hawdb-sql-syntax --bench frontend
+cargo bench --locked -p hawdb-sql-syntax --bench frontend -- --shapes
+```
+
+The default mode mixes five short SQL/PGQ statement shapes; `--shapes` also
+isolates minimal queries, malformed PGQ, 500-column projections, 64 joins and
+a 4 MiB rejected word. It warms the grammar before emitting nine CSV samples
+per workload. Exclude the first sample and interleave identical benchmark
+sources against baseline and candidate revisions. Allocation measurements need
+a separate instrumented probe; timings from that probe include its overhead.
+Results and tested revisions belong in the PR, not a checked-in run log.
+
+PEG still adds matching/capture overhead relative to handwritten parsing.
+Full production SQL activation still requires statement-family positive/negative
+parity, executable lowering,
 query-result/plan coverage and resource measurements, as required by the
 [SQL/PGQ specification](specs/POSTGRES_SQL_PGQ_SPEC.md).

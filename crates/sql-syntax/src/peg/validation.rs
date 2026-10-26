@@ -12,19 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use super::{Expression, Grammar};
 use crate::TokenKind;
 
 impl<T> Grammar<T> {
     pub(super) fn validate(&self) -> Result<(), String> {
-        for (_, expression) in &self.rules {
-            self.check_references(expression)?;
-        }
         let mut nullable = vec![false; self.rules.len()];
         loop {
             let mut changed = false;
             for (index, (_, expression)) in self.rules.iter().enumerate() {
-                if !nullable[index] && self.nullable(expression, &nullable) {
+                if !nullable[index] && Self::nullable(expression, &nullable) {
                     nullable[index] = true;
                     changed = true;
                 }
@@ -35,9 +34,9 @@ impl<T> Grammar<T> {
         }
         let mut edges = Vec::new();
         for (_, expression) in &self.rules {
-            self.check_repetition(expression, &nullable)?;
+            Self::check_repetition(expression, &nullable)?;
             let mut next = Vec::new();
-            self.leading_rules(expression, &nullable, &mut next);
+            Self::leading_rules(expression, &nullable, &mut next);
             edges.push(next);
         }
         let mut visiting = vec![false; self.rules.len()];
@@ -53,30 +52,11 @@ impl<T> Grammar<T> {
         Ok(())
     }
 
-    fn check_references(&self, expression: &Expression<T>) -> Result<(), String> {
+    fn nullable(expression: &Expression<T, usize>, nullable: &[bool]) -> bool {
         match expression {
-            Expression::Rule(name) if !self.names.contains_key(name) => {
-                Err(format!("unknown PEG rule: {name}"))
-            }
-            Expression::Choice(items) | Expression::Sequence(items) => {
-                for item in items {
-                    self.check_references(item)?;
-                }
-                Ok(())
-            }
-            Expression::Optional(item)
-            | Expression::Repeat(item)
-            | Expression::Ahead(item, _)
-            | Expression::Not(item, _) => self.check_references(item),
-            _ => Ok(()),
-        }
-    }
-
-    fn nullable(&self, expression: &Expression<T>, nullable: &[bool]) -> bool {
-        match expression {
-            Expression::Rule(name) => nullable[self.names[name]],
-            Expression::Sequence(items) => items.iter().all(|item| self.nullable(item, nullable)),
-            Expression::Choice(items) => items.iter().any(|item| self.nullable(item, nullable)),
+            Expression::Rule(rule) => nullable[*rule],
+            Expression::Sequence(items) => items.iter().all(|item| Self::nullable(item, nullable)),
+            Expression::Choice(items) => items.iter().any(|item| Self::nullable(item, nullable)),
             Expression::Optional(_)
             | Expression::Repeat(_)
             | Expression::Ahead(_, _)
@@ -88,49 +68,48 @@ impl<T> Grammar<T> {
     }
 
     fn check_repetition(
-        &self,
-        expression: &Expression<T>,
+        expression: &Expression<T, usize>,
         nullable: &[bool],
     ) -> Result<(), String> {
         match expression {
-            Expression::Repeat(item) if self.nullable(item, nullable) => {
+            Expression::Repeat(item) if Self::nullable(item, nullable) => {
                 Err("nullable PEG repetition".into())
             }
             Expression::Choice(items) | Expression::Sequence(items) => {
                 for item in items {
-                    self.check_repetition(item, nullable)?;
+                    Self::check_repetition(item, nullable)?;
                 }
                 Ok(())
             }
             Expression::Optional(item)
             | Expression::Repeat(item)
             | Expression::Ahead(item, _)
-            | Expression::Not(item, _) => self.check_repetition(item, nullable),
+            | Expression::Not(item, _) => Self::check_repetition(item, nullable),
             _ => Ok(()),
         }
     }
 
-    fn leading_rules(&self, expression: &Expression<T>, nullable: &[bool], edges: &mut Vec<usize>) {
+    fn leading_rules(expression: &Expression<T, usize>, nullable: &[bool], edges: &mut Vec<usize>) {
         match expression {
-            Expression::Rule(name) => edges.push(self.names[name]),
+            Expression::Rule(rule) => edges.push(*rule),
             Expression::Sequence(items) => {
                 for item in items {
-                    self.leading_rules(item, nullable, edges);
-                    if !self.nullable(item, nullable) {
+                    Self::leading_rules(item, nullable, edges);
+                    if !Self::nullable(item, nullable) {
                         break;
                     }
                 }
             }
             Expression::Choice(items) => {
                 for item in items {
-                    self.leading_rules(item, nullable, edges);
+                    Self::leading_rules(item, nullable, edges);
                 }
             }
             Expression::Optional(item)
             | Expression::Repeat(item)
             | Expression::Ahead(item, _)
             | Expression::Not(item, _) => {
-                self.leading_rules(item, nullable, edges);
+                Self::leading_rules(item, nullable, edges);
             }
             _ => (),
         }
@@ -153,4 +132,40 @@ fn cycle(node: usize, edges: &[Vec<usize>], visiting: &mut [bool], visited: &mut
     visiting[node] = false;
     visited[node] = true;
     false
+}
+
+impl<T> Expression<T> {
+    pub(super) fn resolve(
+        self,
+        names: &HashMap<&'static str, usize>,
+    ) -> Result<Expression<T, usize>, String> {
+        Ok(match self {
+            Self::Keyword(keyword) => Expression::Keyword(keyword),
+            Self::Token(kind, expected) => Expression::Token(kind, expected),
+            Self::Rule(name) => Expression::Rule(
+                *names
+                    .get(name)
+                    .ok_or_else(|| format!("unknown PEG rule: {name}"))?,
+            ),
+            Self::Sequence(items) => Expression::Sequence(
+                items
+                    .into_iter()
+                    .map(|item| item.resolve(names))
+                    .collect::<Result<_, _>>()?,
+            ),
+            Self::Choice(items) => Expression::Choice(
+                items
+                    .into_iter()
+                    .map(|item| item.resolve(names))
+                    .collect::<Result<_, _>>()?,
+            ),
+            Self::Optional(item) => Expression::Optional(Box::new(item.resolve(names)?)),
+            Self::Repeat(item) => Expression::Repeat(Box::new(item.resolve(names)?)),
+            Self::Ahead(item, expected) => {
+                Expression::Ahead(Box::new(item.resolve(names)?), expected)
+            }
+            Self::Not(item, expected) => Expression::Not(Box::new(item.resolve(names)?), expected),
+            Self::Native { matcher, nullable } => Expression::Native { matcher, nullable },
+        })
+    }
 }
