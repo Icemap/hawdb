@@ -65,22 +65,26 @@ empty/sparse/dense allowlists, ties, multiple top-k limits, and parallel merging
 
 Local observation (2026-10-27): Linux x86_64, AMD Ryzen 7 7735HS, pinned Rust
 1.97.1, repository release profile, base
-`804f1a6139f73470c58167411f6cad871efffdbf` plus the uncommitted SIMD adaptation.
-This is a synthetic development measurement, not representative Mem workload
-or production qualification. Across 96 cases, speedup ranged from 2.99–7.07x
-for 1-bit and 3.83–6.95x for 4-bit, with no measured regression in this matrix.
+`8300b87f609564ad55ad47c4a129ce6d0d899447`. Three independent runs each
+covered all 96 cases with 15 interleaved samples per kernel and case. The table
+and ranges use the median of the three per-run medians. Task-owned compilation
+was stopped during measurement; the shared host was not CPU-isolated. This is a
+synthetic development measurement, not representative Mem workload or production
+qualification. Speedup ranged from 3.54–7.01x for 1-bit and 3.88–6.93x for 4-bit,
+with no measured regression in this matrix. All 288 comparisons preserved exact
+scores, IDs, and reports; payload/query checksums matched across runs.
 The following subset uses default 4-bit codes, one worker, and no allowlist:
 
 | Dimensions | Backend | Scalar median (us) | AVX2 median (us) | Speedup |
 | ---: | --- | ---: | ---: | ---: |
-| 384 | Memory | 7363.0 | 1084.3 | 6.79x |
-| 384 | File | 7319.4 | 1082.4 | 6.76x |
-| 768 | Memory | 14694.7 | 2139.1 | 6.87x |
-| 768 | File | 14868.3 | 2172.6 | 6.84x |
-| 769 | Memory | 14648.9 | 2144.9 | 6.83x |
-| 769 | File | 14770.3 | 2153.5 | 6.86x |
-| 1536 | Memory | 29210.5 | 4204.1 | 6.95x |
-| 1536 | File | 29128.3 | 4202.3 | 6.93x |
+| 384 | Memory | 7264.7 | 1069.0 | 6.80x |
+| 384 | File | 7259.7 | 1071.3 | 6.78x |
+| 768 | Memory | 14456.0 | 2107.1 | 6.86x |
+| 768 | File | 14467.0 | 2111.3 | 6.85x |
+| 769 | Memory | 14475.9 | 2128.3 | 6.80x |
+| 769 | File | 14473.8 | 2123.7 | 6.82x |
+| 1536 | Memory | 28950.1 | 4176.8 | 6.93x |
+| 1536 | File | 29047.7 | 4190.4 | 6.93x |
 
 The kernel adds no heap allocation or per-query lookup table. Existing
 32-row cancellation checkpoints remain unchanged. A companion benchmark measures
@@ -89,9 +93,10 @@ scans for both widths, backends, and one/four workers. It reports the median and
 maximum deadline overshoot over 15 searches, plus cancelled/completed counts.
 These observations include OS scheduling and do not impose a universal latency
 threshold. Peak process RSS, cold I/O, full facade latency, and production recall
-are outside these local probes. In this run, all 120 searches per kernel reached
-the deadline: scalar per-case median overshoot ranged from 142.6–242.5 us
-(maximum 542.7 us), versus 5.3–67.7 us for AVX2 (maximum 92.3 us).
+are outside these local probes. Across three runs, all 360 searches per kernel reached
+the deadline. Taking the median of the three per-run case medians, scalar
+overshoot ranged from 139.0–244.5 us versus 14.9–56.3 us for AVX2. The worst
+observed overshoot across all runs was 514.7 us for scalar and 114.6 us for AVX2.
 No ARM/NEON throughput claim is made.
 
 ## Initial development validation
@@ -135,6 +140,57 @@ Record CPU/OS, compiler, build profile, complete benchmark output, and any
 regressions. Native correctness and speedup are pending; cross-compilation alone
 does not authorize changing AArch64 `Auto` to NEON. Existing application options
 can select `VectorSearchKernelPreference::Neon` explicitly for host measurements.
+
+## Full-query SIMD comparison
+
+The existing profiling example also supports an interleaved comparison through
+`SearchOutOfCoreReader`'s public compressed-vector query API. This includes
+candidate scanning, raw-vector reranking, and result hydration. The fixture has
+100,000 deterministic 384-dimensional vectors, default 4-bit codes, unfiltered
+top-k 10, rank window 100, and one configured worker. Three queries warm both kernels;
+31 measured samples per kernel alternate execution order. Final hit IDs and
+score bits must match exactly. Warmups also compare scored/reranked counts,
+raw-vector bytes, admitted candidate working bytes, and layer-worker counts.
+Open/build and result validation are outside the timers. The emitted JSON retains
+every timing.
+
+Choose an unused fixture directory on a real filesystem, keep raw output outside
+Git, and stop competing compilation before measurement:
+
+```bash
+mkdir -p .scratch
+cargo run --locked --release --example rabitq_query_profile -- \
+  build .scratch/rabitq-simd-query-fixture
+cargo run --locked --release --example rabitq_query_profile -- \
+  compare .scratch/rabitq-simd-query-fixture
+```
+
+The comparison explicitly selects AVX2 on x86 or NEON on AArch64 and rejects
+unsupported hardware. It measures explicit RaBitQ searches, not default DiskANN
+or whole application request latency. The original scalar `profile` mode and
+its historical evidence below remain unchanged.
+
+On 2026-10-27, the same Ryzen 7 7735HS / Linux x86_64 / Rust 1.97.1 host ran
+three independent comparisons on `8300b87f609564ad55ad47c4a129ce6d0d899447`
+plus the comparison mode introduced here, using the repository release profile.
+Competing task-owned builds were stopped; the host was shared and the file cache
+was warm. The build report recorded 100,000 vectors, 4-bit codes, generator seed
+`0x994020266f9131c5`, and 20,821,407 RaBitQ artifact bytes.
+
+| Run | Scalar p50 (ms) | AVX2 p50 (ms) | Scalar p95 (ms) | AVX2 p95 (ms) | p50 speedup |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 1263.7 | 1114.3 | 1285.4 | 1148.4 | 1.134x |
+| 2 | 1272.2 | 1123.1 | 1288.5 | 1140.9 | 1.133x |
+| 3 | 1264.4 | 1113.6 | 1288.7 | 1137.7 | 1.135x |
+
+Taking the median of the three per-run percentiles gives p50 1264.4 -> 1114.3 ms
+and p95 1288.5 -> 1140.9 ms: 1.135x p50 speedup, or 11.9% lower median latency.
+Percentiles use nearest rank. All 186 timed queries preserved exact final IDs
+and score bits. Warmup reports each scored 100,000 vectors and reranked 1,024 candidates,
+with 1,572,864 reported raw-vector bytes, 904,704 admitted candidate working bytes,
+and a layer-worker sum of 13 (sequential layers, not simultaneous workers).
+The combined comparison processes peaked at 42,020–42,972 KiB RSS, measured by
+`wait4`; this is whole-process residency, not a per-kernel memory comparison.
 
 ## Earlier scalar baseline and full-query profile
 
