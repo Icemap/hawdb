@@ -997,6 +997,17 @@ versus cache hits, cold build cost and required target inventory.
   oracle fails; `SHIRO_SECONDS=30` adds a local time budget. Explicit `--cases`
   and `--case-index` support finite verification/replay. See
   [tools/shiro](../tools/shiro/README.md).
+- SQL maintenance and ranges: every Shiro case compares backfilled projection,
+  grouped/global COUNT/SUM/BIGINT-and-TEXT extrema and indexed view reads with an
+  unindexed reference after random INSERT/UPSERT/UPDATE/DELETE, commit, rollback,
+  overflow rejection and clear/repopulation. It verifies pinned old snapshots
+  and ordered composite ranges with inclusive/exclusive/equal/reversed/NULL
+  bounds and residual filters. Local `//tools/shiro:shiro_fast_tests` owns the
+  generator, positive campaign and corrupted-view negative controls; no CI
+  ownership is added. `sql_maintenance_coverage` separates actual initial range
+  plans from fallback plans. Replay with `--seed 7 --cases 32 --case-index 0`;
+  the v3 campaign protocol rejects old resume reports. This is in-memory
+  differential evidence, not persistence or power-loss qualification.
 - MVCC: `make mvcc-fuzz` defaults to 30 seconds of local transaction histories.
   Generate editable cases, replay failures and shrink them before introducing a
   focused deterministic regression. See [tools/mvcc-fuzz](../tools/mvcc-fuzz/README.md).

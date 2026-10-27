@@ -101,6 +101,45 @@ The differential reducer first minimizes graph mutations and then typed query AS
 a candidate only when the same failure signature still triggers, so a setup, parse, or execution
 error cannot replace a semantic mismatch during reduction.
 
+## SQL maintenance and composite ranges
+
+Every generated case also runs a bounded stateful campaign over an indexed
+source and an unindexed reference table. Identical parameterized writes update
+both in one transaction. Materialized projection, grouped and ungrouped
+COUNT/COUNT(column)/SUM/MIN/MAX results are compared with full SELECT
+recomputation on the reference; projection bags retain duplicates and NULLs.
+BIGINT and TEXT extrema include duplicate extrema, NULL keys, all-NULL groups,
+filter changes, primary-key moves and deletion of the last contributing row.
+Views are backfilled over existing rows and include an index on visible outputs.
+
+The deterministic sequence mixes INSERT, UPSERT, UPDATE and DELETE with random
+values and target keys, explicit rollback, clear/repopulation and aggregate
+BIGINT overflow rejection after an earlier staged write. Each transaction checks
+read-your-writes, committed or rolled-back results, and the unchanged pinned
+pre-write snapshot. Rejection must match the specific aggregate overflow
+condition and leave the source, views, reference and commit epoch unchanged;
+arbitrary matching SQL errors never count as agreement.
+
+Composite `(bucket, score, id)` queries compare indexed and unindexed execution
+with inclusive/exclusive endpoints, equal/reversed/NULL bounds, ASC/DESC order,
+a non-indexed residual filter, and LIMIT/OFFSET with a total order. The existing
+seed/case-index replay controls all choices. `sql_maintenance_coverage` reports
+completed operations and actual range-index versus fallback plan selections
+separately. Plan counters describe the initial fixture, not every later step.
+
+Failures retain typed rows, queries/parameters, plans for result mismatches,
+the transaction step, complete setup and operation sequence. Reduction removes
+whole transactions on fresh databases and retains only the same failure
+signature. The campaign protocol is `shiro-multi-oracle-fuzz-v3`; older progress
+files cannot resume with the stronger oracle. Maintenance replay bundles use
+`shiro-sql-maintenance-v1` and describe explicit commit/rollback boundaries.
+
+This campaign is in-memory and checks maintenance/access-path relations. It does
+not establish WAL recovery, machine power-loss safety, concurrent-writer
+serializability, or correctness of SQL semantics shared by both executions.
+Existing persistence and MVCC campaigns remain complementary. No CI job or
+production dependency is added.
+
 ## Extended SQL operator relations
 
 Shiro now additionally runs these relations against one pinned relational snapshot:
