@@ -1,0 +1,17 @@
+{
+  "decision": "reject fixed-stack implementation; restored owned production Rust and test index to 7da5fc6c",
+  "reason": "No supported latency gain; reopened durable ungrouped 1W/2R execution ratios approximately 1.0443,1.0400,1.0459,1.0506. All observations preserved; four pairs are diagnostic, not a formal regression classification.",
+  "exact_checks_passed": true,
+  "measurement_receipt": {
+    "diagnostic_only": true,
+    "exact_checks_passed": true,
+    "counts": {
+      "processes": 32,
+      "cases": 192,
+      "commits": 49152,
+      "reads": 110592,
+      "reopens": 128
+    },
+    "results_sha256": "adaa7b0db545824accbd5e563892e2d60796868237699aeabe29790fee4bca55"
+  }
+}

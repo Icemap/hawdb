@@ -164,9 +164,11 @@ results and plan assertions pass, while non-point latency regressions relative
 to the paired unindexed scan remain explicit. It does not replace full-scale
 release calibration or establish a uniformly faster access policy.
 
-The snapshot full-scan page estimate uses average page occupancy and the
-descriptor's capped candidate rows. A small `LIMIT` can reduce that modeled
-work even when a low-selectivity residual filter needs to visit many more input
-rows. This is a cost-model limitation, not permission to stop a scan early or
-omit execution admission; selectivity-aware input-visit calibration remains
-separate work.
+Snapshot full-scan CPU, row visits and descriptor-page reads use the complete
+pinned table bound, independently of capped candidate/output rows. A small
+intermediate-row budget or `LIMIT` does not prove that a residual predicate
+accepts early inputs. Cardinality and output charges keep the descriptor's
+estimate; point and covering-index costs retain their existing visit counts.
+This conservative bound can overestimate an unfiltered early-stop scan. A
+future selectivity-aware model must represent input visits and safe early-stop
+evidence separately rather than treating an output cap as scan work.

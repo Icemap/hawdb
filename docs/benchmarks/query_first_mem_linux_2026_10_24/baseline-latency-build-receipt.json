@@ -1,0 +1,17 @@
+{
+  "name": "baseline-latency",
+  "cwd": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18",
+  "command": [
+    "cargo",
+    "bench",
+    "--locked",
+    "--bench",
+    "mem_query_concurrency",
+    "--no-run",
+    "--message-format=json"
+  ],
+  "exit_code": 0,
+  "build_seconds": 509.40810446161777,
+  "binary_sha256": "423371c9d32271c8c6c643cd4e30c49b79368c48ce6e29a04639a73f19f41648",
+  "benchmark_sha256": "5436fb523d5171db13e56636d2e7a06d3dc1f2c582a82808e776bd98a5f0595a"
+}

@@ -982,9 +982,8 @@ fn session_result_row_settings_are_isolated_and_inherited_by_transactions() {
             assert!(session.query(query).is_err());
             let mutation_error = session.query("MATCH (n:SessionLimit) WHERE n.score >= 0 SET n.score = 42 RETURN n.score AS score").unwrap_err();
             assert!(
-                mutation_error
-                    .to_string()
-                    .contains("max_mutation_result_rows 1"),
+                matches!(&mutation_error, hawdb::HawDBError::ReadBudgetExceeded(cause)
+                    if cause.resource == hawdb::ReadBudgetResource::Rows && cause.limit == 1),
                 "unexpected mutation refusal: {mutation_error}"
             );
             assert_eq!(

@@ -120,6 +120,7 @@ impl MountedFixture {
         rows: &mut Vec<(RelationalKey, RelationalKey)>,
     ) -> Result<RelationalIndexReadViewReport, RelationalIndexShadowError> {
         let scan = RelationalIndexRangeScan {
+            bounds: Default::default(),
             prefix: key(&[1]),
             exclusive_bound: None,
             direction: RelationalIndexScanDirection::Forward,
@@ -195,6 +196,7 @@ fn mounted_base_validation_accounts_once_and_warm_reads_keep_complete_results() 
         let mut rows = Vec::new();
         let report = fixture.probe(&context, kind, limits, &mut rows).unwrap();
         let scan = RelationalIndexRangeScan {
+            bounds: Default::default(),
             prefix: key(&[1]),
             exclusive_bound: None,
             direction: RelationalIndexScanDirection::Forward,
@@ -282,6 +284,7 @@ fn mounted_descriptor_rejection_retains_payload_allowance_for_statement_retry() 
     drop(held);
     let report = fixture.probe(&context, 0, limits, &mut rows).unwrap();
     let scan = RelationalIndexRangeScan {
+        bounds: Default::default(),
         prefix: key(&[1]),
         exclusive_bound: None,
         direction: RelationalIndexScanDirection::Forward,
@@ -312,6 +315,7 @@ fn retry_transaction_probe_after_descriptor_rejection(kind: usize) {
         RelationalTransactionIndexView::new(fixture.view.clone(), Default::default(), limits);
     let context = RelationalIndexReadContext::new(limits);
     let scan = RelationalIndexRangeScan {
+        bounds: Default::default(),
         prefix: key(&[1]),
         exclusive_bound: None,
         direction: RelationalIndexScanDirection::Forward,

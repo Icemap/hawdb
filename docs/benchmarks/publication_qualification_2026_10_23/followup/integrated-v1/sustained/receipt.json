@@ -1,0 +1,9 @@
+{
+  "source": "4b65398f1580cd771ee22d1085d2e13b20f0109d",
+  "cases_complete": 18,
+  "expected_cases": 18,
+  "process_and_exact_checks_passed": true,
+  "sustained": true,
+  "sustained_progress_qualified": true,
+  "limits": "Finite fixed work, no steady-state, starvation-freedom or latency-improvement claim. Preserve separate strict writer gates and historical adverse datasets."
+}

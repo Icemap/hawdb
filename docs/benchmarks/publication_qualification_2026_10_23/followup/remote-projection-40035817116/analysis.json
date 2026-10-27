@@ -1,0 +1,414 @@
+{
+  "diagnostic_only": true,
+  "scope": "Six descriptive blocks per cohort, no strict gate or matrix confidence claim",
+  "rows": [
+    {
+      "reopen": false,
+      "writers": 1,
+      "readers": 2,
+      "durable": false,
+      "grouped": false,
+      "variant": "stack",
+      "read_p50_ratios": [
+        1.0095192257538326,
+        0.7517453325992292,
+        1.0617520044713684,
+        0.8136308452465362,
+        0.9420328703020115,
+        0.9542537509623871
+      ],
+      "median_ratio": 0.9481433106321993
+    },
+    {
+      "reopen": false,
+      "writers": 1,
+      "readers": 2,
+      "durable": false,
+      "grouped": false,
+      "variant": "vector",
+      "read_p50_ratios": [
+        1.1204093148528373,
+        0.7936913759447419,
+        1.0434780429241346,
+        0.8029892594320851,
+        0.9115023340867531,
+        0.9454842919647719
+      ],
+      "median_ratio": 0.9284933130257624
+    },
+    {
+      "reopen": false,
+      "writers": 1,
+      "readers": 2,
+      "durable": true,
+      "grouped": false,
+      "variant": "stack",
+      "read_p50_ratios": [
+        0.9751703033394099,
+        0.9754008503662722,
+        1.0119138901726819,
+        0.9925693332319862,
+        0.9822518460763442,
+        0.9547121096043062
+      ],
+      "median_ratio": 0.9788263482213082
+    },
+    {
+      "reopen": false,
+      "writers": 1,
+      "readers": 2,
+      "durable": true,
+      "grouped": false,
+      "variant": "vector",
+      "read_p50_ratios": [
+        0.9999520272283352,
+        0.9830439014394754,
+        1.0118062266291332,
+        1.0224702314646146,
+        1.1841646267217179,
+        0.950824320694081
+      ],
+      "median_ratio": 1.0058791269287342
+    },
+    {
+      "reopen": false,
+      "writers": 1,
+      "readers": 2,
+      "durable": true,
+      "grouped": true,
+      "variant": "stack",
+      "read_p50_ratios": [
+        1.0218811152762415,
+        1.0000954874994927,
+        0.9958000705331667,
+        0.9882279485740575,
+        0.9780246179755802,
+        0.94274078373477
+      ],
+      "median_ratio": 0.9920140095536121
+    },
+    {
+      "reopen": false,
+      "writers": 1,
+      "readers": 2,
+      "durable": true,
+      "grouped": true,
+      "variant": "vector",
+      "read_p50_ratios": [
+        0.9839620233525352,
+        0.9722441710849529,
+        0.9811286786375755,
+        1.0396437797966622,
+        1.0017386135671298,
+        0.9788953727809796
+      ],
+      "median_ratio": 0.9825453509950554
+    },
+    {
+      "reopen": false,
+      "writers": 8,
+      "readers": 16,
+      "durable": false,
+      "grouped": false,
+      "variant": "stack",
+      "read_p50_ratios": [
+        0.9628106084920373,
+        1.0042596917757833,
+        0.9864068734879419,
+        0.9861905006322647,
+        0.9615196604702797,
+        0.975617931236747
+      ],
+      "median_ratio": 0.9809042159345058
+    },
+    {
+      "reopen": false,
+      "writers": 8,
+      "readers": 16,
+      "durable": false,
+      "grouped": false,
+      "variant": "vector",
+      "read_p50_ratios": [
+        0.9699867552063792,
+        0.9642213476533765,
+        1.0037927820939783,
+        0.974436444573023,
+        0.9691147648829783,
+        0.9715142952243733
+      ],
+      "median_ratio": 0.9707505252153763
+    },
+    {
+      "reopen": false,
+      "writers": 8,
+      "readers": 16,
+      "durable": true,
+      "grouped": false,
+      "variant": "stack",
+      "read_p50_ratios": [
+        0.9145601523988595,
+        0.9902793328421432,
+        0.9847548871702847,
+        1.0092202534884358,
+        0.9766065618968844,
+        0.9723727581300541
+      ],
+      "median_ratio": 0.9806807245335846
+    },
+    {
+      "reopen": false,
+      "writers": 8,
+      "readers": 16,
+      "durable": true,
+      "grouped": false,
+      "variant": "vector",
+      "read_p50_ratios": [
+        0.9025838946237756,
+        0.9676081638467754,
+        1.0472575811541367,
+        0.9854248718393903,
+        0.960127929418252,
+        0.9501246660333008
+      ],
+      "median_ratio": 0.9638680466325137
+    },
+    {
+      "reopen": false,
+      "writers": 8,
+      "readers": 16,
+      "durable": true,
+      "grouped": true,
+      "variant": "stack",
+      "read_p50_ratios": [
+        0.9694474708171206,
+        0.9672445700671242,
+        0.974525885206803,
+        1.00027127976791,
+        0.9793339402856831,
+        0.9781913242235131
+      ],
+      "median_ratio": 0.976358604715158
+    },
+    {
+      "reopen": false,
+      "writers": 8,
+      "readers": 16,
+      "durable": true,
+      "grouped": true,
+      "variant": "vector",
+      "read_p50_ratios": [
+        0.962988326848249,
+        0.9640773839614223,
+        0.9656132292353236,
+        0.9697780886658864,
+        0.9643085306484966,
+        0.9646503277825521
+      ],
+      "median_ratio": 0.9644794292155243
+    },
+    {
+      "reopen": true,
+      "writers": 1,
+      "readers": 2,
+      "durable": false,
+      "grouped": false,
+      "variant": "stack",
+      "read_p50_ratios": [
+        0.9360766026953687,
+        1.0860703223512742,
+        0.9424179957490717,
+        0.892396005885301,
+        0.8943612614008831,
+        0.9508703988905687
+      ],
+      "median_ratio": 0.9392472992222203
+    },
+    {
+      "reopen": true,
+      "writers": 1,
+      "readers": 2,
+      "durable": false,
+      "grouped": false,
+      "variant": "vector",
+      "read_p50_ratios": [
+        0.9680263261889537,
+        1.0190576794698327,
+        0.9554087228683013,
+        0.8349056318949502,
+        1.0357009851658405,
+        0.9675213030157948
+      ],
+      "median_ratio": 0.9677738146023742
+    },
+    {
+      "reopen": true,
+      "writers": 1,
+      "readers": 2,
+      "durable": true,
+      "grouped": false,
+      "variant": "stack",
+      "read_p50_ratios": [
+        0.9719335491746722,
+        0.9701449166177871,
+        0.9939270334202706,
+        1.0142531749533863,
+        0.9262823844970266,
+        1.3258868832389032
+      ],
+      "median_ratio": 0.9829302912974713
+    },
+    {
+      "reopen": true,
+      "writers": 1,
+      "readers": 2,
+      "durable": true,
+      "grouped": false,
+      "variant": "vector",
+      "read_p50_ratios": [
+        0.9745369141765299,
+        0.9985443763419452,
+        0.9551515335314692,
+        1.0080218745934861,
+        0.9759741339876076,
+        1.3118113486888934
+      ],
+      "median_ratio": 0.9872592551647763
+    },
+    {
+      "reopen": true,
+      "writers": 1,
+      "readers": 2,
+      "durable": true,
+      "grouped": true,
+      "variant": "stack",
+      "read_p50_ratios": [
+        1.0178120706731844,
+        1.1316504452802874,
+        1.034846117600377,
+        0.9674818373759372,
+        1.207207068332524,
+        1.0337228672066734
+      ],
+      "median_ratio": 1.034284492403525
+    },
+    {
+      "reopen": true,
+      "writers": 1,
+      "readers": 2,
+      "durable": true,
+      "grouped": true,
+      "variant": "vector",
+      "read_p50_ratios": [
+        1.0168269486778065,
+        1.008104230485866,
+        0.971162859906257,
+        0.9295677307347936,
+        0.9546847742588553,
+        0.9882326013148358
+      ],
+      "median_ratio": 0.9796977306105463
+    },
+    {
+      "reopen": true,
+      "writers": 8,
+      "readers": 16,
+      "durable": false,
+      "grouped": false,
+      "variant": "stack",
+      "read_p50_ratios": [
+        0.8017916591707919,
+        0.9694279377733539,
+        0.991231570102846,
+        0.9615086874247376,
+        0.9564632964165161,
+        1.0034900574225012
+      ],
+      "median_ratio": 0.9654683125990458
+    },
+    {
+      "reopen": true,
+      "writers": 8,
+      "readers": 16,
+      "durable": false,
+      "grouped": false,
+      "variant": "vector",
+      "read_p50_ratios": [
+        0.81296873398059,
+        0.986539577403737,
+        0.9988710881208429,
+        0.9604425652122738,
+        0.974629424407669,
+        1.0039467453772362
+      ],
+      "median_ratio": 0.980584500905703
+    },
+    {
+      "reopen": true,
+      "writers": 8,
+      "readers": 16,
+      "durable": true,
+      "grouped": false,
+      "variant": "stack",
+      "read_p50_ratios": [
+        0.9996480145675037,
+        1.0054858952363486,
+        0.9893478696866106,
+        0.9999314412645888,
+        0.9808437772236382,
+        0.9652527957972601
+      ],
+      "median_ratio": 0.9944979421270572
+    },
+    {
+      "reopen": true,
+      "writers": 8,
+      "readers": 16,
+      "durable": true,
+      "grouped": false,
+      "variant": "vector",
+      "read_p50_ratios": [
+        0.994853972976905,
+        0.9981636296521575,
+        0.9568934629226092,
+        0.988329017941821,
+        0.973687849442045,
+        0.947611803803228
+      ],
+      "median_ratio": 0.981008433691933
+    },
+    {
+      "reopen": true,
+      "writers": 8,
+      "readers": 16,
+      "durable": true,
+      "grouped": true,
+      "variant": "stack",
+      "read_p50_ratios": [
+        0.9709160671023106,
+        0.987040238119448,
+        0.9720978027216391,
+        0.9886666967264857,
+        1.0119000377928948,
+        0.964394762486139
+      ],
+      "median_ratio": 0.9795690204205436
+    },
+    {
+      "reopen": true,
+      "writers": 8,
+      "readers": 16,
+      "durable": true,
+      "grouped": true,
+      "variant": "vector",
+      "read_p50_ratios": [
+        0.9579475989539044,
+        0.9847940026437175,
+        0.9669868595019022,
+        0.9678262241861304,
+        1.0223096182917613,
+        0.9726721849483081
+      ],
+      "median_ratio": 0.9702492045672193
+    }
+  ]
+}

@@ -69,6 +69,7 @@ impl hawdb_storage::background::BackgroundWorkAdmission for RuntimeGovernorBackg
                 kind: hawdb_qos::RuntimeWorkKind::Control,
                 cpu_slots: request.cpu_slots,
                 memory_bytes: request.memory_bytes,
+                retained_memory_bytes: 0,
                 io_slots: request.io_slots,
                 io_reservation_scope: hawdb_qos::RuntimeIoReservationScope::Task,
                 result_bytes: 0,
@@ -129,6 +130,7 @@ mod read_dependencies;
 pub use read_dependencies::ReadDependencyValidationFailures;
 #[doc(hidden)]
 pub use read_dependencies::{GraphReadDependencies, GraphReadDependencyError};
+mod format_admission;
 #[path = "store/graph_recovery.rs"]
 mod graph_recovery;
 #[path = "store/immutable_root.rs"]
@@ -686,6 +688,7 @@ struct MutationCommitOptions<'a> {
     preserve_single_create_wal: bool,
     mvcc_read_epoch: Option<u64>,
     captured_graph_ops: Option<&'a mut Vec<WalOp>>,
+    prepared_wal: Option<crate::wal::binary::PreparedWalBatch>,
 }
 
 /// An isolated graph mutation workspace for a single explicit transaction.
@@ -698,10 +701,22 @@ struct MutationCommitOptions<'a> {
 #[doc(hidden)]
 pub struct GraphMutationTransaction {
     base_commit_epoch: u64,
+    base_catalog: Catalog,
     catalog: Catalog,
     store: GraphStore,
     ops: Vec<WalOp>,
     rows: Vec<BTreeMap<String, Value>>,
+    persistent_commit: bool,
+}
+
+/// A sealed transaction preparation. No statement can mutate its compacted
+/// operations or encoded graph WAL before authoritative commit validation.
+#[derive(Debug)]
+#[doc(hidden)]
+pub struct PreparedGraphMutationTransaction {
+    transaction: GraphMutationTransaction,
+    wal: Option<crate::wal::binary::PreparedWalBatch>,
+    had_graph_writes: bool,
 }
 
 #[derive(Debug)]
@@ -820,6 +835,13 @@ impl AdvancedStatisticsDirtyState {
     }
 }
 
+#[derive(Debug, Clone)]
+struct SnapshotResidencyObserver {
+    segment_cache: Arc<SegmentCache>,
+    graph_manifest_open_budget_bytes: u64,
+    graph_manifest_encoded_bytes: u64,
+}
+
 #[derive(Debug, Default)]
 pub struct GraphStore {
     next_node_id: u64,
@@ -835,7 +857,7 @@ pub struct GraphStore {
     read_dependency_validation_failures: Arc<read_dependencies::ValidationFailureCounters>,
     read_summary_collapses: Arc<AtomicU64>,
     nodes: crate::cow::CowNodeMap,
-    relationships: CowSegmentedMap<RelId, RelRecord>,
+    relationships: crate::cow::CowRelMap,
     basic_statistics: BasicStatisticsState,
     checkpoint_statistics: CheckpointStatisticsState,
     advanced_statistics_dirty: AdvancedStatisticsDirtyState,
@@ -890,6 +912,7 @@ pub struct GraphStore {
     branch_root_pin: Option<Arc<crate::branch_root_pins::RootPin>>,
     branch_runtime_owner: Option<Arc<crate::file_descriptors::AdmittedRuntimeOwner>>,
     snapshot_file_context: Option<crate::file_descriptors::FileOpenContext>,
+    snapshot_residency_observer: Option<SnapshotResidencyObserver>,
     durable: Option<DurableStore>,
     // Data/COW runtime owners above must drop before decoded allocation leases.
     checkpoint_allocations: crate::background::CheckpointAllocationOwner,
@@ -1212,7 +1235,49 @@ impl RelationshipScanPruningCandidate {
     }
 }
 
+impl PreparedGraphMutationTransaction {
+    #[doc(hidden)]
+    pub fn encode_graph_wal(&mut self, graph_only: bool) -> Result<()> {
+        if self.wal.is_none()
+            && self.transaction.persistent_commit
+            && graph_only
+            && !self.transaction.ops.is_empty()
+        {
+            self.wal = Some(crate::wal::binary::PreparedWalBatch::prepare(
+                &self.transaction.ops,
+            )?);
+        }
+        Ok(())
+    }
+}
+
 impl GraphMutationTransaction {
+    #[doc(hidden)]
+    pub fn prepare_commit(
+        self,
+        limits: MutationLimits,
+        graph_only: bool,
+    ) -> Result<PreparedGraphMutationTransaction> {
+        let mut prepared = self.compact_for_commit(limits)?;
+        prepared.encode_graph_wal(graph_only)?;
+        Ok(prepared)
+    }
+
+    #[doc(hidden)]
+    pub fn compact_for_commit(
+        mut self,
+        limits: MutationLimits,
+    ) -> Result<PreparedGraphMutationTransaction> {
+        let had_graph_writes = !self.ops.is_empty();
+        self.ops = compact_transaction_graph_ops(self.ops);
+        ensure_mutation_commit_limits(&self.ops, &self.rows, limits)?;
+        Ok(PreparedGraphMutationTransaction {
+            transaction: self,
+            wal: None,
+            had_graph_writes,
+        })
+    }
+
     #[doc(hidden)]
     pub fn is_read_only(&self) -> bool {
         self.ops.is_empty()
@@ -1754,6 +1819,29 @@ impl GraphStore {
         durable_manifest_open_micros: u64,
         replay: impl FnOnce(&mut Self, &mut Catalog, WalReplayConfig) -> Result<StorageRecoveryReport>,
     ) -> Result<(Self, Catalog)> {
+        // Legacy stores do not pass through immutable branch admission.
+        // Check all selected codec capabilities before cleanup or runtime writes.
+        if durable.wal_path.parent() == Some(durable.root_path.as_path()) {
+            let manifest = DurableManifest::load(durable.manifest_path())?;
+            let mut limits = replay_config;
+            format_admission::validate_checkpoint_formats(manifest, limits, |name| {
+                Ok(durable.root_path.join(name))
+            })?;
+            if fs::try_exists(&durable.wal_path)? && fs::metadata(&durable.wal_path)?.len() != 0 {
+                format_admission::validate_wal_formats(
+                    &durable.wal_path,
+                    manifest.checkpoint_commit_epoch,
+                    &mut limits,
+                    true,
+                )?;
+            }
+        }
+        if !durable.read_only {
+            cleanup_abandoned_checkpoint_preparations(
+                &durable.root_path,
+                durable.checkpoint_epoch,
+            )?;
+        }
         let projection_generation_root = durable.root_path.join("projection-generations");
         let projection_generations = if durable.read_only {
             if projection_generation_root.exists() {
@@ -1786,7 +1874,7 @@ impl GraphStore {
             read_dependency_validation_failures: Arc::new(Default::default()),
             read_summary_collapses: Arc::new(AtomicU64::new(0)),
             nodes: crate::cow::CowNodeMap::default(),
-            relationships: CowSegmentedMap::default(),
+            relationships: crate::cow::CowRelMap::default(),
             basic_statistics: BasicStatisticsState::default(),
             checkpoint_statistics: CheckpointStatisticsState::default(),
             advanced_statistics_dirty: AdvancedStatisticsDirtyState::default(),
@@ -1839,6 +1927,7 @@ impl GraphStore {
             branch_root_pin: None,
             branch_runtime_owner: None,
             snapshot_file_context: None,
+            snapshot_residency_observer: None,
             durable: Some(durable),
             checkpoint_allocations: Default::default(),
         };
@@ -2341,6 +2430,7 @@ impl GraphStore {
             branch_root_pin: self.branch_root_pin.clone(),
             branch_runtime_owner: self.branch_runtime_owner.clone(),
             snapshot_file_context: self.file_descriptor_context(),
+            snapshot_residency_observer: self.residency_observer(),
             durable: None,
             checkpoint_allocations: self.checkpoint_allocations.clone(),
         }
@@ -5189,6 +5279,7 @@ mod tests {
         let backup = unique_test_dir("unified_relational_backup");
         let restored = unique_test_dir("unified_relational_restored");
         let table = RelationalTableSchema {
+            materialized_view: None,
             name: "messages".to_string(),
             columns: vec![
                 RelationalColumnSchema {
@@ -5337,6 +5428,7 @@ mod tests {
                     }],
                     RelationalTransaction {
                         writes: vec![RelationalWrite::CreateTable(RelationalTableSchema {
+                            materialized_view: None,
                             name: "messages".to_string(),
                             columns: vec![RelationalColumnSchema {
                                 name: "id".to_string(),
@@ -5382,6 +5474,7 @@ mod tests {
                     &mut catalog,
                     RelationalTransaction {
                         writes: vec![RelationalWrite::CreateTable(RelationalTableSchema {
+                            materialized_view: None,
                             name: "messages".to_string(),
                             columns: vec![RelationalColumnSchema {
                                 name: "id".to_string(),
@@ -6113,6 +6206,81 @@ mod tests {
             assert_eq!(
                 store.canonical_node_from_segments(NodeId(1)).unwrap(),
                 store.node(NodeId(1)).cloned()
+            );
+        }
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    #[test]
+    fn detached_snapshots_preserve_live_cache_and_captured_manifest_observations() {
+        let path = unique_test_dir("snapshot_residency_observation");
+        {
+            let mut catalog = Catalog::default();
+            let mut store = GraphStore::open(&path, &mut catalog).unwrap();
+            store
+                .create_node(
+                    &mut catalog,
+                    "Memory",
+                    properties([("body", Value::String("snapshot payload".into()))]),
+                )
+                .unwrap();
+            store.checkpoint(&catalog).unwrap();
+        }
+        {
+            let mut catalog = Catalog::default();
+            let store = GraphStore::open_with_durability_and_replay_config(
+                &path,
+                &mut catalog,
+                DurabilityPolicy::default(),
+                WalReplayConfig {
+                    residency_mode: StorageResidencyMode::OutOfCore,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            let before = store.storage_residency_report();
+            let snapshot = store.snapshot_for_read();
+            let descendant = snapshot.snapshot_for_read();
+            assert!(snapshot.durable.is_none());
+            assert!(descendant.durable.is_none());
+            assert!(descendant.storage_recovery_report().durable);
+            for read in [&snapshot, &descendant] {
+                let residency = read.storage_residency_report();
+                assert_eq!(
+                    residency.segment_cache_capacity_bytes,
+                    before.segment_cache_capacity_bytes
+                );
+                assert_eq!(
+                    residency.graph_manifest_open_budget_bytes,
+                    before.graph_manifest_open_budget_bytes
+                );
+                assert_eq!(
+                    residency.graph_manifest_encoded_bytes,
+                    before.graph_manifest_encoded_bytes
+                );
+                assert_eq!(residency.canonical_generation, before.canonical_generation);
+            }
+            let cache_before = descendant.segment_cache_snapshot().unwrap();
+            assert!(cache_before.capacity_bytes > 0);
+            drop(store);
+            drop(snapshot);
+            assert!(descendant.node_owned(NodeId(0)).unwrap().is_some());
+            let after = descendant.segment_cache_snapshot().unwrap();
+            assert!(
+                after.hit_count + after.miss_count
+                    > cache_before.hit_count + cache_before.miss_count
+            );
+            assert_eq!(
+                descendant
+                    .storage_residency_report()
+                    .segment_cache_hit_count,
+                after.hit_count
+            );
+            assert_eq!(
+                descendant
+                    .storage_residency_report()
+                    .segment_cache_miss_count,
+                after.miss_count
             );
         }
         std::fs::remove_dir_all(path).unwrap();
@@ -8425,6 +8593,7 @@ mod tests {
                 &mut catalog,
                 RelationalTransaction {
                     writes: vec![RelationalWrite::CreateTable(RelationalTableSchema {
+                        materialized_view: None,
                         name: "messages".to_string(),
                         columns: vec![RelationalColumnSchema {
                             name: "id".to_string(),
@@ -8884,6 +9053,7 @@ mod tests {
                 RelationalTransaction {
                     writes: vec![
                         RelationalWrite::CreateTable(RelationalTableSchema {
+                            materialized_view: None,
                             name: "documents".into(),
                             columns: ["id", "body"]
                                 .into_iter()
@@ -9045,6 +9215,7 @@ mod tests {
                 RelationalTransaction {
                     writes: vec![
                         RelationalWrite::CreateTable(RelationalTableSchema {
+                            materialized_view: None,
                             name: "documents".into(),
                             columns: ["id", "body"]
                                 .into_iter()
@@ -9265,6 +9436,7 @@ mod tests {
                         &mut catalog,
                         RelationalTransaction {
                             writes: vec![RelationalWrite::CreateTable(RelationalTableSchema {
+                                materialized_view: None,
                                 name: "documents".into(),
                                 columns: ["id", "body"]
                                     .into_iter()
@@ -13596,7 +13768,7 @@ mod tests {
     #[test]
     fn adaptive_histograms_use_medium_sample_for_medium_cardinality() {
         let nodes = histogram_nodes("score", 2_000);
-        let statistics = compute_statistics(&nodes, &CowSegmentedMap::default(), 1);
+        let statistics = compute_statistics(&nodes, &crate::cow::CowRelMap::default(), 1);
         let histogram = statistics
             .property_histograms
             .get(&(LabelId(0), "score".to_string()))
@@ -13623,7 +13795,7 @@ mod tests {
     #[test]
     fn adaptive_histograms_use_max_sample_for_large_cardinality() {
         let nodes = histogram_nodes("score", 5_000);
-        let statistics = compute_statistics(&nodes, &CowSegmentedMap::default(), 1);
+        let statistics = compute_statistics(&nodes, &crate::cow::CowRelMap::default(), 1);
         let histogram = statistics
             .property_histograms
             .get(&(LabelId(0), "score".to_string()))

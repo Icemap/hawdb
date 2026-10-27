@@ -42,6 +42,7 @@ fn native_probe<R: RelationalIndexStoreReader>(
             TABLE,
             INDEX,
             &RelationalIndexRangeScan {
+                bounds: Default::default(),
                 prefix: prefix.clone(),
                 exclusive_bound: None,
                 direction: RelationalIndexScanDirection::Forward,
@@ -298,6 +299,7 @@ fn descriptor_exhaustion_preserves_index_runtime_for_retry() {
 
 fn scan(prefix: &[i64], backward: bool, bound: Option<&[i64]>) -> RelationalIndexRangeScan {
     RelationalIndexRangeScan {
+        bounds: Default::default(),
         prefix: key(prefix),
         exclusive_bound: bound.map(key),
         direction: if backward {

@@ -14,26 +14,31 @@
 
 use super::super::{
     observability::StatementRecorder, Database, DatabaseReadSnapshot, DatabaseReadTransaction,
-    PlanCache, PreparedRuntimeQuery, QuerySystemVariables, SharedState,
+    PlanCache, PreparedRuntimeQuery, SharedState,
 };
-use crate::{QueryOutput, Result, Value};
-use std::collections::BTreeMap;
+#[cfg(test)]
+use crate::Value;
+use crate::{QueryOutput, Result};
 use std::sync::Arc;
 
-pub(super) struct PublishedConcurrentRead {
-    pub(super) snapshot: DatabaseReadSnapshot,
+pub(crate) struct PublishedConcurrentRead {
+    pub(crate) snapshot: DatabaseReadSnapshot,
     pub(super) recorder: StatementRecorder,
-    system_variables: QuerySystemVariables,
     plan_cache: Arc<SharedState<PlanCache>>,
 }
 
 impl PublishedConcurrentRead {
-    pub(super) fn capture(database: &Database) -> Result<Self> {
+    pub(crate) fn capture(database: &Database) -> Result<Self> {
         let runtime = database.runtime.get()?;
+        if runtime.store.wal_sync_group_active() {
+            return Err(crate::HawDBError::StorageIntegrity(
+                "cannot publish a read view before the WAL group durability barrier".into(),
+            ));
+        }
+        runtime.store.ensure_usable()?;
         Ok(Self {
             snapshot: database.read_snapshot_without_observations()?,
             recorder: database.statement_recorder(),
-            system_variables: database.system_variables.clone(),
             plan_cache: Arc::clone(&runtime.plan_cache),
         })
     }
@@ -45,10 +50,18 @@ impl PublishedConcurrentRead {
         Ok(snapshot)
     }
 
+    pub(crate) fn begin_read_transaction_with_context(
+        &self,
+        context: &hawdb_core::RuntimeTaskContext,
+    ) -> Result<DatabaseReadTransaction> {
+        let mut snapshot = self.snapshot.begin_read_transaction(context)?;
+        self.recorder.refresh_read_snapshot(&mut snapshot);
+        Ok(snapshot)
+    }
+
     pub(super) fn query_sql(
         &self,
-        sql_text: &str,
-        parameters: &[Value],
+        request: crate::SqlQueryRequest<'_>,
         prepared: crate::relational_sql::PreparedRelationalSql,
     ) -> Result<QueryOutput> {
         if matches!(
@@ -60,27 +73,99 @@ impl PublishedConcurrentRead {
             // Capture them privately rather than mutating the shared view.
             return self
                 .begin_read_transaction()?
-                .query_sql_with_prepared_params(sql_text, parameters, prepared);
+                .query_sql_with_prepared_request(request, prepared);
         }
         // SQL execution borrows its store. The caller's publication Arc keeps
         // the complete schema/data view and generation pin alive, so ordinary
         // reads need neither a second store snapshot nor observation copies.
         self.snapshot
             .0
-            .query_sql_with_prepared_params(sql_text, parameters, prepared)
+            .query_sql_with_prepared_request(request, prepared)
     }
 
-    pub(super) fn prepare(
+    pub(super) fn query_prepared_request(
         &self,
-        cypher_text: String,
-        parameters: &BTreeMap<String, Value>,
-    ) -> Result<PreparedRuntimeQuery> {
-        self.snapshot.prepare_runtime_query(
-            cypher_text,
-            parameters,
-            &self.system_variables,
-            &self.plan_cache,
-        )
+        prepared: PreparedRuntimeQuery,
+        request: crate::QueryRequest<'_>,
+    ) -> Result<super::super::BoundedReadQueryOutput> {
+        if prepared.uses_borrowed_read() {
+            let (output, trace) = self.snapshot.query_prepared_request_borrowed(
+                prepared,
+                request,
+                false,
+                &mut crate::executor::NoExternalReadOperator,
+            )?;
+            return Ok(super::super::BoundedReadQueryOutput {
+                output,
+                execution_profile: trace
+                    .execution_profile
+                    .expect("read execution supplies a profile"),
+            });
+        }
+        self.begin_read_transaction()?
+            .query_prepared_request(prepared, request)
+    }
+
+    pub(crate) fn accepts_prepared(&self, prepared: &PreparedRuntimeQuery) -> bool {
+        self.snapshot.accepts_prepared(prepared)
+    }
+
+    pub(crate) fn prepare(&self, request: crate::QueryRequest<'_>) -> Result<PreparedRuntimeQuery> {
+        self.snapshot
+            .prepare_runtime_request(request, &self.plan_cache)
+    }
+
+    pub(crate) fn query_prepared_with_trace(
+        &self,
+        prepared: PreparedRuntimeQuery,
+        request: crate::QueryRequest<'_>,
+        capture_trace: bool,
+        external: &mut dyn crate::executor::ExternalReadOperator,
+    ) -> Result<(QueryOutput, super::super::QueryExecutionTrace)> {
+        let started = hawdb_core::time::Instant::now();
+        let statement_kind = prepared.statement_kind();
+        let parse_nanos = prepared.parse_nanos();
+        let result = (|| {
+            if prepared.uses_borrowed_read() {
+                return self.snapshot.query_prepared_request_borrowed(
+                    prepared,
+                    request,
+                    capture_trace,
+                    external,
+                );
+            }
+            let mut read = match request.task_context {
+                Some(context) => self.begin_read_transaction_with_context(context)?,
+                None => self.begin_read_transaction()?,
+            };
+            read.query_prepared_request_traced(prepared, request, capture_trace, external)
+        })();
+        self.recorder.record_statement_execution(
+            "cypher",
+            request.cypher,
+            statement_kind,
+            started,
+            result.as_ref().map(|(output, _)| output),
+            super::super::StatementExecutionContext {
+                execution_profile: result
+                    .as_ref()
+                    .ok()
+                    .and_then(|(_, trace)| trace.execution_profile.as_ref()),
+                retained_profile: None,
+                access_control: request.access_control,
+                parse_nanos,
+            },
+        );
+        result
+    }
+}
+
+impl std::fmt::Debug for PublishedConcurrentRead {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("PublishedConcurrentRead")
+            .field("snapshot", &self.snapshot)
+            .finish_non_exhaustive()
     }
 }
 
@@ -281,6 +366,74 @@ mod tests {
         assert_eq!(oldest(), Some(epoch));
         drop(reader);
         assert_eq!(oldest(), None);
+    }
+
+    #[test]
+    fn borrowed_cypher_reads_keep_the_published_generation_and_fallback_boundary() {
+        let mut database = Database::new();
+        database.query("CREATE (:Item {id: 1, value: 7})").unwrap();
+        let db = database.into_concurrent();
+        let old = db.inner.commits.read_view().unwrap();
+        let request = crate::QueryRequest::new("MATCH (n:Item) RETURN n.value AS value LIMIT 1");
+        let prepared = old.prepare(request).unwrap();
+        assert!(prepared.uses_borrowed_read());
+        db.query("MATCH (n:Item) SET n.value = 9").unwrap();
+        let output = old.query_prepared_request(prepared, request).unwrap();
+        assert_eq!(output.output.rows[0]["value"], Value::Int(7));
+        assert_eq!(
+            db.query(request.cypher).unwrap().rows[0]["value"],
+            Value::Int(9)
+        );
+        let explain = crate::QueryRequest::new("EXPLAIN MATCH (n:Item) RETURN n.value AS value");
+        assert!(!old.prepare(explain).unwrap().uses_borrowed_read());
+        let mutation = crate::QueryRequest::new("CREATE (:Item {id: 2})");
+        assert!(!old.prepare(mutation).unwrap().uses_borrowed_read());
+        assert!(db.query(explain.cypher).is_ok());
+    }
+
+    #[test]
+    fn borrowed_cypher_requests_keep_private_limits_cancellation_and_profiles() {
+        let mut database = Database::new();
+        database
+            .query("CREATE (:Item {value: 'nonempty payload'})")
+            .unwrap();
+        let db = database.into_concurrent();
+        let request = crate::QueryRequest::new("MATCH (n:Item) RETURN n.value AS value LIMIT 1");
+        for limits in [
+            crate::QueryStreamOptions {
+                max_rows: Some(0),
+                max_payload_bytes: None,
+            },
+            crate::QueryStreamOptions {
+                max_rows: None,
+                max_payload_bytes: Some(1),
+            },
+        ] {
+            assert!(db
+                .query_request(request.with_output_limits(limits))
+                .is_err());
+            assert_eq!(db.query_request(request).unwrap().rows.len(), 1);
+        }
+        let token = hawdb_core::RuntimeCancellationToken::new();
+        let context = hawdb_core::RuntimeTaskContext::without_deadline(token.clone());
+        token.cancel();
+        assert!(db
+            .query_request(request.with_task_context(&context))
+            .is_err());
+        let view = db.inner.commits.read_view().unwrap();
+        let (output, trace) = view
+            .query_prepared_with_trace(
+                view.prepare(request).unwrap(),
+                request,
+                true,
+                &mut crate::executor::NoExternalReadOperator,
+            )
+            .unwrap();
+        assert_eq!(output.rows.len(), 1);
+        assert!(trace.execution_profile.is_some());
+        assert!(trace.optimizer_trace.is_some());
+        assert!(view.snapshot.0.slow_query_snapshot.is_empty());
+        assert!(view.snapshot.0.statement_summary_snapshot.is_empty());
     }
 
     #[test]

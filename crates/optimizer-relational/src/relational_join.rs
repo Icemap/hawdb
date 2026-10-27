@@ -486,6 +486,7 @@ mod tests {
             index_columns,
             order_prefix_len: 0,
             exclusive_range: false,
+            range: None,
             reverse_order: false,
             unique_point: unique,
             covering: false,

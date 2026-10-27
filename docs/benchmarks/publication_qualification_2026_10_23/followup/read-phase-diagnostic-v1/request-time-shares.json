@@ -1,0 +1,213 @@
+{
+  "scope": "durable nonserialized cases; sum of request wall times across overlapping workers, not process CPU or elapsed wall time",
+  "cohorts": [
+    {
+      "reopen": false,
+      "writers": 1,
+      "grouped": false,
+      "revision": "baseline",
+      "total_request_nanoseconds": 113455625,
+      "phase_request_nanoseconds": {
+        "capture": 1257072,
+        "query": 109544471,
+        "drop": 2654082
+      },
+      "query_fraction": 0.9655270155181817
+    },
+    {
+      "reopen": false,
+      "writers": 1,
+      "grouped": false,
+      "revision": "candidate",
+      "total_request_nanoseconds": 125300109,
+      "phase_request_nanoseconds": {
+        "capture": 1410159,
+        "query": 120495990,
+        "drop": 3393960
+      },
+      "query_fraction": 0.961659099594239
+    },
+    {
+      "reopen": false,
+      "writers": 1,
+      "grouped": true,
+      "revision": "baseline",
+      "total_request_nanoseconds": 113053793,
+      "phase_request_nanoseconds": {
+        "capture": 1259040,
+        "query": 108839875,
+        "drop": 2954878
+      },
+      "query_fraction": 0.9627264341321127
+    },
+    {
+      "reopen": false,
+      "writers": 1,
+      "grouped": true,
+      "revision": "candidate",
+      "total_request_nanoseconds": 111266001,
+      "phase_request_nanoseconds": {
+        "capture": 1214576,
+        "query": 107335214,
+        "drop": 2716211
+      },
+      "query_fraction": 0.9646721643208872
+    },
+    {
+      "reopen": false,
+      "writers": 8,
+      "grouped": false,
+      "revision": "baseline",
+      "total_request_nanoseconds": 6526555131,
+      "phase_request_nanoseconds": {
+        "capture": 18992738,
+        "query": 6487173762,
+        "drop": 20388631
+      },
+      "query_fraction": 0.9939659792632494
+    },
+    {
+      "reopen": false,
+      "writers": 8,
+      "grouped": false,
+      "revision": "candidate",
+      "total_request_nanoseconds": 3283594693,
+      "phase_request_nanoseconds": {
+        "capture": 18732442,
+        "query": 3242648328,
+        "drop": 22213923
+      },
+      "query_fraction": 0.9875300185229042
+    },
+    {
+      "reopen": false,
+      "writers": 8,
+      "grouped": true,
+      "revision": "baseline",
+      "total_request_nanoseconds": 5750062190,
+      "phase_request_nanoseconds": {
+        "capture": 19512007,
+        "query": 5710152762,
+        "drop": 20397421
+      },
+      "query_fraction": 0.9930593049811867
+    },
+    {
+      "reopen": false,
+      "writers": 8,
+      "grouped": true,
+      "revision": "candidate",
+      "total_request_nanoseconds": 4180314147,
+      "phase_request_nanoseconds": {
+        "capture": 19283658,
+        "query": 4140339014,
+        "drop": 20691475
+      },
+      "query_fraction": 0.9904372897360625
+    },
+    {
+      "reopen": true,
+      "writers": 1,
+      "grouped": false,
+      "revision": "baseline",
+      "total_request_nanoseconds": 114659952,
+      "phase_request_nanoseconds": {
+        "capture": 1326287,
+        "query": 110617341,
+        "drop": 2716324
+      },
+      "query_fraction": 0.9647426069042834
+    },
+    {
+      "reopen": true,
+      "writers": 1,
+      "grouped": false,
+      "revision": "candidate",
+      "total_request_nanoseconds": 121227168,
+      "phase_request_nanoseconds": {
+        "capture": 1512583,
+        "query": 114675249,
+        "drop": 5039336
+      },
+      "query_fraction": 0.9459533773815454
+    },
+    {
+      "reopen": true,
+      "writers": 1,
+      "grouped": true,
+      "revision": "baseline",
+      "total_request_nanoseconds": 111385745,
+      "phase_request_nanoseconds": {
+        "capture": 1236164,
+        "query": 107334414,
+        "drop": 2815167
+      },
+      "query_fraction": 0.9636279220469369
+    },
+    {
+      "reopen": true,
+      "writers": 1,
+      "grouped": true,
+      "revision": "candidate",
+      "total_request_nanoseconds": 114750206,
+      "phase_request_nanoseconds": {
+        "capture": 1383042,
+        "query": 110080493,
+        "drop": 3286671
+      },
+      "query_fraction": 0.9593054063885514
+    },
+    {
+      "reopen": true,
+      "writers": 8,
+      "grouped": false,
+      "revision": "baseline",
+      "total_request_nanoseconds": 6331643409,
+      "phase_request_nanoseconds": {
+        "capture": 18943812,
+        "query": 6291129144,
+        "drop": 21570453
+      },
+      "query_fraction": 0.993601303424256
+    },
+    {
+      "reopen": true,
+      "writers": 8,
+      "grouped": false,
+      "revision": "candidate",
+      "total_request_nanoseconds": 7365273287,
+      "phase_request_nanoseconds": {
+        "capture": 19255043,
+        "query": 7323771710,
+        "drop": 22246534
+      },
+      "query_fraction": 0.9943652359684668
+    },
+    {
+      "reopen": true,
+      "writers": 8,
+      "grouped": true,
+      "revision": "baseline",
+      "total_request_nanoseconds": 7393233837,
+      "phase_request_nanoseconds": {
+        "capture": 19306065,
+        "query": 7352674284,
+        "drop": 21253488
+      },
+      "query_fraction": 0.9945139631865806
+    },
+    {
+      "reopen": true,
+      "writers": 8,
+      "grouped": true,
+      "revision": "candidate",
+      "total_request_nanoseconds": 5684649135,
+      "phase_request_nanoseconds": {
+        "capture": 18868766,
+        "query": 5645386532,
+        "drop": 20393837
+      },
+      "query_fraction": 0.9930932231580903
+    }
+  ]
+}

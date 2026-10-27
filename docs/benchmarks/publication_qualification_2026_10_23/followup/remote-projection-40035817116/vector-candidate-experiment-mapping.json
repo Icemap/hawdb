@@ -1,0 +1,26 @@
+{
+  "source_mapping": {
+    "crates/executor/src/expression.rs": {
+      "remote_raw_sha256": "e5efb1e5b67bfcc1fe786a90220972ad98f2fb739af3c24c577ab2c100fe7c75",
+      "formatted_production_sha256": "e5efb1e5b67bfcc1fe786a90220972ad98f2fb739af3c24c577ab2c100fe7c75",
+      "rustfmt_output_matches": true
+    },
+    "crates/executor/src/expression/projection.rs": {
+      "remote_raw_sha256": "935a2f4c45428dbe13b91a6fc343dac01d9783b039744efaa7a80ed52ac48ce4",
+      "formatted_production_sha256": "23753c4a41f0c44d88ffd9ee045bf5bc945afd8701a677f1921702311025a26a",
+      "rustfmt_output_matches": true
+    },
+    "crates/executor/src/scan.rs": {
+      "remote_raw_sha256": "2ff63bec6b0e8866821156cfdc29be089373d92873c62e613c8a1cce7328b15f",
+      "formatted_production_sha256": "2ff63bec6b0e8866821156cfdc29be089373d92873c62e613c8a1cce7328b15f",
+      "rustfmt_output_matches": true
+    },
+    "crates/executor/src/expression/projection/tests.rs": {
+      "remote_raw_sha256": "7dda1b8dadef59eebaecfc238dc6474858aa5899e5fac67eb9f6f75b8032b716",
+      "formatted_production_sha256": "7dda1b8dadef59eebaecfc238dc6474858aa5899e5fac67eb9f6f75b8032b716",
+      "rustfmt_output_matches": true
+    }
+  },
+  "temporary_root_instrumentation_absent": true,
+  "note": "rustfmt --emit stdout path headers removed before exact comparison"
+}

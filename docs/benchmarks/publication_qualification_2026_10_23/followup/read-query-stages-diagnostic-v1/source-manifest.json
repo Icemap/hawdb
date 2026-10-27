@@ -1,0 +1,32 @@
+{
+  "baseline": {
+    "Cargo.toml": "01459c5d1068bea837028eff86a6d3799f421b3154ba21a1020bef8338cebfcb",
+    "Cargo.lock": "d06d2c813a3ff92fbc0216b241943049a9652c2c26440d87cf09f5c73db8b019",
+    ".cargo/config.toml": "06c7ca26d39223bd90a6412acd8609c380ce2d1650a72b70c90171656ca89819",
+    "rust-toolchain.toml": "8e390d6a0838315f972690f46ef8bae8b7ecc9ee6c1ed70140ef852869c2482e",
+    "benches/concurrent_writers.rs": "4cf99da0d024d7cfc4af77c834a78eb7dac32d02091bb1c579e441c559ec050e",
+    "benches/concurrent_writers/readers.rs": "1eb468c67658964ef44d66a7a9acc051e856beed10857c986b98fc1af640b1ec",
+    "src/api/concurrent.rs": "7a90c4285f957648ed6ad8b2e57e0154e7a7e1e2d824507cd9a595f2c981d842",
+    "src/api/concurrent/coordinator.rs": "d067dce269392f53fd4b6244051781c9b5c804b12bfa258d8f8d8ab3ea1cee9a",
+    "src/api/concurrent/publication.rs": "bee34677ddfe6dc0665947f53627b11970a17c2dd78d38391d7371d5b0167e70",
+    "src/api/publication.rs": "e336bc38614b8733911de601baa72c22b4e507596b56177232c15356a250564b",
+    "src/api/observability.rs": "e4c84578dc515f26afd2ea17758445f4754e30e026dd34c4e7a1527bfd996039",
+    "src/api/mod.rs": "a667d4dae0b81bb74b256e70126ff3192ca61f4eb034ba2def3183bc9bf5cb5f",
+    "crates/storage/src/store/durable/wal.rs": "e7e7991af443e811a803885b549cc64334545b9665f132553c1b3fc7599239c0"
+  },
+  "candidate": {
+    "Cargo.toml": "01459c5d1068bea837028eff86a6d3799f421b3154ba21a1020bef8338cebfcb",
+    "Cargo.lock": "d06d2c813a3ff92fbc0216b241943049a9652c2c26440d87cf09f5c73db8b019",
+    ".cargo/config.toml": "06c7ca26d39223bd90a6412acd8609c380ce2d1650a72b70c90171656ca89819",
+    "rust-toolchain.toml": "8e390d6a0838315f972690f46ef8bae8b7ecc9ee6c1ed70140ef852869c2482e",
+    "benches/concurrent_writers.rs": "4cf99da0d024d7cfc4af77c834a78eb7dac32d02091bb1c579e441c559ec050e",
+    "benches/concurrent_writers/readers.rs": "1eb468c67658964ef44d66a7a9acc051e856beed10857c986b98fc1af640b1ec",
+    "src/api/concurrent.rs": "7a90c4285f957648ed6ad8b2e57e0154e7a7e1e2d824507cd9a595f2c981d842",
+    "src/api/concurrent/coordinator.rs": "d067dce269392f53fd4b6244051781c9b5c804b12bfa258d8f8d8ab3ea1cee9a",
+    "src/api/concurrent/publication.rs": "bee34677ddfe6dc0665947f53627b11970a17c2dd78d38391d7371d5b0167e70",
+    "src/api/publication.rs": "78027a3337b868f048152b2fc337ff4ee5d5b8f1c913d677cfb7befa25dd2b7e",
+    "src/api/observability.rs": "e4c84578dc515f26afd2ea17758445f4754e30e026dd34c4e7a1527bfd996039",
+    "src/api/mod.rs": "a667d4dae0b81bb74b256e70126ff3192ca61f4eb034ba2def3183bc9bf5cb5f",
+    "crates/storage/src/store/durable/wal.rs": "1e45de86e81f26317eace4237578e52218620f632b73b9d14215e65c999df350"
+  }
+}

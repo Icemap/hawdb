@@ -1,0 +1,11 @@
+{
+  "source": "7546e2d09e34aa02bf3dfb623865fcec360d3dfb",
+  "started_from": "0f641a98f17898a8ea3dae6ddaaa46d641604ae3 plus identical frozen source patch before commit",
+  "targets": 98,
+  "executed": 81,
+  "cached": 17,
+  "invocation": "0d4cbf95-5c34-4f9f-ba55-2a6452e1c067",
+  "seconds_including_build": 2033.558,
+  "xml_checked": 98,
+  "failures": []
+}

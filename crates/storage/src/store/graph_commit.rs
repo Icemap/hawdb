@@ -37,10 +37,12 @@ impl GraphStore {
     pub fn begin_mutation_transaction(&self, catalog: &Catalog) -> GraphMutationTransaction {
         GraphMutationTransaction {
             base_commit_epoch: self.commit_epoch,
+            base_catalog: catalog.clone(),
             catalog: catalog.clone(),
             store: self.snapshot(),
             ops: Vec::new(),
             rows: Vec::new(),
+            persistent_commit: self.durable.is_some(),
         }
     }
 
@@ -54,7 +56,7 @@ impl GraphStore {
     ) -> Result<MutationSummary> {
         self.commit_mutation_transaction_and_relational_internal(
             catalog,
-            transaction,
+            transaction.prepare_commit(limits, relational_transaction.writes.is_empty())?,
             relational_transaction,
             AppendTransaction::default(),
             limits,
@@ -73,7 +75,10 @@ impl GraphStore {
     ) -> Result<MutationSummary> {
         self.commit_mutation_transaction_and_relational_internal(
             catalog,
-            transaction,
+            transaction.prepare_commit(
+                limits,
+                relational_transaction.writes.is_empty() && append_transaction.writes.is_empty(),
+            )?,
             relational_transaction,
             append_transaction,
             limits,
@@ -92,7 +97,10 @@ impl GraphStore {
     ) -> Result<MutationSummary> {
         self.commit_mutation_transaction_and_relational_internal(
             catalog,
-            transaction,
+            transaction.prepare_commit(
+                limits,
+                relational_transaction.writes.is_empty() && append_transaction.writes.is_empty(),
+            )?,
             relational_transaction,
             append_transaction,
             limits,
@@ -100,24 +108,68 @@ impl GraphStore {
         )
     }
 
+    #[doc(hidden)]
+    pub fn commit_prepared_graph_transaction(
+        &mut self,
+        catalog: &mut Catalog,
+        transaction: PreparedGraphMutationTransaction,
+        relational: RelationalTransaction,
+        append: AppendTransaction,
+        limits: MutationLimits,
+        allow_stale_rebase: bool,
+    ) -> Result<MutationSummary> {
+        self.commit_mutation_transaction_and_relational_internal(
+            catalog,
+            transaction,
+            relational,
+            append,
+            limits,
+            allow_stale_rebase,
+        )
+    }
+
     fn commit_mutation_transaction_and_relational_internal(
         &mut self,
         catalog: &mut Catalog,
-        transaction: GraphMutationTransaction,
+        prepared: PreparedGraphMutationTransaction,
         relational_transaction: RelationalTransaction,
         append_transaction: AppendTransaction,
         limits: MutationLimits,
         allow_stale_rebase: bool,
     ) -> Result<MutationSummary> {
-        let read_only = transaction.ops.is_empty()
+        let PreparedGraphMutationTransaction {
+            transaction,
+            wal,
+            had_graph_writes,
+        } = prepared;
+        // Mixed SQL/append staging determines its final WAL under current-state
+        // validation. Never use graph-only bytes for such a mixed transaction.
+        let prepared_wal = wal.filter(|_| {
+            relational_transaction.writes.is_empty() && append_transaction.writes.is_empty()
+        });
+        let read_only = !had_graph_writes
             && relational_transaction.writes.is_empty()
             && append_transaction.writes.is_empty();
         let mvcc_read_epoch =
             (!read_only && !allow_stale_rebase).then_some(transaction.base_commit_epoch);
-        let ops = compact_transaction_graph_ops(transaction.ops);
+        // A data-only transaction must not replace symbols or constraints
+        // published by another writer after its snapshot. Catalog edits cannot
+        // be rebased by name: staged operations may already contain numeric IDs.
+        let working_catalog = if transaction.catalog == transaction.base_catalog {
+            catalog.clone()
+        } else if *catalog == transaction.base_catalog {
+            transaction.catalog
+        } else {
+            return Err(HawDBError::TransactionConflict {
+                read_epoch: transaction.base_commit_epoch,
+                committed_epoch: self.commit_epoch,
+                key: "catalog".into(),
+            });
+        };
+        let ops = transaction.ops;
         self.commit_prepared_mutation_ops(
             catalog,
-            transaction.catalog,
+            working_catalog,
             ops,
             transaction.rows,
             limits,
@@ -125,6 +177,7 @@ impl GraphStore {
                 relational: Some(relational_transaction),
                 append: Some(append_transaction),
                 mvcc_read_epoch,
+                prepared_wal,
                 ..MutationCommitOptions::default()
             },
         )
@@ -1767,6 +1820,7 @@ impl GraphStore {
             preserve_single_create_wal,
             mvcc_read_epoch,
             captured_graph_ops,
+            prepared_wal,
         } = options;
         self.ensure_usable()?;
         ensure_mutation_commit_limits(&ops, &rows, limits)?;
@@ -1986,7 +2040,7 @@ impl GraphStore {
             if preserve_single_create_wal && let [op @ WalOp::CreateNode { .. }] = ops.as_slice() {
                 self.append_durable_wal_single(op.clone())
             } else {
-                self.append_durable_wal_batch(&ops)
+                self.append_durable_wal_batch_prepared(&ops, prepared_wal)
             };
         self.poison_on_storage_error(&wal_result);
         wal_result?;
@@ -2203,16 +2257,28 @@ impl GraphStore {
     }
 
     pub(super) fn append_durable_wal_batch(&mut self, ops: &[WalOp]) -> Result<()> {
+        self.append_durable_wal_batch_prepared(ops, None)
+    }
+
+    fn append_durable_wal_batch_prepared(
+        &mut self,
+        ops: &[WalOp],
+        prepared: Option<crate::wal::binary::PreparedWalBatch>,
+    ) -> Result<()> {
         let rebuild = search_projection_capture::projection_wal_requires_rebuild(ops);
         let result = (|| {
             if self.durable.is_none() {
                 return Ok(());
             }
             let pressure_signals = self.wal_admission_signals(ops)?;
-            self.durable
+            let durable = self
+                .durable
                 .as_mut()
-                .expect("durable store presence was checked")
-                .append_batch(ops.to_vec(), pressure_signals)
+                .expect("durable store presence was checked");
+            match prepared {
+                Some(prepared) => durable.append_prepared_batch(prepared, pressure_signals),
+                None => durable.append_batch(ops.to_vec(), pressure_signals),
+            }
         })();
         self.poison_on_storage_error(&result);
         result?;
@@ -2558,7 +2624,7 @@ fn collect_version_writes(
     writes: &mut VersionWriteSet,
     ops: &[WalOp],
     created_relationships: &mut BTreeMap<RelId, (NodeId, NodeId)>,
-    relationships: &CowSegmentedMap<RelId, RelRecord>,
+    relationships: &crate::cow::CowRelMap,
 ) -> Result<()> {
     for op in ops {
         match op {
@@ -2729,6 +2795,7 @@ fn collect_relational_version_writes(
             | RelationalWrite::DeleteWhere { table, .. }
             | RelationalWrite::UpdateWhere { table, .. } => table,
             RelationalWrite::CreateTable(_)
+            | RelationalWrite::DropMaterializedView { .. }
             | RelationalWrite::AddColumn { .. }
             | RelationalWrite::CreateIndex { .. }
             | RelationalWrite::Upsert { .. } => {
@@ -2738,6 +2805,14 @@ fn collect_relational_version_writes(
         let Some(schema) = state.table_schema(table) else {
             return record_live_version(writes, VersionKey::Database);
         };
+        if state.table_schemas().any(|schema| {
+            schema
+                .materialized_view
+                .as_ref()
+                .is_some_and(|view| view.source == *table)
+        }) {
+            return record_live_version(writes, VersionKey::Database);
+        }
         let preserves_constraint_keys = match write {
             RelationalWrite::Insert {
                 mode: RelationalInsertMode::Error,
@@ -2974,6 +3049,7 @@ fn record_tombstone_version(writes: &mut VersionWriteSet, key: VersionKey) -> Re
 
 fn map_relational_staging_error(error: RelationalError) -> HawDBError {
     match error {
+        RelationalError::UnsupportedFormat(error) => HawDBError::UnsupportedStorageFormat(error),
         RelationalError::FileDescriptors(error) => HawDBError::FileDescriptors(error),
         RelationalError::Corruption(_) => HawDBError::StorageIntegrity(error.to_string()),
         RelationalError::Admission(_)
@@ -3053,6 +3129,7 @@ mod tests {
                 &mut catalog,
                 RelationalTransaction {
                     writes: vec![RelationalWrite::CreateTable(RelationalTableSchema {
+                        materialized_view: None,
                         name: "rows".into(),
                         columns: vec![
                             RelationalColumnSchema {
@@ -3194,6 +3271,7 @@ mod tests {
                 &mut catalog,
                 RelationalTransaction {
                     writes: vec![RelationalWrite::CreateTable(RelationalTableSchema {
+                        materialized_view: None,
                         name: "rows".into(),
                         columns: vec![
                             RelationalColumnSchema {
@@ -3630,7 +3708,7 @@ mod tests {
                 record: Arc::from([]),
             }],
             &mut BTreeMap::new(),
-            &CowSegmentedMap::default(),
+            &crate::cow::CowRelMap::default(),
         )
         .unwrap();
         assert!(opaque.contains_key(&VersionKey::Database));

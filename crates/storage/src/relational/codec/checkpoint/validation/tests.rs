@@ -27,6 +27,7 @@ fn scheduler() -> LocalQosScheduler {
 
 fn schema() -> RelationalTableSchema {
     let mut schema = RelationalTableSchema {
+        materialized_view: None,
         name: "table-界".repeat(10000),
         columns: vec![RelationalColumnSchema {
             name: "id".into(),

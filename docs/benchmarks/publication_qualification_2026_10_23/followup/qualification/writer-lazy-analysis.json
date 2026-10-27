@@ -1,0 +1,390 @@
+{
+  "writer-original-39979560713": {
+    "binary_hashes": {
+      "baseline-concurrent-writers": "db54e2747062dd68d322f808d472a27bcea87a29fefe1ad3ab1bcf8e013ee2ea",
+      "candidate-concurrent-writers": "777cb805714f4aaa1429a8f5fa24b119aee06cae4ebfe7c92ea698ade7b4d77b"
+    },
+    "cohorts": [
+      {
+        "profile": "measurement",
+        "cases": 480,
+        "commits": 122880,
+        "reopens": 320,
+        "gate": true,
+        "endpoints": [
+          {
+            "durable": false,
+            "grouped": false,
+            "family": "commit_latency",
+            "metric": "p50_ns",
+            "baseline_median_ns": 95838.5,
+            "candidate_median_ns": 35867.0,
+            "median_ratio": 0.3839224409157018,
+            "ratio_interval": [
+              0.36972076431031653,
+              0.39839489885664026
+            ],
+            "disposition": "pass"
+          },
+          {
+            "durable": false,
+            "grouped": false,
+            "family": "commit_latency",
+            "metric": "p95_ns",
+            "baseline_median_ns": 116327.0,
+            "candidate_median_ns": 54040.5,
+            "median_ratio": 0.45902506131711307,
+            "ratio_interval": [
+              0.40777932581512927,
+              0.47856461503520326
+            ],
+            "disposition": "pass"
+          },
+          {
+            "durable": true,
+            "grouped": false,
+            "family": "commit_latency",
+            "metric": "p50_ns",
+            "baseline_median_ns": 346887.0,
+            "candidate_median_ns": 310549.0,
+            "median_ratio": 0.9053649068377976,
+            "ratio_interval": [
+              0.8741526472772715,
+              0.9246698004503542
+            ],
+            "disposition": "pass"
+          },
+          {
+            "durable": true,
+            "grouped": false,
+            "family": "commit_latency",
+            "metric": "p95_ns",
+            "baseline_median_ns": 439294.0,
+            "candidate_median_ns": 408205.5,
+            "median_ratio": 0.9235360179413559,
+            "ratio_interval": [
+              0.8859670794601773,
+              0.9817759951495931
+            ],
+            "disposition": "pass"
+          },
+          {
+            "durable": true,
+            "grouped": true,
+            "family": "commit_latency",
+            "metric": "p50_ns",
+            "baseline_median_ns": 352703.0,
+            "candidate_median_ns": 326338.5,
+            "median_ratio": 0.9384914548722332,
+            "ratio_interval": [
+              0.8894103210400637,
+              0.963274814409408
+            ],
+            "disposition": "pass"
+          },
+          {
+            "durable": true,
+            "grouped": true,
+            "family": "commit_latency",
+            "metric": "p95_ns",
+            "baseline_median_ns": 449222.0,
+            "candidate_median_ns": 426094.5,
+            "median_ratio": 0.9434208482554578,
+            "ratio_interval": [
+              0.9143414960431561,
+              0.9878767036822608
+            ],
+            "disposition": "pass"
+          }
+        ]
+      },
+      {
+        "profile": "captured-measurement",
+        "cases": 480,
+        "commits": 122880,
+        "reopens": 320,
+        "gate": false,
+        "endpoints": [
+          {
+            "durable": false,
+            "grouped": false,
+            "family": "commit_latency",
+            "metric": "p50_ns",
+            "baseline_median_ns": 93675.0,
+            "candidate_median_ns": 35395.5,
+            "median_ratio": 0.3788006087148593,
+            "ratio_interval": [
+              0.368606570470156,
+              0.4001982891794056
+            ],
+            "disposition": "pass"
+          },
+          {
+            "durable": false,
+            "grouped": false,
+            "family": "commit_latency",
+            "metric": "p95_ns",
+            "baseline_median_ns": 114022.0,
+            "candidate_median_ns": 51185.0,
+            "median_ratio": 0.4435756693913274,
+            "ratio_interval": [
+              0.40660153559676554,
+              0.48418666666666665
+            ],
+            "disposition": "pass"
+          },
+          {
+            "durable": true,
+            "grouped": false,
+            "family": "commit_latency",
+            "metric": "p50_ns",
+            "baseline_median_ns": 351725.5,
+            "candidate_median_ns": 323994.5,
+            "median_ratio": 0.928483327595883,
+            "ratio_interval": [
+              0.9079981829278828,
+              0.9403596553609729
+            ],
+            "disposition": "pass"
+          },
+          {
+            "durable": true,
+            "grouped": false,
+            "family": "commit_latency",
+            "metric": "p95_ns",
+            "baseline_median_ns": 441663.5,
+            "candidate_median_ns": 406817.0,
+            "median_ratio": 0.9306115725587503,
+            "ratio_interval": [
+              0.891413600372613,
+              0.9788527067998677
+            ],
+            "disposition": "pass"
+          },
+          {
+            "durable": true,
+            "grouped": true,
+            "family": "commit_latency",
+            "metric": "p50_ns",
+            "baseline_median_ns": 345874.5,
+            "candidate_median_ns": 362581.0,
+            "median_ratio": 1.026143425197168,
+            "ratio_interval": [
+              0.9995263089760036,
+              1.05837967329603
+            ],
+            "disposition": "inconclusive"
+          },
+          {
+            "durable": true,
+            "grouped": true,
+            "family": "commit_latency",
+            "metric": "p95_ns",
+            "baseline_median_ns": 438698.5,
+            "candidate_median_ns": 439594.5,
+            "median_ratio": 1.0120251551009076,
+            "ratio_interval": [
+              0.9551293015163129,
+              1.0756400934012005
+            ],
+            "disposition": "inconclusive"
+          }
+        ]
+      }
+    ]
+  },
+  "writer-current-main-39979562261": {
+    "binary_hashes": {
+      "baseline-concurrent-writers": "2def3e2180ee209dae51ce8b3207e9c19fea9d931e69de8120ea01cabf455a57",
+      "candidate-concurrent-writers": "777cb805714f4aaa1429a8f5fa24b119aee06cae4ebfe7c92ea698ade7b4d77b"
+    },
+    "cohorts": [
+      {
+        "profile": "measurement",
+        "cases": 480,
+        "commits": 122880,
+        "reopens": 320,
+        "gate": false,
+        "endpoints": [
+          {
+            "durable": false,
+            "grouped": false,
+            "family": "commit_latency",
+            "metric": "p50_ns",
+            "baseline_median_ns": 20575.5,
+            "candidate_median_ns": 20611.0,
+            "median_ratio": 1.0046047210508458,
+            "ratio_interval": [
+              0.9966054022598322,
+              1.0097667638483965
+            ],
+            "disposition": "inconclusive"
+          },
+          {
+            "durable": false,
+            "grouped": false,
+            "family": "commit_latency",
+            "metric": "p95_ns",
+            "baseline_median_ns": 25518.0,
+            "candidate_median_ns": 26920.5,
+            "median_ratio": 1.0173918417920267,
+            "ratio_interval": [
+              1.0037050759540571,
+              1.0443320659997786
+            ],
+            "disposition": "regression"
+          },
+          {
+            "durable": true,
+            "grouped": false,
+            "family": "commit_latency",
+            "metric": "p50_ns",
+            "baseline_median_ns": 323233.5,
+            "candidate_median_ns": 250554.0,
+            "median_ratio": 0.7780805797345053,
+            "ratio_interval": [
+              0.7661212530445897,
+              0.7849794567377427
+            ],
+            "disposition": "pass"
+          },
+          {
+            "durable": true,
+            "grouped": false,
+            "family": "commit_latency",
+            "metric": "p95_ns",
+            "baseline_median_ns": 381484.5,
+            "candidate_median_ns": 298376.0,
+            "median_ratio": 0.8023373186788332,
+            "ratio_interval": [
+              0.7494647626768102,
+              0.8313662650354894
+            ],
+            "disposition": "pass"
+          },
+          {
+            "durable": true,
+            "grouped": true,
+            "family": "commit_latency",
+            "metric": "p50_ns",
+            "baseline_median_ns": 334274.0,
+            "candidate_median_ns": 262407.0,
+            "median_ratio": 0.7778404024694165,
+            "ratio_interval": [
+              0.7684861808471444,
+              0.7989374890374673
+            ],
+            "disposition": "pass"
+          },
+          {
+            "durable": true,
+            "grouped": true,
+            "family": "commit_latency",
+            "metric": "p95_ns",
+            "baseline_median_ns": 388725.5,
+            "candidate_median_ns": 312807.0,
+            "median_ratio": 0.799393940443184,
+            "ratio_interval": [
+              0.7695867638252624,
+              0.8402850968243323
+            ],
+            "disposition": "pass"
+          }
+        ]
+      },
+      {
+        "profile": "captured-measurement",
+        "cases": 480,
+        "commits": 122880,
+        "reopens": 320,
+        "gate": false,
+        "endpoints": [
+          {
+            "durable": false,
+            "grouped": false,
+            "family": "commit_latency",
+            "metric": "p50_ns",
+            "baseline_median_ns": 20746.0,
+            "candidate_median_ns": 20666.0,
+            "median_ratio": 0.997828987507232,
+            "ratio_interval": [
+              0.9922895282155076,
+              1.0076105686387133
+            ],
+            "disposition": "inconclusive"
+          },
+          {
+            "durable": false,
+            "grouped": false,
+            "family": "commit_latency",
+            "metric": "p95_ns",
+            "baseline_median_ns": 26845.0,
+            "candidate_median_ns": 25868.5,
+            "median_ratio": 0.9839919350928062,
+            "ratio_interval": [
+              0.9611174458380843,
+              1.0111688311688312
+            ],
+            "disposition": "inconclusive"
+          },
+          {
+            "durable": true,
+            "grouped": false,
+            "family": "commit_latency",
+            "metric": "p50_ns",
+            "baseline_median_ns": 339692.5,
+            "candidate_median_ns": 266473.0,
+            "median_ratio": 0.7834870309408037,
+            "ratio_interval": [
+              0.7678985069274747,
+              0.8011878590383313
+            ],
+            "disposition": "pass"
+          },
+          {
+            "durable": true,
+            "grouped": false,
+            "family": "commit_latency",
+            "metric": "p95_ns",
+            "baseline_median_ns": 388341.0,
+            "candidate_median_ns": 308300.5,
+            "median_ratio": 0.7923085859252317,
+            "ratio_interval": [
+              0.7713945838213773,
+              0.8397108467332169
+            ],
+            "disposition": "pass"
+          },
+          {
+            "durable": true,
+            "grouped": true,
+            "family": "commit_latency",
+            "metric": "p50_ns",
+            "baseline_median_ns": 349196.5,
+            "candidate_median_ns": 280254.0,
+            "median_ratio": 0.8015963416936815,
+            "ratio_interval": [
+              0.779706903988921,
+              0.8163852567803217
+            ],
+            "disposition": "pass"
+          },
+          {
+            "durable": true,
+            "grouped": true,
+            "family": "commit_latency",
+            "metric": "p95_ns",
+            "baseline_median_ns": 397178.5,
+            "candidate_median_ns": 322606.5,
+            "median_ratio": 0.8252622274741168,
+            "ratio_interval": [
+              0.8018074652236449,
+              0.8522999734664833
+            ],
+            "disposition": "pass"
+          }
+        ]
+      }
+    ]
+  }
+}

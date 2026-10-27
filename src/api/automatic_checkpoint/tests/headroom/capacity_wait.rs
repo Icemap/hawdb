@@ -1,3 +1,17 @@
+// Copyright 2026 Nowledge
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use super::*;
 
 #[test]
@@ -40,25 +54,41 @@ fn assert_critical_wait_returns_busy(phase: Phase) {
         state.debt = Some(debt);
         assert!(preparation_needs_capacity(&state));
     }
-    let notifying = control.clone();
-    let notifier = std::thread::spawn(move || {
-        let deadline = Instant::now() + PREPARATION_CAPACITY_WAIT_LIMIT * 2;
-        while Instant::now() < deadline {
-            notifying.changed.notify_all();
-            std::thread::sleep(Duration::from_millis(1));
-        }
+    let now = Instant::now();
+    control.set_frontend_time(now);
+    let (waiting, entered) = mpsc::channel();
+    control.lock().unwrap().frontend_wait_probe = Some(waiting);
+    let frontend = control.clone();
+    let (finished, completion) = mpsc::channel();
+    let caller = std::thread::spawn(move || {
+        let result = frontend.lock_frontend().map(|guard| guard.phase);
+        finished.send(result).unwrap();
     });
-    let started = Instant::now();
+    assert_eq!(
+        entered.recv_timeout(Duration::from_secs(15)).unwrap(),
+        phase
+    );
+    let before = now + PREPARATION_CAPACITY_WAIT_LIMIT - Duration::from_nanos(1);
+    for _ in 0..4 {
+        control.set_frontend_time(before);
+        assert_eq!(
+            entered.recv_timeout(Duration::from_secs(15)).unwrap(),
+            phase
+        );
+        assert!(matches!(
+            completion.try_recv(),
+            Err(mpsc::TryRecvError::Empty)
+        ));
+    }
+    control.set_frontend_time(now + PREPARATION_CAPACITY_WAIT_LIMIT);
+    let result = completion.recv_timeout(Duration::from_secs(15)).unwrap();
+    caller.join().unwrap();
     assert!(matches!(
-        control.lock_frontend(),
+        result,
         Err(HawDBError::BranchBusy {
             resource: "automatic checkpoint capacity"
         })
     ));
-    let elapsed = started.elapsed();
-    notifier.join().unwrap();
-    assert!(elapsed >= PREPARATION_CAPACITY_WAIT_LIMIT);
-    assert!(elapsed < PREPARATION_CAPACITY_WAIT_LIMIT * 2);
     assert_eq!(control.lock().unwrap().phase, phase);
     control.ensure_healthy().unwrap();
     control.lock().unwrap().phase = Phase::Idle;
@@ -207,4 +237,65 @@ fn assert_cleanup_fences_capacity_growth(phase: Phase) {
     assert_eq!(observed_phase.unwrap(), phase);
     assert!(matches!(early, Err(mpsc::TryRecvError::Empty)));
     assert_eq!(completion.recv().unwrap(), Phase::Idle);
+}
+
+#[test]
+fn only_completed_checkpoint_or_builder_progress_renews_capacity_deadline() {
+    for checkpoint_progress in [false, true] {
+        let control = cleanup_control(Phase::Preparing, capacity_boundary(16 * 1024));
+        let now = Instant::now();
+        control.set_frontend_time(now);
+        let (waiting, entered) = mpsc::channel();
+        control.lock().unwrap().frontend_wait_probe = Some(waiting);
+        let frontend = control.clone();
+        let (finished, completion) = mpsc::channel();
+        let caller = std::thread::spawn(move || {
+            finished
+                .send(frontend.lock_frontend().map(|state| state.phase))
+                .unwrap();
+        });
+        assert_eq!(
+            entered.recv_timeout(Duration::from_secs(15)).unwrap(),
+            Phase::Preparing
+        );
+        let progress_at = now + PREPARATION_CAPACITY_WAIT_LIMIT - Duration::from_nanos(1);
+        control.set_frontend_time(progress_at);
+        assert_eq!(
+            entered.recv_timeout(Duration::from_secs(15)).unwrap(),
+            Phase::Preparing
+        );
+        {
+            let mut state = control.lock().unwrap();
+            if checkpoint_progress {
+                state.report.completed_checkpoints += 1;
+            } else {
+                control.work_progress.fetch_add(1, Ordering::Relaxed);
+            }
+            control.notify_all();
+        }
+        assert_eq!(
+            entered.recv_timeout(Duration::from_secs(15)).unwrap(),
+            Phase::Preparing
+        );
+        // The original deadline has elapsed, but real progress established a
+        // fresh bounded wait. Notifications alone are covered above.
+        control.set_frontend_time(now + PREPARATION_CAPACITY_WAIT_LIMIT);
+        assert_eq!(
+            entered.recv_timeout(Duration::from_secs(15)).unwrap(),
+            Phase::Preparing
+        );
+        assert!(matches!(
+            completion.try_recv(),
+            Err(mpsc::TryRecvError::Empty)
+        ));
+        control.set_frontend_time(progress_at + PREPARATION_CAPACITY_WAIT_LIMIT);
+        let result = completion.recv_timeout(Duration::from_secs(15)).unwrap();
+        caller.join().unwrap();
+        assert!(matches!(
+            result,
+            Err(HawDBError::BranchBusy {
+                resource: "automatic checkpoint capacity"
+            })
+        ));
+    }
 }

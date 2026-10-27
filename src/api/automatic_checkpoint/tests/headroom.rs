@@ -1,3 +1,17 @@
+// Copyright 2026 Nowledge
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use super::*;
 mod active_cleanup;
 mod admitted_transaction;
@@ -21,14 +35,24 @@ fn pause() -> (Arc<OwnerPauseProbe>, Receiver<()>, Sender<()>) {
 }
 
 fn create(db: &mut Database, id: i64) -> Result<()> {
-    db.query_with_params(
+    let control = db.runtime.checkpoint_control_for_test();
+    let initial_progress = control.work_progress.load(Ordering::Relaxed);
+    let started = Instant::now();
+    let result = db.query_with_params(
         "CREATE (:Memory {id: $id, body: $body})",
         &std::collections::BTreeMap::from([
             ("id".into(), crate::Value::Int(id)),
             ("body".into(), crate::Value::String("b".repeat(512))),
         ]),
-    )?;
-    Ok(())
+    );
+    if let Err(error) = &result {
+        let diagnostics = {
+            let state = control.state.try_lock().ok();
+            wait_diagnostics(&control, state.as_deref(), started, initial_progress)
+        };
+        eprintln!("headroom CREATE id={id} failed: {error:?}; {diagnostics}");
+    }
+    result.map(|_| ())
 }
 
 fn seeded(fixture: &Fixture) -> (Database, Suspension, i64) {
@@ -91,6 +115,7 @@ fn pending_idle_owner_blocks_pressure_growth_before_admission() {
     let fixture = Fixture::new();
     let (mut db, suspension, next) = seeded(&fixture);
     let control = db.runtime.checkpoint_control_for_test();
+    control.set_frontend_time(Instant::now());
     let (probe, paused, resume) = pause();
     let (waiting, waited) = mpsc::channel();
     {
@@ -118,6 +143,7 @@ fn retiring_owner_blocks_pressure_growth_until_cleanup_finishes() {
     let fixture = Fixture::new();
     let (mut db, suspension, next) = seeded(&fixture);
     let control = db.runtime.checkpoint_control_for_test();
+    control.set_frontend_time(Instant::now());
     let (probe, paused, resume) = pause();
     {
         control.lock().unwrap().retirement_probe = Some(probe);

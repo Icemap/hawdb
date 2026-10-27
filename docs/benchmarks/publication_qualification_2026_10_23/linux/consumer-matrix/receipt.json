@@ -1,0 +1,21 @@
+{
+  "source": "0f641a98f17898a8ea3dae6ddaaa46d641604ae3",
+  "cases_complete": 54,
+  "exact_counter_document_epoch_checks_passed": true,
+  "per_mode": {
+    "disabled": {
+      "cases": 18,
+      "finite_progress_qualified_cases": 0
+    },
+    "scoped-blocking": {
+      "cases": 18,
+      "finite_progress_qualified_cases": 5
+    },
+    "detached": {
+      "cases": 18,
+      "finite_progress_qualified_cases": 1
+    }
+  },
+  "progress_acceptance_passed": false,
+  "limits": "Complete finite matrix, no publication tail/no-regression acceptance or general fairness inference. Separate long-work cohort was declared before these results."
+}

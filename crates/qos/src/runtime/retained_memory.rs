@@ -16,8 +16,8 @@ use super::*;
 
 /// Memory that may outlive active work without retaining execution slots.
 ///
-/// This is an additional reservation, charged to both the originating governor
-/// and its process-memory policy. It does not admit CPU, task or I/O work.
+/// The reservation is charged to both the originating governor and its
+/// process-memory policy. It does not admit CPU, task or I/O work.
 #[derive(Debug)]
 pub struct RuntimeRetainedMemory {
     pub(super) governor: Arc<RuntimeGovernorInner>,
@@ -72,6 +72,28 @@ impl RuntimeRetainedMemory {
 }
 
 impl RuntimePermit {
+    /// Completes fixed-reservation work while preserving its entire memory charge.
+    ///
+    /// The transfer does not release and reacquire memory, so another owner cannot
+    /// consume the capacity between preparation and execution. CPU, task and I/O
+    /// slots are released before return. Retained state must be dropped before
+    /// this token. Elastic maintenance permits cannot transfer their controller;
+    /// they return `None` and release their resources normally.
+    pub fn into_retained_memory(mut self) -> Option<RuntimeRetainedMemory> {
+        if self.memory_controller.is_some() {
+            return None;
+        }
+        let retained = RuntimeRetainedMemory {
+            governor: Arc::clone(&self.governor),
+            bytes: self.request.reserved_memory_bytes(),
+            process_memory: self.process_memory_reservation.take(),
+        };
+        self.request.memory_bytes = 0;
+        self.request.result_bytes = 0;
+        self.release_inner();
+        Some(retained)
+    }
+
     /// Admits extra memory for state that can survive this operation.
     ///
     /// Reserve before allocating that state. The original working-memory ceiling

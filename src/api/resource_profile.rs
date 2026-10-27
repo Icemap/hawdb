@@ -26,14 +26,15 @@ impl Database {
         parameters: &BTreeMap<String, Value>,
         limits: StorageResourceProfileLimits,
     ) -> Result<StorageResourceProfileReport> {
-        self.storage_resource_profile_with_binding(
-            cypher_text,
-            parameters,
-            limits,
-            None,
-            None,
-            None,
-        )
+        limits.validate()?;
+        self.begin_read_transaction()?
+            .storage_resource_profile_with_binding(
+                || self.prepare_runtime_query(cypher_text.to_string(), parameters),
+                parameters,
+                limits,
+                None,
+                &hawdb_core::RuntimeTaskContext::default(),
+            )
     }
 
     pub fn storage_resource_profile_for_production(
@@ -44,86 +45,79 @@ impl Database {
         evidence_binding: crate::ProductionEvidenceBinding,
         expected_identity: crate::ProductionQualificationIdentity,
     ) -> Result<StorageResourceProfileReport> {
-        evidence_binding.validate_for(&expected_identity)?;
-        let commit_epoch = self.commit_epoch()?;
-        if evidence_binding.identity.canonical_graph_commit_epoch != commit_epoch {
-            return Err(HawDBError::Semantic(format!(
-                "production evidence canonical graph commit epoch {} does not match database epoch {commit_epoch}",
-                evidence_binding.identity.canonical_graph_commit_epoch
-            )));
-        }
-        self.storage_resource_profile_with_binding(
-            cypher_text,
-            parameters,
-            limits,
-            Some(evidence_binding),
-            Some(expected_identity),
-            None,
-        )
+        limits.validate()?;
+        self.begin_read_transaction()?
+            .storage_resource_profile_with_binding(
+                || self.prepare_runtime_query(cypher_text.to_string(), parameters),
+                parameters,
+                limits,
+                Some((evidence_binding, expected_identity)),
+                &hawdb_core::RuntimeTaskContext::default(),
+            )
     }
+}
 
+impl DatabaseReadTransaction {
     pub(crate) fn storage_resource_profile_for_production_with_context(
-        &self,
-        cypher_text: &str,
+        &mut self,
+        prepared: super::query_runtime::PreparedRuntimeQuery,
         parameters: &BTreeMap<String, Value>,
         limits: StorageResourceProfileLimits,
         evidence_binding: crate::ProductionEvidenceBinding,
         expected_identity: crate::ProductionQualificationIdentity,
         task_context: &hawdb_core::RuntimeTaskContext,
     ) -> Result<StorageResourceProfileReport> {
-        evidence_binding.validate_for(&expected_identity)?;
-        let commit_epoch = self.commit_epoch()?;
-        if evidence_binding.identity.canonical_graph_commit_epoch != commit_epoch {
-            return Err(HawDBError::Semantic(format!(
-                "production evidence canonical graph commit epoch {} does not match database epoch {commit_epoch}",
-                evidence_binding.identity.canonical_graph_commit_epoch
-            )));
-        }
         self.storage_resource_profile_with_binding(
-            cypher_text,
+            || Ok(prepared),
             parameters,
             limits,
-            Some(evidence_binding),
-            Some(expected_identity),
-            Some(task_context),
+            Some((evidence_binding, expected_identity)),
+            task_context,
         )
     }
 
     fn storage_resource_profile_with_binding(
-        &self,
-        cypher_text: &str,
+        &mut self,
+        prepare: impl FnOnce() -> Result<super::query_runtime::PreparedRuntimeQuery>,
         parameters: &BTreeMap<String, Value>,
         limits: StorageResourceProfileLimits,
-        evidence_binding: Option<crate::ProductionEvidenceBinding>,
-        expected_identity: Option<crate::ProductionQualificationIdentity>,
-        task_context: Option<&hawdb_core::RuntimeTaskContext>,
+        production: Option<(
+            crate::ProductionEvidenceBinding,
+            crate::ProductionQualificationIdentity,
+        )>,
+        task_context: &hawdb_core::RuntimeTaskContext,
     ) -> Result<StorageResourceProfileReport> {
         limits.validate()?;
-        let canonical_graph_commit_epoch = self.commit_epoch()?;
-        let durable = self.storage_recovery_report()?.durable;
-        let before = self.storage_residency_report()?;
-        let mut read = self.begin_read_transaction()?;
+        let canonical_graph_commit_epoch = self.commit_epoch();
+        let (evidence_binding, expected_identity) = if let Some((binding, expected)) = production {
+            binding.validate_for(&expected)?;
+            if binding.identity.canonical_graph_commit_epoch != canonical_graph_commit_epoch {
+                return Err(HawDBError::Semantic(format!(
+                    "production evidence canonical graph commit epoch {} does not match database epoch {canonical_graph_commit_epoch}",
+                    binding.identity.canonical_graph_commit_epoch
+                )));
+            }
+            (Some(binding), Some(expected))
+        } else {
+            (None, None)
+        };
+        let durable = self.store.storage_recovery_report().durable;
+        let before = self.store.storage_residency_report();
         let stream_options = QueryStreamOptions {
             max_rows: Some(limits.max_output_rows),
             max_payload_bytes: Some(limits.max_output_payload_bytes),
         };
-        let query = match task_context {
-            Some(task_context) => read.query_with_params_streaming_context(
-                cypher_text,
-                parameters,
-                stream_options,
-                task_context,
-                |_| Ok(()),
-            ),
-            None => read.query_with_params_streaming(
-                cypher_text,
-                parameters,
-                stream_options,
-                |_| Ok(()),
-            ),
-        }?;
-        drop(read);
-        let after = self.storage_residency_report()?;
+        // Raw callers measure preparation after the residency baseline; admitted
+        // callers hand over the already-accounted preparation without repeating it.
+        let query = self.query_prepared_with_params_streaming_context(
+            prepare()?,
+            parameters,
+            stream_options,
+            executor::StreamDelivery::Validated,
+            task_context,
+            |_| Ok(()),
+        )?;
+        let after = self.store.storage_residency_report();
 
         Ok(StorageResourceProfileReport::from_observation(
             StorageResourceProfileObservation {

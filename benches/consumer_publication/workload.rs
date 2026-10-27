@@ -10,6 +10,11 @@ fn nz(value: usize) -> NonZeroUsize {
     NonZeroUsize::new(value).unwrap()
 }
 
+const FEED_ITEMS: usize = 100_000;
+// This fixture's Done-only mapper consumes an intake and a mapping call per
+// item (including End), followed by one close. It emits no delta mutations.
+pub const STAGING_ADVANCE_CALL_LIMIT: usize = 2 * FEED_ITEMS + 1;
+
 fn document(row: QueryRowRef<'_>) -> SearchDocument {
     let Value::String(id) = &row["id"] else {
         panic!("text ID")
@@ -64,7 +69,7 @@ fn full(
 fn feed() -> ProjectionFeedLimits {
     ProjectionFeedLimits {
         work: nz(1_000_000),
-        items: nz(100_000),
+        items: nz(FEED_ITEMS),
         bytes: nz(64 << 20),
     }
 }
@@ -117,19 +122,28 @@ pub fn begin<'a>(
 pub fn prepare(
     mut session: ProjectionConsumerStagingSession<'_>,
     scoped: bool,
-) -> ProjectionCoveredConsumerUpdate {
+) -> (ProjectionCoveredConsumerUpdate, usize) {
     let quantum = ProjectionFeedLimits {
         work: nz(256),
         items: nz(64),
         bytes: nz(1 << 20),
     };
-    for _ in 0..100_000 {
+    let mut staging_calls = 0;
+    let mut complete = false;
+    for _ in 0..STAGING_ADVANCE_CALL_LIMIT {
+        staging_calls += 1;
         if session.advance(quantum, Default::default()).unwrap()
             == ProjectionStagingSessionStep::Complete
         {
+            complete = true;
             break;
         }
     }
+    assert!(
+        complete,
+        "staging exceeded {STAGING_ADVANCE_CALL_LIMIT} calls at source epoch {}",
+        session.source_epoch()
+    );
     let mut coverage = session
         .verify_complete_source_in(
             ProjectionCoverageConfig {
@@ -167,7 +181,7 @@ pub fn prepare(
         if coverage.advance(quantum, Default::default()).unwrap()
             == ProjectionCoverageStep::Complete
         {
-            return coverage.finish().unwrap();
+            return (coverage.finish().unwrap(), staging_calls);
         }
     }
     panic!("coverage exceeded its bounded step count");

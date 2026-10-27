@@ -1,0 +1,6 @@
+{
+  "baseline": "8e9eab185ef880794d216d99ac6cd57442c511aa",
+  "root": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18",
+  "instrumentation_patch_sha256": "4d46512281dd32599c2669f7b20bcf90f3191634d97504e496bde36339e39b1e",
+  "benchmark_sha256": "5436fb523d5171db13e56636d2e7a06d3dc1f2c582a82808e776bd98a5f0595a"
+}

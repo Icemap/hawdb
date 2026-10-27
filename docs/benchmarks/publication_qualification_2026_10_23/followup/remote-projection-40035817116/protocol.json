@@ -1,0 +1,166 @@
+{
+  "anchor": "823e8e9c735050dcafb3e0bf024e12f0a46ea140",
+  "diagnostic_ref": "b93264aad446b43e7cf826ab58c7da6b855455f8",
+  "diagnostic_only": true,
+  "variants": [
+    "map",
+    "stack",
+    "vector"
+  ],
+  "orders": [
+    [
+      "map",
+      "stack",
+      "vector"
+    ],
+    [
+      "stack",
+      "vector",
+      "map"
+    ],
+    [
+      "vector",
+      "map",
+      "stack"
+    ],
+    [
+      "vector",
+      "stack",
+      "map"
+    ],
+    [
+      "stack",
+      "map",
+      "vector"
+    ],
+    [
+      "map",
+      "vector",
+      "stack"
+    ]
+  ],
+  "cohorts": [
+    [
+      false,
+      1,
+      2
+    ],
+    [
+      false,
+      8,
+      16
+    ],
+    [
+      true,
+      1,
+      2
+    ],
+    [
+      true,
+      8,
+      16
+    ]
+  ],
+  "blocks": 6,
+  "cases_per_process": 6,
+  "measurement_reuse": false,
+  "profile": "unaltered repository global bench profile; separate fresh target directories",
+  "coverage": "256 writes and 64 reads per reader; full 256-row ID/value/mirror, pins, epochs, overlap and reopen guards",
+  "preflight": "One existing full-row preflight uses its identical bounded profile path, then an untimed EXPLAIN records the actual operator shape on all variants.",
+  "inventory": "identical 1Hz guest compiler inventory; no physical-exclusive-host claim",
+  "python": "3.12.3",
+  "architecture": "x86_64",
+  "system": "Linux",
+  "cpu": {
+    "schema": "writer-cpu-topology-v1",
+    "affinity_cpus": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "allowed_logical_cpus": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "physical_cores": [
+      {
+        "package": 0,
+        "core": 0,
+        "logical_cpus": [
+          0,
+          1
+        ]
+      },
+      {
+        "package": 0,
+        "core": 1,
+        "logical_cpus": [
+          2,
+          3
+        ]
+      }
+    ],
+    "cpuset_masks": [
+      {
+        "path": "/sys/fs/cgroup/system.slice/hosted-compute-agent.service/cpuset.cpus.effective",
+        "cpus": [
+          0,
+          1,
+          2,
+          3
+        ]
+      },
+      {
+        "path": "/sys/fs/cgroup/system.slice/cpuset.cpus.effective",
+        "cpus": [
+          0,
+          1,
+          2,
+          3
+        ]
+      },
+      {
+        "path": "/sys/fs/cgroup/cpuset.cpus.effective",
+        "cpus": [
+          0,
+          1,
+          2,
+          3
+        ]
+      }
+    ],
+    "quota_limits": [
+      {
+        "path": "/sys/fs/cgroup/system.slice/hosted-compute-agent.service/cpu.max",
+        "quota": "max",
+        "period": "100000",
+        "cores": null
+      },
+      {
+        "path": "/sys/fs/cgroup/system.slice/cpu.max",
+        "quota": "max",
+        "period": "100000",
+        "cores": null
+      }
+    ],
+    "effective_cpu_cores": "2",
+    "maximum_writers": 1,
+    "writer_counts": [
+      1
+    ],
+    "multi_writer_coverage": false,
+    "rule": "max(1, floor(min(allowed physical cores, visible ancestor quota/period) / 2))",
+    "visibility": "visible cgroup mount ancestors only; physical topology as exposed by the host or VM"
+  },
+  "fixtures_sha256": {
+    "README.md": "85353d9498dde92eddf76f840ec1b9b74d6dfd5e131dcb95c0023dc2af03f979",
+    "concurrent_writers.rs.txt": "85806a85d055425d160ce64a3058199c247c6945793fbce9a2fbdc3df5392a98",
+    "query-timers.patch.gz": "4fae53bd49df51fcf6ba1ec83289a9aef7750676423be6ba141a2336c107e0f1",
+    "readers.rs.txt": "025679a616cfb9afbc79269cc4530cc16b23d76bac0ffbe840995fa804e4849e",
+    "stack.patch.gz": "762c24999eeed9ff6b69ca2bb7700fa43907f6f7e65bc59f906f522fff59cac3",
+    "vector.patch.gz": "b01f02153170243eba9e827db152ca368e90edb1aa92a63d10bbb174e6ccffe2"
+  }
+}

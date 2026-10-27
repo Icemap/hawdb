@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use crate::time::{Duration, Instant};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::fmt::Debug;
 use std::fmt::{self, Display, Formatter};
@@ -36,7 +36,7 @@ pub struct RuntimeCancellationToken {
 #[derive(Debug)]
 struct RuntimeCancellationState {
     cancellation_reason: AtomicU8,
-    parent: Option<RuntimeCancellationToken>,
+    parents: [Option<RuntimeCancellationToken>; 2],
     next_waiter_id: AtomicU64,
     waiters: Mutex<BTreeMap<u64, Waker>>,
 }
@@ -46,7 +46,7 @@ impl Default for RuntimeCancellationToken {
         Self {
             state: Arc::new(RuntimeCancellationState {
                 cancellation_reason: AtomicU8::new(NOT_CANCELLED),
-                parent: None,
+                parents: [None, None],
                 next_waiter_id: AtomicU64::new(1),
                 waiters: Mutex::new(BTreeMap::new()),
             }),
@@ -103,9 +103,10 @@ impl RuntimeCancellationToken {
             RESOURCE_EXHAUSTED => Some(RuntimeCancellationReason::ResourceExhausted),
             _ => self
                 .state
-                .parent
-                .as_ref()
-                .and_then(RuntimeCancellationToken::reason),
+                .parents
+                .iter()
+                .flatten()
+                .find_map(RuntimeCancellationToken::reason),
         }
     }
 
@@ -113,7 +114,21 @@ impl RuntimeCancellationToken {
         Self {
             state: Arc::new(RuntimeCancellationState {
                 cancellation_reason: AtomicU8::new(NOT_CANCELLED),
-                parent: Some(self.clone()),
+                parents: [Some(self.clone()), None],
+                next_waiter_id: AtomicU64::new(1),
+                waiters: Mutex::new(BTreeMap::new()),
+            }),
+        }
+    }
+
+    fn linked(&self, other: &Self) -> Self {
+        if Arc::ptr_eq(&self.state, &other.state) {
+            return self.child();
+        }
+        Self {
+            state: Arc::new(RuntimeCancellationState {
+                cancellation_reason: AtomicU8::new(NOT_CANCELLED),
+                parents: [Some(self.clone()), Some(other.clone())],
                 next_waiter_id: AtomicU64::new(1),
                 waiters: Mutex::new(BTreeMap::new()),
             }),
@@ -149,8 +164,12 @@ impl Future for RuntimeCancellationFuture<'_> {
         }
 
         if self.registrations.is_empty() {
-            let mut token = Some(self.token);
-            while let Some(current) = token {
+            let mut pending = vec![self.token];
+            let mut visited = BTreeSet::new();
+            while let Some(current) = pending.pop() {
+                if !visited.insert(Arc::as_ptr(&current.state)) {
+                    continue;
+                }
                 let waiter_id = current.state.next_waiter_id.fetch_add(1, Ordering::Relaxed);
                 current
                     .state
@@ -162,7 +181,7 @@ impl Future for RuntimeCancellationFuture<'_> {
                     state: Arc::downgrade(&current.state),
                     waiter_id,
                 });
-                token = current.state.parent.as_ref();
+                pending.extend(current.state.parents.iter().flatten());
             }
         } else {
             for registration in &self.registrations {
@@ -361,6 +380,61 @@ impl RuntimeTaskContext {
             io_wave_controller: self.io_wave_controller.clone(),
             work_budget: self.work_budget.clone(),
         }
+    }
+
+    /// Applies statement constraints without replacing an enclosing admission.
+    /// Cancellation from either scope stops the statement; cancelling the combined
+    /// scope does not cancel its parents. Budgets remain shared and can only tighten.
+    /// Independent controllers cannot represent one admission and are rejected.
+    pub fn constrained_by(&self, request: &Self) -> crate::Result<Self> {
+        fn controller<T: ?Sized>(
+            parent: &Option<Arc<T>>,
+            request: &Option<Arc<T>>,
+            resource: &str,
+        ) -> crate::Result<Option<Arc<T>>> {
+            match (parent, request) {
+                (Some(parent), Some(request)) if !Arc::ptr_eq(parent, request) => {
+                    Err(crate::HawDBError::Execution(format!(
+                        "request task context carries a different {resource} admission"
+                    )))
+                }
+                (Some(parent), _) => Ok(Some(parent.clone())),
+                (_, request) => Ok(request.clone()),
+            }
+        }
+        fn minimum<T: Ord + Copy>(left: Option<T>, right: Option<T>) -> Option<T> {
+            match (left, right) {
+                (Some(left), Some(right)) => Some(left.min(right)),
+                (left, right) => left.or(right),
+            }
+        }
+        Ok(Self {
+            cancellation: self.cancellation.linked(&request.cancellation),
+            deadline: minimum(self.deadline, request.deadline),
+            admitted_parallelism: self.admitted_parallelism.min(request.admitted_parallelism),
+            executor_thread_limit: minimum(
+                self.executor_thread_limit,
+                request.executor_thread_limit,
+            ),
+            memory_reservation: match (self.memory_reservation, request.memory_reservation) {
+                (Some(parent), Some(request)) => Some(parent.intersect(request)),
+                (parent, request) => parent.or(request),
+            },
+            memory_controller: controller(
+                &self.memory_controller,
+                &request.memory_controller,
+                "memory",
+            )?,
+            io_wave_controller: controller(
+                &self.io_wave_controller,
+                &request.io_wave_controller,
+                "I/O",
+            )?,
+            work_budget: work::RuntimeWorkBudget::intersect(
+                &self.work_budget,
+                &request.work_budget,
+            ),
+        })
     }
 
     /// Carries the CPU parallelism already reserved by the runtime governor.
@@ -705,6 +779,88 @@ mod tests {
         fn wake(self: Arc<Self>) {
             self.0.fetch_add(1, Ordering::AcqRel);
         }
+    }
+
+    #[test]
+    fn constrained_context_observes_both_cancellations_without_cancelling_parents() {
+        for cancel_parent in [false, true] {
+            let parent = RuntimeTaskContext::default();
+            let request = RuntimeTaskContext::default();
+            let combined = parent.constrained_by(&request).unwrap();
+            let counter = Arc::new(WakeCounter::default());
+            let waker = Waker::from(counter.clone());
+            let mut context = Context::from_waker(&waker);
+            let mut cancelled = Box::pin(combined.cancellation().cancelled());
+            assert!(cancelled.as_mut().poll(&mut context).is_pending());
+            if cancel_parent {
+                parent.cancellation().cancel();
+            } else {
+                request.cancellation().cancel();
+            }
+            assert_eq!(counter.0.load(Ordering::Acquire), 1);
+            assert!(cancelled.as_mut().poll(&mut context).is_ready());
+            assert_eq!(
+                combined.checkpoint(),
+                Err(RuntimeCancellationReason::Cancelled)
+            );
+        }
+        let parent = RuntimeTaskContext::default();
+        let request = RuntimeTaskContext::default();
+        let combined = parent.constrained_by(&request).unwrap();
+        combined.cancellation().cancel();
+        assert!(parent.checkpoint().is_ok());
+        assert!(request.checkpoint().is_ok());
+    }
+
+    #[test]
+    fn constrained_descendants_register_shared_ancestors_once_and_unregister_on_drop() {
+        let parent = RuntimeTaskContext::default();
+        let request = parent.child();
+        let combined = parent.constrained_by(&request).unwrap();
+        let waker = Waker::from(Arc::new(WakeCounter::default()));
+        let mut context = Context::from_waker(&waker);
+        let mut cancelled = Box::pin(combined.cancellation().cancelled());
+        assert!(cancelled.as_mut().poll(&mut context).is_pending());
+        assert_eq!(parent.cancellation.state.waiters.lock().unwrap().len(), 1);
+        assert_eq!(request.cancellation.state.waiters.lock().unwrap().len(), 1);
+        drop(cancelled);
+        assert!(parent.cancellation.state.waiters.lock().unwrap().is_empty());
+        assert!(request
+            .cancellation
+            .state
+            .waiters
+            .lock()
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
+    fn constrained_context_tightens_limits_and_keeps_the_original_io_controller() {
+        let active_slots = Arc::new(AtomicUsize::new(0));
+        let parent = RuntimeTaskContext::with_timeout(Duration::from_secs(5))
+            .with_memory_reservation(RuntimeMemoryReservation::new(100, 20))
+            .with_admitted_parallelism(NonZeroUsize::new(4).unwrap())
+            .with_io_wave_controller(Arc::new(RecordingIoController {
+                active_slots: active_slots.clone(),
+            }));
+        let request = RuntimeTaskContext::with_timeout(Duration::from_secs(10))
+            .with_memory_reservation(RuntimeMemoryReservation::new(30, 50))
+            .with_admitted_parallelism(NonZeroUsize::new(2).unwrap());
+        let combined = parent.constrained_by(&request).unwrap();
+        assert_eq!(combined.deadline(), parent.deadline());
+        assert_eq!(
+            combined.memory_reservation(),
+            Some(RuntimeMemoryReservation::new(30, 20))
+        );
+        assert_eq!(combined.admitted_parallelism().get(), 2);
+        let io = combined.acquire_io_wave(NonZeroUsize::MIN).unwrap();
+        assert_eq!(active_slots.load(Ordering::Acquire), 1);
+        drop(io);
+        assert_eq!(active_slots.load(Ordering::Acquire), 0);
+        assert!(parent.constrained_by(&parent.child()).is_ok());
+        let independent =
+            request.with_io_wave_controller(Arc::new(RecordingIoController { active_slots }));
+        assert!(parent.constrained_by(&independent).is_err());
     }
 
     #[test]

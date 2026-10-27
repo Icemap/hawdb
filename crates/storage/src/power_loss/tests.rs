@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use super::image::PersistOperation;
 use super::*;
 use crate::file_io as fs;
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -76,6 +77,68 @@ fn observations_capture_actual_file_barriers_before_later_flushes() {
                 ObservationBoundary::After => b"oldnew".as_slice(),
             }
         );
+    }
+}
+
+#[test]
+fn publication_filename_observations_exclude_later_scratch_and_preserve_torn_bytes() {
+    for skip in [0, 1] {
+        let fixture = Fixture::new(ImageLimits::default());
+        fs::create_dir_all(fixture.root.join("search")).unwrap();
+        fs::create_dir_all(fixture.root.join("other")).unwrap();
+        fixture
+            .model
+            .observe_file_name_prefix(
+                ObservationPoint {
+                    event: IoEvent::Write,
+                    relative_path: "search".into(),
+                    boundary: ObservationBoundary::After,
+                    skip_matches: skip,
+                    include_descendants: true,
+                    keep_last: skip == 0,
+                },
+                "manifest.tmp.",
+            )
+            .unwrap();
+        fs::File::create(fixture.root.join("search/scratch"))
+            .unwrap()
+            .write_all(b"before")
+            .unwrap();
+        fs::File::create(fixture.root.join("other/manifest.tmp.0"))
+            .unwrap()
+            .write_all(b"outside")
+            .unwrap();
+        fs::File::create(fixture.root.join("search/manifest.tmp.1"))
+            .unwrap()
+            .write_all(b"first")
+            .unwrap();
+        let target = Path::new("search/manifest.tmp.2");
+        let mut file = fs::File::create(fixture.root.join(target)).unwrap();
+        file.write_all(b"second").unwrap();
+        file.sync_all().unwrap();
+        fs::File::create(fixture.root.join("search/validate-target.body"))
+            .unwrap()
+            .write_all(b"after")
+            .unwrap();
+        let snapshot = fixture.model.take_observation().unwrap().unwrap();
+        assert_eq!(snapshot.observed_path(), Some(target));
+        assert_eq!(snapshot.uncovered_writes(target).unwrap().len(), 1);
+        let write = snapshot.uncovered_writes(target).unwrap()[0];
+        let mut plan = snapshot.persist_all_plan();
+        let operation = plan
+            .persistence
+            .iter_mut()
+            .find(|operation| **operation == PersistOperation::Whole(write.operation))
+            .unwrap();
+        *operation = PersistOperation::TornWrite {
+            operation: write.operation,
+            bytes: 0..3,
+        };
+        assert_eq!(
+            snapshot.crash(&plan).unwrap().bytes(target).unwrap(),
+            b"sec"
+        );
+        fixture.model.capture().unwrap();
     }
 }
 

@@ -999,15 +999,16 @@ mod tests {
             std::env::temp_dir().join(format!("hawdb-qualification-{}-{id}", std::process::id()));
         let mut config = MixedSoakConfig::scheduled(root.join("database"), "test-revision");
         config.dataset_id = "test-dataset".to_string();
-        config.node_count = 512;
+        config.node_count = 768;
         config.payload_bytes = 8 * 1024;
         config.foreground_workers = 2;
         config.foreground_rounds_per_worker = 2;
         config.background_rounds = 1;
         config.segment_cache_bytes = 64 * 1024;
-        // Admit the planning phase and bounded stream buffers while keeping the
-        // raw dataset twice the governor budget. Operator/cache limits stay small.
-        config.runtime_memory_budget_bytes = 2 * 1024 * 1024;
+        // Retained preparation, the execution/rebuild reservation and bounded
+        // stream buffers coexist. Keep the raw dataset twice the governor budget
+        // while preserving the small operator and segment-cache limits.
+        config.runtime_memory_budget_bytes = 3 * 1024 * 1024;
         config.result_budget_bytes = 64 * 1024;
         config.blocking_operator_bytes = 32 * 1024;
         // Avoid treating shared-runner scheduling delays as workload failures.

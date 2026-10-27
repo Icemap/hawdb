@@ -13,13 +13,21 @@
 // limitations under the License.
 
 use crate::sql::{Expr, ExprKind};
+mod autocommit;
+#[cfg(test)]
+pub(crate) use autocommit::AutocommitMutationPhase;
 mod coordinator;
+#[cfg(test)]
+mod graph_preparation_tests;
 #[cfg(test)]
 mod key_range_tests;
 mod metrics;
+mod owner;
 mod publication;
 
 pub use metrics::{ConcurrentDatabaseMetrics, ConcurrentPhaseMetrics};
+pub(crate) use owner::{SharedDatabaseGuard, SharedDatabaseOwner};
+pub(crate) use publication::PublishedConcurrentRead;
 
 use self::coordinator::{CommitSequencer, LockManager, TransactionIdAllocator};
 use super::system_sql;
@@ -28,9 +36,9 @@ use super::transaction_locks::{
     DEFAULT_LOCK_ESCALATION_ENTRIES_PER_TABLE,
 };
 use super::{
-    commit_database_transaction_state, execute_concurrent_graph_transaction_query,
-    execute_database_transaction_prepared_sql, Database, DatabaseConfig, DatabaseReadTransaction,
-    DatabaseTransactionRuntime, DatabaseTransactionSqlOptions, DatabaseTransactionState,
+    commit_prepared_database_transaction_state, execute_database_transaction_prepared_sql,
+    Database, DatabaseConfig, DatabaseReadTransaction, DatabaseTransactionRuntime,
+    DatabaseTransactionSqlOptions, DatabaseTransactionState, PreparedGraphTransactionRequest,
     QueryOutput, StatementExecutionContext, TransactionCommitResult,
 };
 use crate::error::{HawDBError, Result};
@@ -65,6 +73,16 @@ use std::path::Path;
 #[cfg(test)]
 use std::sync::{mpsc::Sender, Barrier, Condvar};
 use std::sync::{Arc, Mutex};
+
+#[cfg(test)]
+thread_local! {
+    static GRAPH_COMMIT_PREPARATION_HOOK: std::cell::RefCell<Option<Box<dyn FnOnce()>>> = const { std::cell::RefCell::new(None) };
+}
+
+#[cfg(test)]
+fn set_graph_commit_preparation_hook(hook: Box<dyn FnOnce()>) {
+    GRAPH_COMMIT_PREPARATION_HOOK.with(|slot| *slot.borrow_mut() = Some(hook));
+}
 
 pub const DEFAULT_PESSIMISTIC_LOCK_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -119,6 +137,17 @@ pub struct ConcurrentDatabase {
     inner: Arc<ConcurrentDatabaseInner>,
 }
 
+pub(crate) struct ExclusiveDatabaseLease {
+    inner: Arc<ConcurrentDatabaseInner>,
+    transaction_id: u64,
+}
+
+impl Drop for ExclusiveDatabaseLease {
+    fn drop(&mut self) {
+        self.inner.locks.release(self.transaction_id);
+    }
+}
+
 #[derive(Debug)]
 struct ConcurrentDatabaseInner {
     commits: CommitSequencer,
@@ -127,6 +156,8 @@ struct ConcurrentDatabaseInner {
     checkpoint_serial: Mutex<()>,
     #[cfg(test)]
     autocommit_read_gate: Mutex<Option<AutocommitReadGate>>,
+    #[cfg(test)]
+    autocommit_mutation_gate: Mutex<Option<autocommit::AutocommitMutationGate>>,
 }
 
 #[cfg(test)]
@@ -161,14 +192,27 @@ impl ConcurrentDatabase {
         database: Database,
         wal_group_commit: WalGroupCommitConfig,
     ) -> Self {
+        Self::with_sequencer(CommitSequencer::new(database, wal_group_commit))
+    }
+
+    pub(crate) fn with_shared_owner(owner: Arc<dyn SharedDatabaseOwner>) -> Result<Self> {
+        Ok(Self::with_sequencer(CommitSequencer::shared(
+            owner,
+            WalGroupCommitConfig::default(),
+        )?))
+    }
+
+    fn with_sequencer(commits: CommitSequencer) -> Self {
         Self {
             inner: Arc::new(ConcurrentDatabaseInner {
-                commits: CommitSequencer::new(database, wal_group_commit),
+                commits,
                 locks: LockManager::default(),
                 transaction_ids: TransactionIdAllocator::default(),
                 checkpoint_serial: Mutex::new(()),
                 #[cfg(test)]
                 autocommit_read_gate: Mutex::new(None),
+                #[cfg(test)]
+                autocommit_mutation_gate: Mutex::new(None),
             }),
         }
     }
@@ -384,6 +428,14 @@ impl ConcurrentDatabase {
         options: ConcurrentTransactionOptions,
     ) -> Result<ConcurrentDatabaseTransaction> {
         let transaction_id = self.inner.transaction_ids.allocate()?;
+        self.begin_transaction_with_id(options, transaction_id)
+    }
+
+    fn begin_transaction_with_id(
+        &self,
+        options: ConcurrentTransactionOptions,
+        transaction_id: u64,
+    ) -> Result<ConcurrentDatabaseTransaction> {
         let database = self.inner.commits.lock()?;
         let base_commit_epoch = database.commit_epoch()?;
         Ok(ConcurrentDatabaseTransaction {
@@ -442,37 +494,44 @@ impl ConcurrentDatabase {
         cypher_text: &str,
         parameters: &BTreeMap<String, Value>,
     ) -> Result<QueryOutput> {
+        self.query_request(super::QueryRequest::new(cypher_text).with_params(parameters))
+    }
+
+    pub fn query_request(&self, request: super::QueryRequest<'_>) -> Result<QueryOutput> {
+        super::query_runtime::query_runtime_checkpoint(request.task_context)?;
+        let cypher_text = request.cypher;
         let started = Instant::now();
         let view = self.inner.commits.read_view()?;
-        let prepared = match view.prepare(cypher_text.to_string(), parameters) {
+        let prepared = match view.prepare(request) {
             Ok(prepared) => prepared,
             Err(_) => {
                 // Failed preparation cannot prove that the statement is read-only. Re-run it
                 // through the original exclusive path so planning failures retain their
                 // statement-observability behavior and uncertain statements fail closed.
                 drop(view);
-                return self.with_autocommit_exclusive(|database| {
-                    database.query_with_params(cypher_text, parameters)
-                });
+                return self.with_autocommit_exclusive(|database| database.query_request(request));
             }
         };
+        if prepared.uses_transaction_kernel() {
+            drop(view);
+            return self
+                .query_prepared_mutation(prepared, request, false, None, None)
+                .map(|(output, _)| output);
+        }
         if !prepared.uses_read_snapshot() {
             drop(view);
             return self.with_autocommit_exclusive(move |database| {
-                database.query_prepared_with_params(prepared, parameters)
+                database.query_prepared_request(prepared, request)
             });
         }
         let statement_kind = prepared.statement_kind();
         let parse_nanos = prepared.parse_nanos();
-        let mut snapshot = view.begin_read_transaction()?;
-
         #[cfg(test)]
         self.wait_after_autocommit_read_snapshot()?;
-        let result = self.inner.commits.finish_read(
-            &view,
-            snapshot.query_prepared_with_params_bounded_profile(prepared, parameters),
-        );
-        drop(snapshot);
+        let result = self
+            .inner
+            .commits
+            .finish_read(&view, view.query_prepared_request(prepared, request));
         view.recorder.record_statement_execution(
             "cypher",
             cypher_text,
@@ -485,7 +544,7 @@ impl ConcurrentDatabase {
                     .ok()
                     .map(|profiled| &profiled.execution_profile),
                 retained_profile: None,
-                access_control: None,
+                access_control: request.access_control,
                 parse_nanos,
             },
         );
@@ -503,8 +562,25 @@ impl ConcurrentDatabase {
         sql_text: &str,
         parameters: &[Value],
     ) -> Result<QueryOutput> {
+        self.query_sql_request(super::SqlQueryRequest::new(sql_text).with_params(parameters))
+    }
+
+    pub fn query_sql_request(&self, request: super::SqlQueryRequest<'_>) -> Result<QueryOutput> {
+        super::query_runtime::query_runtime_checkpoint(request.task_context)?;
+        let sql_text = request.sql;
         let started = Instant::now();
         let prepared = self.inner.commits.prepare_sql(sql_text)?;
+        self.query_prepared_sql_request(request, prepared, started)
+    }
+
+    pub(crate) fn query_prepared_sql_request(
+        &self,
+        request: super::SqlQueryRequest<'_>,
+        prepared: crate::relational_sql::PreparedRelationalSql,
+        started: Instant,
+    ) -> Result<QueryOutput> {
+        super::query_runtime::query_runtime_checkpoint(request.task_context)?;
+        let sql_text = request.sql;
         if let SqlStatement::Branch(statement) = prepared.statement() {
             if matches!(statement, crate::sql::BranchSqlStatement::UseBranch(_)) {
                 return Err(HawDBError::BranchCommandUnsupported {
@@ -519,15 +595,12 @@ impl ConcurrentDatabase {
                 self.wait_after_autocommit_read_snapshot()?;
             }
             return self.with_autocommit_exclusive(|database| {
-                database.query_sql_with_prepared_params(sql_text, parameters, prepared)
+                database.query_sql_with_prepared_request(request, prepared)
             });
         }
         let view = self.inner.commits.read_view()?;
         if !sql_statement_uses_snapshot(prepared.statement()) {
-            drop(view);
-            return self.with_autocommit_exclusive(move |database| {
-                database.query_sql_with_prepared_params(sql_text, parameters, prepared)
-            });
+            return self.query_prepared_sql_mutation(request, prepared, view, started);
         }
         let statement_kind = super::observability::sql_statement_kind(prepared.statement());
         #[cfg(test)]
@@ -535,7 +608,7 @@ impl ConcurrentDatabase {
         let result = self
             .inner
             .commits
-            .finish_read(&view, view.query_sql(sql_text, parameters, prepared));
+            .finish_read(&view, view.query_sql(request, prepared));
         view.recorder.record_statement_execution(
             "sql",
             sql_text,
@@ -586,10 +659,18 @@ impl ConcurrentDatabase {
             })
     }
 
-    fn with_autocommit_exclusive(
+    pub(crate) fn with_autocommit_exclusive(
         &self,
         execute: impl FnOnce(&mut Database) -> Result<QueryOutput>,
     ) -> Result<QueryOutput> {
+        let _lease = self.exclusive_database_lease()?;
+        self.inner
+            .commits
+            .lock()
+            .and_then(|mut database| execute(&mut database))
+    }
+
+    pub(crate) fn exclusive_database_lease(&self) -> Result<ExclusiveDatabaseLease> {
         let transaction_id = self.inner.transaction_ids.allocate()?;
         self.inner.locks.acquire(
             transaction_id,
@@ -597,13 +678,10 @@ impl ConcurrentDatabase {
             Instant::now(),
             DEFAULT_PESSIMISTIC_LOCK_TIMEOUT,
         )?;
-        let result = self
-            .inner
-            .commits
-            .lock()
-            .and_then(|mut database| execute(&mut database));
-        self.inner.locks.release(transaction_id);
-        result
+        Ok(ExclusiveDatabaseLease {
+            inner: Arc::clone(&self.inner),
+            transaction_id,
+        })
     }
 
     #[cfg(test)]
@@ -660,30 +738,34 @@ impl ConcurrentDatabaseTransaction {
         cypher_text: &str,
         parameters: &BTreeMap<String, Value>,
     ) -> Result<QueryOutput> {
-        let result = self.query_with_params_inner(cypher_text, parameters);
+        self.query_request(super::QueryRequest::new(cypher_text).with_params(parameters))
+    }
+
+    pub fn query_request(&mut self, request: super::QueryRequest<'_>) -> Result<QueryOutput> {
+        let result = self.query_request_inner(request);
         if result.is_err() {
             self.state.fail_read_dependencies();
         }
         result
     }
 
-    fn query_with_params_inner(
-        &mut self,
-        cypher_text: &str,
-        parameters: &BTreeMap<String, Value>,
-    ) -> Result<QueryOutput> {
+    fn query_request_inner(&mut self, request: super::QueryRequest<'_>) -> Result<QueryOutput> {
         self.ensure_active()?;
         let lock_savepoint = (self.options.mode == ConcurrentTransactionMode::Pessimistic)
             .then(|| self.inner.locks.savepoint(self.transaction_id))
             .transpose()?;
         self.inner.commits.metrics.graph_execution();
-        let execution = execute_concurrent_graph_transaction_query(
-            &self.runtime,
-            &mut self.state,
-            cypher_text,
-            parameters,
+        let task = super::query_request::bind_request_context(
             self.task_context.as_ref(),
-        );
+            request.task_context,
+        )?;
+        let request = super::QueryRequest {
+            task_context: task.as_ref(),
+            ..request
+        };
+        let prepared =
+            PreparedGraphTransactionRequest::prepare(&self.runtime, &mut self.state, request)?;
+        let execution = prepared.execute(&self.runtime, &mut self.state);
         let outcome = match execution {
             Ok(outcome) => outcome,
             Err(error) => {
@@ -738,13 +820,10 @@ impl ConcurrentDatabaseTransaction {
             self.state.restore_graph_statement(graph_savepoint);
             self.acquire_graph_statement_locks(&requests, lock_savepoint.clone())?;
             self.inner.commits.metrics.graph_replay();
-            let replayed = execute_concurrent_graph_transaction_query(
-                &self.runtime,
-                &mut self.state,
-                cypher_text,
-                parameters,
-                self.task_context.as_ref(),
-            );
+            // Restoring the statement savepoint preserves the preparation's
+            // schema and parameters. The epoch fence prevents a new snapshot
+            // from being substituted under the already-derived lock set.
+            let replayed = prepared.execute(&self.runtime, &mut self.state);
             let replayed = match replayed {
                 Ok(replayed) => replayed,
                 Err(error) => {
@@ -787,21 +866,44 @@ impl ConcurrentDatabaseTransaction {
         sql_text: &str,
         parameters: &[Value],
     ) -> Result<super::SqlStatementResult> {
-        let result = self.query_sql_with_result_and_params_inner(sql_text, parameters);
+        self.query_sql_request_with_result(
+            super::SqlQueryRequest::new(sql_text).with_params(parameters),
+        )
+    }
+
+    pub fn query_sql_request(
+        &mut self,
+        request: super::SqlQueryRequest<'_>,
+    ) -> Result<QueryOutput> {
+        self.query_sql_request_with_result(request)
+            .map(|result| result.output)
+    }
+
+    pub fn query_sql_request_with_result(
+        &mut self,
+        request: super::SqlQueryRequest<'_>,
+    ) -> Result<super::SqlStatementResult> {
+        let result = self.query_sql_request_inner(request);
         if result.is_err() {
             self.state.fail_read_dependencies();
         }
         result
     }
 
-    fn query_sql_with_result_and_params_inner(
+    fn query_sql_request_inner(
         &mut self,
-        sql_text: &str,
-        parameters: &[Value],
+        request: super::SqlQueryRequest<'_>,
     ) -> Result<super::SqlStatementResult> {
         self.ensure_active()?;
+        let task = super::query_request::bind_request_context(
+            self.task_context.as_ref(),
+            request.task_context,
+        )?;
+        super::query_runtime::query_runtime_checkpoint(task.as_ref())?;
+        let sql_text = request.sql;
+        let parameters = request.parameters;
         if let Some(dependencies) = &mut self.state.read_dependencies {
-            super::query_runtime::query_runtime_checkpoint(self.task_context.as_ref())?;
+            super::query_runtime::query_runtime_checkpoint(task.as_ref())?;
             dependencies.admit_sql(sql_text, parameters)?;
         }
         let prepared = self
@@ -810,7 +912,6 @@ impl ConcurrentDatabaseTransaction {
             .prepare(sql_text)?;
         if self.options.mode == ConcurrentTransactionMode::Pessimistic {
             let requests = sql_lock_requests(
-                sql_text,
                 &prepared,
                 parameters,
                 &self.state.relational_state,
@@ -832,7 +933,9 @@ impl ConcurrentDatabaseTransaction {
             DatabaseTransactionSqlOptions {
                 allow_system_schema_registry_write: false,
                 allow_locking_select: true,
-                task_context: self.task_context.as_ref(),
+                task_context: task.as_ref(),
+                output_limits: request.output_limits,
+                join_planning: request.join_planning,
             },
         );
         if result.is_ok() {
@@ -877,6 +980,22 @@ impl ConcurrentDatabaseTransaction {
             self.options.mode == ConcurrentTransactionMode::Pessimistic || retry_safe_conflict_noop;
         let inner = Arc::clone(&self.inner);
         let mut state = self.state.take_for_commit();
+        super::query_runtime::query_runtime_checkpoint(self.task_context.as_ref())?;
+        let graph_only = state.relational_transaction.writes.is_empty()
+            && state.append_transaction.writes.is_empty();
+        let mut prepared = state
+            .graph_transaction
+            .take()
+            .expect("concurrent transaction owns a graph workspace")
+            .compact_for_commit(self.runtime.config.mutation_limits)?;
+        #[cfg(test)]
+        GRAPH_COMMIT_PREPARATION_HOOK.with(|hook| {
+            if let Some(hook) = hook.borrow_mut().take() {
+                hook();
+            }
+        });
+        prepared.encode_graph_wal(graph_only)?;
+        super::query_runtime::query_runtime_checkpoint(self.task_context.as_ref())?;
         let committed_result = Arc::new(Mutex::new(None));
         let result_slot = Arc::clone(&committed_result);
         let task_context = self.task_context.clone();
@@ -887,9 +1006,10 @@ impl ConcurrentDatabaseTransaction {
                     // Cancellation before the commit boundary rejects without WAL.
                     // Never turn a durable success into cancellation afterward.
                     super::query_runtime::query_runtime_checkpoint(task_context.as_ref())?;
-                    let result = commit_database_transaction_state(
+                    let result = commit_prepared_database_transaction_state(
                         database,
                         &mut state,
+                        prepared,
                         allow_stale_rebase,
                     )?;
                     let output = result.output.clone();
@@ -1067,11 +1187,13 @@ fn reject_optimistic_locking_select(
     Ok(())
 }
 
-fn sql_statement_uses_snapshot(statement: &SqlStatement) -> bool {
+pub(super) fn sql_statement_uses_snapshot(statement: &SqlStatement) -> bool {
     match statement {
         SqlStatement::Select(select) => select.lock_strength.is_none(),
         SqlStatement::Explain(explain) => sql_statement_uses_snapshot(&explain.statement),
         SqlStatement::Insert(_)
+        | SqlStatement::CreateMaterializedView(_)
+        | SqlStatement::DropMaterializedView(_)
         | SqlStatement::Update(_)
         | SqlStatement::Delete(_)
         | SqlStatement::CreateTable(_)
@@ -1181,7 +1303,6 @@ impl Drop for ConcurrentDatabaseTransaction {
 }
 
 fn sql_lock_requests(
-    sql_text: &str,
     prepared: &crate::relational_sql::PreparedRelationalSql,
     parameters: &[Value],
     state: &RelationalState,
@@ -1265,21 +1386,34 @@ fn sql_lock_requests(
             Ok(select_lock_requests(select, parameters, state))
         }
         SqlStatement::Insert(_) => {
-            let transaction = crate::relational_sql::compile_relational_statement_sql(
-                sql_text, parameters, state,
-            )?;
-            Ok(insert_lock_requests(&transaction, state)
+            let compiled =
+                crate::relational_sql::compile_prepared_relational_statement_with_result(
+                    &prepared.template,
+                    parameters,
+                    state,
+                )?;
+            Ok(insert_lock_requests(&compiled.transaction, state)
                 .unwrap_or_else(|| vec![LockRequest::database(LockMode::Exclusive)]))
         }
         SqlStatement::Update(update) => {
-            crate::relational_sql::compile_relational_statement_sql(sql_text, parameters, state)?;
+            crate::relational_sql::compile_prepared_relational_statement_with_result(
+                &prepared.template,
+                parameters,
+                state,
+            )?;
             Ok(update_lock_requests(update, parameters, state))
         }
         SqlStatement::Delete(delete) => {
-            crate::relational_sql::compile_relational_statement_sql(sql_text, parameters, state)?;
+            crate::relational_sql::compile_prepared_relational_statement_with_result(
+                &prepared.template,
+                parameters,
+                state,
+            )?;
             Ok(delete_lock_requests(delete, parameters, state))
         }
         SqlStatement::CreateTable(_)
+        | SqlStatement::CreateMaterializedView(_)
+        | SqlStatement::DropMaterializedView(_)
         | SqlStatement::CreateIndex(_)
         | SqlStatement::AlterTableAddColumn(_) => {
             Ok(vec![LockRequest::database(LockMode::Exclusive)])
@@ -1402,14 +1536,14 @@ fn select_lock_requests(
         None => Some(vec![(Bound::Unbounded, Bound::Unbounded)]),
         Some(predicate) if schema.primary_key.len() == 1 => single_key_ranges(
             predicate,
-            &schema.primary_key[0],
+            schema,
             select.from_table(),
             select.from_alias.as_deref(),
             parameters,
         ),
         Some(predicate) => composite_key_point(
             predicate,
-            &schema.primary_key,
+            schema,
             select.from_table(),
             select.from_alias.as_deref(),
             parameters,
@@ -1491,10 +1625,9 @@ fn mutation_target_lock_requests(
         )];
     };
     let ranges = if schema.primary_key.len() == 1 {
-        single_key_ranges(selection, &schema.primary_key[0], table, alias, parameters)
+        single_key_ranges(selection, schema, table, alias, parameters)
     } else {
-        composite_key_point(selection, &schema.primary_key, table, alias, parameters)
-            .map(|range| vec![range])
+        composite_key_point(selection, schema, table, alias, parameters).map(|range| vec![range])
     };
     let Some(ranges) = ranges else {
         return vec![LockRequest::relational_table(
@@ -1648,7 +1781,7 @@ fn relational_row_key(
 
 fn single_key_ranges(
     predicate: &SqlPredicate,
-    primary_key: &str,
+    schema: &RelationalTableSchema,
     table: &SqlTableName,
     alias: Option<&str>,
     parameters: &[Value],
@@ -1658,8 +1791,8 @@ fn single_key_ranges(
             kind: ExprKind::And(left, right),
             ..
         } => {
-            let left = single_key_ranges(left, primary_key, table, alias, parameters);
-            let right = single_key_ranges(right, primary_key, table, alias, parameters);
+            let left = single_key_ranges(left, schema, table, alias, parameters);
+            let right = single_key_ranges(right, schema, table, alias, parameters);
             match (left, right) {
                 (Some(left), Some(right)) => Some(
                     left.into_iter()
@@ -1680,14 +1813,8 @@ fn single_key_ranges(
             kind: ExprKind::Or(left, right),
             ..
         } => {
-            let mut ranges = single_key_ranges(left, primary_key, table, alias, parameters)?;
-            ranges.extend(single_key_ranges(
-                right,
-                primary_key,
-                table,
-                alias,
-                parameters,
-            )?);
+            let mut ranges = single_key_ranges(left, schema, table, alias, parameters)?;
+            ranges.extend(single_key_ranges(right, schema, table, alias, parameters)?);
             Some(ranges)
         }
         Expr {
@@ -1695,9 +1822,13 @@ fn single_key_ranges(
             ..
         } if left
             .as_column()
-            .is_some_and(|left| column_matches(left, primary_key, table, alias)) =>
+            .is_some_and(|left| column_matches(left, &schema.primary_key[0], table, alias)) =>
         {
-            let key = RelationalKey(vec![bind_sql_lock_value(right.as_value()?, parameters)?]);
+            let key = RelationalKey(vec![bind_sql_lock_value(
+                right.as_value()?,
+                parameters,
+                schema.columns[schema.column_position(&schema.primary_key[0])?].scalar_type,
+            )?]);
             match op {
                 SqlComparisonOp::Eq => {
                     Some(vec![(Bound::Included(key.clone()), Bound::Included(key))])
@@ -1719,13 +1850,16 @@ fn single_key_ranges(
             ..
         } if left
             .as_column()
-            .is_some_and(|left| column_matches(left, primary_key, table, alias)) =>
+            .is_some_and(|left| column_matches(left, &schema.primary_key[0], table, alias)) =>
         {
             values
                 .iter()
                 .map(|value| {
-                    let key =
-                        RelationalKey(vec![bind_sql_lock_value(value.as_value()?, parameters)?]);
+                    let key = RelationalKey(vec![bind_sql_lock_value(
+                        value.as_value()?,
+                        parameters,
+                        schema.columns[schema.column_position(&schema.primary_key[0])?].scalar_type,
+                    )?]);
                     Some((Bound::Included(key.clone()), Bound::Included(key)))
                 })
                 .collect()
@@ -1736,22 +1870,16 @@ fn single_key_ranges(
 
 fn composite_key_point(
     predicate: &SqlPredicate,
-    primary_key: &[String],
+    schema: &RelationalTableSchema,
     table: &SqlTableName,
     alias: Option<&str>,
     parameters: &[Value],
 ) -> Option<(Bound<RelationalKey>, Bound<RelationalKey>)> {
     let mut values = BTreeMap::new();
-    collect_composite_equalities(
-        predicate,
-        primary_key,
-        table,
-        alias,
-        parameters,
-        &mut values,
-    )?;
+    collect_composite_equalities(predicate, schema, table, alias, parameters, &mut values)?;
     let key = RelationalKey(
-        primary_key
+        schema
+            .primary_key
             .iter()
             .map(|column| values.remove(column))
             .collect::<Option<Vec<_>>>()?,
@@ -1761,7 +1889,7 @@ fn composite_key_point(
 
 fn collect_composite_equalities(
     predicate: &SqlPredicate,
-    primary_key: &[String],
+    schema: &RelationalTableSchema,
     table: &SqlTableName,
     alias: Option<&str>,
     parameters: &[Value],
@@ -1772,8 +1900,8 @@ fn collect_composite_equalities(
             kind: ExprKind::And(left, right),
             ..
         } => {
-            collect_composite_equalities(left, primary_key, table, alias, parameters, values)?;
-            collect_composite_equalities(right, primary_key, table, alias, parameters, values)
+            collect_composite_equalities(left, schema, table, alias, parameters, values)?;
+            collect_composite_equalities(right, schema, table, alias, parameters, values)
         }
         Expr {
             kind:
@@ -1783,7 +1911,7 @@ fn collect_composite_equalities(
                     right,
                 },
             ..
-        } if primary_key.iter().any(|column| {
+        } if schema.primary_key.iter().any(|column| {
             left.as_column()
                 .is_some_and(|left| column_matches(left, column, table, alias))
         }) =>
@@ -1794,7 +1922,11 @@ fn collect_composite_equalities(
             }
             values.insert(
                 left.name.clone(),
-                bind_sql_lock_value(right.as_value()?, parameters)?,
+                bind_sql_lock_value(
+                    right.as_value()?,
+                    parameters,
+                    schema.columns[schema.column_position(&left.name)?].scalar_type,
+                )?,
             );
             Some(())
         }
@@ -1802,8 +1934,13 @@ fn collect_composite_equalities(
     }
 }
 
-fn bind_sql_lock_value(value: &SqlValue, parameters: &[Value]) -> Option<RelationalValue> {
-    crate::relational_sql::bind_relational_value(value.clone(), parameters).ok()
+fn bind_sql_lock_value(
+    value: &SqlValue,
+    parameters: &[Value],
+    scalar_type: hawdb_storage::relational::RelationalScalarType,
+) -> Option<RelationalValue> {
+    let value = crate::relational_sql::bind_relational_value(value.clone(), parameters).ok()?;
+    hawdb_relational::coerce_relational_value(value, scalar_type).ok()
 }
 
 fn column_matches(
@@ -1996,14 +2133,9 @@ mod tests {
                            WHERE stream = 'alpha' ORDER BY sequence LIMIT 10";
         let cache = crate::relational_sql::RelationalPlanTemplateCache::new(Some(4));
         let prepared = cache.prepare(SQL).expect("prepare append explain analyze");
-        let requests = sql_lock_requests(
-            SQL,
-            &prepared,
-            &[],
-            &RelationalState::default(),
-            &append_state,
-        )
-        .expect("derive append explain analyze locks");
+        let requests =
+            sql_lock_requests(&prepared, &[], &RelationalState::default(), &append_state)
+                .expect("derive append explain analyze locks");
 
         assert_eq!(requests, vec![LockRequest::database(LockMode::Shared)]);
     }
@@ -2027,7 +2159,6 @@ mod tests {
         ] {
             let prepared = cache.prepare(sql).unwrap();
             let requests = sql_lock_requests(
-                sql,
                 &prepared,
                 &[],
                 &RelationalState::default(),

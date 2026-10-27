@@ -61,6 +61,43 @@ def test_memory_open_rejects_read_only():
         hawdb.Database(read_only=True)
 
 
+@pytest.mark.parametrize(
+    "opener", [hawdb.open, hawdb.Database, hawdb.connect], ids=["open", "Database", "connect"]
+)
+@pytest.mark.parametrize("read_only", [False, True])
+def test_memory_sentinel_path_is_refused(tmp_path, monkeypatch, opener, read_only):
+    # sqlite3 spells an in-memory database ":memory:"; HawDB takes no path.
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(ValueError, match="pass no path for an in-memory database"):
+        with opener(":memory:", read_only=read_only):
+            pass
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize(
+    "opener", [hawdb.open, hawdb.Database, hawdb.connect], ids=["open", "Database", "connect"]
+)
+@pytest.mark.parametrize("read_only", [False, True])
+@pytest.mark.parametrize("existing_project", [False, True])
+def test_empty_path_is_refused(
+    tmp_path, monkeypatch, opener, read_only, existing_project
+):
+    if existing_project:
+        with hawdb.open(tmp_path) as db:
+            db.execute("CREATE (:Persisted {id: 9})")
+    monkeypatch.chdir(tmp_path)
+    before = sorted(tmp_path.rglob("*"))
+    with pytest.raises(ValueError, match="path is empty; pass no path"):
+        with opener("", read_only=read_only):
+            pass
+    assert sorted(tmp_path.rglob("*")) == before
+    if existing_project:
+        with hawdb.open(tmp_path, read_only=True) as db:
+            assert db.execute("MATCH (p:Persisted) RETURN p.id AS id").fetchall() == [
+                {"id": 9}
+            ]
+
+
 def test_database_constructor_without_path_opens_memory():
     db = hawdb.Database()
     try:

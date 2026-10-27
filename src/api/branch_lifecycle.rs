@@ -1,3 +1,6 @@
+// Copyright 2026 Nowledge
+// SPDX-License-Identifier: Apache-2.0
+
 //! Typed branch metadata lifecycle for the embedded database facade.
 //!
 //! Durable head publication and branch opening remain storage-owned. This
@@ -456,7 +459,10 @@ mod tests {
                 .query_sql_with_params("USE BRANCH ID $1", &[Value::Uuid(grandchild)])
                 .unwrap();
             assert!(database
-                .query_prepared_with_params(prepared_write, &Default::default())
+                .query_prepared_request(
+                    prepared_write,
+                    crate::QueryRequest::new("CREATE (:Memory {id: 'stale-plan'})"),
+                )
                 .unwrap_err()
                 .to_string()
                 .contains("different branch"));
@@ -1897,6 +1903,7 @@ mod tests {
                 &mut crate::schema::Catalog::default(),
                 RelationalTransaction {
                     writes: vec![RelationalWrite::CreateTable(RelationalTableSchema {
+                        materialized_view: None,
                         name: "pending_legacy_rows".into(),
                         columns: vec![RelationalColumnSchema {
                             name: "id".into(),

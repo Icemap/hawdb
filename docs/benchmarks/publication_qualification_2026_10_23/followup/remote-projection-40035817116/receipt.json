@@ -1,0 +1,16 @@
+{
+  "diagnostic_only": true,
+  "exact_checks_passed": true,
+  "counts": {
+    "cases": 432,
+    "commits": 110592,
+    "reads": 248832,
+    "reopens": 288,
+    "processes": 72
+  },
+  "known_compiler_interference": [],
+  "inventory_errors": [],
+  "inventory_coverage_complete": true,
+  "timing_environment_qualified": true,
+  "results_sha256": "28b92ea6d8824a4aaa03e6b497b6aa5c46cd199094d6695e3db233e599c8c0f7"
+}

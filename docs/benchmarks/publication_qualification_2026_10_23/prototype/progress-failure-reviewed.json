@@ -1,0 +1,5 @@
+{
+  "exit_code": 1,
+  "cause": "Feed(Incomplete) at coverage entry: staging did not meet complete/end/closed/order invariants. The helper has a fixed 100000-advance loop without a separate completion assertion; exhausting that loop is the source-based explanation, not a captured step-counter measurement.",
+  "disposition": "preserve failed five-case partial cohort; independently run unchanged 54-case controls on the same binary, not a progress retry"
+}

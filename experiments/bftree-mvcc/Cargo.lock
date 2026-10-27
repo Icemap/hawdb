@@ -181,7 +181,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -263,7 +263,7 @@ checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
 
 [[package]]
 name = "hawdb-analytics"
-version = "0.14.0"
+version = "0.17.0"
 dependencies = [
  "hawdb-core",
 ]
@@ -282,11 +282,11 @@ dependencies = [
 
 [[package]]
 name = "hawdb-cgroup"
-version = "0.14.0"
+version = "0.17.0"
 
 [[package]]
 name = "hawdb-core"
-version = "0.14.0"
+version = "0.17.0"
 dependencies = [
  "getrandom 0.4.3",
  "regex",
@@ -295,53 +295,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "hawdb-cypher"
-version = "0.14.0"
-dependencies = [
- "hawdb-core",
- "hawdb-ddl",
-]
-
-[[package]]
-name = "hawdb-ddl"
-version = "0.14.0"
-dependencies = [
- "hawdb-core",
-]
-
-[[package]]
-name = "hawdb-expression"
-version = "0.14.0"
-dependencies = [
- "hawdb-core",
-]
-
-[[package]]
 name = "hawdb-integrity"
-version = "0.14.0"
+version = "0.17.0"
 dependencies = [
  "crc32c",
  "sha2",
 ]
 
 [[package]]
-name = "hawdb-plan-core"
-version = "0.14.0"
-
-[[package]]
-name = "hawdb-plan-cypher"
-version = "0.14.0"
-dependencies = [
- "hawdb-core",
- "hawdb-cypher",
- "hawdb-ddl",
- "hawdb-expression",
- "hawdb-plan-core",
-]
-
-[[package]]
 name = "hawdb-qos"
-version = "0.14.0"
+version = "0.17.0"
 dependencies = [
  "hawdb-cgroup",
  "hawdb-core",
@@ -352,14 +315,13 @@ dependencies = [
 
 [[package]]
 name = "hawdb-storage"
-version = "0.14.0"
+version = "0.17.0"
 dependencies = [
  "chrono",
  "fs2",
  "hawdb-analytics",
  "hawdb-core",
  "hawdb-integrity",
- "hawdb-plan-cypher",
  "hawdb-qos",
  "hawdb-telemetry",
  "libc",
@@ -372,7 +334,7 @@ dependencies = [
 
 [[package]]
 name = "hawdb-telemetry"
-version = "0.14.0"
+version = "0.17.0"
 dependencies = [
  "hawdb-qos",
 ]
@@ -652,7 +614,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -785,10 +747,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.4.3",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

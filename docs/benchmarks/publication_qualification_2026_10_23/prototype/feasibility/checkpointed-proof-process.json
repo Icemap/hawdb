@@ -1,0 +1,24 @@
+{
+  "command": [
+    "/build/release/deps/consumer_publication-ee5e1a723b428eea",
+    "--mode",
+    "detached",
+    "--writers",
+    "1",
+    "--documents",
+    "32",
+    "--payload",
+    "128",
+    "--writes",
+    "20000",
+    "--quiet-samples",
+    "1",
+    "--root",
+    "/fixtures/checkpointed-proof-51byss_f/database",
+    "--sustained",
+    "true"
+  ],
+  "returncode": 0,
+  "seconds_including_setup": 8.382774379,
+  "scope": "correctness only, not qualified timing"
+}

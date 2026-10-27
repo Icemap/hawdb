@@ -1,0 +1,71 @@
+{
+  "source": {
+    "head": "7da5fc6c81790121491dd23ee1c1b232ad9a8c3b",
+    "source_overlay_sha256": {
+      "crates/executor/src/expression.rs": "e5efb1e5b67bfcc1fe786a90220972ad98f2fb739af3c24c577ab2c100fe7c75",
+      "crates/executor/src/expression/projection.rs": "23753c4a41f0c44d88ffd9ee045bf5bc945afd8701a677f1921702311025a26a",
+      "crates/executor/src/scan.rs": "2ff63bec6b0e8866821156cfdc29be089373d92873c62e613c8a1cce7328b15f",
+      "crates/executor/src/expression/projection/tests.rs": "7dda1b8dadef59eebaecfc238dc6474858aa5899e5fac67eb9f6f75b8032b716"
+    },
+    "source": "vector representation from completed experimental run40035817116; rustfmt only, no temporary root instrumentation",
+    "qualification": "pending actual-source local fuzz, MVCC, final-head CI and unchanged strict writer gates"
+  },
+  "bazel": {
+    "targets": 98,
+    "passed": 98,
+    "executed": 58,
+    "cached": 40,
+    "elapsed_seconds": 1245.52,
+    "bep_sha256": "0f89909c1a386b9e680e6441a29c8d85b4374793c35df0434024645dfe912c85"
+  },
+  "mvcc": {
+    "cases": 42511,
+    "elapsed_ms": 30000,
+    "artifact_directory": "target/mvcc-fuzz/76637-1792798647628318000",
+    "compile_seconds": 14.41,
+    "coverage": [
+      {
+        "kind": "same_key",
+        "t1_first": 2614,
+        "t2_first": 2700
+      },
+      {
+        "kind": "disjoint",
+        "t1_first": 2627,
+        "t2_first": 2687
+      },
+      {
+        "kind": "net_zero",
+        "t1_first": 1345,
+        "t2_first": 3969
+      },
+      {
+        "kind": "absent_delete",
+        "t1_first": 2659,
+        "t2_first": 2655
+      },
+      {
+        "kind": "delete_insert",
+        "t1_first": 1385,
+        "t2_first": 3929
+      },
+      {
+        "kind": "broad_narrow",
+        "t1_first": 2665,
+        "t2_first": 2649
+      },
+      {
+        "kind": "duplicate_insert",
+        "t1_first": 2665,
+        "t2_first": 2649
+      },
+      {
+        "kind": "rollback",
+        "t1_first": 2613,
+        "t2_first": 2700
+      }
+    ]
+  },
+  "ordinary_new_unit_execution": "CI owned; not claimed from local fuzz",
+  "timing_gate_accepted": false
+}

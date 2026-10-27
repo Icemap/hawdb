@@ -1,0 +1,57 @@
+{
+  "schema": "concurrent-writer-strict-gate-v2",
+  "created_utc": "2026-10-23T18:09:55.782276+00:00",
+  "baseline_revision": "8e9eab185ef880794d216d99ac6cd57442c511aa",
+  "candidate_head": "4b65398f1580cd771ee22d1085d2e13b20f0109d",
+  "candidate_status": "?? artifacts/\n?? scripts/__pycache__/\n",
+  "candidate_source_manifest_sha256": "d8932a4e2df6aeb23e5a54905bce0cab53468ceacafe2c08bffe22540beed94a",
+  "candidate_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "harness_sha256": "802a8f19ef71ff149fb4a5a4c21b2d810d2b0d2b25eef07941792a38e562a498",
+  "reader_harness_sha256": "4b844fa1d028f509a29a7f272995fc36e4d41db3a2cb596cd17b6aa1a41e3c85",
+  "binary_sha256": {
+    "baseline": "16f22397f266546b8821ecb66eb60d77948cc75a84192d69ef164139a15262fe",
+    "candidate": "961df06fe5cc244eac0300484161d10609c5745f535e91a65f4f944d1d8ecc38"
+  },
+  "binary_paths": {
+    "baseline": "/home/runner/work/hawdb/hawdb/artifacts/strict-writer-gate/baseline-concurrent-writers",
+    "candidate": "/home/runner/work/hawdb/hawdb/artifacts/strict-writer-gate/candidate-concurrent-writers"
+  },
+  "cargo_lock_sha256": {
+    "baseline": "d06d2c813a3ff92fbc0216b241943049a9652c2c26440d87cf09f5c73db8b019",
+    "candidate": "d06d2c813a3ff92fbc0216b241943049a9652c2c26440d87cf09f5c73db8b019"
+  },
+  "effective_cargo_config_sha256": "06c7ca26d39223bd90a6412acd8609c380ce2d1650a72b70c90171656ca89819",
+  "build_profile": "bench; opt-level=3, codegen-units=1, thin LTO, strip=none; both builds invoked from candidate repository",
+  "toolchain": "Rust 1.97.1",
+  "default_features": true,
+  "baseline_overlay": "identical writer harness and Cargo benchmark registration only",
+  "measured_pairs": 40,
+  "warm_up_pairs": 1,
+  "interval_ranks_one_based": [
+    12,
+    29
+  ],
+  "writers": 1,
+  "readers": 0,
+  "cpu_topology": null,
+  "fixture_profile": "post-checkpoint-control",
+  "reopen_before_measure": false,
+  "primary_endpoints": [
+    [
+      "commit_latency",
+      "p50_ns"
+    ],
+    [
+      "commit_latency",
+      "p95_ns"
+    ]
+  ],
+  "primary_endpoint_count": 6,
+  "primary_cases": "non-serialized API in memory, durable ungrouped, durable grouped",
+  "pass_rule": "all unrounded upper ratio endpoints <= 1.0; no adaptive stopping or sample removal",
+  "coverage": "95% simultaneous intervals within this cohort only; no joint matrix claim",
+  "order": "baseline first for even pairs, candidate first for odd pairs; alternate --round 0/1",
+  "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+  "filesystem": "Filesystem     Type 1K-blocks     Used Available Use% Mounted on\n/dev/root      ext4 151263856 64386120  86861352  43% /\n",
+  "limitations": "shared host; no exclusive machine, affinity, cache flush, or power-loss claim; median-ratio intervals assume independent pairs from continuous distributions"
+}

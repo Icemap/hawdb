@@ -99,6 +99,7 @@ fn compare(actual: &SegmentAccumulator, expected: &SegmentAccumulator) {
     assert_eq!(actual.source_endpoint_keys, expected.source_endpoint_keys);
     assert_eq!(actual.target_endpoint_keys, expected.target_endpoint_keys);
     assert_eq!(actual.node_property_keys, expected.node_property_keys);
+    assert_eq!(actual.node_label_keys, expected.node_label_keys);
 }
 
 fn reference(payload: &[u8]) -> SegmentAccumulator {
@@ -115,6 +116,188 @@ fn reference(payload: &[u8]) -> SegmentAccumulator {
     }
     output.add_node_properties(&node(), None).unwrap();
     output
+}
+
+fn label_bloom_cardinality(admitted: bool) {
+    let ceiling = 2 * 1024 * 1024;
+    let governor = governor(ceiling);
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(ceiling).with_io_wave_slots(1))
+        .unwrap();
+    let task = permit.bind_task_context(RuntimeTaskContext::default());
+    let work = CheckpointWorkContext::new(task.clone());
+    for labels in [vec![LabelId(7)], vec![LabelId(9), LabelId(3), LabelId(7)]] {
+        for count in [1, 4096] {
+            let path = std::env::temp_dir().join(format!(
+                "hawdb-label-bloom-cardinality-{}",
+                hawdb_core::generate_uuidv7().unwrap()
+            ));
+            let mut output = Accumulator::new(
+                CanonicalSegmentKind::Nodes,
+                ManifestGeneration(47),
+                1,
+                CanonicalSegmentConfig::default(),
+                work.clone(),
+                admitted,
+            );
+            let mut node = NodeRecord {
+                id: NodeId(0),
+                labels: labels.iter().copied().collect(),
+                properties: BTreeMap::new(),
+            };
+            let payload = encode_node_with_property_spills(&node, None, None).unwrap();
+            for id in 0..count {
+                node.id = NodeId(id);
+                output.push(id, &payload, None).unwrap();
+                output.add_node_properties(&node, None).unwrap();
+            }
+            let keys = output.node_label_keys.clone();
+            let capacity = output.node_label_keys.capacity();
+            let mut file = File::create(&path).unwrap();
+            let descriptor = output
+                .flush_with_work_context(&mut file, &mut IntegrityHasher::new(), 0, None)
+                .unwrap();
+            assert_eq!(
+                descriptor.node_label_bloom.words.len(),
+                BLOOM_MIN_WORDS,
+                "label Bloom must depend on distinct labels: admitted={admitted}, nodes={count}"
+            );
+            assert_eq!(
+                keys,
+                node.labels
+                    .iter()
+                    .map(|label| u64::from(label.0))
+                    .collect::<Vec<_>>()
+            );
+            assert!(capacity <= labels.len().next_power_of_two().max(4));
+            for label in &labels {
+                assert!(descriptor
+                    .node_label_bloom
+                    .might_contain(u64::from(label.0)));
+            }
+            let value = descriptor.encode_descriptor_tree_value().unwrap();
+            let decoded = CanonicalSegmentDescriptor::decode_descriptor_tree_entry(
+                &descriptor.descriptor_tree_key(),
+                &value,
+            )
+            .unwrap();
+            assert_eq!(decoded.node_label_bloom, descriptor.node_label_bloom);
+            drop(descriptor);
+            assert_eq!(used(&task, ceiling), 0);
+            drop(file);
+            std::fs::remove_file(path).unwrap();
+        }
+    }
+}
+
+#[test]
+fn ordinary_node_label_bloom_size_depends_on_distinct_labels() {
+    label_bloom_cardinality(false);
+}
+
+#[test]
+fn admitted_node_label_bloom_size_depends_on_distinct_labels() {
+    label_bloom_cardinality(true);
+}
+
+#[test]
+fn repeated_node_labels_reuse_the_original_admitted_inventory() {
+    let ceiling = 1 << 20;
+    let governor = governor(ceiling);
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+        .unwrap();
+    let task = permit.bind_task_context(RuntimeTaskContext::default());
+    let work = CheckpointWorkContext::new(task.clone());
+    let mut output = accumulator(work, CanonicalSegmentKind::Nodes);
+    let mut node = NodeRecord {
+        id: NodeId(0),
+        labels: BTreeSet::from([LabelId(7)]),
+        properties: BTreeMap::new(),
+    };
+    output.add_node_properties(&node, None).unwrap();
+    let retained = used(&task, ceiling);
+    assert!(retained >= 8);
+    for id in 1..4096 {
+        node.id = NodeId(id);
+        output.add_node_properties(&node, None).unwrap();
+    }
+    assert_eq!(
+        used(&task, ceiling),
+        retained,
+        "repeated labels must not grow admission"
+    );
+    assert_eq!(output.node_label_keys, [7]);
+    drop(output);
+    assert_eq!(used(&task, ceiling), 0);
+}
+
+#[test]
+fn retained_node_label_insert_retries_every_cut_without_duplicate_keys() {
+    let ceiling = 1 << 20;
+    let governor = governor(ceiling);
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+        .unwrap();
+    let task = permit.bind_task_context(RuntimeTaskContext::default());
+    let local = local();
+    let work = CheckpointWorkContext::new(task.clone()).with_scheduler(local.clone());
+    let prefix = NodeRecord {
+        id: NodeId(0),
+        labels: (1000..1320).map(LabelId).collect(),
+        properties: BTreeMap::new(),
+    };
+    let node = NodeRecord {
+        id: NodeId(1),
+        labels: BTreeSet::from([LabelId(1), LabelId(1001)]),
+        properties: BTreeMap::new(),
+    };
+    let mut expected = SegmentAccumulator::new(
+        CanonicalSegmentKind::Nodes,
+        ManifestGeneration(47),
+        1,
+        CanonicalSegmentConfig::default(),
+    );
+    expected.add_node_properties(&prefix, None).unwrap();
+    expected.add_node_properties(&node, None).unwrap();
+    assert_eq!(expected.node_label_keys.len(), 321);
+    let mut baseline_output = accumulator(work.clone(), CanonicalSegmentKind::Nodes);
+    baseline_output.add_node_properties(&prefix, None).unwrap();
+    let baseline = Arc::new(CheckpointWorkProbe::default());
+    local.set_telemetry_sink(Some(baseline.clone()));
+    baseline_output.add_node_properties(&node, None).unwrap();
+    let total = baseline.completed.load(Ordering::SeqCst);
+    assert!(
+        total > 5,
+        "cover admission, both shift blocks and the repeated label"
+    );
+    local.set_telemetry_sink(None);
+    drop(baseline_output);
+    for cut in 1..=total {
+        let mut actual = accumulator(work.clone(), CanonicalSegmentKind::Nodes);
+        actual.add_node_properties(&prefix, None).unwrap();
+        let probe = Arc::new(CheckpointWorkProbe::default());
+        probe.cancel_after.store(cut, Ordering::SeqCst);
+        local.set_telemetry_sink(Some(probe.clone()));
+        let stopped = CheckpointWorkContext::new(permit.bind_task_context(
+            RuntimeTaskContext::without_deadline(probe.cancellation.clone()),
+        ))
+        .with_scheduler(local.clone());
+        assert!(
+            matches!(
+                actual.add_node_properties(&node, Some(&stopped)),
+                Err(CanonicalSegmentError::Work(CheckpointWorkError::Stopped(_)))
+            ),
+            "cut={cut}"
+        );
+        probe.assert_released(&local);
+        local.set_telemetry_sink(None);
+        actual.add_node_properties(&node, Some(&work)).unwrap();
+        compare(&actual, &expected);
+        assert!(actual.pending_properties.is_none());
+        drop(actual);
+        assert_eq!(used(&task, ceiling), 0, "cut={cut}");
+    }
 }
 
 #[test]
@@ -137,7 +320,8 @@ fn checkpoint_units_canonical_accumulator_memory_related_wire_arrays_and_retaine
         let capacity_bytes = actual.records.capacity()
             + 8 * (actual.source_endpoint_keys.capacity()
                 + actual.target_endpoint_keys.capacity()
-                + actual.node_property_keys.capacity());
+                + actual.node_property_keys.capacity()
+                + actual.node_label_keys.capacity());
         assert!(used(&task, ceiling) >= capacity_bytes as u64);
         assert_eq!(probe.peak_units.load(Ordering::SeqCst), 1);
         assert_eq!(probe.io_waves.load(Ordering::SeqCst), 0);

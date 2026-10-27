@@ -173,7 +173,7 @@ impl CowNodeMap {
                     let bytes = bytes
                         .checked_add(2 * std::mem::size_of::<usize>())?
                         .checked_add(std::mem::size_of::<
-                            super::CowData<BTreeMap<NodeId, NodeOwner>>,
+                            super::CowData<super::CowMapPage<NodeId, NodeOwner>>,
                         >())?
                         .checked_add(tree_capacity::<NodeId, NodeOwner>(page.len())?)?;
                     page.values().try_fold(bytes, |bytes, owner| {
@@ -244,13 +244,7 @@ impl CowNodeMap {
         self.0
             .prepare_checkpoint_insertions_for_key(id, count, work)
     }
-    pub(crate) fn prepare_checkpoint_insert_copy_for_key(
-        &mut self,
-        id: &NodeId,
-        work: &crate::background::CheckpointWorkContext,
-    ) -> Result<(), crate::background::CheckpointWorkError> {
-        self.prepare_checkpoint_insertions_for_key(id, 1, work)
-    }
+
     pub(crate) fn prepare_checkpoint_copy_for_key(
         &mut self,
         id: &NodeId,

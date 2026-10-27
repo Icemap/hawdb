@@ -1,0 +1,41 @@
+#[path = "/work/benches/consumer_publication/workload.rs"]
+mod workload;
+use hawdb::{ProjectionFeedLimits, ProjectionStagingSessionStep, Value};
+use serde_json::json;
+use std::num::NonZeroUsize;
+fn main() {
+    let root = std::path::Path::new("/fixtures/staging-budget-proof-1");
+    std::fs::create_dir(root).unwrap();
+    let (mut database, consumer) = workload::setup(root, 32, 128, 1, 104_192);
+    let selected_before = consumer.projection().receipt().source_epoch;
+    let epoch_before = database.commit_epoch().unwrap();
+    for value in 1..=60_000 {
+        database.query_sql_with_params("UPDATE foreground SET value=$1 WHERE id=0", &[Value::Int(value)]).unwrap();
+    }
+    assert_eq!(database.commit_epoch().unwrap(), epoch_before + 60_000);
+    let mut session = workload::begin(&mut database, &consumer, true);
+    let captured = session.source_epoch();
+    let quantum = ProjectionFeedLimits {
+        work: NonZeroUsize::new(256).unwrap(),
+        items: NonZeroUsize::new(64).unwrap(),
+        bytes: NonZeroUsize::new(1 << 20).unwrap(),
+    };
+    let mut counts = [0_u64; 4];
+    for calls in 1..=250_000 {
+        let state = session.advance(quantum, Default::default()).unwrap();
+        counts[match state {
+            ProjectionStagingSessionStep::Input => 0,
+            ProjectionStagingSessionStep::Mapping => 1,
+            ProjectionStagingSessionStep::Ordering => 2,
+            ProjectionStagingSessionStep::Complete => 3,
+        }] += 1;
+        if calls == 100_000 || state == ProjectionStagingSessionStep::Complete {
+            println!("{}", json!({"scope":"correctness diagnostic only, not sustained qualification or latency", "foreground_updates":60000,"selected_before":selected_before,"epoch_before":epoch_before,"captured_epoch":captured,"calls":calls,"state":format!("{state:?}"),"state_counts_input_mapping_ordering_complete":counts,"original_feed_mapping_and_memory_limits":true}));
+        }
+        if state == ProjectionStagingSessionStep::Complete {
+            assert!(calls > 100_000);
+            return;
+        }
+    }
+    panic!("diagnostic did not complete; original fixture retained");
+}

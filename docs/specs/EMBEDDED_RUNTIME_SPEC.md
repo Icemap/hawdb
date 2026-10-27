@@ -174,9 +174,49 @@ the last committed state and permit later work. Publication retains the current
 COW roots and one current pin; compaction paths that use only the oldest logical
 epoch may conservatively postpone reclamation until a later checkpoint.
 
+`NowledgeMemEmbeddedStoreHandle::with_transaction` supplies the existing
+`ConcurrentDatabaseTransaction` workspace. Transaction callbacks stage outside
+the store publication lock, retain their admitted permit, and publish through
+the ordinary lock manager, commit validation and WAL coordinator. The statement
+group entrypoint uses the same path. Direct Mem mutations and maintenance acquire
+the coordinator's database-exclusive logical lease before the publication lock;
+they MUST NOT bypass active pessimistic write locks. Both paths update the same
+canonical read publication, so no second snapshot cache can retain a stale
+physical generation. An unfinished WAL group cannot become a read publication.
+Retired views release their pins after unlocking. Mem writer unwind remains a
+serving failure until reopen, including an unwind in a transaction callback.
+
+Ordinary Mem owned reads and streaming callbacks prepare and execute against
+immutable published graph views after releasing the outer store lock. Planning
+releases its view before execution admission, retaining only the accounted
+template. Execution acquires the current view and verifies instance, branch,
+schema/execution compatibility, configuration and query settings. Ordinary data
+commits preserve reuse; an incompatible source returns a retry error before
+execution. Streaming callbacks may overlap commits and acquire newer reads,
+while their original result remains bound to its selected snapshot.
+
+Mem report reads without a resident projection use the same admitted template
+and immutable publication path, including out-of-core external search operators.
+They capture optimizer/cache/profile evidence during that execution and record
+statement telemetry outside the store lock. A telemetry callback may wait for a
+writer and perform a fresh read without replacing the original report's snapshot.
+Ordinary report reads reuse preparation without an additional plan-cache lookup;
+EXPLAIN's separately bound diagnostic plan is outside this reuse guarantee. Non-snapshot
+statements and resident projection reports currently retain the canonical owner
+for execution; they reuse admission preparation and revalidate the instance,
+schema, branch and configuration after acquiring it. This fallback remains a
+separate concurrency requirement. Canonical snapshot construction and observation
+refresh also run outside the short publication-pointer acquisition lock.
+
 `with_bounded_read_snapshot` additionally pins the configured search projection
-and retains the store read lock through the callback. Graph-only snapshots MUST
-report no projection presence or projection epochs and MUST reject external
+with its graph publication. Out-of-core snapshots own the complete immutable
+reader, including its manifest, visibility state, shared artifact handles and
+native pins; callbacks run after releasing the store and publication locks.
+Maintenance refresh installs a new reader and preserves existing readers. The
+publication cache retains one current projection owner and retires replaced
+owners after unlocking. The resident projection path still retains the store
+read lock until resident document/COW ownership is implemented.
+Graph-only snapshots MUST report no projection presence or projection epochs and MUST reject external
 vector reads, even when the live store has a projection. A host requiring
 projection consistency MUST use the projection-pinned entrypoint. Neither
 entrypoint transfers host business policy into the database.

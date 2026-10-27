@@ -1,5 +1,16 @@
 // Copyright 2026 Nowledge
-// Licensed under the Apache License, Version 2.0.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Governed artifacts for an invisible registered Consumer producer. The caller
 //! retains its original publication lease and owns the sole native selection.
@@ -18,23 +29,15 @@ impl SearchOutOfCoreGenerationWriter {
         let root = index.path.as_deref().ok_or_else(|| {
             HawDBError::StorageIntegrity("Consumer producer has no private root".into())
         })?;
-        // The permit declares wave capacity but does not occupy an I/O slot.
-        // This fresh private producer uses uncaptured staging and no retirement
-        // pass, so its synchronous I/O and cleanup share this one wave. Return
-        // releases it before Consumer target preparation acquires its own wave.
-        let _io = task
-            .acquire_io_wave(NonZeroUsize::MIN)
-            .map_err(|error| HawDBError::Execution(error.to_string()))?
-            .ok_or_else(|| {
-                HawDBError::Execution("Consumer producer requires I/O admission".into())
-            })?;
+        let mut memory = BuildMemory::new(&task)?;
+        memory.host_admission = Some(permit);
+        let scope = io_phase::Scope::acquire(&task, &memory)?;
+        let task = scope.task();
         if !publication.matches_source_directory(root)? {
             return Err(HawDBError::StorageIntegrity(
                 "Consumer producer changed native root".into(),
             ));
         }
-        let mut memory = BuildMemory::new(&task)?;
-        memory.host_admission = Some(permit);
         // This entrypoint accepts only a fresh private producer. It never opens
         // another selector or retries a possibly selected public generation.
         if discovery::active_identity(root, &memory, &task)?.is_some() {
@@ -92,6 +95,7 @@ impl SearchOutOfCoreGenerationWriter {
         let options = context_memory::Options::new(options, &memory, &task)?;
         drop(options_memory);
         let mut writer = Self::create_with_memory(root, options, task, memory)?;
+        scope.install(&mut writer);
         for document in index.documents.values() {
             checkpoint(&writer.task_context)?;
             let lease = writer

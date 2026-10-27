@@ -323,7 +323,7 @@ impl DatabaseTransactionState {
         Ok(state)
     }
 
-    pub(super) fn fail_read_dependencies(&mut self) {
+    pub(crate) fn fail_read_dependencies(&mut self) {
         if let Some(dependencies) = &mut self.read_dependencies {
             dependencies.fail();
         }

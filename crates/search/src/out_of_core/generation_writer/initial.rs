@@ -219,6 +219,9 @@ fn build_range(
         parent.task_context.clone(),
         parent.memory.clone(),
     )?;
+    // Pre-publication failures must borrow the parent's still-active cleanup
+    // wave rather than contend with that same operation for a second slot.
+    part.stage.inherit_io_task(&parent.stage);
     part.lexical_term_policy = parent.lexical_term_policy;
     part.max_lexical_manifest_bytes = parent.max_lexical_manifest_bytes;
     part.embedding_dimension = parent.embedding_dimension;

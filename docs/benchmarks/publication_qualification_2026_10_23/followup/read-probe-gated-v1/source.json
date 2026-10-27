@@ -1,0 +1,13 @@
+{
+  "committed_parent": "a4eea1cc85bbf6635399a191907000a1b5b109be",
+  "overlay_sha256": {
+    "benches/consumer_publication.rs": "5cd9c1a527ffad5c29212ccff1e51e82a72044d3eff250e4a942e53d285f1996",
+    "benches/consumer_publication/probes.rs": "f0500b57df83e850b34a99ea372cba38a012e17cda6f1421ef089aae37c65526",
+    "scripts/measure-consumer-publication.py": "26576a5d10f53657475d4d362b740611fa337de9c066a3be185cb9ed18a535e7",
+    "scripts/measure-consumer-publication.test.py": "e0e688507284af53995cb1cf6ef39fa6cdefd07345b32a7d8f2eee95160255af",
+    "src/api/publication.rs": "78027a3337b868f048152b2fc337ff4ee5d5b8f1c913d677cfb7befa25dd2b7e"
+  },
+  "only_rust_difference_from_read_probe_v1": "src/api/publication.rs",
+  "declared_utc": "2026-10-23T18:53:38.746431+00:00",
+  "purpose": "unchanged read protocol calibration after owner admission gate; not final acceptance"
+}

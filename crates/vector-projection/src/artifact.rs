@@ -489,6 +489,17 @@ impl FileProjection {
 }
 
 impl<Memory> FileProjection<Memory> {
+    /// Conservative retained capacity including the complete mapped file.
+    pub fn retained_capacity_bytes(&self) -> usize {
+        self.contents
+            .manifest
+            .retained_capacity_bytes()
+            .saturating_add(self.contents.path.capacity())
+            .saturating_add(self.contents.mmap.len())
+            .saturating_add(std::mem::size_of::<ProjectionContents<Memory>>())
+            .saturating_add(2 * std::mem::size_of::<usize>())
+    }
+
     /// Producer reference computed during the existing complete validation pass.
     #[cfg(feature = "storage-io")]
     #[doc(hidden)]

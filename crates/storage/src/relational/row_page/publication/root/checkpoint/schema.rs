@@ -18,8 +18,9 @@
 
 use super::{clone_bytes, compare, work_error, CheckpointWorkContext};
 use crate::relational::{
-    codec::clone_string_with_work_context, RelationalColumnDefault, RelationalColumnSchema,
-    RelationalForeignKeySchema, RelationalIndexSchema, RelationalRowPagePublicationError,
+    codec::clone_string_with_work_context, MaterializedViewDefinition, MaterializedViewExpression,
+    RelationalColumnDefault, RelationalColumnSchema, RelationalForeignKeySchema,
+    RelationalIndexSchema, RelationalPredicate, RelationalRowPagePublicationError,
     RelationalTableSchema, RelationalValue,
 };
 
@@ -73,21 +74,102 @@ fn same_default(
 ) -> Result<bool> {
     use RelationalColumnDefault::Literal;
     match (left, right) {
-        (
-            Some(Literal(RelationalValue::Text(left))),
-            Some(Literal(RelationalValue::Text(right))),
-        ) => same_text(left, right, work),
-        (
-            Some(Literal(RelationalValue::Bytea(left))),
-            Some(Literal(RelationalValue::Bytea(right))),
-        ) => Ok(compare(left, right, work)?.is_eq()),
-        (
-            Some(Literal(RelationalValue::Vector(left))),
-            Some(Literal(RelationalValue::Vector(right))),
-        ) => Ok(compare(left.encoded(), right.encoded(), work)?.is_eq()),
+        (Some(Literal(left)), Some(Literal(right))) => same_value(left, right, work),
+        _ => fixed(work, || left == right),
+    }
+}
+
+fn same_value(
+    left: &RelationalValue,
+    right: &RelationalValue,
+    work: &CheckpointWorkContext,
+) -> Result<bool> {
+    match (left, right) {
+        (RelationalValue::Text(left), RelationalValue::Text(right)) => same_text(left, right, work),
+        (RelationalValue::Bytea(left), RelationalValue::Bytea(right)) => {
+            Ok(compare(left, right, work)?.is_eq())
+        }
+        (RelationalValue::Vector(left), RelationalValue::Vector(right)) => {
+            Ok(compare(left.encoded(), right.encoded(), work)?.is_eq())
+        }
         // Other matching payloads are fixed-size. Different variants compare
         // their discriminants first, preserving RelationalValue's total order.
         _ => fixed(work, || left == right),
+    }
+}
+
+fn same_predicate(
+    left: &RelationalPredicate,
+    right: &RelationalPredicate,
+    work: &CheckpointWorkContext,
+) -> Result<bool> {
+    use RelationalPredicate::*;
+    work.checkpoint().map_err(work_error)?;
+    match (left, right) {
+        (And(a, b), And(c, d)) | (Or(a, b), Or(c, d)) => {
+            Ok(same_predicate(a, c, work)? && same_predicate(b, d, work)?)
+        }
+        (Not(a), Not(b)) => same_predicate(a, b, work),
+        (
+            Compare {
+                column: a,
+                op: b,
+                value: c,
+            },
+            Compare {
+                column: d,
+                op: e,
+                value: f,
+            },
+        ) => Ok(b == e && same_text(a, d, work)? && same_value(c, f, work)?),
+        (
+            IsNull {
+                column: a,
+                negated: b,
+            },
+            IsNull {
+                column: c,
+                negated: d,
+            },
+        ) => Ok(b == d && same_text(a, c, work)?),
+        _ => Ok(false),
+    }
+}
+
+fn same_materialized_view(
+    left: Option<&MaterializedViewDefinition>,
+    right: Option<&MaterializedViewDefinition>,
+    work: &CheckpointWorkContext,
+) -> Result<bool> {
+    let (left, right) = match (left, right) {
+        (Some(left), Some(right)) => (left, right),
+        (None, None) => return Ok(true),
+        _ => return Ok(false),
+    };
+    if !same_text(&left.source, &right.source, work)?
+        || !same_names(&left.group_by, &right.group_by, work)?
+        || !same_list(&left.columns, &right.columns, work, |left, right, work| {
+            use MaterializedViewExpression::*;
+            if !same_text(&left.name, &right.name, work)? {
+                return Ok(false);
+            }
+            match (&left.expression, &right.expression) {
+                (Column(a), Column(b))
+                | (Sum(a), Sum(b))
+                | (Min(a), Min(b))
+                | (Max(a), Max(b))
+                | (Count(Some(a)), Count(Some(b))) => same_text(a, b, work),
+                (Count(None), Count(None)) => Ok(true),
+                _ => Ok(false),
+            }
+        })?
+    {
+        return Ok(false);
+    }
+    match (&left.filter, &right.filter) {
+        (Some(left), Some(right)) => same_predicate(left, right, work),
+        (None, None) => Ok(true),
+        _ => Ok(false),
     }
 }
 
@@ -96,7 +178,11 @@ pub(in crate::relational::row_page::publication) fn same_schema(
     right: &RelationalTableSchema,
     work: &CheckpointWorkContext,
 ) -> Result<bool> {
-    if !same_text(&left.name, &right.name, work)?
+    if !same_materialized_view(
+        left.materialized_view.as_deref(),
+        right.materialized_view.as_deref(),
+        work,
+    )? || !same_text(&left.name, &right.name, work)?
         || !same_list(&left.columns, &right.columns, work, |left, right, work| {
             Ok(same_text(&left.name, &right.name, work)?
                 && fixed(work, || {
@@ -216,7 +302,18 @@ pub(in crate::relational::row_page::publication) fn clone_schema(
             unique: index.unique,
         })
     })?;
+    let context = crate::background::CheckpointDecodeContext {
+        work: work.clone(),
+        memory: Default::default(),
+    };
+    let materialized_view = schema
+        .materialized_view
+        .as_deref()
+        .map(|view| crate::relational::materialized_view::clone_definition(view, &context))
+        .transpose()
+        .map_err(|error| RelationalRowPagePublicationError::Admission(error.to_string()))?;
     fixed(work, || RelationalTableSchema {
+        materialized_view,
         name,
         columns,
         primary_key,

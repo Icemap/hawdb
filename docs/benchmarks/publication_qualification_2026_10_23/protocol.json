@@ -1,0 +1,21 @@
+{
+  "source": "0f641a98f17898a8ea3dae6ddaaa46d641604ae3",
+  "source_directory": "/private/tmp/hawdb-publication-qualification/source",
+  "image_digest": "sha256:77fac8b98f9f46062bb680b6d25d5bcaabfc400143952ebc572e924bcbedc3fa",
+  "platform": "Linux arm64 in Docker Desktop VM on macOS; not the GitHub Linux x86_64 writer cohorts",
+  "container_cpu_quota": 4,
+  "container_memory_bytes": 6442450944,
+  "container_memory_swap_bytes": 6442450944,
+  "filesystem": "dedicated Docker named volume; capture df -T in the measurement manifest",
+  "fresh_source_clone": true,
+  "default_features": true,
+  "profile": "repository bench profile, Rust 1.97.1, no overrides",
+  "rounds": 3,
+  "writes_per_case": 4096,
+  "quiet_publications": 32,
+  "expected_cases": 54,
+  "measurements_start_after_build": true,
+  "host_exclusivity": false,
+  "notes": "Separate declared publication cohort, not a retry or replacement of historical adverse evidence. No hardware power-loss or physical CPU-parallelism claim.",
+  "initial_setup_failure": "Git alternates inherited a host-only object path. Container exited128 before compilation or timing. Repacked only the frozen clone and removed its alternates link; connectivity check passed, source HEAD/files unchanged. Original preflight/logs retained."
+}

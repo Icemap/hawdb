@@ -108,6 +108,9 @@ pub struct RuntimeWorkRequest {
     pub kind: RuntimeWorkKind,
     pub cpu_slots: usize,
     pub memory_bytes: u64,
+    /// Separately charged memory that this caller must retain while waiting.
+    /// Included only in hard-capacity checks, never charged a second time.
+    pub retained_memory_bytes: u64,
     pub io_slots: usize,
     pub io_reservation_scope: RuntimeIoReservationScope,
     pub result_bytes: u64,
@@ -121,6 +124,7 @@ impl RuntimeWorkRequest {
             kind,
             cpu_slots: 0,
             memory_bytes: 0,
+            retained_memory_bytes: 0,
             io_slots: 0,
             io_reservation_scope: RuntimeIoReservationScope::Task,
             result_bytes: 0,
@@ -138,6 +142,7 @@ impl RuntimeWorkRequest {
             kind: RuntimeWorkKind::Query,
             cpu_slots: 1,
             memory_bytes,
+            retained_memory_bytes: 0,
             io_slots: 0,
             io_reservation_scope: RuntimeIoReservationScope::Task,
             result_bytes,
@@ -155,6 +160,7 @@ impl RuntimeWorkRequest {
             kind: RuntimeWorkKind::Mutation,
             cpu_slots: 1,
             memory_bytes,
+            retained_memory_bytes: 0,
             io_slots: 0,
             io_reservation_scope: RuntimeIoReservationScope::Task,
             result_bytes: 0,
@@ -172,6 +178,7 @@ impl RuntimeWorkRequest {
             kind: RuntimeWorkKind::Maintenance,
             cpu_slots: 1,
             memory_bytes,
+            retained_memory_bytes: 0,
             io_slots: 0,
             io_reservation_scope: RuntimeIoReservationScope::Task,
             result_bytes: 0,
@@ -185,6 +192,7 @@ impl RuntimeWorkRequest {
             kind: RuntimeWorkKind::BlockingCpu,
             cpu_slots: 1,
             memory_bytes,
+            retained_memory_bytes: 0,
             io_slots: 0,
             io_reservation_scope: RuntimeIoReservationScope::Task,
             result_bytes: 0,
@@ -198,6 +206,7 @@ impl RuntimeWorkRequest {
             kind: RuntimeWorkKind::Io,
             cpu_slots: 0,
             memory_bytes,
+            retained_memory_bytes: 0,
             io_slots,
             io_reservation_scope: RuntimeIoReservationScope::Task,
             result_bytes: 0,
@@ -217,6 +226,13 @@ impl RuntimeWorkRequest {
 
     pub const fn with_memory_bytes(mut self, memory_bytes: u64) -> Self {
         self.memory_bytes = memory_bytes;
+        self
+    }
+
+    /// Declares an existing reservation that cannot be released during admission.
+    /// This prevents waiting forever when retained state plus new work cannot fit.
+    pub const fn with_retained_memory_bytes(mut self, bytes: u64) -> Self {
+        self.retained_memory_bytes = bytes;
         self
     }
 
@@ -240,6 +256,16 @@ impl RuntimeWorkRequest {
     pub const fn with_blocking(mut self, blocking: bool) -> Self {
         self.blocking = blocking;
         self
+    }
+
+    fn minimum_memory_capacity_bytes(self) -> u64 {
+        self.reserved_memory_bytes()
+            .saturating_add(self.retained_memory_bytes)
+    }
+
+    fn exceeds_memory_capacity(self, capacity: u64) -> bool {
+        self.retained_memory_bytes > capacity
+            || self.reserved_memory_bytes() > capacity.saturating_sub(self.retained_memory_bytes)
     }
 
     fn reserved_memory_bytes(self) -> u64 {
@@ -772,11 +798,11 @@ impl RuntimeGovernor {
             let process_memory_capacity_error = state
                 .process_memory_policy
                 .as_ref()
-                .filter(|policy| request.reserved_memory_bytes() > policy.resident_limit_bytes())
+                .filter(|policy| request.exceeds_memory_capacity(policy.resident_limit_bytes()))
                 .map(|policy| {
                     admission_error_value(
                         RuntimeAdmissionCode::MemorySaturated,
-                        request.reserved_memory_bytes(),
+                        request.minimum_memory_capacity_bytes(),
                         policy.resident_limit_bytes(),
                         false,
                     )
@@ -1475,10 +1501,11 @@ fn admission_error(
         ));
     }
     let reserved_memory = request.reserved_memory_bytes();
-    if reserved_memory > state.limits.memory_capacity_bytes {
+    let minimum_capacity = request.minimum_memory_capacity_bytes();
+    if request.exceeds_memory_capacity(state.limits.memory_capacity_bytes) {
         return Some(admission_error_value(
             RuntimeAdmissionCode::MemorySaturated,
-            reserved_memory,
+            minimum_capacity,
             state.limits.memory_capacity_bytes,
             false,
         ));

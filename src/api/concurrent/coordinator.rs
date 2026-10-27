@@ -14,6 +14,7 @@
 
 use super::super::transaction_locks::{LockRequest, LockTable, LockWaitQueue};
 use super::metrics::{Metrics, PhaseTimer};
+use super::owner::{DatabaseOwner, DatabaseOwnerGuard, SharedDatabaseOwner};
 use super::publication::PublishedConcurrentRead;
 use super::{
     Database, QueryOutput, WalGroupCommitConfig, WalGroupCommitDelayPolicy, WalGroupCommitSnapshot,
@@ -27,7 +28,7 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 #[cfg(test)]
 use std::sync::Barrier;
-use std::sync::{Arc, Condvar, Mutex, MutexGuard, TryLockError};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 
 // Subprocess qualification only; absent from production control planes.
 #[cfg(test)]
@@ -51,7 +52,7 @@ const MIN_USEFUL_COALESCING_DELAY: Duration = Duration::from_micros(50);
 const GROUP_COMMIT_LIVENESS_CHECK_INTERVAL: Duration = Duration::from_millis(250);
 
 pub(super) struct CommitSequencer {
-    database: Mutex<Database>,
+    database: DatabaseOwner,
     pub(super) metrics: Metrics,
     published_read: Mutex<Option<Arc<PublishedConcurrentRead>>>,
     read_publication_failed: AtomicBool,
@@ -64,8 +65,32 @@ pub(super) struct CommitSequencer {
 impl CommitSequencer {
     pub(super) fn new(database: Database, group_commit: WalGroupCommitConfig) -> Self {
         let checkpoint_control = database.runtime.checkpoint_control();
+        Self::with_owner(
+            DatabaseOwner::Direct(Box::new(Mutex::new(database))),
+            checkpoint_control,
+            group_commit,
+        )
+    }
+
+    pub(super) fn shared(
+        owner: Arc<dyn SharedDatabaseOwner>,
+        group_commit: WalGroupCommitConfig,
+    ) -> Result<Self> {
+        let checkpoint_control = owner.lock()?.runtime.checkpoint_control();
+        Ok(Self::with_owner(
+            DatabaseOwner::Shared(owner),
+            checkpoint_control,
+            group_commit,
+        ))
+    }
+
+    fn with_owner(
+        database: DatabaseOwner,
+        checkpoint_control: Arc<super::super::automatic_checkpoint::Control>,
+        group_commit: WalGroupCommitConfig,
+    ) -> Self {
         Self {
-            database: Mutex::new(database),
+            database,
             metrics: Metrics::default(),
             // Opening a concurrent project must not take main's writer lease.
             // The first data operation publishes a complete, validated view;
@@ -81,9 +106,7 @@ impl CommitSequencer {
 
     pub(super) fn lock(&self) -> Result<CommitGuard<'_>> {
         let waiting = self.metrics.sequencer_wait.start();
-        let database = self.database.lock().map_err(|_| {
-            HawDBError::Execution("concurrent commit sequencer is poisoned".to_string())
-        })?;
+        let database = self.database.lock()?;
         drop(waiting);
         Ok(CommitGuard {
             database,
@@ -110,6 +133,11 @@ impl CommitSequencer {
 
     pub(super) fn read_view(&self) -> Result<Arc<PublishedConcurrentRead>> {
         self.try_adopt_read_handoff()?;
+        if let DatabaseOwner::Shared(owner) = &self.database {
+            let view = owner.read_view()?;
+            self.ensure_read_usable(&view)?;
+            return Ok(view);
+        }
         let view = self
             .published_read
             .lock()
@@ -152,13 +180,14 @@ impl CommitSequencer {
         }
         // A cached read must remain available while a writer or group sync
         // owns the sequencer. That writer adopts before its next mutation.
-        let mut database = match self.database.try_lock() {
-            Ok(database) => database,
-            Err(TryLockError::WouldBlock) => return Ok(()),
-            Err(TryLockError::Poisoned(_)) => return Err(read_publication_poisoned_error()),
+        let Some(mut database) = self.database.try_lock()? else {
+            return Ok(());
         };
         database.runtime.get_read()?;
         if self.checkpoint_control.has_pending_handoff() {
+            return Ok(());
+        }
+        if database.publishes_on_drop() {
             return Ok(());
         }
         let next = match capture_read_publication(&database, &self.metrics) {
@@ -184,6 +213,14 @@ impl CommitSequencer {
         &self,
         sql_text: &str,
     ) -> Result<crate::relational_sql::PreparedRelationalSql> {
+        if let DatabaseOwner::Shared(owner) = &self.database {
+            return owner
+                .read_view()?
+                .snapshot
+                .0
+                .relational_plan_template_cache
+                .prepare(sql_text);
+        }
         let view = self
             .published_read
             .lock()
@@ -609,7 +646,7 @@ impl CommitSequencer {
 pub(super) struct CommitGuard<'a> {
     // Fields drop in declaration order after Drop::drop: unlock first, record
     // the completed hold, then release the retired view and its COW/pin owners.
-    database: MutexGuard<'a, Database>,
+    database: DatabaseOwnerGuard<'a>,
     _hold_timer: PhaseTimer<'a>,
     metrics: &'a Metrics,
     retired: Option<Arc<PublishedConcurrentRead>>,
@@ -639,6 +676,9 @@ impl std::ops::DerefMut for CommitGuard<'_> {
 
 impl Drop for CommitGuard<'_> {
     fn drop(&mut self) {
+        if self.database.publishes_on_drop() {
+            return;
+        }
         if !self.mutated && !std::thread::panicking() {
             return;
         }

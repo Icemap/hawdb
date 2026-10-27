@@ -154,6 +154,7 @@ fn seeded_state() -> RelationalState {
             RelationalTransaction {
                 writes: vec![
                     RelationalWrite::CreateTable(RelationalTableSchema {
+                        materialized_view: None,
                         name: "messages".to_string(),
                         columns: vec![text_column("id"), text_column("owner")],
                         primary_key: vec!["id".to_string()],

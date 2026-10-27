@@ -14,6 +14,7 @@
 
 use super::{
     column_positions, rebuild_indexes, validate_foreign_keys, validate_row, validate_table_schema,
+    MaterializedViewColumn, MaterializedViewDefinition, MaterializedViewExpression,
     RelationalBigIntArithmeticOperator, RelationalBigIntOperand, RelationalColumnDefault,
     RelationalColumnSchema, RelationalComparisonOp, RelationalConflictAction, RelationalError,
     RelationalForeignKeySchema, RelationalIndexSchema, RelationalInsertMode, RelationalKey,
@@ -43,6 +44,9 @@ pub(crate) mod schema_encoding;
 #[cfg(test)]
 mod vector_schema_tests;
 
+#[cfg(test)]
+mod compatibility_tests;
+
 mod checkpoint;
 pub(crate) use checkpoint::{
     clone_string_with_work_context, decode_relational_checkpoint_file_with_work_context,
@@ -55,7 +59,7 @@ pub(crate) use checkpoint::{
 
 const WAL_MAGIC: &[u8; 8] = b"SKRLWAL1";
 const CHECKPOINT_MAGIC: &[u8; 8] = b"SKRLCKP1";
-const CODEC_VERSION: u16 = 1;
+const CODEC_VERSION: u16 = 2;
 const HEADER_BYTES: usize = 64;
 const RELATIONAL_CHECKPOINT_ARTIFACT_ID: u64 = 1;
 
@@ -680,6 +684,49 @@ pub fn decode_relational_checkpoint_with_index_load(
     )
 }
 
+/// Check a selected checkpoint's envelope and schemas without retaining its rows.
+pub(crate) fn validate_relational_checkpoint_file_format(
+    path: &Path,
+) -> Result<(), RelationalError> {
+    let limits = RelationalDecodeLimits::checkpoint();
+    let length = crate::file_io::metadata(path)
+        .map_err(|error| RelationalError::from_io("inspect relational checkpoint", error))?
+        .len();
+    if length > limits.max_record_bytes as u64 {
+        return Err(RelationalError::Admission(
+            "relational checkpoint format admission byte limit exceeded".into(),
+        ));
+    }
+    let (_, input) = FileDecodeInput::open_checkpoint(path, length, limits)?;
+    if let Err(error) = validate_codec_version(input.version) {
+        input.verify_remaining()?;
+        return Err(error);
+    }
+    let mut decoder = Decoder::new(input, limits, false);
+    let table_count = decoder.count(limits.max_tables, "checkpoint tables")?;
+    for _ in 0..table_count {
+        let name = decoder.string()?;
+        let schema = match decoder.table_schema() {
+            Err(error @ RelationalError::UnsupportedFormat(_)) => {
+                decoder.input.verify_remaining()?;
+                return Err(error);
+            }
+            result => result?,
+        };
+        if name != schema.name {
+            return Err(RelationalError::Corruption(format!(
+                "checkpoint has a mismatched table {name}"
+            )));
+        }
+        let row_count = decoder.row_count()?;
+        for _ in 0..row_count {
+            // Reuse value decoding to reach the next schema without building row maps.
+            drop(decoder.row()?);
+        }
+    }
+    decoder.input.verify_remaining()
+}
+
 pub fn decode_relational_checkpoint_file(
     path: &Path,
     limits: RelationalDecodeLimits,
@@ -751,12 +798,24 @@ fn decode_relational_checkpoint_from_decoder<I: DecodeInput>(
     storage: OverflowDecodeStorage,
     index_load: RelationalCheckpointIndexLoad,
 ) -> Result<RelationalCheckpoint, RelationalError> {
+    if let Some(version) = decoder.input.codec_version()
+        && let Err(error) = validate_codec_version(version)
+    {
+        decoder.input.verify_remaining()?;
+        return Err(error);
+    }
     let work = decoder.input.checkpoint_work_context().cloned();
     let table_count = decoder.count(limits.max_tables, "checkpoint tables")?;
     let mut state = RelationalState::default();
     for _ in 0..table_count {
         let name = decoder.string()?;
-        let schema = decoder.table_schema()?;
+        let schema = match decoder.table_schema() {
+            Err(error @ RelationalError::UnsupportedFormat(_)) => {
+                decoder.input.verify_remaining()?;
+                return Err(error);
+            }
+            result => result?,
+        };
         let unit = work
             .as_ref()
             .map(|work| work.start_unit().map_err(checkpoint::work_error))
@@ -903,6 +962,16 @@ fn decode_relational_checkpoint_from_decoder<I: DecodeInput>(
         checkpoint::validate_reachability(&state, work)?;
     } else {
         validate_checkpoint_overflow_reachability(&state)?;
+    }
+    for schema in state.table_schemas() {
+        super::materialized_view::validate_definition(&state, schema)?;
+        if schema.materialized_view.is_some()
+            && index_load == RelationalCheckpointIndexLoad::OmitMaterializedPostings
+        {
+            return Err(RelationalError::Admission(
+                "materialized views do not support authoritative relational indexes".into(),
+            ));
+        }
     }
     if index_load == RelationalCheckpointIndexLoad::MaterializedPostings {
         if let Some(work) = &work {
@@ -1065,11 +1134,6 @@ fn decode_envelope_with_work_context<'a>(
     }
     let version = u16::from_le_bytes(bytes[8..10].try_into().expect("fixed header"));
     let flags = u16::from_le_bytes(bytes[10..12].try_into().expect("fixed header"));
-    if version != CODEC_VERSION || flags != 0 {
-        return Err(RelationalError::Corruption(format!(
-            "unsupported relational durable codec version {version} or flags {flags}"
-        )));
-    }
     let epoch = u64::from_le_bytes(bytes[12..20].try_into().expect("fixed header"));
     let payload_len = usize::try_from(u64::from_le_bytes(
         bytes[20..28].try_into().expect("fixed header"),
@@ -1105,7 +1169,31 @@ fn decode_envelope_with_work_context<'a>(
             "relational durable record checksum mismatch".to_string(),
         ));
     }
+    validate_codec_version(version)?;
+    validate_codec_flags(flags)?;
     Ok((epoch, payload))
+}
+
+fn validate_codec_version(version: u16) -> Result<(), RelationalError> {
+    if version != CODEC_VERSION {
+        return Err(RelationalError::UnsupportedFormat(
+            hawdb_core::StorageFormatError::UnsupportedVersion {
+                format: "relational durable codec",
+                found: version,
+                supported: CODEC_VERSION,
+            },
+        ));
+    }
+    Ok(())
+}
+
+fn validate_codec_flags(flags: u16) -> Result<(), RelationalError> {
+    if flags != 0 {
+        return Err(RelationalError::Corruption(format!(
+            "non-zero relational durable codec reserved flags {flags}"
+        )));
+    }
+    Ok(())
 }
 
 #[derive(Default)]
@@ -1226,6 +1314,10 @@ impl Encoder {
 
     fn write(&mut self, write: &RelationalWrite) -> Result<(), RelationalError> {
         match write {
+            RelationalWrite::DropMaterializedView { table } => {
+                self.u8(9);
+                self.string(table)?;
+            }
             RelationalWrite::CreateTable(schema) => {
                 self.u8(1);
                 self.table_schema(schema)?;
@@ -1391,45 +1483,14 @@ impl Encoder {
     }
 
     fn predicate(&mut self, predicate: &RelationalPredicate) -> Result<(), RelationalError> {
-        match predicate {
-            RelationalPredicate::And(left, right) => {
-                self.u8(0);
-                self.predicate(left)?;
-                self.predicate(right)?;
-            }
-            RelationalPredicate::Or(left, right) => {
-                self.u8(1);
-                self.predicate(left)?;
-                self.predicate(right)?;
-            }
-            RelationalPredicate::Not(predicate) => {
-                self.u8(2);
-                self.predicate(predicate)?;
-            }
-            RelationalPredicate::Compare { column, op, value } => {
-                self.u8(3);
-                self.string(column)?;
-                self.u8(match op {
-                    RelationalComparisonOp::Eq => 0,
-                    RelationalComparisonOp::NotEq => 1,
-                    RelationalComparisonOp::Lt => 2,
-                    RelationalComparisonOp::Lte => 3,
-                    RelationalComparisonOp::Gt => 4,
-                    RelationalComparisonOp::Gte => 5,
-                });
-                self.logical_value(value)?;
-            }
-            RelationalPredicate::IsNull { column, negated } => {
-                self.u8(4);
-                self.string(column)?;
-                self.u8(u8::from(*negated));
-            }
-        }
-        Ok(())
+        schema_encoding::predicate(self, predicate)
     }
 }
 
 trait DecodeInput {
+    fn codec_version(&self) -> Option<u16> {
+        None
+    }
     fn checkpoint_work_context(&self) -> Option<&crate::background::CheckpointWorkContext> {
         None
     }
@@ -1440,6 +1501,20 @@ trait DecodeInput {
     fn position(&self) -> usize;
     fn read_exact(&mut self, output: &mut [u8]) -> Result<(), RelationalError>;
     fn finish(self) -> Result<(), RelationalError>;
+
+    /// Verify the envelope before reporting an unsupported schema capability.
+    /// Streaming readers may not have reached the checksum boundary yet.
+    fn verify_remaining(mut self) -> Result<(), RelationalError>
+    where
+        Self: Sized,
+    {
+        let mut buffer = [0_u8; 8192];
+        while self.position() < self.len() {
+            let count = (self.len() - self.position()).min(buffer.len());
+            self.read_exact(&mut buffer[..count])?;
+        }
+        self.finish()
+    }
 }
 
 struct SliceDecodeInput<'a> {
@@ -1474,6 +1549,7 @@ impl DecodeInput for SliceDecodeInput<'_> {
 }
 
 struct FileDecodeInput {
+    version: u16,
     file: File,
     payload_len: usize,
     offset: usize,
@@ -1511,11 +1587,6 @@ impl FileDecodeInput {
         }
         let version = u16::from_le_bytes(header[8..10].try_into().expect("fixed header"));
         let flags = u16::from_le_bytes(header[10..12].try_into().expect("fixed header"));
-        if version != CODEC_VERSION || flags != 0 {
-            return Err(RelationalError::Corruption(format!(
-                "unsupported relational durable codec version {version} or flags {flags}"
-            )));
-        }
         let epoch = u64::from_le_bytes(header[12..20].try_into().expect("fixed header"));
         let payload_len = usize::try_from(u64::from_le_bytes(
             header[20..28].try_into().expect("fixed header"),
@@ -1535,21 +1606,26 @@ impl FileDecodeInput {
         let expected_sha256 = header[32..32 + SHA256_BYTES]
             .try_into()
             .expect("fixed SHA-256 digest");
-        Ok((
-            epoch,
-            Self {
-                file,
-                payload_len,
-                offset: 0,
-                expected_crc32c,
-                expected_sha256,
-                hasher: IntegrityHasher::new(),
-            },
-        ))
+        let input = Self {
+            version,
+            file,
+            payload_len,
+            offset: 0,
+            expected_crc32c,
+            expected_sha256,
+            hasher: IntegrityHasher::new(),
+        };
+        if version == CODEC_VERSION {
+            validate_codec_flags(flags)?;
+        }
+        Ok((epoch, input))
     }
 }
 
 impl DecodeInput for FileDecodeInput {
+    fn codec_version(&self) -> Option<u16> {
+        Some(self.version)
+    }
     fn len(&self) -> usize {
         self.payload_len
     }
@@ -1996,7 +2072,52 @@ impl<I: DecodeInput> Decoder<I> {
         let foreign_keys = self.repeated(foreign_key_count, Self::foreign_key)?;
         let index_count = self.count(self.limits.max_values, "indexes")?;
         let indexes = self.repeated(index_count, Self::index)?;
+        let materialized_view = if self.boolean("materialized view")? {
+            let source = self.string()?;
+            let group_by = self.string_list()?;
+            let count = self.count(self.limits.max_values, "materialized view columns")?;
+            let columns = self.repeated(count, |decoder| {
+                let name = decoder.string()?;
+                let expression = match decoder.u8()? {
+                    0 => MaterializedViewExpression::Column(decoder.string()?),
+                    1 => MaterializedViewExpression::Count(None),
+                    2 => MaterializedViewExpression::Count(Some(decoder.string()?)),
+                    3 => MaterializedViewExpression::Sum(decoder.string()?),
+                    4 => MaterializedViewExpression::Min(decoder.string()?),
+                    5 => MaterializedViewExpression::Max(decoder.string()?),
+                    tag => {
+                        return Err(RelationalError::UnsupportedFormat(
+                            hawdb_core::StorageFormatError::UnsupportedFeature {
+                                format: "relational schema",
+                                feature: "materialized view expression",
+                                tag: u64::from(tag),
+                            },
+                        ))
+                    }
+                };
+                Ok(MaterializedViewColumn { name, expression })
+            })?;
+            let filter = if self.boolean("materialized view filter")? {
+                Some(self.predicate()?)
+            } else {
+                None
+            };
+            if let Some(context) = self.input.checkpoint_allocation_context() {
+                context
+                    .reserve(std::mem::size_of::<MaterializedViewDefinition>())
+                    .map_err(|error| RelationalError::Admission(error.to_string()))?;
+            }
+            Some(Box::new(MaterializedViewDefinition {
+                source,
+                group_by,
+                columns,
+                filter,
+            }))
+        } else {
+            None
+        };
         Ok(RelationalTableSchema {
+            materialized_view,
             name,
             columns,
             primary_key,
@@ -2073,6 +2194,9 @@ impl<I: DecodeInput> Decoder<I> {
 
     fn write(&mut self) -> Result<RelationalWrite, RelationalError> {
         match self.u8()? {
+            9 => Ok(RelationalWrite::DropMaterializedView {
+                table: self.string()?,
+            }),
             1 => Ok(RelationalWrite::CreateTable(self.table_schema()?)),
             2 => Ok(RelationalWrite::CreateIndex {
                 table: self.string()?,

@@ -41,6 +41,10 @@ if [[ "${1:-}" == --list ]]; then
   fi
   echo 'api::tests::storage_recovery::owned: test'
   echo 'api::tests::query_execution::owned: test'
+  echo 'api::automatic_checkpoint::tests::headroom::pending_idle: test'
+  echo 'api::automatic_checkpoint::tests::headroom::capacity_wait::deadline: test'
+  echo 'api::automatic_checkpoint::tests::delta_pressure_sustains_generations_and_preserves_all_values_after_reopen: test'
+  echo 'api::automatic_checkpoint::tests::soft_wal_pressure_sustains_multiple_generations_without_host_checkpoints: test'
   if [[ "${PARTITION_PROBE_OVERLAP:-0}" == 1 ]]; then
     echo 'analytics::overlap: test'
     echo 'api::tests::query_execution::analytics::overlap: test'
@@ -52,7 +56,7 @@ if [[ "${1:-}" == --list ]]; then
   if [[ "${PARTITION_PROBE_RSS_OVERLAP:-0}" == 1 ]]; then
     echo 'api::tests::graph_analytics::rss_child_extension: test'
   fi
-  echo '6 tests, 0 benchmarks'
+  echo '10 tests, 0 benchmarks'
   exit 0
 fi
 printf '%s\n' "$@" >"${PARTITION_PROBE_ARGS}"
@@ -60,7 +64,7 @@ exit "${PARTITION_PROBE_EXIT:-0}"
 EOF
 chmod +x "${fixture}/binary"
 
-for partition in general concurrent analytics analytics_core analytics_core_general analytics_identity analytics_rss recovery; do
+for partition in general concurrent checkpoint_headroom analytics analytics_core analytics_core_general analytics_identity analytics_rss recovery; do
   "${runner}" "${fixture}/binary" "${partition}" custom_filter --exact --skip user_skip
   cp "${PARTITION_PROBE_ARGS}" "${fixture}/args.${partition}"
   python3 - "${PARTITION_PROBE_ARGS}" "${partition}" <<'PY'
@@ -77,6 +81,12 @@ owners = {
     },
     "recovery": {"api::tests::storage_recovery::owned"},
     "general": {"api::tests::query_execution::owned"},
+    "checkpoint_headroom": {
+        "api::automatic_checkpoint::tests::headroom::pending_idle",
+        "api::automatic_checkpoint::tests::headroom::capacity_wait::deadline",
+        "api::automatic_checkpoint::tests::delta_pressure_sustains_generations_and_preserves_all_values_after_reopen",
+        "api::automatic_checkpoint::tests::soft_wal_pressure_sustains_multiple_generations_without_host_checkpoints",
+    },
 }
 all_names = set().union(*owners.values())
 core = owners["analytics_core_general"] | owners["analytics_rss"]
@@ -106,6 +116,10 @@ names = {
     "api::tests::graph_analytics::rss_child",
     "api::tests::storage_recovery::owned",
     "api::tests::query_execution::owned",
+    "api::automatic_checkpoint::tests::headroom::pending_idle",
+    "api::automatic_checkpoint::tests::headroom::capacity_wait::deadline",
+    "api::automatic_checkpoint::tests::delta_pressure_sustains_generations_and_preserves_all_values_after_reopen",
+    "api::automatic_checkpoint::tests::soft_wal_pressure_sustains_multiple_generations_without_host_checkpoints",
 }
 
 def selected(partition):
@@ -114,7 +128,7 @@ def selected(partition):
     return names - skips
 
 leaves = [selected(name) for name in [
-    "general", "concurrent", "analytics_core_general", "analytics_rss", "recovery"
+    "general", "concurrent", "checkpoint_headroom", "analytics_core_general", "analytics_rss", "recovery"
 ]]
 assert set().union(*leaves) == names
 assert sum(map(len, leaves)) == len(names)

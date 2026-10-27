@@ -20,6 +20,10 @@ fn pressured_writer_finishes_while_a_real_prepared_prefix_remains_paused() {
     let (mut db, suspension, next) = seeded(&fixture);
     let old = db.runtime.get().unwrap().store.snapshot_for_read();
     let control = db.runtime.checkpoint_control_for_test();
+    let now = Instant::now();
+    control.set_frontend_time(now);
+    let (waiting, entered) = mpsc::channel();
+    control.lock().unwrap().frontend_wait_probe = Some(waiting);
     let (sealed, observed) = mpsc::channel();
     let (resume, continuation) = mpsc::channel();
     control.lock().unwrap().prefix_seal_probe = Some(Arc::new(PrefixSealProbe {
@@ -40,7 +44,9 @@ fn pressured_writer_finishes_while_a_real_prepared_prefix_remains_paused() {
     });
     // The owner stays paused for this complete observation. Waiting for its
     // entire preparation phase would fail even though the next write fits.
-    let early = completion.recv_timeout(Duration::from_secs(1));
+    let waiting_phase = entered.recv_timeout(Duration::from_secs(15));
+    control.set_frontend_time(now + PREPARATION_BACKOFF_LIMIT);
+    let early = completion.recv_timeout(Duration::from_secs(15));
     control.lock().unwrap().prefix_seal_probe = None;
     resume.send(()).unwrap();
     producer.join().unwrap();
@@ -51,6 +57,7 @@ fn pressured_writer_finishes_while_a_real_prepared_prefix_remains_paused() {
             panic!("writer waited for the complete Preparing phase: {error}");
         }
     };
+    assert_eq!(waiting_phase.unwrap(), Phase::Preparing);
     result.unwrap();
     assert!(
         db.automatic_checkpoint_report()
@@ -78,20 +85,39 @@ fn preparing_backoff_uses_one_deadline_across_repeated_notifications() {
         state.debt = db.runtime.peek().unwrap().store.checkpoint_debt_snapshot();
         assert!(needs_headroom(&state));
     }
-    let notifying = control.clone();
-    let notifier = std::thread::spawn(move || {
-        let end = Instant::now() + Duration::from_millis(500);
-        while Instant::now() < end {
-            notifying.changed.notify_all();
-            std::thread::sleep(Duration::from_millis(1));
-        }
-        notifying.lock().unwrap().phase = Phase::Idle;
-        notifying.changed.notify_all();
+    let now = Instant::now();
+    control.set_frontend_time(now);
+    let (waiting, entered) = mpsc::channel();
+    control.lock().unwrap().frontend_wait_probe = Some(waiting);
+    let frontend = control.clone();
+    let (finished, completion) = mpsc::channel();
+    let caller = std::thread::spawn(move || {
+        drop(frontend.lock_frontend().unwrap());
+        finished.send(()).unwrap();
     });
-    let started = Instant::now();
-    drop(control.lock_frontend().unwrap());
-    let elapsed = started.elapsed();
-    notifier.join().unwrap();
+    assert_eq!(
+        entered.recv_timeout(Duration::from_secs(15)).unwrap(),
+        Phase::Preparing
+    );
+    control.set_frontend_time(now + PREPARATION_BACKOFF_LIMIT - Duration::from_nanos(1));
+    assert_eq!(
+        entered.recv_timeout(Duration::from_secs(15)).unwrap(),
+        Phase::Preparing
+    );
+    for _ in 0..3 {
+        control.set_frontend_time(now + PREPARATION_BACKOFF_LIMIT - Duration::from_nanos(1));
+        assert_eq!(
+            entered.recv_timeout(Duration::from_secs(15)).unwrap(),
+            Phase::Preparing
+        );
+        assert!(matches!(
+            completion.try_recv(),
+            Err(mpsc::TryRecvError::Empty)
+        ));
+    }
+    control.set_frontend_time(now + PREPARATION_BACKOFF_LIMIT);
+    completion.recv_timeout(Duration::from_secs(15)).unwrap();
+    caller.join().unwrap();
     assert_eq!(
         control
             .lock()
@@ -99,10 +125,6 @@ fn preparing_backoff_uses_one_deadline_across_repeated_notifications() {
             .report
             .preparation_backoff_expirations,
         1
-    );
-    assert!(
-        elapsed < Duration::from_millis(200),
-        "notifications restarted the pressure backoff: {elapsed:?}"
     );
 }
 

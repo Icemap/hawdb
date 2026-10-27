@@ -358,6 +358,7 @@ fn query_runtime_probe_identity_blocker_codes(
 #[doc(hidden)]
 pub const fn hawdb_error_class(error: &HawDBError) -> &'static str {
     match error {
+        HawDBError::UnsupportedStorageFormat(_) => "unsupported_storage_format",
         HawDBError::Parse(_) => "parse",
         HawDBError::Semantic(_) => "semantic",
         HawDBError::Storage(_)

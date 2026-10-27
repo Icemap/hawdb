@@ -89,6 +89,7 @@ fn relational_suffix_after_unchanged_prefix_seals_and_keeps_all_later_prefixes_b
                     RelationalTransaction {
                         writes: vec![
                             RelationalWrite::CreateTable(RelationalTableSchema {
+                                materialized_view: None,
                                 name: "documents".into(),
                                 columns: vec![RelationalColumnSchema {
                                     name: "id".into(),
@@ -287,6 +288,7 @@ fn private_relational_prefix_clone_denial_case(mode: RelationalIndexMode) {
         .iter()
         .map(|name| {
             RelationalWrite::CreateTable(RelationalTableSchema {
+                materialized_view: None,
                 name: name.clone(),
                 columns: vec![RelationalColumnSchema {
                     name: "id".into(),

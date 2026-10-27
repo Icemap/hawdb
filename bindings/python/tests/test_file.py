@@ -12,8 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Behaviors tied to a durable project path: reopen persistence, read-only
-open, and the parent-directory guard."""
+"""Durable path validation, stable handle paths, and reopen behavior."""
+
+import os
+from pathlib import Path
 
 import pytest
 
@@ -21,9 +23,14 @@ import hawdb
 from hawdb import exceptions
 
 
-def test_file_open_reports_path_and_persists(tmp_path):
+OPENERS = [hawdb.open, hawdb.Database, hawdb.connect]
+OPENER_IDS = ["open", "Database", "connect"]
+
+
+@pytest.mark.parametrize("opener", OPENERS[:2], ids=OPENER_IDS[:2])
+def test_file_open_reports_path_and_persists(tmp_path, opener):
     path = tmp_path / "graph"
-    with hawdb.open(path) as db:
+    with opener(path) as db:
         assert db.path == str(path)
         db.execute("CREATE (:Persisted {id: 1})")
 
@@ -33,14 +40,131 @@ def test_file_open_reports_path_and_persists(tmp_path):
         ]
 
 
-def test_open_rejects_missing_parent(tmp_path):
-    with pytest.raises(exceptions.Error):
-        hawdb.open(tmp_path / "missing" / "deep" / "db")
+@pytest.mark.parametrize("opener", OPENERS, ids=OPENER_IDS)
+@pytest.mark.parametrize("read_only", [False, True])
+def test_open_rejects_missing_parent(tmp_path, opener, read_only):
+    with pytest.raises(exceptions.StorageError):
+        with opener(tmp_path / "missing" / "deep" / "db", read_only=read_only):
+            pass
+    assert list(tmp_path.iterdir()) == []
 
 
-def test_open_rejects_read_only_without_existing_path(tmp_path):
-    with pytest.raises(Exception):
-        hawdb.open(tmp_path / "absent", read_only=True)
+@pytest.mark.parametrize("opener", OPENERS[:2], ids=OPENER_IDS[:2])
+def test_open_accepts_bare_relative_path(tmp_path, monkeypatch, opener):
+    # Like sqlite3.connect("app.db"), a bare name opens or creates the
+    # database in the current directory.
+    monkeypatch.chdir(tmp_path)
+    with opener("app.db") as db:
+        assert db.path == str(tmp_path / "app.db")
+        db.execute("CREATE (:Persisted {id: 1})")
+
+    assert (tmp_path / "app.db").is_dir()
+    with hawdb.open("app.db") as reopened:
+        assert reopened.execute("MATCH (p:Persisted) RETURN p.id AS id").fetchall() == [
+            {"id": 1}
+        ]
+
+
+@pytest.mark.parametrize("opener", OPENERS, ids=OPENER_IDS)
+def test_open_rejects_missing_relative_parent(tmp_path, monkeypatch, opener):
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(exceptions.StorageError) as caught:
+        with opener("missing/app.db"):
+            pass
+    assert str(caught.value) == (
+        f"parent directory does not exist: {tmp_path / 'missing'}"
+    )
+    assert not (tmp_path / "missing").exists()
+
+
+@pytest.mark.parametrize("opener", OPENERS, ids=OPENER_IDS)
+def test_open_rejects_read_only_without_existing_path(tmp_path, opener):
+    with pytest.raises(exceptions.StorageError):
+        with opener(tmp_path / "absent", read_only=True):
+            pass
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize("opener", OPENERS, ids=OPENER_IDS)
+@pytest.mark.parametrize("read_only", [False, True])
+@pytest.mark.parametrize("as_parent", [False, True])
+def test_open_rejects_regular_files_without_changing_them(
+    tmp_path, opener, read_only, as_parent
+):
+    existing = tmp_path / "app.db"
+    content = b"SQLite format 3\x00preserve this file"
+    existing.write_bytes(content)
+    path = existing / "child" if as_parent else existing
+    with pytest.raises(exceptions.StorageError) as caught:
+        with opener(path, read_only=read_only):
+            pass
+    assert str(path) in str(caught.value)
+    if not as_parent:
+        assert "not a directory" in str(caught.value)
+    assert existing.read_bytes() == content
+    assert list(tmp_path.iterdir()) == [existing]
+
+
+@pytest.mark.skipif(os.name != "posix", reason="requires POSIX directory permissions")
+@pytest.mark.parametrize("opener", OPENERS, ids=OPENER_IDS)
+@pytest.mark.parametrize("read_only", [False, True])
+def test_open_preserves_permission_errors(tmp_path, opener, read_only):
+    locked = tmp_path / "locked"
+    parent = locked / "sub"
+    parent.mkdir(parents=True)
+    path = parent / "app.db"
+    mode = locked.stat().st_mode
+    locked.chmod(0)
+    try:
+        try:
+            parent.stat()
+        except PermissionError as error:
+            cause = os.strerror(error.errno)
+        else:
+            pytest.skip("the current user can bypass directory permissions")
+        with pytest.raises(exceptions.StorageError) as caught:
+            with opener(path, read_only=read_only):
+                pass
+        assert cause in str(caught.value)
+        assert str(path) in str(caught.value)
+        assert "parent directory does not exist" not in str(caught.value)
+    finally:
+        locked.chmod(mode)
+    assert list(parent.iterdir()) == []
+
+
+@pytest.mark.parametrize("opener", OPENERS[:2], ids=OPENER_IDS[:2])
+def test_handle_path_reopens_the_same_database_after_chdir(tmp_path, monkeypatch, opener):
+    original = tmp_path / "original"
+    elsewhere = tmp_path / "elsewhere"
+    original.mkdir()
+    elsewhere.mkdir()
+    monkeypatch.chdir(original)
+    with opener("app.db") as db:
+        path = db.path
+        assert path == str(original / "app.db")
+        assert original.name in repr(db)
+        monkeypatch.chdir(elsewhere)
+        db.execute("CREATE (:Persisted {id: 7})")
+    with hawdb.open(path, read_only=True) as reopened:
+        assert reopened.path == path
+        assert reopened.execute("MATCH (p:Persisted) RETURN p.id AS id").fetchall() == [
+            {"id": 7}
+        ]
+    assert list(elsewhere.iterdir()) == []
+
+
+@pytest.mark.skipif(os.name != "posix", reason="requires directory symlinks")
+@pytest.mark.parametrize("opener", OPENERS[:2], ids=OPENER_IDS[:2])
+def test_handle_path_preserves_symlink_spelling(tmp_path, monkeypatch, opener):
+    target = tmp_path / "target"
+    target.mkdir()
+    alias = tmp_path / "alias"
+    alias.symlink_to(target, target_is_directory=True)
+    monkeypatch.chdir(tmp_path)
+    with opener(Path("alias") / "app.db") as db:
+        assert db.path == str(alias / "app.db")
+    assert (target / "app.db").is_dir()
 
 
 def test_deferred_admission_keeps_metadata_and_retries_after_busy_writer(tmp_path):

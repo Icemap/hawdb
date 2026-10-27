@@ -1,0 +1,11 @@
+{
+  "measured_candidate": "c669b8d186574d2cda319089601d630910cfe919",
+  "baseline": "8e9eab185ef880794d216d99ac6cd57442c511aa",
+  "original_raw_files": 144,
+  "restored_raw_files": 144,
+  "raw_sha256_matches_analysis": true,
+  "job_receipt_stderr_byte_exact": true,
+  "original_analysis_sha256": "57ccdb788e3df47e92a9622563b8821569c57f2a242b0a7ecd6853a3e21fb5e4",
+  "encoding": "hawdb-v2-sample-varints-1",
+  "round_trip_scope": "encode/decode during packing, then restore from all three on-disk archives and compare every raw hash against the original source-bound analysis"
+}

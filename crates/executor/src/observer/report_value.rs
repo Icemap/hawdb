@@ -207,6 +207,10 @@ pub fn pipeline_memory_report_value(report: &PipelineMemoryReport) -> Value {
             usize_value(report.borrowed_node_projection_rows),
         ),
         (
+            "native_projection_rows".to_string(),
+            usize_value(report.native_projection_rows),
+        ),
+        (
             "columnar_batches".to_string(),
             usize_value(report.columnar_batches),
         ),

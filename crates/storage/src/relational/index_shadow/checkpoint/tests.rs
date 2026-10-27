@@ -41,6 +41,7 @@ fn governor(bytes: u64) -> RuntimeGovernor {
 
 fn schema(value: RelationalValue) -> RelationalTableSchema {
     RelationalTableSchema {
+        materialized_view: None,
         name: "checkpoint_schema_memory".into(),
         columns: vec![
             RelationalColumnSchema {

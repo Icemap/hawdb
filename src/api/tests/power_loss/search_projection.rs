@@ -476,14 +476,25 @@ fn retry_covers_existing_unsynchronized_component_ancestry() {
     // An earlier interrupted attempt may leave these names visible but unsynced.
     hawdb_storage::file_io::create_dir_all(&root).unwrap();
     let project = fixture.model.project().clone();
-    with_reserved_descriptors(&project, project.metrics().limit, || {
-        assert!(SearchOutOfCoreGenerationWriter::create(&root, Default::default()).is_err());
+    let baseline = project.metrics();
+    let available = baseline.limit - baseline.open - baseline.reserved;
+    assert_eq!(
+        baseline.open, 1,
+        "the power-loss model owns its root anchor"
+    );
+    with_reserved_descriptors(&project, available, || {
+        let error = SearchOutOfCoreGenerationWriter::create(&root, Default::default()).unwrap_err();
+        assert!(matches!(error, HawDBError::FileDescriptors(_)), "{error:?}");
     });
+    assert_eq!(project.metrics().open, baseline.open);
+    assert_eq!(project.metrics().reserved, baseline.reserved);
 
-    // Root barriers precede the spool and use just one transient descriptor.
-    with_reserved_descriptors(&project, project.metrics().limit - 1, || {
+    // This standalone writer synchronizes ancestors one at a time. The same
+    // single free slot then admits its spool beside the model's root anchor.
+    // Captured, governed Consumer staging has a separate directory inventory.
+    with_reserved_descriptors(&project, available - 1, || {
         let writer = SearchOutOfCoreGenerationWriter::create(&root, Default::default()).unwrap();
-        assert_eq!(project.metrics().open, 1);
+        assert_eq!(project.metrics().open, baseline.open + 1);
         drop(writer);
     });
 
@@ -495,8 +506,8 @@ fn retry_covers_existing_unsynchronized_component_ancestry() {
     let reader = SearchOutOfCoreReader::open(image.join("interrupted/search")).unwrap();
     assert_eq!(reader.generation(), generation);
     assert_eq!(reader.document_count(), 1);
-    assert_eq!(project.metrics().open, 0);
-    assert_eq!(project.metrics().reserved, 0);
+    assert_eq!(project.metrics().open, baseline.open);
+    assert_eq!(project.metrics().reserved, baseline.reserved);
     assert!(project.metrics().high_water <= project.metrics().limit);
 }
 
@@ -734,12 +745,6 @@ fn qualify_publication(publication: Publication) {
         (IoEvent::Rename, ObservationBoundary::Before),
         (IoEvent::Rename, ObservationBoundary::After),
     ] {
-        // Mutation's post-commit cleanup discovery writes validation scratch.
-        // Its exact rename points cover selector publication; append/compaction
-        // also cover torn temporary writes through the shared GenerationIo.
-        if matches!(publication, Publication::Mutation) && event == IoEvent::Write {
-            continue;
-        }
         let mut fixture = Fixture::new();
         let root = fixture.root.join("search");
         let selector = Path::new("search").join(COMPONENT_MANIFEST);
@@ -774,21 +779,28 @@ fn qualify_publication(publication: Publication) {
                     .map(|space| (mode, space, search(&old, mode, space)))
             })
             .collect();
-        fixture
-            .model
-            .observe(ObservationPoint {
-                event,
-                relative_path: if event == IoEvent::Write {
-                    "search".into()
-                } else {
-                    selector.clone()
-                },
-                boundary,
-                skip_matches: 0,
-                include_descendants: event == IoEvent::Write,
-                keep_last: event == IoEvent::Write,
-            })
-            .unwrap();
+        let point = ObservationPoint {
+            event,
+            relative_path: if event == IoEvent::Write {
+                "search".into()
+            } else {
+                selector.clone()
+            },
+            boundary,
+            skip_matches: 0,
+            include_descendants: event == IoEvent::Write,
+            keep_last: event == IoEvent::Write,
+        };
+        if event == IoEvent::Write {
+            // Cleanup discovery can write scratch after selector publication.
+            // Keep the last actual manifest write, including both mutation modes.
+            fixture
+                .model
+                .observe_file_name_prefix(point, "search_projection.out_of_core.manifest.tmp.")
+                .unwrap();
+        } else {
+            fixture.model.observe(point).unwrap();
+        }
         match publication {
             Publication::Append => append(&root),
             Publication::Mutation => mutate_component(&root),

@@ -1,4 +1,11 @@
-# PostgreSQL 18.0 compatibility runner
+# PostgreSQL regression tests
+
+Run selected PostgreSQL regression queries directly against embedded HawDB with
+`make pg-regress-hawdb`. This path requires no PostgreSQL server, libpq, DSN,
+Python or subprocess. Both SQL and expected results come from the pinned
+PostgreSQL repository; they are not generated from HawDB's current answers.
+
+An optional live comparison CLI is also retained:
 
 An independent, unpublished Rust test project following RisingWave's
 [`src/tests/regress`](https://github.com/risingwavelabs/risingwave/tree/main/src/tests/regress)
@@ -12,6 +19,9 @@ FFI, helper process or HawDB PostgreSQL protocol server is involved in compariso
 - `src/suite.rs`: typed manifest/schedule loading and upstream provenance checks.
 - `src/compare.rs`: result/error comparison and negative controls.
 - `src/embedded.rs`: the real embedded Rust transaction API adapter.
+- `tests/upstream_sql.rs`: HawDB-only regression tests using `Database::query_sql`.
+- `data/hawdb-expectations.json`: exact upstream output ranges and explicit
+  scalar/error mappings for those tests; no hand-written expected result rows.
 - `src/postgres.rs`: safe Rust libpq connections, execution and result decoding.
 - `data/sql/`, `data/expected/`, `data/isolation/`: unmodified PostgreSQL inputs.
 - `data/cases.json`: checksums, upstream paths, exact SQL/line ranges, explicit
@@ -22,16 +32,70 @@ FFI, helper process or HawDB PostgreSQL protocol server is involved in compariso
 
 Inputs are pinned to PostgreSQL `REL_18_0` commit
 `3d6a828938a5fa0444275d3d2f67b64ec3199eb7`, version **180000**.
-Stock expected files are retained for provenance; live PG 18.0 execution is the
-reference. Their aligned-column padding is preserved by a scoped whitespace
-attribute. A source edit requires a reviewed checksum/provenance update.
+HawDB-only tests read the selected stock expected output directly. The optional
+comparison CLI uses live PG 18.0 as its reference. Aligned-column padding is
+preserved by a scoped whitespace attribute. A source edit requires a reviewed
+checksum/provenance update.
 
 The manifest is a selected subset. Unselected source statements are not coverage.
 Separately named `adapted/` cases may attach explicit fixture-only `execute_sql`
 to a source step. Both backends execute that same SQL; the report retains its
 original/effective SQL and adaptation reason. Raw upstream failures remain.
 
+### Existing SQL selection
+
+The additional selection keeps the upstream query text unchanged:
+
+- `adapted/int8/comparison-0` through `comparison-11`: the six column-left
+  comparisons against each of two integer constants, retaining all five
+  upstream integer pairs and their duplicate values. Setup adds a synthetic
+  primary key, explicit INSERT targets and numeric literals instead of string
+  input conversion. The HawDB-only assertion removes only that exact additional
+  key column before comparing all upstream columns and rows. These cases do not
+  cover string parsing or PostgreSQL integer widths.
+- `adapted/select_having/`: six ungrouped HAVING queries covering aggregate
+  comparisons, zero/one-row constant predicates and two invalid ungrouped-column
+  references. Negative cases map the original upstream ungrouped-column error
+  to the exact typed HawDB semantic error; adjacent successful queries exercise
+  the same setup and syntax. The optional CLI retains SQLSTATE `42803` mapping.
+- `adapted/select_implicit/non-projected-order-key`: ordering by an input column
+  omitted from the projection, preserving both result order and duplicate rows.
+
+The latter two fixtures use the original, already unique `a` column as a BIGINT
+primary key, BIGINT for `b`, TEXT for CHAR columns and explicit INSERT targets.
+All original values are retained. CHAR padding/width and integer-width semantics
+are outside this adaptation. Existing raw int8 cases remain unchanged. The five
+other `select_having.sql` queries are unselected because they need aggregate
+ORDER BY, scalar LOWER, expression GROUP BY or arithmetic predicates. They are
+not counted as passes.
+
+Each expected-output range must echo the exact selected query and belong to a
+checksum-verified source. Assertions preserve column names, value kinds,
+duplicate counts and explicit ordering. The small expected-output decoder is
+limited to these integer and known ASCII-word text fixtures. It rejects blank
+and interior-whitespace cells and other scalar kinds. Aligned output cannot
+recover arbitrary surrounding text whitespace or distinguish empty strings
+from NULL, so this selection does not claim those cases.
+
+This is a regression-only selection: it does not expand the engine's accepted
+SQL surface. Unselected queries, including literal-left int8 comparisons,
+casts, arithmetic and repeated output names, are not coverage. Grouping with
+ORDER BY remains unsupported; no ordering clause is removed to make a case pass.
+
 ## Run locally
+
+Run all 19 migrated cases on HawDB alone with the pinned Rust toolchain:
+
+```bash
+make pg-regress-hawdb
+# Or directly:
+cargo test --locked --manifest-path tests/pg-regress/Cargo.toml --no-default-features --test upstream_sql
+```
+
+Cargo also runs two existing checksum/selection controls imported from the suite
+loader. Those controls are separate from the 19 migrated PostgreSQL cases.
+
+### Optional live comparisons
 
 Use the pinned Rust toolchain, PostgreSQL/libpq development headers and library,
 libclang and pkg-config/pg_config for the native bindings. The private
@@ -53,6 +117,8 @@ make pg-regress-list
 export PGREGRESS_DSN='host=127.0.0.1 port=58432 dbname=postgres user=hawdb_test'
 make pg-regress
 make pg-regress PG_REGRESS_ARGS='--case adapted/isolation/ --report target/pg-regress/isolation.json'
+make pg-regress PG_REGRESS_ARGS='--case adapted/int8/ --report target/pg-regress/int8.json'
+make pg-regress PG_REGRESS_ARGS='--case adapted/select_ --report target/pg-regress/select.json'
 ```
 
 Or run the single CLI directly:

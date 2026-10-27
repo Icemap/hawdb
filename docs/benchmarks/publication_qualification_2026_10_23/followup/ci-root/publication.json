@@ -1,0 +1,27 @@
+{
+  "events_retained": 903,
+  "original_sha256": "7dbdaf1a69fd77baaeb72c218825209ce94f165ff32a98600ac42215b0a23044",
+  "published_sha256": "853bd7f4c965b090e01fe94a7baa3709c8174aeae3958b6b0f62a818748d191b",
+  "transformation": "Remove client_env/test_env/repo_env options from structured and unstructured command metadata; preserve every event, result, metric and profile option. Full original remains at the authorized Prow artifact.",
+  "original_uri": "gs://ci-cd-503413-prow-public/artifacts/native/pr-logs/pull/nowledge-co_hawdb/1217/pull-skein-bazel-test-root/2113655888001634304/artifacts/bepless-events.json",
+  "refs": {
+    "org": "nowledge-co",
+    "repo": "hawdb",
+    "repo_link": "https://github.com/nowledge-co/hawdb",
+    "base_ref": "main",
+    "base_sha": "8e9eab185ef880794d216d99ac6cd57442c511aa",
+    "base_link": "https://github.com/nowledge-co/hawdb/commit/8e9eab185ef880794d216d99ac6cd57442c511aa",
+    "pulls": [
+      {
+        "number": 1217,
+        "author": "hawkingrei",
+        "sha": "7546e2d09e34aa02bf3dfb623865fcec360d3dfb",
+        "title": "perf(storage): avoid unused generation inventory in WAL admission",
+        "head_ref": "bench/1119-sustained-publication",
+        "link": "https://github.com/nowledge-co/hawdb/pull/1217",
+        "commit_link": "https://github.com/nowledge-co/hawdb/pull/1217/commits/7546e2d09e34aa02bf3dfb623865fcec360d3dfb",
+        "author_link": "https://github.com/hawkingrei"
+      }
+    ]
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "rounds": 2,
+  "modes": [
+    "disabled",
+    "scoped-blocking",
+    "detached"
+  ],
+  "documents": 32,
+  "payload": 128,
+  "writers": 1,
+  "readers": 1,
+  "writes": 4096,
+  "reads_per_reader": 512,
+  "quiet_samples": 32,
+  "order": "baseline/gated alternating by pair; no host compiler/fuzz active; calibration only, no latency qualification"
+}

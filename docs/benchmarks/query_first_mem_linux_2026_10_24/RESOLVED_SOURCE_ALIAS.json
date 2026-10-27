@@ -1,0 +1,5 @@
+{
+  "reason": "shared target marked candidate fresh after baseline; both executable sha256 identical; candidate receipts invalid",
+  "candidate": "0e51caa18c881b08c7e49f55c41fd8d70fc7ed23",
+  "required": "rebuild candidate with explicit manifest and isolated target; require source-bound compiler artifact for hawdb and bench, preserve both sets"
+}

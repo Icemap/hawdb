@@ -355,7 +355,26 @@ match the row executor. Any expression outside this proven fragment uses the
 row implementation for the entire aggregate; it MUST NOT switch paths after
 consuming input, and the row path remains the differential oracle.
 
-An ordered index projection whose equality prefix and `ORDER BY` suffix are
+Conjunctive SQL `<`, `<=`, `>`, and `>=` comparisons on the first index column
+after a leading equality prefix MUST intersect into typed inclusive/exclusive
+bounds before index traversal. A constrained first-column range MAY have an
+empty equality prefix; this MUST NOT authorize an unbounded empty-prefix lookup.
+Partial-key boundaries include or exclude every trailing-key value at the bound.
+NULL range operands produce an empty interval, and one-sided upper bounds MUST
+exclude NULL keys. A unique index with an unconstrained nullable suffix MUST
+retain complete fallback because its missing NULL keys cannot cover the domain.
+
+The same interval MUST prune resident index pages, immutable tree children,
+recovery-delta selectors and committed live batches, and filter transaction
+overlays before their ordered merge. Existing full-key keyset cursors intersect
+the same bounds without changing persisted encodings. Small resident intervals
+use at most 64 rows for cardinality probing; larger/detached intervals use an
+explicit estimate rather than a preparation-time whole-range count. Explain
+MUST distinguish the range column, bound inclusiveness and an empty interval.
+Uncovered predicates remain residuals and cannot authorize predicate-free
+ordered projection.
+
+An ordered index projection whose equality/range bounds and `ORDER BY` suffix are
 fully covered MUST stream compact row locators through an executor-owned typed
 `ColumnarBatch`. `OFFSET` and `LIMIT` apply while visiting the ordered cursor,
 before row hydration, and the visitor MUST stop after the requested locator is

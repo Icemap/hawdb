@@ -32,6 +32,7 @@ mod distinct_output;
 mod exact_count_planning;
 mod having;
 mod ordinary_aggregate;
+mod projection_admission;
 
 fn assert_aggregate_memory_refusal(error: &HawDBError, owner: &str) {
     let HawDBError::ResourceBudgetExceeded(cause) = error else {
@@ -1256,6 +1257,7 @@ fn prepared_bushy_physical_join_plan_materializes_the_composite_right_input_once
     let execution = PreparedRelationalExecutionDescriptor::prepare(&select, &access_plan)
         .expect("prepare relational execution descriptor");
     let prepared = PreparedRelationalSelect {
+        output_schema: select_output_schema(&select, &state).expect("name bushy plan output"),
         statement: select,
         access_plan,
         join_planning: RelationalJoinPlanningOutcome::selected(

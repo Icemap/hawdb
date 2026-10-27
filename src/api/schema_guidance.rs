@@ -72,6 +72,15 @@ impl DatabaseReadTransaction {
         parameters: &BTreeMap<String, Value>,
         max_rows: Option<usize>,
     ) -> Result<BoundedReadQueryOutput> {
+        self.validate_generated_graph_rag(query, parameters)?;
+        self.query_with_params_bounded_profile(query.cypher(), parameters, max_rows)
+    }
+
+    pub(crate) fn validate_generated_graph_rag(
+        &self,
+        query: &GraphRagGeneratedQuery,
+        parameters: &BTreeMap<String, Value>,
+    ) -> Result<()> {
         let pinned_epoch = self
             .store
             .statistics(&self.catalog)
@@ -85,7 +94,6 @@ impl DatabaseReadTransaction {
         }
         query
             .validate_parameters(parameters)
-            .map_err(|error| HawDBError::Semantic(error.to_string()))?;
-        self.query_with_params_bounded_profile(query.cypher(), parameters, max_rows)
+            .map_err(|error| HawDBError::Semantic(error.to_string()))
     }
 }

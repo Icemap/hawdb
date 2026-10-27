@@ -18,7 +18,9 @@
 //! prepared-kernel contracts are not a second host integration API.
 
 mod lending;
+mod output;
 mod owned;
+use output::{NativeProjection, NumericOutput};
 pub mod retained;
 
 pub use owned::{stream_owned_numeric_nodes, stream_owned_typed_numeric_nodes};
@@ -169,7 +171,8 @@ struct NumericBatchEmitter<'plan, 'context, 'emit> {
     execution_limit: ExecutionLimit,
     task_context: Option<&'context RuntimeTaskContext>,
     observer: &'context QueryExecutionObserver,
-    emit: &'emit mut dyn FnMut(BindingBatch) -> Result<BatchControl>,
+    emit: NumericOutput<'emit>,
+    native_projection: Option<NativeProjection>,
     selected_rows: Vec<u32>,
     working: QueryMemoryAccount,
     output: AccountedBindingBatch,
@@ -259,7 +262,12 @@ pub fn try_stream_columnar_projection_batches(
     }
 
     let fragment = NumericFragment::try_prepare(items, input, context.catalog)?;
-    Some(fragment.stream(items, context, execution_limit, emit))
+    Some(fragment.stream(
+        items,
+        context,
+        execution_limit,
+        NumericOutput::Bindings(emit),
+    ))
 }
 
 pub fn try_stream_columnar_node_projection_batches(
@@ -283,7 +291,104 @@ pub fn try_stream_columnar_node_projection_batches(
     }
     let fragment =
         NumericFragment::try_prepare_parts(items, variable, label, predicate?, context.catalog)?;
-    Some(fragment.stream(items, context, execution_limit, emit))
+    Some(fragment.stream(
+        items,
+        context,
+        execution_limit,
+        NumericOutput::Bindings(emit),
+    ))
+}
+
+/// Execute an eligible root projection over the existing numeric scan/morsel
+/// protocol, lending values directly to the final result boundary.
+pub fn try_stream_native_projection(
+    plan: &PhysicalPlan,
+    context: NumericExecutionContext<'_>,
+    execution_limit: ExecutionLimit,
+    emit: &mut dyn FnMut(crate::RowRef<'_>) -> Result<BatchControl>,
+) -> Option<Result<BatchControl>> {
+    if context
+        .task_context
+        .is_some_and(RuntimeTaskContext::has_work_limit)
+    {
+        return None;
+    }
+    let (projection, offset, limit) = match plan {
+        PhysicalPlan::LimitExec {
+            input,
+            offset,
+            limit,
+        } => (input.as_ref(), *offset, *limit),
+        _ => (plan, 0, None),
+    };
+    let has_limit = !std::ptr::eq(projection, plan);
+    let (fragment, items) = match projection {
+        PhysicalPlan::ProjectExec { items, input } => (
+            NumericFragment::try_prepare(items, input, context.catalog)?,
+            items,
+        ),
+        PhysicalPlan::NodeProjectionScanExec {
+            variable,
+            label,
+            access,
+            predicate: Some(predicate),
+            items,
+            ..
+        } if access.is_label_scan() && !context.store.is_out_of_core() => (
+            NumericFragment::try_prepare_parts(items, variable, label, predicate, context.catalog)?,
+            items,
+        ),
+        _ => return None,
+    };
+    Some((|| {
+        runtime_checkpoint(context.task_context)?;
+        if execution_limit.output_rows == Some(0) {
+            return Ok(BatchControl::Continue);
+        }
+        context.observer.record_operator_start(plan);
+        let child_limit = execution_limit.child_for_limit(offset, limit);
+        if child_limit.output_rows == Some(0) {
+            return Ok(BatchControl::Continue);
+        }
+        if has_limit {
+            context.observer.record_operator_start(projection);
+        }
+        let mut skipped = 0usize;
+        let mut measured = |row: crate::RowRef<'_>| {
+            runtime_checkpoint(context.task_context)?;
+            let payload = row.iter().fold(0usize, |bytes, (name, value)| {
+                bytes
+                    .saturating_add(name.len())
+                    .saturating_add(crate::binding::value_ref_payload_bytes(value))
+            });
+            if payload > context.memory.batch_payload_bytes.get() {
+                return Err(HawDBError::Execution(format!(
+                    "native projection row uses {payload} bytes, exceeding batch_payload_bytes {}",
+                    context.memory.batch_payload_bytes
+                )));
+            }
+            // The source owns the payload. The emitter owns an admitted schema;
+            // no transient row-map or cloned payload reservation is necessary.
+            context.observer.record_operator_output(projection, 1);
+            if skipped < offset {
+                skipped += 1;
+                return Ok(BatchControl::Continue);
+            }
+            context.observer.record_native_projection_row(payload);
+            if has_limit {
+                context.observer.record_operator_output(plan, 1);
+            }
+            let control = emit(row)?;
+            runtime_checkpoint(context.task_context)?;
+            Ok(control)
+        };
+        fragment.stream(
+            items,
+            context,
+            child_limit,
+            NumericOutput::Borrowed(&mut measured),
+        )
+    })())
 }
 
 impl<'a> NumericFragment<'a> {
@@ -484,7 +589,7 @@ impl<'a> NumericFragment<'a> {
         items: &[Projection],
         context: NumericExecutionContext<'_>,
         execution_limit: ExecutionLimit,
-        emit: &mut dyn FnMut(BindingBatch) -> Result<BatchControl>,
+        emit: NumericOutput<'_>,
     ) -> Result<BatchControl> {
         self.start_fused_operators(context.observer);
         let Some(label_id) = context.catalog.label_id(self.label) else {
@@ -606,7 +711,7 @@ impl<'a> NumericFragment<'a> {
         );
 
         let (emitted, stopped) = if use_owned_typed {
-            stream_owned_typed_numeric_nodes(
+            owned::stream_owned_typed_numeric_nodes_with_output(
                 self,
                 items,
                 label_id,
@@ -616,7 +721,14 @@ impl<'a> NumericFragment<'a> {
                 emit,
             )?
         } else if context.store.is_out_of_core() {
-            stream_owned_numeric_nodes(self, items, label_id, context, execution_limit, emit)?
+            owned::stream_owned_numeric_nodes_with_output(
+                self,
+                items,
+                label_id,
+                context,
+                execution_limit,
+                emit,
+            )?
         } else if parallel {
             stream_parallel_borrowed_numeric_nodes(
                 self,
@@ -746,7 +858,7 @@ fn stream_parallel_borrowed_numeric_nodes(
     pool: SharedExecutorPool,
     context: NumericExecutionContext<'_>,
     execution_limit: ExecutionLimit,
-    emit: &mut dyn FnMut(BindingBatch) -> Result<BatchControl>,
+    emit: NumericOutput<'_>,
 ) -> Result<(usize, bool)> {
     // Cooperating workers share an execution-local stop signal. A failed query
     // must not poison a caller's reusable parent context or hide its budget error.
@@ -863,7 +975,7 @@ fn stream_lending_numeric_nodes(
     scan: LendingNumericScan,
     context: NumericExecutionContext<'_>,
     execution_limit: ExecutionLimit,
-    emit: &mut dyn FnMut(BindingBatch) -> Result<BatchControl>,
+    emit: NumericOutput<'_>,
 ) -> Result<(usize, bool)> {
     let mut cursor = NumericNodeBatchCursor::new(
         context.store.scan_nodes_borrowed(Some(label_id)),
@@ -897,7 +1009,7 @@ fn stream_borrowed_numeric_nodes(
     label_id: hawdb_core::LabelId,
     context: NumericExecutionContext<'_>,
     execution_limit: ExecutionLimit,
-    emit: &mut dyn FnMut(BindingBatch) -> Result<BatchControl>,
+    emit: NumericOutput<'_>,
 ) -> Result<(usize, bool)> {
     let mut nodes = Vec::with_capacity(context.memory.batch_rows.get());
     let mut batch_emitter = NumericBatchEmitter::new(
@@ -935,7 +1047,7 @@ impl<'plan, 'context, 'emit> NumericBatchEmitter<'plan, 'context, 'emit> {
         resources: (&ExecutionMemoryConfig, &QueryMemoryLedger),
         task_context: Option<&'context RuntimeTaskContext>,
         observer: &'context QueryExecutionObserver,
-        emit: &'emit mut dyn FnMut(BindingBatch) -> Result<BatchControl>,
+        emit: NumericOutput<'emit>,
     ) -> Self {
         Self {
             fragment,
@@ -945,6 +1057,7 @@ impl<'plan, 'context, 'emit> NumericBatchEmitter<'plan, 'context, 'emit> {
             task_context,
             observer,
             emit,
+            native_projection: None,
             selected_rows: Vec::new(),
             working: resources.1.source_account(
                 "numeric projection expressions",
@@ -986,20 +1099,18 @@ impl<'plan, 'context, 'emit> NumericBatchEmitter<'plan, 'context, 'emit> {
                 if self.limit_reached() {
                     break;
                 }
-                let control = self.emit_row(|expression| {
-                    Ok(match expression {
-                        ProjectionExpression::Id { .. } => ProjectedValue::scalar(Value::Int(
-                            input
-                                .node_ids
-                                .expect("typed scan retains requested node ids")[row]
-                                as i64,
-                        )),
-                        ProjectionExpression::Property { .. } => {
-                            ProjectedValue::scalar(input.values.value(row))
-                        }
-                        ProjectionExpression::Literal(value) => ProjectedValue::borrowed(value),
-                        _ => unreachable!("typed projection eligibility checks expressions"),
-                    })
+                let control = self.emit_row(|expression| match expression {
+                    ProjectionExpression::Id { .. } => ProjectedValue::scalar(Value::Int(
+                        input
+                            .node_ids
+                            .expect("typed scan retains requested node ids")[row]
+                            as i64,
+                    )),
+                    ProjectionExpression::Property { .. } => {
+                        ProjectedValue::scalar(input.values.value(row))
+                    }
+                    ProjectionExpression::Literal(value) => ProjectedValue::borrowed(value),
+                    _ => unreachable!("typed projection eligibility checks expressions"),
                 })?;
                 if control == BatchControl::Stop {
                     return Ok(control);
@@ -1027,20 +1138,18 @@ impl<'plan, 'context, 'emit> NumericBatchEmitter<'plan, 'context, 'emit> {
                 break;
             }
             let node = input[row].borrow();
-            let control = self.emit_row(|expression| {
-                Ok(match expression {
-                    ProjectionExpression::Id { .. } => {
-                        ProjectedValue::scalar(Value::Int(node.id.0 as i64))
-                    }
-                    ProjectionExpression::Property { property, .. } => {
-                        node.properties.get(property).map_or_else(
-                            || ProjectedValue::scalar(Value::Null),
-                            ProjectedValue::borrowed,
-                        )
-                    }
-                    ProjectionExpression::Literal(value) => ProjectedValue::borrowed(value),
-                    _ => unreachable!("numeric projection eligibility checks expressions"),
-                })
+            let control = self.emit_row(|expression| match expression {
+                ProjectionExpression::Id { .. } => {
+                    ProjectedValue::scalar(Value::Int(node.id.0 as i64))
+                }
+                ProjectionExpression::Property { property, .. } => {
+                    node.properties.get(property).map_or_else(
+                        || ProjectedValue::scalar(Value::Null),
+                        ProjectedValue::borrowed,
+                    )
+                }
+                ProjectionExpression::Literal(value) => ProjectedValue::borrowed(value),
+                _ => unreachable!("numeric projection eligibility checks expressions"),
             })?;
             if control == BatchControl::Stop {
                 return Ok(control);
@@ -1069,20 +1178,18 @@ impl<'plan, 'context, 'emit> NumericBatchEmitter<'plan, 'context, 'emit> {
             .expect("prepared columnar batch retains its predicate column");
         let node_ids = batch.column(NODE_ID_SLOT);
         for row in batch.selection().iter() {
-            let control = self.emit_row(|expression| {
-                Ok(match expression {
-                    ProjectionExpression::Id { .. } => ProjectedValue::scalar(
-                        node_ids
-                            .expect("typed scan retains requested node ids")
-                            .value(row)
-                            .expect("node id columns are non-null"),
-                    ),
-                    ProjectionExpression::Property { .. } => {
-                        ProjectedValue::scalar(property.value(row).unwrap_or(Value::Null))
-                    }
-                    ProjectionExpression::Literal(value) => ProjectedValue::borrowed(value),
-                    _ => unreachable!("typed projection eligibility checks expressions"),
-                })
+            let control = self.emit_row(|expression| match expression {
+                ProjectionExpression::Id { .. } => ProjectedValue::scalar(
+                    node_ids
+                        .expect("typed scan retains requested node ids")
+                        .value(row)
+                        .expect("node id columns are non-null"),
+                ),
+                ProjectionExpression::Property { .. } => {
+                    ProjectedValue::scalar(property.value(row).unwrap_or(Value::Null))
+                }
+                ProjectionExpression::Literal(value) => ProjectedValue::borrowed(value),
+                _ => unreachable!("typed projection eligibility checks expressions"),
             })?;
             if control == BatchControl::Stop {
                 return Ok(control);
@@ -1093,19 +1200,47 @@ impl<'plan, 'context, 'emit> NumericBatchEmitter<'plan, 'context, 'emit> {
 
     fn emit_row<'a>(
         &mut self,
-        mut evaluate: impl FnMut(&'a ProjectionExpression) -> Result<ProjectedValue<'a>>,
+        evaluate: impl Fn(&'a ProjectionExpression) -> ProjectedValue<'a> + Sync,
     ) -> Result<BatchControl>
     where
         'plan: 'a,
     {
         runtime_checkpoint(self.task_context)?;
         let items = self.items;
+        if let NumericOutput::Borrowed(emit) = &mut self.emit {
+            if self.native_projection.is_none() {
+                self.native_projection = Some(NativeProjection::new(items, &self.working)?);
+            }
+            let schema = self
+                .native_projection
+                .as_ref()
+                .expect("native schema is admitted");
+            let value = |index: usize| evaluate(&items[index].expression).into_source_ref();
+            let control = emit(crate::RowRef::Projected(crate::profile::ProjectedRowRef {
+                columns: &schema.columns,
+                value: &value,
+            }))?;
+            self.emitted = self.emitted.saturating_add(1);
+            runtime_checkpoint(self.task_context)?;
+            return Ok(if control == BatchControl::Stop || self.limit_reached() {
+                BatchControl::Stop
+            } else {
+                BatchControl::Continue
+            });
+        }
+        let NumericOutput::Bindings(emit) = &mut self.emit else {
+            unreachable!()
+        };
         let working = &self.working;
         if push_borrowed_projection(
             &mut self.output,
-            || prepare_borrowed_projection(items, working, None, &mut evaluate),
+            || {
+                prepare_borrowed_projection(items, working, None, |expression| {
+                    Ok(evaluate(expression))
+                })
+            },
             self.task_context,
-            self.emit,
+            *emit,
         )? == BatchControl::Stop
         {
             return Ok(BatchControl::Stop);
@@ -1119,7 +1254,12 @@ impl<'plan, 'context, 'emit> NumericBatchEmitter<'plan, 'context, 'emit> {
 
     fn finish_batch(&mut self) -> Result<BatchControl> {
         runtime_checkpoint(self.task_context)?;
-        if self.output.emit(self.emit)? == BatchControl::Stop || self.limit_reached() {
+        if let NumericOutput::Bindings(emit) = &mut self.emit
+            && self.output.emit(*emit)? == BatchControl::Stop
+        {
+            return Ok(BatchControl::Stop);
+        }
+        if self.limit_reached() {
             return Ok(BatchControl::Stop);
         }
         Ok(BatchControl::Continue)
@@ -1621,9 +1761,21 @@ mod tests {
         );
         let parent = RuntimeTaskContext::default();
         for task_context in [None, Some(&parent)] {
-            for refuse in [true, false] {
+            for (native, refuse) in [(false, true), (false, false), (true, true), (true, false)] {
                 let observer = QueryExecutionObserver::default();
-                let mut rows = 0;
+                let rows = std::cell::Cell::new(0usize);
+                let consume = |count| {
+                    if refuse {
+                        let _lease = result_account.reserve(2)?;
+                    }
+                    rows.set(rows.get() + count);
+                    Ok(BatchControl::Continue)
+                };
+                let mut bindings = |batch: BindingBatch| consume(batch.len());
+                let mut borrowed = |row: crate::RowRef<'_>| {
+                    assert!(matches!(row, crate::RowRef::Projected(_)));
+                    consume(1)
+                };
                 let result = stream_parallel_borrowed_numeric_nodes(
                     fragment,
                     &items,
@@ -1646,22 +1798,20 @@ mod tests {
                         observer: &observer,
                     },
                     ExecutionLimit::unlimited(),
-                    &mut |batch| {
-                        if refuse {
-                            let _lease = result_account.reserve(2)?;
-                        }
-                        rows += batch.len();
-                        Ok(BatchControl::Continue)
+                    if native {
+                        NumericOutput::Borrowed(&mut borrowed)
+                    } else {
+                        NumericOutput::Bindings(&mut bindings)
                     },
                 );
                 if refuse {
                     assert!(
                         matches!(result, Err(HawDBError::ResourceBudgetExceeded(ref error)) if error.owner == "host result")
                     );
-                    assert_eq!(rows, 0);
+                    assert_eq!(rows.get(), 0);
                 } else {
                     assert_eq!(result.unwrap(), (8, false));
-                    assert_eq!(rows, 8);
+                    assert_eq!(rows.get(), 8);
                 }
                 assert_eq!(ledger.snapshot().used_bytes, 0);
                 assert_eq!(parent.checkpoint(), Ok(()));

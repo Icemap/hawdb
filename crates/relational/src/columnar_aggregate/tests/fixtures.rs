@@ -32,6 +32,7 @@ pub(super) fn parse(sql: &str) -> SelectStatement {
 
 pub(super) fn schema() -> RelationalTableSchema {
     RelationalTableSchema {
+        materialized_view: None,
         name: "records".into(),
         columns: [
             ("n", RelationalScalarType::BigInt),

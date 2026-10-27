@@ -19,8 +19,8 @@
 //! relational stores; keeping these concerns separate lets a transaction
 //! validate its write set without retaining a second copy of user data.
 
-mod history_budget;
-use history_budget::{HistoryBudget, HistoryLease};
+pub(crate) mod history_budget;
+use history_budget::HistoryBudget;
 
 use crate::{
     adjacency::AdjacencyDirection,
@@ -102,7 +102,7 @@ pub const DEFAULT_MAX_VERSION_WRITE_SET_BYTES: usize = crate::config::DEFAULT_MA
 
 /// Current-index payload estimate; excludes historical COW roots.
 pub const DEFAULT_MAX_VERSION_INDEX_BYTES: usize = 64 * 1024 * 1024;
-/// Shared budget for retained/staged non-Database root payload estimates.
+/// Shared budget for retained/staged narrow-key physical-page payload estimates.
 pub const DEFAULT_MAX_RETAINED_VERSION_HISTORY_BYTES: usize = 256 * 1024 * 1024;
 
 pub const DEFAULT_MAX_VERSION_WRITE_SET_ENTRIES: usize =
@@ -461,8 +461,6 @@ pub struct VersionIndex {
     estimated_bytes: usize,
     max_estimated_bytes: usize,
     history_budget: HistoryBudget,
-    // Drop after the map, so the last holder releases storage before its charge.
-    history_lease: Option<Arc<HistoryLease>>,
 }
 
 impl Default for VersionIndex {
@@ -492,7 +490,6 @@ impl VersionIndex {
             estimated_bytes: reserved,
             max_estimated_bytes,
             history_budget: HistoryBudget::new(max_history_bytes),
-            history_lease: None,
         }
     }
 
@@ -511,7 +508,6 @@ impl VersionIndex {
             estimated_bytes: inline_barrier_bytes(),
             max_estimated_bytes: self.max_estimated_bytes,
             history_budget: self.history_budget.clone(),
-            history_lease: None,
         };
         if epoch > 0 {
             baseline.apply_database_barrier(epoch);
@@ -542,32 +538,43 @@ impl VersionIndex {
         self.history_budget.used()
     }
 
-    /// Reserve the complete candidate root before any COW allocation or WAL.
-    /// The existing root remains charged until its last snapshot is dropped.
+    /// Reserve only new physical pages before COW allocation or WAL. Unchanged
+    /// pages retain one credit shared by every root that can still reach them.
     pub(crate) fn stage(&self, writes: &VersionWriteSet, epoch: u64) -> Option<Self> {
         if !self.admits(writes) {
             return None;
         }
-        let mut bytes = self.estimated_bytes - inline_barrier_bytes();
-        let mut changes_map = false;
+        let mut touched = std::collections::BTreeSet::new();
+        let mut bytes = 0usize;
         for (key, _) in writes.iter() {
             if !matches!(key, VersionKey::Database | VersionKey::ReadBarrier) {
-                changes_map = true;
+                if let Some(identity) = self.stamps.version_page_for_key(key) {
+                    touched.insert(identity);
+                }
                 if !self.stamps.contains_key(key) {
                     bytes = bytes.checked_add(version_stamp_bytes(key))?;
                 }
             }
         }
-        let lease = if bytes == 0 {
-            None
-        } else if changes_map || self.history_lease.is_none() {
+        for (identity, payload, _, charged) in self.stamps.version_page_layout() {
+            if !charged {
+                bytes = bytes.checked_add(payload)?;
+            }
+            if touched.contains(&identity) {
+                bytes = bytes.checked_add(payload)?;
+            }
+        }
+        let mut reservation = if bytes > 0 {
             Some(self.history_budget.reserve(bytes)?)
         } else {
-            self.history_lease.clone()
+            None
         };
+        // Adopt unmanaged recovery/construction roots too: a page credit must
+        // survive even when an older, previously unmanaged snapshot owns it.
+        self.stamps.charge_version_pages(&mut reservation);
         let mut staged = self.clone();
-        staged.history_lease = lease;
         staged.apply_prepared(writes, epoch);
+        staged.stamps.charge_version_pages(&mut reservation);
         Some(staged)
     }
 
@@ -585,13 +592,18 @@ impl VersionIndex {
         // place and still reject the writer. The barrier at this commit epoch
         // supersedes all earlier read summaries for every live capture.
         let (retained_bytes, bytes) = self.collapsed_write_bytes(writes)?;
-        let history_bytes = bytes - inline_barrier_bytes();
-        let lease = (history_bytes > 0)
-            .then(|| self.history_budget.reserve(history_bytes))
-            .flatten();
-        if history_bytes > 0 && lease.is_none() {
-            return None;
+        let mut history_bytes = bytes - inline_barrier_bytes();
+        for (_, payload, _, charged) in self.stamps.version_page_layout() {
+            if !charged {
+                history_bytes = history_bytes.checked_add(payload)?;
+            }
         }
+        let mut reservation = if history_bytes > 0 {
+            Some(self.history_budget.reserve(history_bytes)?)
+        } else {
+            None
+        };
+        self.stamps.charge_version_pages(&mut reservation);
         let retained = self
             .stamps
             .iter()
@@ -606,9 +618,9 @@ impl VersionIndex {
             estimated_bytes: retained_bytes,
             max_estimated_bytes: self.max_estimated_bytes,
             history_budget: self.history_budget.clone(),
-            history_lease: lease,
         };
         staged.apply_prepared(writes, epoch);
+        staged.stamps.charge_version_pages(&mut reservation);
         staged.insert_stamp(
             VersionKey::ReadBarrier,
             VersionStamp {
@@ -666,9 +678,9 @@ impl VersionIndex {
     fn recount_bytes(&mut self) {
         self.estimated_bytes = self
             .stamps
-            .iter()
-            .fold(inline_barrier_bytes(), |bytes, (key, _)| {
-                bytes.saturating_add(version_stamp_bytes(key))
+            .version_page_layout()
+            .fold(inline_barrier_bytes(), |bytes, (_, payload, _, _)| {
+                bytes.saturating_add(payload)
             });
     }
 
@@ -749,7 +761,10 @@ impl VersionIndex {
     /// This construction/test primitive rejects indexes holding history leases.
     pub fn apply(&mut self, writes: &VersionWriteSet, commit_epoch: u64) {
         assert!(
-            self.history_lease.is_none(),
+            !self
+                .stamps
+                .version_page_layout()
+                .any(|(_, _, _, charged)| charged),
             "managed history requires a staged update"
         );
         self.apply_prepared(writes, commit_epoch);
@@ -801,10 +816,13 @@ impl VersionIndex {
         }) {
             self.read_barrier = None;
         }
-        self.prune_map(|stamp| {
-            stamp.disposition != VersionDisposition::Tombstone
-                || stamp.commit_epoch >= oldest_reader_epoch
-        });
+        self.prune_map(
+            |stamp| {
+                stamp.disposition != VersionDisposition::Tombstone
+                    || stamp.commit_epoch >= oldest_reader_epoch
+            },
+            None,
+        );
     }
 
     /// Removes conflict history strictly older than every usable snapshot.
@@ -826,37 +844,54 @@ impl VersionIndex {
         {
             self.read_barrier = None;
         }
-        self.prune_map(|stamp| stamp.commit_epoch >= oldest_reader_epoch);
+        self.prune_map(
+            |stamp| stamp.commit_epoch >= oldest_reader_epoch,
+            Some(oldest_reader_epoch),
+        );
     }
 
-    fn prune_map(&mut self, keep: impl Fn(&VersionStamp) -> bool) {
-        if self.stamps.iter().all(|(_, stamp)| keep(stamp)) {
+    fn prune_map(&mut self, keep: impl Fn(&VersionStamp) -> bool, floor: Option<u64>) {
+        use crate::cow::VersionPageRetention::{Drop, Keep, Mixed};
+        let mut plan = self.stamps.version_retention_plan(&keep, floor);
+        if plan.iter().all(|action| *action == Keep) {
             return;
         }
-        if self.stamps.iter().all(|(_, stamp)| !keep(stamp)) {
-            self.stamps = CowSegmentedMap::default();
-            self.history_lease = None;
-            self.recount_bytes();
-            return;
+        let managed = self
+            .stamps
+            .version_page_layout()
+            .any(|(_, _, _, charged)| charged);
+        let bytes = if managed {
+            self.stamps
+                .version_page_layout()
+                .zip(&plan)
+                .filter(|((_, _, shared, _), action)| *shared && **action == Mixed)
+                .map(|((_, bytes, _, _), _)| bytes)
+                .sum()
+        } else {
+            0
+        };
+        let mut reservation = if bytes > 0 {
+            self.history_budget.reserve(bytes)
+        } else {
+            None
+        };
+        if bytes > 0 && reservation.is_none() {
+            // Whole obsolete pages can still retire under a full budget. Mixed
+            // pages need preflight copy credit and safely retain extra evidence.
+            for action in &mut plan {
+                if *action == Mixed {
+                    *action = Keep;
+                }
+            }
+            if !plan.contains(&Drop) {
+                return;
+            }
         }
-        if let Some(lease) = &self.history_lease
-            && Arc::strong_count(lease) > 1
-        {
-            // retain can copy all input pages before discarding entries, so
-            // reserve the old root's full payload, then refund the removed part.
-            let bytes = self.estimated_bytes - inline_barrier_bytes();
-            let Some(replacement) = self.history_budget.reserve(bytes) else {
-                return; // Retaining extra conflict history is safe under pressure.
-            };
-            self.history_lease = Some(replacement);
+        self.stamps.retain_version_pages(&plan, &keep);
+        if managed {
+            self.stamps.charge_version_pages(&mut reservation);
         }
-        self.stamps.retain(|_, stamp| keep(stamp));
         self.recount_bytes();
-        if let Some(lease) = self.history_lease.as_mut() {
-            Arc::get_mut(lease)
-                .expect("pruned root owns its history charge")
-                .shrink(self.estimated_bytes - inline_barrier_bytes());
-        }
     }
 
     /// Tests sharing of non-Database COW pages, not equality of inline barriers.
@@ -885,6 +920,9 @@ pub(crate) fn is_read_summary_key(key: &VersionKey) -> bool {
             | VersionKey::ReadRelationalIndexPrefix { .. }
     )
 }
+
+#[cfg(test)]
+mod page_history_tests;
 
 #[cfg(test)]
 mod tests {
@@ -923,7 +961,7 @@ mod tests {
         assert!(index.stamp(&key1).is_some()); // copying shared pages cannot fit
         drop(old);
         index.prune_before(2);
-        assert!(index.stamp(&key1).is_some()); // still needs a full input-root reserve
+        assert!(index.stamp(&key1).is_some()); // still needs a full shared-page reserve
         drop(current_snapshot);
         index.prune_before(2);
         assert!(index.stamp(&key1).is_none());

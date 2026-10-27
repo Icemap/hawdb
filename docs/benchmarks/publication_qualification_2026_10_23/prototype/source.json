@@ -1,0 +1,8 @@
+{
+  "base": "0f641a98f17898a8ea3dae6ddaaa46d641604ae3",
+  "overlay_sha256": {
+    "benches/consumer_publication.rs": "7a46e780977bd7371379322d108241be390eff99517d6fbf9f5c29f79cbebe1d",
+    "crates/storage/src/store/durable/wal.rs": "1e45de86e81f26317eace4237578e52218620f632b73b9d14215e65c999df350"
+  },
+  "scope": "WAL admission lazy generation debt; opt-in manual sustained Consumer benchmark; pinned profile unchanged"
+}

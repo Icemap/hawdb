@@ -266,6 +266,7 @@ fn table_without_primary_key_is_rejected_before_catalog_publication() {
         .commit(
             RelationalTransaction {
                 writes: vec![RelationalWrite::CreateTable(RelationalTableSchema {
+                    materialized_view: None,
                     name: "documents".to_string(),
                     columns: vec![text_column("id", false)],
                     primary_key: Vec::new(),
@@ -1325,6 +1326,7 @@ fn sparse_mutation_hydration_plan_groups_monotonic_primary_keys_by_partition() {
         .stage_transaction(
             RelationalTransaction {
                 writes: vec![RelationalWrite::CreateTable(RelationalTableSchema {
+                    materialized_view: None,
                     name: "events".to_string(),
                     columns: vec![
                         RelationalColumnSchema {
@@ -2407,6 +2409,7 @@ fn append_updates_only_the_affected_posting_page() {
             RelationalTransaction {
                 writes: vec![
                     RelationalWrite::CreateTable(RelationalTableSchema {
+                        materialized_view: None,
                         name: "messages".to_string(),
                         columns: vec![text_column("id", false), text_column("thread_id", false)],
                         primary_key: vec!["id".to_string()],
@@ -2486,6 +2489,7 @@ fn composite_index_prefix_lookup_is_bounded_and_preserves_leading_column_order()
             RelationalTransaction {
                 writes: vec![
                     RelationalWrite::CreateTable(RelationalTableSchema {
+                        materialized_view: None,
                         name: "messages".to_string(),
                         columns: vec![
                             text_column("id", false),
@@ -3080,6 +3084,7 @@ fn authoritative_recovery_does_not_revalidate_durable_non_primary_foreign_keys()
     let schema = RelationalTransaction {
         writes: vec![
             RelationalWrite::CreateTable(RelationalTableSchema {
+                materialized_view: None,
                 name: "accounts".to_string(),
                 columns: vec![text_column("id", false), text_column("owner", false)],
                 primary_key: vec!["id".to_string()],
@@ -3088,6 +3093,7 @@ fn authoritative_recovery_does_not_revalidate_durable_non_primary_foreign_keys()
                 indexes: Vec::new(),
             }),
             RelationalWrite::CreateTable(RelationalTableSchema {
+                materialized_view: None,
                 name: "sessions".to_string(),
                 columns: vec![text_column("id", false), text_column("owner", false)],
                 primary_key: vec!["id".to_string()],
@@ -3294,6 +3300,7 @@ fn relational_index_shadow_publishes_generation_fenced_cold_pages() {
             RelationalTransaction {
                 writes: vec![
                     RelationalWrite::CreateTable(RelationalTableSchema {
+                        materialized_view: None,
                         name: "documents".to_string(),
                         columns: vec![text_column("id", false), text_column("owner", false)],
                         primary_key: vec!["id".to_string()],
@@ -3444,6 +3451,7 @@ fn relational_index_shadow_range_seek_traverses_multiple_pages_in_both_direction
             RelationalTransaction {
                 writes: vec![
                     RelationalWrite::CreateTable(RelationalTableSchema {
+                        materialized_view: None,
                         name: "documents".to_string(),
                         columns: vec![text_column("id", false), text_column("owner", false)],
                         primary_key: vec!["id".to_string()],
@@ -3507,6 +3515,7 @@ fn relational_index_shadow_range_seek_traverses_multiple_pages_in_both_direction
             "documents",
             "documents_owner_id_idx",
             &RelationalIndexRangeScan {
+                bounds: Default::default(),
                 prefix: prefix.clone(),
                 exclusive_bound: Some(RelationalKey(vec![
                     RelationalValue::Text("owner-1".to_string()),
@@ -3540,7 +3549,8 @@ fn relational_index_shadow_range_seek_traverses_multiple_pages_in_both_direction
             "documents",
             "documents_owner_id_idx",
             &RelationalIndexRangeScan {
-                prefix,
+                bounds: Default::default(),
+                prefix: prefix.clone(),
                 exclusive_bound: None,
                 direction: RelationalIndexScanDirection::Backward,
             },
@@ -3563,6 +3573,102 @@ fn relational_index_shadow_range_seek_traverses_multiple_pages_in_both_direction
         ]
     );
     assert!(backward_report.stopped_early);
+    // Bounds on a partial key must include/exclude every trailing value, not
+    // just the short tuple itself. The tiny pages force cross-leaf traversal.
+    let boundary = |id: Option<&str>, inclusive| {
+        let mut key = prefix.0.clone();
+        if let Some(id) = id {
+            key.push(RelationalValue::Text(id.into()));
+        }
+        RelationalIndexBound {
+            key: RelationalKey(key),
+            inclusive,
+        }
+    };
+    for direction in [
+        RelationalIndexScanDirection::Forward,
+        RelationalIndexScanDirection::Backward,
+    ] {
+        for (lower, upper, start, end, empty_prefix) in [
+            (
+                Some(boundary(Some("doc-03"), false)),
+                Some(boundary(Some("doc-06"), true)),
+                4,
+                7,
+                false,
+            ),
+            (
+                Some(boundary(Some("doc-03"), true)),
+                Some(boundary(Some("doc-06"), false)),
+                3,
+                6,
+                false,
+            ),
+            (
+                Some(boundary(None, true)),
+                Some(boundary(None, true)),
+                0,
+                12,
+                true,
+            ),
+            (Some(boundary(None, false)), None, 0, 0, true),
+            (None, Some(boundary(None, false)), 0, 0, true),
+        ] {
+            let scan = RelationalIndexRangeScan {
+                prefix: if empty_prefix {
+                    RelationalKey(Vec::new())
+                } else {
+                    prefix.clone()
+                },
+                bounds: Some(Box::new(RelationalIndexBounds {
+                    lower,
+                    upper,
+                    empty: false,
+                })),
+                exclusive_bound: None,
+                direction,
+            };
+            let mut materialized = Vec::new();
+            state
+                .visit_index_range_entries(
+                    "documents",
+                    "documents_owner_id_idx",
+                    &scan,
+                    |index, _| {
+                        materialized.push(index.clone());
+                        true
+                    },
+                )
+                .unwrap();
+            let mut persisted = Vec::new();
+            let report = reader
+                .visit_range_entries(
+                    "documents",
+                    "documents_owner_id_idx",
+                    &scan,
+                    RelationalIndexReadLimits::default(),
+                    |index, _| {
+                        persisted.push(index.clone());
+                        true
+                    },
+                )
+                .unwrap();
+            let mut expected = (start..end)
+                .map(|ordinal| {
+                    RelationalKey(vec![
+                        RelationalValue::Text("owner-1".into()),
+                        RelationalValue::Text(format!("doc-{ordinal:02}")),
+                    ])
+                })
+                .collect::<Vec<_>>();
+            if direction == RelationalIndexScanDirection::Backward {
+                expected.reverse();
+            }
+            assert_eq!(materialized, expected);
+            assert_eq!(persisted, expected);
+            assert_eq!(report.leaf_entries_visited, expected.len());
+        }
+    }
     std::fs::remove_dir_all(directory).expect("remove range-seek fixture");
 }
 
@@ -3583,6 +3689,7 @@ fn relational_index_shadow_publishes_skew_aware_leading_prefix_statistics() {
             RelationalTransaction {
                 writes: vec![
                     RelationalWrite::CreateTable(RelationalTableSchema {
+                        materialized_view: None,
                         name: "events".to_string(),
                         columns: vec![
                             text_column("id", false),
@@ -3670,6 +3777,7 @@ fn relational_index_bound_open_verifies_one_canonical_manifest_image() {
             RelationalTransaction {
                 writes: vec![
                     RelationalWrite::CreateTable(RelationalTableSchema {
+                        materialized_view: None,
                         name: "documents".to_string(),
                         columns: vec![text_column("id", false), text_column("owner", false)],
                         primary_key: vec!["id".to_string()],
@@ -3750,6 +3858,7 @@ fn relational_index_shadow_streams_rows_without_materialized_postings() {
             RelationalTransaction {
                 writes: vec![
                     RelationalWrite::CreateTable(RelationalTableSchema {
+                        materialized_view: None,
                         name: "documents".to_string(),
                         columns: vec![text_column("id", false), text_column("owner", false)],
                         primary_key: vec!["id".to_string()],
@@ -3857,6 +3966,7 @@ fn relational_index_shadow_rejects_and_cleans_excess_spill_runs() {
             RelationalTransaction {
                 writes: vec![
                     RelationalWrite::CreateTable(RelationalTableSchema {
+                        materialized_view: None,
                         name: "documents".to_string(),
                         columns: vec![text_column("id", false), text_column("owner", false)],
                         primary_key: vec!["id".to_string()],
@@ -3948,6 +4058,7 @@ fn required_relational_index_roots_cover_constraints_and_foreign_keys() {
             RelationalTransaction {
                 writes: vec![
                     RelationalWrite::CreateTable(RelationalTableSchema {
+                        materialized_view: None,
                         name: "accounts".to_string(),
                         columns: vec![
                             text_column("id", false),
@@ -3972,6 +4083,7 @@ fn required_relational_index_roots_cover_constraints_and_foreign_keys() {
                         ],
                     }),
                     RelationalWrite::CreateTable(RelationalTableSchema {
+                        materialized_view: None,
                         name: "sessions".to_string(),
                         columns: vec![text_column("id", false), text_column("account_id", false)],
                         primary_key: vec!["id".to_string()],
@@ -4202,6 +4314,7 @@ fn relational_index_shadow_demand_reads_match_materialized_oracle() {
             RelationalTransaction {
                 writes: vec![
                     RelationalWrite::CreateTable(RelationalTableSchema {
+                        materialized_view: None,
                         name: "documents".to_string(),
                         columns: vec![
                             text_column("id", false),
@@ -4713,6 +4826,7 @@ fn relational_index_wal_deltas_merge_with_cold_base_and_stay_bounded() {
             RelationalTransaction {
                 writes: vec![
                     RelationalWrite::CreateTable(RelationalTableSchema {
+                        materialized_view: None,
                         name: "documents".to_string(),
                         columns: vec![
                             text_column("id", false),
@@ -4928,6 +5042,7 @@ fn relational_index_wal_deltas_merge_with_cold_base_and_stay_bounded() {
             "documents",
             RELATIONAL_PRIMARY_INDEX_NAME,
             &RelationalIndexRangeScan {
+                bounds: Default::default(),
                 prefix: inserted_document.clone(),
                 exclusive_bound: None,
                 direction: RelationalIndexScanDirection::Forward,
@@ -5200,6 +5315,7 @@ fn schema_changing_relational_wal_invalidates_incremental_index_capture() {
         .stage_transaction_with_index_changes(
             RelationalTransaction {
                 writes: vec![RelationalWrite::CreateTable(RelationalTableSchema {
+                    materialized_view: None,
                     name: "documents".to_string(),
                     columns: vec![text_column("id", false)],
                     primary_key: vec!["id".to_string()],
@@ -5708,6 +5824,7 @@ fn relational_schema_rejects_reserved_and_duplicate_index_names() {
             .stage_transaction(
                 RelationalTransaction {
                     writes: vec![RelationalWrite::CreateTable(RelationalTableSchema {
+                        materialized_view: None,
                         name: "documents".to_string(),
                         columns: vec![text_column("id", false)],
                         primary_key: vec!["id".to_string()],
@@ -5731,6 +5848,7 @@ fn relational_schema_rejects_reserved_and_duplicate_index_names() {
         .stage_transaction(
             RelationalTransaction {
                 writes: vec![RelationalWrite::CreateTable(RelationalTableSchema {
+                    materialized_view: None,
                     name: "documents".to_string(),
                     columns: vec![text_column("id", false)],
                     primary_key: vec!["id".to_string()],
@@ -5769,6 +5887,7 @@ fn create_content_tables() -> RelationalTransaction {
     RelationalTransaction {
         writes: vec![
             RelationalWrite::CreateTable(RelationalTableSchema {
+                materialized_view: None,
                 name: "content_documents".to_string(),
                 columns: vec![text_column("content_doc_id", false)],
                 primary_key: vec!["content_doc_id".to_string()],
@@ -5777,6 +5896,7 @@ fn create_content_tables() -> RelationalTransaction {
                 indexes: Vec::new(),
             }),
             RelationalWrite::CreateTable(RelationalTableSchema {
+                materialized_view: None,
                 name: "content_anchors".to_string(),
                 columns: vec![
                     text_column("anchor_id", false),
@@ -5801,6 +5921,7 @@ fn create_cascade_tables() -> RelationalTransaction {
     RelationalTransaction {
         writes: vec![
             RelationalWrite::CreateTable(RelationalTableSchema {
+                materialized_view: None,
                 name: "cascade_parents".to_string(),
                 columns: vec![text_column("id", false)],
                 primary_key: vec!["id".to_string()],
@@ -5809,6 +5930,7 @@ fn create_cascade_tables() -> RelationalTransaction {
                 indexes: Vec::new(),
             }),
             RelationalWrite::CreateTable(RelationalTableSchema {
+                materialized_view: None,
                 name: "cascade_children".to_string(),
                 columns: vec![text_column("id", false), text_column("parent_id", false)],
                 primary_key: vec!["id".to_string()],
@@ -5823,6 +5945,7 @@ fn create_cascade_tables() -> RelationalTransaction {
                 indexes: Vec::new(),
             }),
             RelationalWrite::CreateTable(RelationalTableSchema {
+                materialized_view: None,
                 name: "cascade_grandchildren".to_string(),
                 columns: vec![text_column("id", false), text_column("child_id", false)],
                 primary_key: vec!["id".to_string()],
@@ -5873,6 +5996,7 @@ fn seed_cascade_rows() -> RelationalTransaction {
 fn create_payload_table() -> RelationalTransaction {
     RelationalTransaction {
         writes: vec![RelationalWrite::CreateTable(RelationalTableSchema {
+            materialized_view: None,
             name: "messages".to_string(),
             columns: vec![text_column("id", false), text_column("payload", false)],
             primary_key: vec!["id".to_string()],
@@ -5886,6 +6010,7 @@ fn create_payload_table() -> RelationalTransaction {
 fn create_upsert_table() -> RelationalTransaction {
     RelationalTransaction {
         writes: vec![RelationalWrite::CreateTable(RelationalTableSchema {
+            materialized_view: None,
             name: "documents".to_string(),
             columns: vec![
                 text_column("id", false),

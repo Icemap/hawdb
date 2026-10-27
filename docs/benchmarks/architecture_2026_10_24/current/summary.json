@@ -1,0 +1,501 @@
+{
+  "source_note": "PRE-descriptor-memory-admission correction. Source-bound 0.14 controls, not final corrected-source qualification.",
+  "baseline_revision": "01793dc2923da88e8b8d053ffda8daf6d8b84f06",
+  "candidate_revision": "9bb71b8c82120806a1304328dd6644c8f3a7dafc",
+  "scan": [
+    {
+      "case": "small",
+      "cold": false,
+      "baseline": {
+        "items": 35,
+        "work": 69,
+        "elapsed_ns_median": 8750,
+        "elapsed_ns_min": 8500,
+        "elapsed_ns_max": 21333,
+        "exact_matches": 3,
+        "repeats": 3
+      },
+      "candidate": {
+        "items": 35,
+        "work": 103,
+        "elapsed_ns_median": 11459,
+        "elapsed_ns_min": 10375,
+        "elapsed_ns_max": 33833,
+        "exact_matches": 3,
+        "repeats": 3
+      }
+    },
+    {
+      "case": "small",
+      "cold": true,
+      "baseline": {
+        "items": 35,
+        "work": 69,
+        "elapsed_ns_median": 62708,
+        "elapsed_ns_min": 58458,
+        "elapsed_ns_max": 65375,
+        "exact_matches": 3,
+        "repeats": 3
+      },
+      "candidate": {
+        "items": 35,
+        "work": 107,
+        "elapsed_ns_median": 40250,
+        "elapsed_ns_min": 40250,
+        "elapsed_ns_max": 51250,
+        "exact_matches": 3,
+        "repeats": 3
+      }
+    },
+    {
+      "case": "bulk",
+      "cold": false,
+      "baseline": {
+        "items": 4129,
+        "work": 8257,
+        "elapsed_ns_median": 190375,
+        "elapsed_ns_min": 189375,
+        "elapsed_ns_max": 192250,
+        "exact_matches": 3,
+        "repeats": 3
+      },
+      "candidate": {
+        "items": 4129,
+        "work": 12385,
+        "elapsed_ns_median": 549417,
+        "elapsed_ns_min": 548416,
+        "elapsed_ns_max": 558709,
+        "exact_matches": 3,
+        "repeats": 3
+      }
+    },
+    {
+      "case": "bulk",
+      "cold": true,
+      "baseline": {
+        "items": 4129,
+        "work": 8257,
+        "elapsed_ns_median": 84414167,
+        "elapsed_ns_min": 83880542,
+        "elapsed_ns_max": 85296459,
+        "exact_matches": 3,
+        "repeats": 3
+      },
+      "candidate": {
+        "items": 161,
+        "work": 487,
+        "elapsed_ns_median": 88292,
+        "elapsed_ns_min": 87875,
+        "elapsed_ns_max": 104542,
+        "exact_matches": 3,
+        "repeats": 3
+      }
+    },
+    {
+      "case": "sparse",
+      "cold": false,
+      "baseline": {
+        "items": 1060866,
+        "work": 2121731,
+        "elapsed_ns_median": 17850292,
+        "elapsed_ns_min": 17688334,
+        "elapsed_ns_max": 17937667,
+        "exact_matches": 3,
+        "repeats": 3
+      },
+      "candidate": {
+        "items": 261,
+        "work": 781,
+        "elapsed_ns_median": 25708,
+        "elapsed_ns_min": 24334,
+        "elapsed_ns_max": 25917,
+        "exact_matches": 3,
+        "repeats": 3
+      }
+    },
+    {
+      "case": "sparse",
+      "cold": true,
+      "baseline": {
+        "items": 1060866,
+        "work": 2121731,
+        "elapsed_ns_median": 952393792,
+        "elapsed_ns_min": 950171542,
+        "elapsed_ns_max": 971838958,
+        "exact_matches": 3,
+        "repeats": 3
+      },
+      "candidate": {
+        "items": 261,
+        "work": 785,
+        "elapsed_ns_median": 57375,
+        "elapsed_ns_min": 54875,
+        "elapsed_ns_max": 57875,
+        "exact_matches": 3,
+        "repeats": 3
+      }
+    }
+  ],
+  "publication": [
+    {
+      "shape": "small",
+      "mode": "disabled",
+      "baseline": {
+        "repeats": 3,
+        "foreground_write": {
+          "count": 3072,
+          "p50_ns": 4520834,
+          "p95_ns": 5514125,
+          "p99_ns": 9708833,
+          "min_ns": 3625583,
+          "max_ns": 14798083
+        },
+        "writer_elapsed_ns_median": 4846889834,
+        "concurrent_phase_elapsed_ns_median": 4846905709,
+        "successful_watermark_advances": 0,
+        "concurrent_phase_successful_advances": 0,
+        "quiet_successful_advances": 0,
+        "active_writer_advances": 0,
+        "committed_post_e_witnesses": 0,
+        "active_writer_committed_post_e_advances": 0,
+        "qualified_repetitions": 0,
+        "verified_documents_per_run": [
+          32,
+          32,
+          32
+        ],
+        "preparation_outside_owner_ns": null,
+        "construction_outside_owner_ns": null,
+        "publication_exclusive_callback_ns": null,
+        "elapsed_ns": null
+      },
+      "candidate": {
+        "repeats": 3,
+        "foreground_write": {
+          "count": 3072,
+          "p50_ns": 4701042,
+          "p95_ns": 5766000,
+          "p99_ns": 9988625,
+          "min_ns": 3582708,
+          "max_ns": 138599833
+        },
+        "writer_elapsed_ns_median": 5358074125,
+        "concurrent_phase_elapsed_ns_median": 5358089084,
+        "successful_watermark_advances": 0,
+        "concurrent_phase_successful_advances": 0,
+        "quiet_successful_advances": 0,
+        "active_writer_advances": 0,
+        "committed_post_e_witnesses": 0,
+        "active_writer_committed_post_e_advances": 0,
+        "qualified_repetitions": 0,
+        "verified_documents_per_run": [
+          32,
+          32,
+          32
+        ],
+        "preparation_outside_owner_ns": null,
+        "construction_outside_owner_ns": null,
+        "publication_exclusive_callback_ns": null,
+        "elapsed_ns": null
+      }
+    },
+    {
+      "shape": "small",
+      "mode": "detached",
+      "baseline": {
+        "repeats": 3,
+        "foreground_write": {
+          "count": 3072,
+          "p50_ns": 9009375,
+          "p95_ns": 11810917,
+          "p99_ns": 50902417,
+          "min_ns": 3696333,
+          "max_ns": 901320417
+        },
+        "writer_elapsed_ns_median": 9965641458,
+        "concurrent_phase_elapsed_ns_median": 11855947708,
+        "successful_watermark_advances": 60,
+        "concurrent_phase_successful_advances": 48,
+        "quiet_successful_advances": 12,
+        "active_writer_advances": 35,
+        "committed_post_e_witnesses": 38,
+        "active_writer_committed_post_e_advances": 35,
+        "qualified_repetitions": 3,
+        "verified_documents_per_run": [
+          32,
+          32,
+          32
+        ],
+        "preparation_outside_owner_ns": {
+          "count": 60,
+          "p50_ns": 60842417,
+          "p95_ns": 90202125,
+          "p99_ns": 261275334,
+          "min_ns": 5594333,
+          "max_ns": 261275334
+        },
+        "construction_outside_owner_ns": {
+          "count": 60,
+          "p50_ns": 513299667,
+          "p95_ns": 570227416,
+          "p99_ns": 1656684416,
+          "min_ns": 218535166,
+          "max_ns": 1656684416
+        },
+        "publication_exclusive_callback_ns": {
+          "count": 60,
+          "p50_ns": 42305208,
+          "p95_ns": 55915625,
+          "p99_ns": 922432041,
+          "min_ns": 39262625,
+          "max_ns": 922432041
+        },
+        "elapsed_ns": {
+          "count": 60,
+          "p50_ns": 704199000,
+          "p95_ns": 961818959,
+          "p99_ns": 1876565709,
+          "min_ns": 333354084,
+          "max_ns": 1876565709
+        }
+      },
+      "candidate": {
+        "repeats": 3,
+        "foreground_write": {
+          "count": 3072,
+          "p50_ns": 9148459,
+          "p95_ns": 15709666,
+          "p99_ns": 61328500,
+          "min_ns": 3681250,
+          "max_ns": 385854666
+        },
+        "writer_elapsed_ns_median": 9922727000,
+        "concurrent_phase_elapsed_ns_median": 11670786042,
+        "successful_watermark_advances": 60,
+        "concurrent_phase_successful_advances": 48,
+        "quiet_successful_advances": 12,
+        "active_writer_advances": 35,
+        "committed_post_e_witnesses": 38,
+        "active_writer_committed_post_e_advances": 35,
+        "qualified_repetitions": 3,
+        "verified_documents_per_run": [
+          32,
+          32,
+          32
+        ],
+        "preparation_outside_owner_ns": {
+          "count": 60,
+          "p50_ns": 64785417,
+          "p95_ns": 176264792,
+          "p99_ns": 212121000,
+          "min_ns": 5688875,
+          "max_ns": 212121000
+        },
+        "construction_outside_owner_ns": {
+          "count": 60,
+          "p50_ns": 515804542,
+          "p95_ns": 779888917,
+          "p99_ns": 1559915458,
+          "min_ns": 216317500,
+          "max_ns": 1559915458
+        },
+        "publication_exclusive_callback_ns": {
+          "count": 60,
+          "p50_ns": 42261708,
+          "p95_ns": 64508459,
+          "p99_ns": 451313708,
+          "min_ns": 38189959,
+          "max_ns": 451313708
+        },
+        "elapsed_ns": {
+          "count": 60,
+          "p50_ns": 715721625,
+          "p95_ns": 1205853500,
+          "p99_ns": 1874648667,
+          "min_ns": 335179125,
+          "max_ns": 1874648667
+        }
+      }
+    },
+    {
+      "shape": "bulk",
+      "mode": "disabled",
+      "baseline": {
+        "repeats": 3,
+        "foreground_write": {
+          "count": 3072,
+          "p50_ns": 4649250,
+          "p95_ns": 5515500,
+          "p99_ns": 10308209,
+          "min_ns": 3642208,
+          "max_ns": 258928166
+        },
+        "writer_elapsed_ns_median": 5190853625,
+        "concurrent_phase_elapsed_ns_median": 5190866584,
+        "successful_watermark_advances": 0,
+        "concurrent_phase_successful_advances": 0,
+        "quiet_successful_advances": 0,
+        "active_writer_advances": 0,
+        "committed_post_e_witnesses": 0,
+        "active_writer_committed_post_e_advances": 0,
+        "qualified_repetitions": 0,
+        "verified_documents_per_run": [
+          1024,
+          1024,
+          1024
+        ],
+        "preparation_outside_owner_ns": null,
+        "construction_outside_owner_ns": null,
+        "publication_exclusive_callback_ns": null,
+        "elapsed_ns": null
+      },
+      "candidate": {
+        "repeats": 3,
+        "foreground_write": {
+          "count": 3072,
+          "p50_ns": 4532458,
+          "p95_ns": 5516208,
+          "p99_ns": 10155917,
+          "min_ns": 3586375,
+          "max_ns": 257216792
+        },
+        "writer_elapsed_ns_median": 4973037709,
+        "concurrent_phase_elapsed_ns_median": 4973048000,
+        "successful_watermark_advances": 0,
+        "concurrent_phase_successful_advances": 0,
+        "quiet_successful_advances": 0,
+        "active_writer_advances": 0,
+        "committed_post_e_witnesses": 0,
+        "active_writer_committed_post_e_advances": 0,
+        "qualified_repetitions": 0,
+        "verified_documents_per_run": [
+          1024,
+          1024,
+          1024
+        ],
+        "preparation_outside_owner_ns": null,
+        "construction_outside_owner_ns": null,
+        "publication_exclusive_callback_ns": null,
+        "elapsed_ns": null
+      }
+    },
+    {
+      "shape": "bulk",
+      "mode": "detached",
+      "baseline": {
+        "repeats": 3,
+        "foreground_write": {
+          "count": 3072,
+          "p50_ns": 5496083,
+          "p95_ns": 7502250,
+          "p99_ns": 10847792,
+          "min_ns": 3711542,
+          "max_ns": 259396959
+        },
+        "writer_elapsed_ns_median": 5985722458,
+        "concurrent_phase_elapsed_ns_median": 22558248209,
+        "successful_watermark_advances": 60,
+        "concurrent_phase_successful_advances": 48,
+        "quiet_successful_advances": 12,
+        "active_writer_advances": 0,
+        "committed_post_e_witnesses": 3,
+        "active_writer_committed_post_e_advances": 0,
+        "qualified_repetitions": 0,
+        "verified_documents_per_run": [
+          1024,
+          1024,
+          1024
+        ],
+        "preparation_outside_owner_ns": {
+          "count": 60,
+          "p50_ns": 630882250,
+          "p95_ns": 1035254500,
+          "p99_ns": 7065519666,
+          "min_ns": 576217958,
+          "max_ns": 7065519666
+        },
+        "construction_outside_owner_ns": {
+          "count": 60,
+          "p50_ns": 262010833,
+          "p95_ns": 295370500,
+          "p99_ns": 1244768500,
+          "min_ns": 243709334,
+          "max_ns": 1244768500
+        },
+        "publication_exclusive_callback_ns": {
+          "count": 60,
+          "p50_ns": 41723584,
+          "p95_ns": 45153500,
+          "p99_ns": 673989416,
+          "min_ns": 39876750,
+          "max_ns": 673989416
+        },
+        "elapsed_ns": {
+          "count": 60,
+          "p50_ns": 1017730709,
+          "p95_ns": 2130998625,
+          "p99_ns": 7464211709,
+          "min_ns": 941123125,
+          "max_ns": 7464211709
+        }
+      },
+      "candidate": {
+        "repeats": 3,
+        "foreground_write": {
+          "count": 3072,
+          "p50_ns": 5473250,
+          "p95_ns": 7500042,
+          "p99_ns": 11112792,
+          "min_ns": 3675250,
+          "max_ns": 129434208
+        },
+        "writer_elapsed_ns_median": 5992566916,
+        "concurrent_phase_elapsed_ns_median": 24360605417,
+        "successful_watermark_advances": 60,
+        "concurrent_phase_successful_advances": 48,
+        "quiet_successful_advances": 12,
+        "active_writer_advances": 0,
+        "committed_post_e_witnesses": 3,
+        "active_writer_committed_post_e_advances": 0,
+        "qualified_repetitions": 0,
+        "verified_documents_per_run": [
+          1024,
+          1024,
+          1024
+        ],
+        "preparation_outside_owner_ns": {
+          "count": 60,
+          "p50_ns": 714831375,
+          "p95_ns": 1319506000,
+          "p99_ns": 6886180125,
+          "min_ns": 573483000,
+          "max_ns": 6886180125
+        },
+        "construction_outside_owner_ns": {
+          "count": 60,
+          "p50_ns": 272550209,
+          "p95_ns": 337403333,
+          "p99_ns": 821568916,
+          "min_ns": 235604459,
+          "max_ns": 821568916
+        },
+        "publication_exclusive_callback_ns": {
+          "count": 60,
+          "p50_ns": 42927583,
+          "p95_ns": 48334833,
+          "p99_ns": 841213834,
+          "min_ns": 38114542,
+          "max_ns": 841213834
+        },
+        "elapsed_ns": {
+          "count": 60,
+          "p50_ns": 1177531542,
+          "p95_ns": 2297222792,
+          "p99_ns": 7232218792,
+          "min_ns": 926060792,
+          "max_ns": 7232218792
+        }
+      }
+    }
+  ]
+}

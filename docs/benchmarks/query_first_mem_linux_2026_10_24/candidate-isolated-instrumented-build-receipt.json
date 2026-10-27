@@ -1,0 +1,21 @@
+{
+  "name": "candidate-isolated-instrumented",
+  "cwd": "/tmp/hawdb-query-first-api",
+  "command": [
+    "cargo",
+    "bench",
+    "--manifest-path",
+    "/tmp/hawdb-query-first-api/Cargo.toml",
+    "--locked",
+    "--bench",
+    "mem_query_concurrency",
+    "--no-run",
+    "--message-format=json",
+    "--features",
+    "qualification"
+  ],
+  "exit_code": 0,
+  "build_seconds": 207.99191444460303,
+  "binary_sha256": "bf17a4844f5f36adf019cb1d2d16a8a6e8cd0ee406077b34b0e5bc6fdb4384ac",
+  "benchmark_sha256": "5436fb523d5171db13e56636d2e7a06d3dc1f2c582a82808e776bd98a5f0595a"
+}

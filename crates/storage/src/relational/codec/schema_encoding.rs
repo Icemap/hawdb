@@ -28,6 +28,7 @@ pub(crate) trait Sink {
 }
 
 pub(crate) struct Schema<'a> {
+    pub(crate) materialized_view: Option<&'a MaterializedViewDefinition>,
     pub(crate) name: &'a str,
     pub(crate) columns: &'a [RelationalColumnSchema],
     pub(crate) primary_key: &'a [String],
@@ -40,6 +41,7 @@ pub(crate) struct Schema<'a> {
 impl<'a> From<&'a RelationalTableSchema> for Schema<'a> {
     fn from(schema: &'a RelationalTableSchema) -> Self {
         Self {
+            materialized_view: schema.materialized_view.as_deref(),
             name: &schema.name,
             columns: &schema.columns,
             primary_key: &schema.primary_key,
@@ -198,7 +200,7 @@ pub(crate) fn schema(sink: &mut impl Sink, schema: Schema<'_>) -> Result<(), Rel
         strings(sink, &index.columns)?;
         sink.raw(&[u8::from(index.unique)])?;
     }
-    Ok(())
+    materialized_view(sink, schema.materialized_view)
 }
 
 impl Sink for Encoder {
@@ -210,4 +212,88 @@ impl Sink for Encoder {
     fn value(&mut self, item: &RelationalValue) -> Result<(), RelationalError> {
         Encoder::value(self, item)
     }
+}
+
+fn materialized_view(
+    sink: &mut impl Sink,
+    definition: Option<&MaterializedViewDefinition>,
+) -> Result<(), RelationalError> {
+    sink.raw(&[u8::from(definition.is_some())])?;
+    if let Some(view) = definition {
+        bytes(sink, view.source.as_bytes())?;
+        strings(sink, &view.group_by)?;
+        count(sink, view.columns.len(), "materialized view columns")?;
+        for column in &view.columns {
+            bytes(sink, column.name.as_bytes())?;
+            match &column.expression {
+                MaterializedViewExpression::Column(name) => {
+                    sink.raw(&[0])?;
+                    bytes(sink, name.as_bytes())?;
+                }
+                MaterializedViewExpression::Count(None) => sink.raw(&[1])?,
+                MaterializedViewExpression::Count(Some(name)) => {
+                    sink.raw(&[2])?;
+                    bytes(sink, name.as_bytes())?;
+                }
+                MaterializedViewExpression::Sum(name) => {
+                    sink.raw(&[3])?;
+                    bytes(sink, name.as_bytes())?;
+                }
+                MaterializedViewExpression::Min(name) => {
+                    sink.raw(&[4])?;
+                    bytes(sink, name.as_bytes())?;
+                }
+                MaterializedViewExpression::Max(name) => {
+                    sink.raw(&[5])?;
+                    bytes(sink, name.as_bytes())?;
+                }
+            }
+        }
+        sink.raw(&[u8::from(view.filter.is_some())])?;
+        if let Some(filter) = &view.filter {
+            predicate(sink, filter)?;
+        }
+    }
+    Ok(())
+}
+
+pub(super) fn predicate(
+    sink: &mut impl Sink,
+    input: &RelationalPredicate,
+) -> Result<(), RelationalError> {
+    match input {
+        RelationalPredicate::And(left, right) | RelationalPredicate::Or(left, right) => {
+            sink.raw(&[u8::from(matches!(input, RelationalPredicate::Or(..)))])?;
+            predicate(sink, left)?;
+            predicate(sink, right)?;
+        }
+        RelationalPredicate::Not(inner) => {
+            sink.raw(&[2])?;
+            predicate(sink, inner)?;
+        }
+        RelationalPredicate::Compare { column, op, value } => {
+            sink.raw(&[3])?;
+            bytes(sink, column.as_bytes())?;
+            sink.raw(&[match op {
+                RelationalComparisonOp::Eq => 0,
+                RelationalComparisonOp::NotEq => 1,
+                RelationalComparisonOp::Lt => 2,
+                RelationalComparisonOp::Lte => 3,
+                RelationalComparisonOp::Gt => 4,
+                RelationalComparisonOp::Gte => 5,
+            }])?;
+            if matches!(value, RelationalValue::Overflow(_)) {
+                return Err(RelationalError::Durability(
+                    "WAL predicates and assignments must contain logical values".into(),
+                ));
+            }
+            sink.value(value)?;
+        }
+        RelationalPredicate::IsNull { column, negated } => {
+            sink.raw(&[4])?;
+            bytes(sink, column.as_bytes())?;
+            sink.raw(&[u8::from(*negated)])?;
+        }
+    }
+    Ok(())
 }

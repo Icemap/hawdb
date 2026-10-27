@@ -26,7 +26,7 @@ use crate::store::durable::DurableArtifactMetadata;
 pub(super) struct CanonicalPreparationState {
     writer: CanonicalPreparation,
     nodes: CheckpointOverlayCursor<NodeRecord, crate::cow::CowNodeMap>,
-    relationships: CheckpointOverlayCursor<RelRecord>,
+    relationships: CheckpointOverlayCursor<RelRecord, crate::cow::CowRelMap>,
     phase: u8,
     manifests: Option<(CheckpointCanonicalManifest, PropertySpillManifest)>,
     encoded: Option<crate::background::CheckpointText>,

@@ -1,0 +1,1790 @@
+{
+  "schema": "mvcc-hot-paths-paired-v3",
+  "order": [
+    "baseline",
+    "candidate",
+    "candidate",
+    "baseline"
+  ],
+  "baseline_revision": "80c4b8435",
+  "benchmark_sha256": "5af9d2a20d83ab0816c160615c81092b4da96ceebcb2c187ebf549d25ae28a5f",
+  "concurrent_work": "one serial Bazel test target may be active; other host work is uncontrolled",
+  "runs": [
+    {
+      "label": "baseline",
+      "binary_sha256": "21d63264683e309bcf0b2681a678c16c5fe4365c90d39607e144f57b8351b8ef",
+      "load_before": "{ 5.93 15.62 64.27 }",
+      "wall_seconds": 89.83361601829529,
+      "result": {
+        "cases": [
+          {
+            "elapsed_ns": 1571916,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": false,
+            "repetition": 0,
+            "rows": 64
+          },
+          {
+            "elapsed_ns": 7169958,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": true,
+            "repetition": 0,
+            "rows": 64
+          },
+          {
+            "elapsed_ns": 11156459,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": false,
+            "repetition": 0,
+            "rows": 4096
+          },
+          {
+            "elapsed_ns": 56363375,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": true,
+            "repetition": 0,
+            "rows": 4096
+          },
+          {
+            "elapsed_ns": 52187208,
+            "kind": "cypher_point",
+            "operations": 2000,
+            "readers": 1,
+            "repetition": 0
+          },
+          {
+            "elapsed_ns": 86782083,
+            "kind": "cypher_point",
+            "operations": 8000,
+            "readers": 4,
+            "repetition": 0
+          },
+          {
+            "elapsed_ns": 110607000,
+            "kind": "cypher_point",
+            "operations": 16000,
+            "readers": 8,
+            "repetition": 0
+          },
+          {
+            "body_bytes": 0,
+            "elapsed_ns": 12790042,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": false,
+            "repetition": 0,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 0,
+            "elapsed_ns": 20176583,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": true,
+            "repetition": 0,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 8192,
+            "elapsed_ns": 21267667,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": false,
+            "repetition": 0,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 8192,
+            "elapsed_ns": 24271459,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": true,
+            "repetition": 0,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 4096,
+            "durability": "SyncOnEveryWrite",
+            "elapsed_ns": 244017958,
+            "group_delay_us": 100,
+            "group_max_bytes": 1048576,
+            "group_max_entries": 8,
+            "kind": "graph_commits",
+            "operations": 8,
+            "repetition": 0,
+            "rows_per_transaction": 8,
+            "storage": "persistent",
+            "transaction_ns_p50": 24962416,
+            "transaction_ns_p95": 42617792,
+            "transaction_ns_p99": 42617792,
+            "writers": 1
+          },
+          {
+            "body_bytes": 4096,
+            "durability": "SyncOnEveryWrite",
+            "elapsed_ns": 512948958,
+            "group_delay_us": 100,
+            "group_max_bytes": 1048576,
+            "group_max_entries": 8,
+            "kind": "graph_commits",
+            "operations": 32,
+            "repetition": 0,
+            "rows_per_transaction": 8,
+            "storage": "persistent",
+            "transaction_ns_p50": 61553417,
+            "transaction_ns_p95": 86857375,
+            "transaction_ns_p99": 86858667,
+            "writers": 4
+          },
+          {
+            "body_bytes": 4096,
+            "durability": "SyncOnEveryWrite",
+            "elapsed_ns": 873208292,
+            "group_delay_us": 100,
+            "group_max_bytes": 1048576,
+            "group_max_entries": 8,
+            "kind": "graph_commits",
+            "operations": 64,
+            "repetition": 0,
+            "rows_per_transaction": 8,
+            "storage": "persistent",
+            "transaction_ns_p50": 99007166,
+            "transaction_ns_p95": 139557417,
+            "transaction_ns_p99": 139561416,
+            "writers": 8
+          },
+          {
+            "elapsed_ns": 1770334,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": false,
+            "repetition": 1,
+            "rows": 64
+          },
+          {
+            "elapsed_ns": 7166416,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": true,
+            "repetition": 1,
+            "rows": 64
+          },
+          {
+            "elapsed_ns": 13223208,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": false,
+            "repetition": 1,
+            "rows": 4096
+          },
+          {
+            "elapsed_ns": 60952250,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": true,
+            "repetition": 1,
+            "rows": 4096
+          },
+          {
+            "elapsed_ns": 54861083,
+            "kind": "cypher_point",
+            "operations": 2000,
+            "readers": 1,
+            "repetition": 1
+          },
+          {
+            "elapsed_ns": 93984750,
+            "kind": "cypher_point",
+            "operations": 8000,
+            "readers": 4,
+            "repetition": 1
+          },
+          {
+            "elapsed_ns": 119982166,
+            "kind": "cypher_point",
+            "operations": 16000,
+            "readers": 8,
+            "repetition": 1
+          },
+          {
+            "body_bytes": 0,
+            "elapsed_ns": 13187500,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": false,
+            "repetition": 1,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 0,
+            "elapsed_ns": 20171916,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": true,
+            "repetition": 1,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 8192,
+            "elapsed_ns": 22547625,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": false,
+            "repetition": 1,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 8192,
+            "elapsed_ns": 26082000,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": true,
+            "repetition": 1,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 4096,
+            "durability": "SyncOnEveryWrite",
+            "elapsed_ns": 247155334,
+            "group_delay_us": 100,
+            "group_max_bytes": 1048576,
+            "group_max_entries": 8,
+            "kind": "graph_commits",
+            "operations": 8,
+            "repetition": 1,
+            "rows_per_transaction": 8,
+            "storage": "persistent",
+            "transaction_ns_p50": 29125083,
+            "transaction_ns_p95": 39121625,
+            "transaction_ns_p99": 39121625,
+            "writers": 1
+          },
+          {
+            "body_bytes": 4096,
+            "durability": "SyncOnEveryWrite",
+            "elapsed_ns": 498211292,
+            "group_delay_us": 100,
+            "group_max_bytes": 1048576,
+            "group_max_entries": 8,
+            "kind": "graph_commits",
+            "operations": 32,
+            "repetition": 1,
+            "rows_per_transaction": 8,
+            "storage": "persistent",
+            "transaction_ns_p50": 57972917,
+            "transaction_ns_p95": 95971083,
+            "transaction_ns_p99": 95971792,
+            "writers": 4
+          },
+          {
+            "body_bytes": 4096,
+            "durability": "SyncOnEveryWrite",
+            "elapsed_ns": 554444042,
+            "group_delay_us": 100,
+            "group_max_bytes": 1048576,
+            "group_max_entries": 8,
+            "kind": "graph_commits",
+            "operations": 64,
+            "repetition": 1,
+            "rows_per_transaction": 8,
+            "storage": "persistent",
+            "transaction_ns_p50": 72101209,
+            "transaction_ns_p95": 107406958,
+            "transaction_ns_p99": 107447958,
+            "writers": 8
+          },
+          {
+            "elapsed_ns": 1551916,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": false,
+            "repetition": 2,
+            "rows": 64
+          },
+          {
+            "elapsed_ns": 6923542,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": true,
+            "repetition": 2,
+            "rows": 64
+          },
+          {
+            "elapsed_ns": 10733792,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": false,
+            "repetition": 2,
+            "rows": 4096
+          },
+          {
+            "elapsed_ns": 54862042,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": true,
+            "repetition": 2,
+            "rows": 4096
+          },
+          {
+            "elapsed_ns": 51306667,
+            "kind": "cypher_point",
+            "operations": 2000,
+            "readers": 1,
+            "repetition": 2
+          },
+          {
+            "elapsed_ns": 76299333,
+            "kind": "cypher_point",
+            "operations": 8000,
+            "readers": 4,
+            "repetition": 2
+          },
+          {
+            "elapsed_ns": 104841917,
+            "kind": "cypher_point",
+            "operations": 16000,
+            "readers": 8,
+            "repetition": 2
+          },
+          {
+            "body_bytes": 0,
+            "elapsed_ns": 12453667,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": false,
+            "repetition": 2,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 0,
+            "elapsed_ns": 19219166,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": true,
+            "repetition": 2,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 8192,
+            "elapsed_ns": 21176542,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": false,
+            "repetition": 2,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 8192,
+            "elapsed_ns": 24441917,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": true,
+            "repetition": 2,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 4096,
+            "durability": "SyncOnEveryWrite",
+            "elapsed_ns": 267372125,
+            "group_delay_us": 100,
+            "group_max_bytes": 1048576,
+            "group_max_entries": 8,
+            "kind": "graph_commits",
+            "operations": 8,
+            "repetition": 2,
+            "rows_per_transaction": 8,
+            "storage": "persistent",
+            "transaction_ns_p50": 33264291,
+            "transaction_ns_p95": 39913708,
+            "transaction_ns_p99": 39913708,
+            "writers": 1
+          },
+          {
+            "body_bytes": 4096,
+            "durability": "SyncOnEveryWrite",
+            "elapsed_ns": 508892542,
+            "group_delay_us": 100,
+            "group_max_bytes": 1048576,
+            "group_max_entries": 8,
+            "kind": "graph_commits",
+            "operations": 32,
+            "repetition": 2,
+            "rows_per_transaction": 8,
+            "storage": "persistent",
+            "transaction_ns_p50": 64992292,
+            "transaction_ns_p95": 95719708,
+            "transaction_ns_p99": 95741875,
+            "writers": 4
+          },
+          {
+            "body_bytes": 4096,
+            "durability": "SyncOnEveryWrite",
+            "elapsed_ns": 706667875,
+            "group_delay_us": 100,
+            "group_max_bytes": 1048576,
+            "group_max_entries": 8,
+            "kind": "graph_commits",
+            "operations": 64,
+            "repetition": 2,
+            "rows_per_transaction": 8,
+            "storage": "persistent",
+            "transaction_ns_p50": 81892459,
+            "transaction_ns_p95": 155586041,
+            "transaction_ns_p99": 155596666,
+            "writers": 8
+          }
+        ],
+        "profile": "release",
+        "schema": "mvcc-hot-paths-v3"
+      }
+    },
+    {
+      "label": "candidate",
+      "binary_sha256": "5d89e40d4abf269019cd35ffee544124358f4d8e34c745566033174cbcd39de5",
+      "load_before": "{ 4.47 12.61 58.22 }",
+      "wall_seconds": 98.23173689842224,
+      "result": {
+        "cases": [
+          {
+            "elapsed_ns": 300667,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": false,
+            "repetition": 0,
+            "rows": 64
+          },
+          {
+            "elapsed_ns": 6320125,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": true,
+            "repetition": 0,
+            "rows": 64
+          },
+          {
+            "elapsed_ns": 582375,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": false,
+            "repetition": 0,
+            "rows": 4096
+          },
+          {
+            "elapsed_ns": 46392792,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": true,
+            "repetition": 0,
+            "rows": 4096
+          },
+          {
+            "elapsed_ns": 47122875,
+            "kind": "cypher_point",
+            "operations": 2000,
+            "readers": 1,
+            "repetition": 0
+          },
+          {
+            "elapsed_ns": 75091291,
+            "kind": "cypher_point",
+            "operations": 8000,
+            "readers": 4,
+            "repetition": 0
+          },
+          {
+            "elapsed_ns": 92051958,
+            "kind": "cypher_point",
+            "operations": 16000,
+            "readers": 8,
+            "repetition": 0
+          },
+          {
+            "body_bytes": 0,
+            "elapsed_ns": 7837125,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": false,
+            "repetition": 0,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 0,
+            "elapsed_ns": 10051583,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": true,
+            "repetition": 0,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 8192,
+            "elapsed_ns": 20073625,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": false,
+            "repetition": 0,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 8192,
+            "elapsed_ns": 23198167,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": true,
+            "repetition": 0,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 4096,
+            "durability": "SyncOnEveryWrite",
+            "elapsed_ns": 267014042,
+            "group_delay_us": 100,
+            "group_max_bytes": 1048576,
+            "group_max_entries": 8,
+            "kind": "graph_commits",
+            "operations": 8,
+            "repetition": 0,
+            "rows_per_transaction": 8,
+            "storage": "persistent",
+            "transaction_ns_p50": 35508167,
+            "transaction_ns_p95": 43497333,
+            "transaction_ns_p99": 43497333,
+            "writers": 1
+          },
+          {
+            "body_bytes": 4096,
+            "durability": "SyncOnEveryWrite",
+            "elapsed_ns": 770590333,
+            "group_delay_us": 100,
+            "group_max_bytes": 1048576,
+            "group_max_entries": 8,
+            "kind": "graph_commits",
+            "operations": 32,
+            "repetition": 0,
+            "rows_per_transaction": 8,
+            "storage": "persistent",
+            "transaction_ns_p50": 93108000,
+            "transaction_ns_p95": 144292917,
+            "transaction_ns_p99": 145016000,
+            "writers": 4
+          },
+          {
+            "body_bytes": 4096,
+            "durability": "SyncOnEveryWrite",
+            "elapsed_ns": 860209000,
+            "group_delay_us": 100,
+            "group_max_bytes": 1048576,
+            "group_max_entries": 8,
+            "kind": "graph_commits",
+            "operations": 64,
+            "repetition": 0,
+            "rows_per_transaction": 8,
+            "storage": "persistent",
+            "transaction_ns_p50": 91286166,
+            "transaction_ns_p95": 189502916,
+            "transaction_ns_p99": 194693666,
+            "writers": 8
+          },
+          {
+            "elapsed_ns": 2172125,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": false,
+            "repetition": 1,
+            "rows": 64
+          },
+          {
+            "elapsed_ns": 26931791,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": true,
+            "repetition": 1,
+            "rows": 64
+          },
+          {
+            "elapsed_ns": 1461167,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": false,
+            "repetition": 1,
+            "rows": 4096
+          },
+          {
+            "elapsed_ns": 63384625,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": true,
+            "repetition": 1,
+            "rows": 4096
+          },
+          {
+            "elapsed_ns": 46278709,
+            "kind": "cypher_point",
+            "operations": 2000,
+            "readers": 1,
+            "repetition": 1
+          },
+          {
+            "elapsed_ns": 67550042,
+            "kind": "cypher_point",
+            "operations": 8000,
+            "readers": 4,
+            "repetition": 1
+          },
+          {
+            "elapsed_ns": 87432042,
+            "kind": "cypher_point",
+            "operations": 16000,
+            "readers": 8,
+            "repetition": 1
+          },
+          {
+            "body_bytes": 0,
+            "elapsed_ns": 7636209,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": false,
+            "repetition": 1,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 0,
+            "elapsed_ns": 9561375,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": true,
+            "repetition": 1,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 8192,
+            "elapsed_ns": 18608458,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": false,
+            "repetition": 1,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 8192,
+            "elapsed_ns": 22132333,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": true,
+            "repetition": 1,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 4096,
+            "durability": "SyncOnEveryWrite",
+            "elapsed_ns": 348126916,
+            "group_delay_us": 100,
+            "group_max_bytes": 1048576,
+            "group_max_entries": 8,
+            "kind": "graph_commits",
+            "operations": 8,
+            "repetition": 1,
+            "rows_per_transaction": 8,
+            "storage": "persistent",
+            "transaction_ns_p50": 41769542,
+            "transaction_ns_p95": 51350208,
+            "transaction_ns_p99": 51350208,
+            "writers": 1
+          },
+          {
+            "body_bytes": 4096,
+            "durability": "SyncOnEveryWrite",
+            "elapsed_ns": 724176625,
+            "group_delay_us": 100,
+            "group_max_bytes": 1048576,
+            "group_max_entries": 8,
+            "kind": "graph_commits",
+            "operations": 32,
+            "repetition": 1,
+            "rows_per_transaction": 8,
+            "storage": "persistent",
+            "transaction_ns_p50": 93670583,
+            "transaction_ns_p95": 120603209,
+            "transaction_ns_p99": 120603250,
+            "writers": 4
+          },
+          {
+            "body_bytes": 4096,
+            "durability": "SyncOnEveryWrite",
+            "elapsed_ns": 815962500,
+            "group_delay_us": 100,
+            "group_max_bytes": 1048576,
+            "group_max_entries": 8,
+            "kind": "graph_commits",
+            "operations": 64,
+            "repetition": 1,
+            "rows_per_transaction": 8,
+            "storage": "persistent",
+            "transaction_ns_p50": 106156041,
+            "transaction_ns_p95": 183931459,
+            "transaction_ns_p99": 184609583,
+            "writers": 8
+          },
+          {
+            "elapsed_ns": 1688167,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": false,
+            "repetition": 2,
+            "rows": 64
+          },
+          {
+            "elapsed_ns": 22965459,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": true,
+            "repetition": 2,
+            "rows": 64
+          },
+          {
+            "elapsed_ns": 1456875,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": false,
+            "repetition": 2,
+            "rows": 4096
+          },
+          {
+            "elapsed_ns": 63278375,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": true,
+            "repetition": 2,
+            "rows": 4096
+          },
+          {
+            "elapsed_ns": 44408000,
+            "kind": "cypher_point",
+            "operations": 2000,
+            "readers": 1,
+            "repetition": 2
+          },
+          {
+            "elapsed_ns": 66537958,
+            "kind": "cypher_point",
+            "operations": 8000,
+            "readers": 4,
+            "repetition": 2
+          },
+          {
+            "elapsed_ns": 84674333,
+            "kind": "cypher_point",
+            "operations": 16000,
+            "readers": 8,
+            "repetition": 2
+          },
+          {
+            "body_bytes": 0,
+            "elapsed_ns": 7708167,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": false,
+            "repetition": 2,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 0,
+            "elapsed_ns": 10322208,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": true,
+            "repetition": 2,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 8192,
+            "elapsed_ns": 19875833,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": false,
+            "repetition": 2,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 8192,
+            "elapsed_ns": 23380666,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": true,
+            "repetition": 2,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 4096,
+            "durability": "SyncOnEveryWrite",
+            "elapsed_ns": 259013250,
+            "group_delay_us": 100,
+            "group_max_bytes": 1048576,
+            "group_max_entries": 8,
+            "kind": "graph_commits",
+            "operations": 8,
+            "repetition": 2,
+            "rows_per_transaction": 8,
+            "storage": "persistent",
+            "transaction_ns_p50": 28465542,
+            "transaction_ns_p95": 37510750,
+            "transaction_ns_p99": 37510750,
+            "writers": 1
+          },
+          {
+            "body_bytes": 4096,
+            "durability": "SyncOnEveryWrite",
+            "elapsed_ns": 522147708,
+            "group_delay_us": 100,
+            "group_max_bytes": 1048576,
+            "group_max_entries": 8,
+            "kind": "graph_commits",
+            "operations": 32,
+            "repetition": 2,
+            "rows_per_transaction": 8,
+            "storage": "persistent",
+            "transaction_ns_p50": 58797042,
+            "transaction_ns_p95": 94330792,
+            "transaction_ns_p99": 94332209,
+            "writers": 4
+          },
+          {
+            "body_bytes": 4096,
+            "durability": "SyncOnEveryWrite",
+            "elapsed_ns": 670926791,
+            "group_delay_us": 100,
+            "group_max_bytes": 1048576,
+            "group_max_entries": 8,
+            "kind": "graph_commits",
+            "operations": 64,
+            "repetition": 2,
+            "rows_per_transaction": 8,
+            "storage": "persistent",
+            "transaction_ns_p50": 83422958,
+            "transaction_ns_p95": 99383167,
+            "transaction_ns_p99": 99420583,
+            "writers": 8
+          }
+        ],
+        "profile": "release",
+        "schema": "mvcc-hot-paths-v3"
+      }
+    },
+    {
+      "label": "candidate",
+      "binary_sha256": "5d89e40d4abf269019cd35ffee544124358f4d8e34c745566033174cbcd39de5",
+      "load_before": "{ 6.00 10.92 52.74 }",
+      "wall_seconds": 68.99600195884705,
+      "result": {
+        "cases": [
+          {
+            "elapsed_ns": 255834,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": false,
+            "repetition": 0,
+            "rows": 64
+          },
+          {
+            "elapsed_ns": 5998917,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": true,
+            "repetition": 0,
+            "rows": 64
+          },
+          {
+            "elapsed_ns": 593583,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": false,
+            "repetition": 0,
+            "rows": 4096
+          },
+          {
+            "elapsed_ns": 45223459,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": true,
+            "repetition": 0,
+            "rows": 4096
+          },
+          {
+            "elapsed_ns": 46560959,
+            "kind": "cypher_point",
+            "operations": 2000,
+            "readers": 1,
+            "repetition": 0
+          },
+          {
+            "elapsed_ns": 76604625,
+            "kind": "cypher_point",
+            "operations": 8000,
+            "readers": 4,
+            "repetition": 0
+          },
+          {
+            "elapsed_ns": 90285708,
+            "kind": "cypher_point",
+            "operations": 16000,
+            "readers": 8,
+            "repetition": 0
+          },
+          {
+            "body_bytes": 0,
+            "elapsed_ns": 7876209,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": false,
+            "repetition": 0,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 0,
+            "elapsed_ns": 10240959,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": true,
+            "repetition": 0,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 8192,
+            "elapsed_ns": 20904125,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": false,
+            "repetition": 0,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 8192,
+            "elapsed_ns": 23217792,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": true,
+            "repetition": 0,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 4096,
+            "durability": "SyncOnEveryWrite",
+            "elapsed_ns": 174342333,
+            "group_delay_us": 100,
+            "group_max_bytes": 1048576,
+            "group_max_entries": 8,
+            "kind": "graph_commits",
+            "operations": 8,
+            "repetition": 0,
+            "rows_per_transaction": 8,
+            "storage": "persistent",
+            "transaction_ns_p50": 22911709,
+            "transaction_ns_p95": 30359000,
+            "transaction_ns_p99": 30359000,
+            "writers": 1
+          },
+          {
+            "body_bytes": 4096,
+            "durability": "SyncOnEveryWrite",
+            "elapsed_ns": 455563167,
+            "group_delay_us": 100,
+            "group_max_bytes": 1048576,
+            "group_max_entries": 8,
+            "kind": "graph_commits",
+            "operations": 32,
+            "repetition": 0,
+            "rows_per_transaction": 8,
+            "storage": "persistent",
+            "transaction_ns_p50": 54310625,
+            "transaction_ns_p95": 65021000,
+            "transaction_ns_p99": 65053583,
+            "writers": 4
+          },
+          {
+            "body_bytes": 4096,
+            "durability": "SyncOnEveryWrite",
+            "elapsed_ns": 821272083,
+            "group_delay_us": 100,
+            "group_max_bytes": 1048576,
+            "group_max_entries": 8,
+            "kind": "graph_commits",
+            "operations": 64,
+            "repetition": 0,
+            "rows_per_transaction": 8,
+            "storage": "persistent",
+            "transaction_ns_p50": 103967333,
+            "transaction_ns_p95": 119104958,
+            "transaction_ns_p99": 119120291,
+            "writers": 8
+          },
+          {
+            "elapsed_ns": 346042,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": false,
+            "repetition": 1,
+            "rows": 64
+          },
+          {
+            "elapsed_ns": 5862833,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": true,
+            "repetition": 1,
+            "rows": 64
+          },
+          {
+            "elapsed_ns": 617958,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": false,
+            "repetition": 1,
+            "rows": 4096
+          },
+          {
+            "elapsed_ns": 44571042,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": true,
+            "repetition": 1,
+            "rows": 4096
+          },
+          {
+            "elapsed_ns": 46244917,
+            "kind": "cypher_point",
+            "operations": 2000,
+            "readers": 1,
+            "repetition": 1
+          },
+          {
+            "elapsed_ns": 70664250,
+            "kind": "cypher_point",
+            "operations": 8000,
+            "readers": 4,
+            "repetition": 1
+          },
+          {
+            "elapsed_ns": 84229750,
+            "kind": "cypher_point",
+            "operations": 16000,
+            "readers": 8,
+            "repetition": 1
+          },
+          {
+            "body_bytes": 0,
+            "elapsed_ns": 8122125,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": false,
+            "repetition": 1,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 0,
+            "elapsed_ns": 9893834,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": true,
+            "repetition": 1,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 8192,
+            "elapsed_ns": 19154750,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": false,
+            "repetition": 1,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 8192,
+            "elapsed_ns": 23833292,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": true,
+            "repetition": 1,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 4096,
+            "durability": "SyncOnEveryWrite",
+            "elapsed_ns": 291704709,
+            "group_delay_us": 100,
+            "group_max_bytes": 1048576,
+            "group_max_entries": 8,
+            "kind": "graph_commits",
+            "operations": 8,
+            "repetition": 1,
+            "rows_per_transaction": 8,
+            "storage": "persistent",
+            "transaction_ns_p50": 21464625,
+            "transaction_ns_p95": 66052417,
+            "transaction_ns_p99": 66052417,
+            "writers": 1
+          },
+          {
+            "body_bytes": 4096,
+            "durability": "SyncOnEveryWrite",
+            "elapsed_ns": 220518166,
+            "group_delay_us": 100,
+            "group_max_bytes": 1048576,
+            "group_max_entries": 8,
+            "kind": "graph_commits",
+            "operations": 32,
+            "repetition": 1,
+            "rows_per_transaction": 8,
+            "storage": "persistent",
+            "transaction_ns_p50": 24058500,
+            "transaction_ns_p95": 52512834,
+            "transaction_ns_p99": 52514958,
+            "writers": 4
+          },
+          {
+            "body_bytes": 4096,
+            "durability": "SyncOnEveryWrite",
+            "elapsed_ns": 782934959,
+            "group_delay_us": 100,
+            "group_max_bytes": 1048576,
+            "group_max_entries": 8,
+            "kind": "graph_commits",
+            "operations": 64,
+            "repetition": 1,
+            "rows_per_transaction": 8,
+            "storage": "persistent",
+            "transaction_ns_p50": 97596833,
+            "transaction_ns_p95": 115798125,
+            "transaction_ns_p99": 115813208,
+            "writers": 8
+          },
+          {
+            "elapsed_ns": 291250,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": false,
+            "repetition": 2,
+            "rows": 64
+          },
+          {
+            "elapsed_ns": 6127792,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": true,
+            "repetition": 2,
+            "rows": 64
+          },
+          {
+            "elapsed_ns": 610791,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": false,
+            "repetition": 2,
+            "rows": 4096
+          },
+          {
+            "elapsed_ns": 44990834,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": true,
+            "repetition": 2,
+            "rows": 4096
+          },
+          {
+            "elapsed_ns": 46584708,
+            "kind": "cypher_point",
+            "operations": 2000,
+            "readers": 1,
+            "repetition": 2
+          },
+          {
+            "elapsed_ns": 68625291,
+            "kind": "cypher_point",
+            "operations": 8000,
+            "readers": 4,
+            "repetition": 2
+          },
+          {
+            "elapsed_ns": 80732583,
+            "kind": "cypher_point",
+            "operations": 16000,
+            "readers": 8,
+            "repetition": 2
+          },
+          {
+            "body_bytes": 0,
+            "elapsed_ns": 7523750,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": false,
+            "repetition": 2,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 0,
+            "elapsed_ns": 9921250,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": true,
+            "repetition": 2,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 8192,
+            "elapsed_ns": 19769584,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": false,
+            "repetition": 2,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 8192,
+            "elapsed_ns": 23225750,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": true,
+            "repetition": 2,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 4096,
+            "durability": "SyncOnEveryWrite",
+            "elapsed_ns": 170092166,
+            "group_delay_us": 100,
+            "group_max_bytes": 1048576,
+            "group_max_entries": 8,
+            "kind": "graph_commits",
+            "operations": 8,
+            "repetition": 2,
+            "rows_per_transaction": 8,
+            "storage": "persistent",
+            "transaction_ns_p50": 17710959,
+            "transaction_ns_p95": 24031166,
+            "transaction_ns_p99": 24031166,
+            "writers": 1
+          },
+          {
+            "body_bytes": 4096,
+            "durability": "SyncOnEveryWrite",
+            "elapsed_ns": 345498417,
+            "group_delay_us": 100,
+            "group_max_bytes": 1048576,
+            "group_max_entries": 8,
+            "kind": "graph_commits",
+            "operations": 32,
+            "repetition": 2,
+            "rows_per_transaction": 8,
+            "storage": "persistent",
+            "transaction_ns_p50": 42003417,
+            "transaction_ns_p95": 51900042,
+            "transaction_ns_p99": 51903541,
+            "writers": 4
+          },
+          {
+            "body_bytes": 4096,
+            "durability": "SyncOnEveryWrite",
+            "elapsed_ns": 300671084,
+            "group_delay_us": 100,
+            "group_max_bytes": 1048576,
+            "group_max_entries": 8,
+            "kind": "graph_commits",
+            "operations": 64,
+            "repetition": 2,
+            "rows_per_transaction": 8,
+            "storage": "persistent",
+            "transaction_ns_p50": 38641292,
+            "transaction_ns_p95": 45738166,
+            "transaction_ns_p99": 45792916,
+            "writers": 8
+          }
+        ],
+        "profile": "release",
+        "schema": "mvcc-hot-paths-v3"
+      }
+    },
+    {
+      "label": "baseline",
+      "binary_sha256": "21d63264683e309bcf0b2681a678c16c5fe4365c90d39607e144f57b8351b8ef",
+      "load_before": "{ 6.93 10.15 49.15 }",
+      "wall_seconds": 25.502254962921143,
+      "result": {
+        "cases": [
+          {
+            "elapsed_ns": 1540750,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": false,
+            "repetition": 0,
+            "rows": 64
+          },
+          {
+            "elapsed_ns": 7058417,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": true,
+            "repetition": 0,
+            "rows": 64
+          },
+          {
+            "elapsed_ns": 10213458,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": false,
+            "repetition": 0,
+            "rows": 4096
+          },
+          {
+            "elapsed_ns": 52906125,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": true,
+            "repetition": 0,
+            "rows": 4096
+          },
+          {
+            "elapsed_ns": 49476667,
+            "kind": "cypher_point",
+            "operations": 2000,
+            "readers": 1,
+            "repetition": 0
+          },
+          {
+            "elapsed_ns": 84050666,
+            "kind": "cypher_point",
+            "operations": 8000,
+            "readers": 4,
+            "repetition": 0
+          },
+          {
+            "elapsed_ns": 128302417,
+            "kind": "cypher_point",
+            "operations": 16000,
+            "readers": 8,
+            "repetition": 0
+          },
+          {
+            "body_bytes": 0,
+            "elapsed_ns": 12855833,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": false,
+            "repetition": 0,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 0,
+            "elapsed_ns": 23304167,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": true,
+            "repetition": 0,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 8192,
+            "elapsed_ns": 20422458,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": false,
+            "repetition": 0,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 8192,
+            "elapsed_ns": 23393375,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": true,
+            "repetition": 0,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 4096,
+            "durability": "SyncOnEveryWrite",
+            "elapsed_ns": 123819291,
+            "group_delay_us": 100,
+            "group_max_bytes": 1048576,
+            "group_max_entries": 8,
+            "kind": "graph_commits",
+            "operations": 8,
+            "repetition": 0,
+            "rows_per_transaction": 8,
+            "storage": "persistent",
+            "transaction_ns_p50": 16500417,
+            "transaction_ns_p95": 17209167,
+            "transaction_ns_p99": 17209167,
+            "writers": 1
+          },
+          {
+            "body_bytes": 4096,
+            "durability": "SyncOnEveryWrite",
+            "elapsed_ns": 177211750,
+            "group_delay_us": 100,
+            "group_max_bytes": 1048576,
+            "group_max_entries": 8,
+            "kind": "graph_commits",
+            "operations": 32,
+            "repetition": 0,
+            "rows_per_transaction": 8,
+            "storage": "persistent",
+            "transaction_ns_p50": 17070625,
+            "transaction_ns_p95": 34266875,
+            "transaction_ns_p99": 34274625,
+            "writers": 4
+          },
+          {
+            "body_bytes": 4096,
+            "durability": "SyncOnEveryWrite",
+            "elapsed_ns": 196187958,
+            "group_delay_us": 100,
+            "group_max_bytes": 1048576,
+            "group_max_entries": 8,
+            "kind": "graph_commits",
+            "operations": 64,
+            "repetition": 0,
+            "rows_per_transaction": 8,
+            "storage": "persistent",
+            "transaction_ns_p50": 23003625,
+            "transaction_ns_p95": 35166792,
+            "transaction_ns_p99": 35193834,
+            "writers": 8
+          },
+          {
+            "elapsed_ns": 1558875,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": false,
+            "repetition": 1,
+            "rows": 64
+          },
+          {
+            "elapsed_ns": 6911958,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": true,
+            "repetition": 1,
+            "rows": 64
+          },
+          {
+            "elapsed_ns": 10529292,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": false,
+            "repetition": 1,
+            "rows": 4096
+          },
+          {
+            "elapsed_ns": 54129833,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": true,
+            "repetition": 1,
+            "rows": 4096
+          },
+          {
+            "elapsed_ns": 50018750,
+            "kind": "cypher_point",
+            "operations": 2000,
+            "readers": 1,
+            "repetition": 1
+          },
+          {
+            "elapsed_ns": 71566625,
+            "kind": "cypher_point",
+            "operations": 8000,
+            "readers": 4,
+            "repetition": 1
+          },
+          {
+            "elapsed_ns": 103030792,
+            "kind": "cypher_point",
+            "operations": 16000,
+            "readers": 8,
+            "repetition": 1
+          },
+          {
+            "body_bytes": 0,
+            "elapsed_ns": 12432500,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": false,
+            "repetition": 1,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 0,
+            "elapsed_ns": 19798959,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": true,
+            "repetition": 1,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 8192,
+            "elapsed_ns": 19363917,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": false,
+            "repetition": 1,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 8192,
+            "elapsed_ns": 22845000,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": true,
+            "repetition": 1,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 4096,
+            "durability": "SyncOnEveryWrite",
+            "elapsed_ns": 113522291,
+            "group_delay_us": 100,
+            "group_max_bytes": 1048576,
+            "group_max_entries": 8,
+            "kind": "graph_commits",
+            "operations": 8,
+            "repetition": 1,
+            "rows_per_transaction": 8,
+            "storage": "persistent",
+            "transaction_ns_p50": 15544417,
+            "transaction_ns_p95": 16668209,
+            "transaction_ns_p99": 16668209,
+            "writers": 1
+          },
+          {
+            "body_bytes": 4096,
+            "durability": "SyncOnEveryWrite",
+            "elapsed_ns": 174079667,
+            "group_delay_us": 100,
+            "group_max_bytes": 1048576,
+            "group_max_entries": 8,
+            "kind": "graph_commits",
+            "operations": 32,
+            "repetition": 1,
+            "rows_per_transaction": 8,
+            "storage": "persistent",
+            "transaction_ns_p50": 21018875,
+            "transaction_ns_p95": 28413458,
+            "transaction_ns_p99": 28413708,
+            "writers": 4
+          },
+          {
+            "body_bytes": 4096,
+            "durability": "SyncOnEveryWrite",
+            "elapsed_ns": 122602166,
+            "group_delay_us": 100,
+            "group_max_bytes": 1048576,
+            "group_max_entries": 8,
+            "kind": "graph_commits",
+            "operations": 64,
+            "repetition": 1,
+            "rows_per_transaction": 8,
+            "storage": "persistent",
+            "transaction_ns_p50": 15619041,
+            "transaction_ns_p95": 17630333,
+            "transaction_ns_p99": 17661333,
+            "writers": 8
+          },
+          {
+            "elapsed_ns": 1523166,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": false,
+            "repetition": 2,
+            "rows": 64
+          },
+          {
+            "elapsed_ns": 6891625,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": true,
+            "repetition": 2,
+            "rows": 64
+          },
+          {
+            "elapsed_ns": 10602916,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": false,
+            "repetition": 2,
+            "rows": 4096
+          },
+          {
+            "elapsed_ns": 54271625,
+            "kind": "cow_replace",
+            "operations": 10000,
+            "pinned_each_write": true,
+            "repetition": 2,
+            "rows": 4096
+          },
+          {
+            "elapsed_ns": 50101167,
+            "kind": "cypher_point",
+            "operations": 2000,
+            "readers": 1,
+            "repetition": 2
+          },
+          {
+            "elapsed_ns": 69429917,
+            "kind": "cypher_point",
+            "operations": 8000,
+            "readers": 4,
+            "repetition": 2
+          },
+          {
+            "elapsed_ns": 100530709,
+            "kind": "cypher_point",
+            "operations": 16000,
+            "readers": 8,
+            "repetition": 2
+          },
+          {
+            "body_bytes": 0,
+            "elapsed_ns": 12484041,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": false,
+            "repetition": 2,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 0,
+            "elapsed_ns": 19535542,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": true,
+            "repetition": 2,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 8192,
+            "elapsed_ns": 18942875,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": false,
+            "repetition": 2,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 8192,
+            "elapsed_ns": 22805625,
+            "kind": "relationship_payload",
+            "operations": 512,
+            "pinned_each_write": true,
+            "repetition": 2,
+            "rows": 128,
+            "storage": "in_memory"
+          },
+          {
+            "body_bytes": 4096,
+            "durability": "SyncOnEveryWrite",
+            "elapsed_ns": 83942000,
+            "group_delay_us": 100,
+            "group_max_bytes": 1048576,
+            "group_max_entries": 8,
+            "kind": "graph_commits",
+            "operations": 8,
+            "repetition": 2,
+            "rows_per_transaction": 8,
+            "storage": "persistent",
+            "transaction_ns_p50": 10204167,
+            "transaction_ns_p95": 10811375,
+            "transaction_ns_p99": 10811375,
+            "writers": 1
+          },
+          {
+            "body_bytes": 4096,
+            "durability": "SyncOnEveryWrite",
+            "elapsed_ns": 94493875,
+            "group_delay_us": 100,
+            "group_max_bytes": 1048576,
+            "group_max_entries": 8,
+            "kind": "graph_commits",
+            "operations": 32,
+            "repetition": 2,
+            "rows_per_transaction": 8,
+            "storage": "persistent",
+            "transaction_ns_p50": 11026583,
+            "transaction_ns_p95": 16333667,
+            "transaction_ns_p99": 16338875,
+            "writers": 4
+          },
+          {
+            "body_bytes": 4096,
+            "durability": "SyncOnEveryWrite",
+            "elapsed_ns": 119209875,
+            "group_delay_us": 100,
+            "group_max_bytes": 1048576,
+            "group_max_entries": 8,
+            "kind": "graph_commits",
+            "operations": 64,
+            "repetition": 2,
+            "rows_per_transaction": 8,
+            "storage": "persistent",
+            "transaction_ns_p50": 15595250,
+            "transaction_ns_p95": 16577000,
+            "transaction_ns_p99": 16588750,
+            "writers": 8
+          }
+        ],
+        "profile": "release",
+        "schema": "mvcc-hot-paths-v3"
+      }
+    }
+  ]
+}

@@ -20,8 +20,14 @@ use hawdb_plan_cypher::{
 };
 use std::collections::BTreeMap;
 
+mod budget;
 mod host;
+mod owned;
+mod sql;
+pub use budget::{BudgetedReadSnapshot, ReadSnapshotBudget, ReadSnapshotUsage};
 pub use host::HostScoringRequest;
+pub use owned::{OwnedHostScoringRequest, OwnedQueryRequest, OwnedSqlQueryRequest};
+pub use sql::SqlQueryRequest;
 
 #[derive(Clone, Copy)]
 pub(super) enum ScoringAttachment<'a> {
@@ -160,12 +166,12 @@ impl ScoringRequest {
 /// A borrowed ordinary Cypher request. Existing string overloads remain valid.
 #[derive(Clone, Copy)]
 pub struct QueryRequest<'a> {
-    pub(super) cypher: &'a str,
-    pub(super) parameters: Option<&'a BTreeMap<String, Value>>,
+    pub(crate) cypher: &'a str,
+    pub(crate) parameters: Option<&'a BTreeMap<String, Value>>,
     pub(super) scoring: Option<ScoringAttachment<'a>>,
     pub(super) access_control: Option<&'a QueryAccessControlContext>,
-    pub(super) task_context: Option<&'a hawdb_core::RuntimeTaskContext>,
-    pub(super) output_limits: QueryStreamOptions,
+    pub(crate) task_context: Option<&'a hawdb_core::RuntimeTaskContext>,
+    pub(crate) output_limits: QueryStreamOptions,
 }
 
 impl<'a> QueryRequest<'a> {
@@ -210,8 +216,8 @@ impl<'a> QueryRequest<'a> {
         self
     }
 
-    /// Restrict read output without relaxing database-level caps.
-    /// Mutations retain the database's separate mutation limits.
+    /// Restrict read and explicit SET RETURN output without relaxing database caps.
+    /// Mutation staging and storage summaries retain separate mutation limits.
     pub fn with_output_limits(mut self, limits: QueryStreamOptions) -> Self {
         self.output_limits = limits;
         self
@@ -228,6 +234,17 @@ impl<'a> QueryRequest<'a> {
             ),
         };
         self
+    }
+}
+
+pub(crate) fn bind_request_context(
+    parent: Option<&hawdb_core::RuntimeTaskContext>,
+    request: Option<&hawdb_core::RuntimeTaskContext>,
+) -> Result<Option<hawdb_core::RuntimeTaskContext>> {
+    match (parent, request) {
+        (Some(parent), Some(request)) => parent.constrained_by(request).map(Some),
+        (Some(parent), None) => Ok(Some(parent.clone())),
+        (None, request) => Ok(request.cloned()),
     }
 }
 
@@ -391,35 +408,40 @@ impl<'a> BoundScoringRequest<'a> {
 
 impl<S: crate::executor::ExecutionStore> super::DatabaseReadTransaction<S> {
     pub fn query_request(&mut self, request: QueryRequest<'_>) -> Result<super::QueryOutput> {
-        let task_context = self.task_context.clone();
-        let options = super::query_runtime::QueryExecutionOptions::for_request(
+        self.query_request_profiled(request)
+            .map(|result| result.output)
+    }
+
+    /// Collects compact result rows under the same request and snapshot limits.
+    pub fn query_request_profiled(
+        &mut self,
+        request: QueryRequest<'_>,
+    ) -> Result<super::BoundedReadQueryOutput> {
+        self.query_request_profiled_with_external(
             request,
-            task_context.as_ref(),
-        );
-        let prepared = super::query_runtime::parse_runtime_execution(request.cypher)?;
-        if let crate::cypher::Statement::Explain(explain) = &prepared.statement {
-            self.store.ensure_usable()?;
-            return self
-                .execute_explain_request(
-                    request.cypher,
-                    explain,
-                    request.parameters.unwrap_or(&BTreeMap::new()),
-                    options,
-                )
-                .map(|profiled| profiled.output);
-        }
-        let mut rows = Vec::new();
-        self.query_request_streaming_prepared_external(
-            request,
-            prepared,
-            options,
             &mut crate::executor::NoExternalReadOperator,
-            &mut |row| {
-                rows.push(row);
-                Ok(())
-            },
-        )?;
-        Ok(super::QueryOutput { rows: rows.into() })
+        )
+    }
+
+    pub(crate) fn query_request_profiled_with_external(
+        &mut self,
+        request: QueryRequest<'_>,
+        external: &mut dyn crate::executor::ExternalReadOperator,
+    ) -> Result<super::BoundedReadQueryOutput> {
+        let task_context = bind_request_context(self.task_context.as_ref(), request.task_context)?;
+        let request = QueryRequest {
+            task_context: task_context.as_ref(),
+            ..request
+        };
+        let options = super::query_runtime::QueryExecutionOptions::for_request(request, None);
+        let prepared = super::query_runtime::parse_runtime_execution(request.cypher)?;
+        self.query_prepared_request_profiled(
+            request.cypher,
+            prepared,
+            request.parameters.unwrap_or(&BTreeMap::new()),
+            options,
+            external,
+        )
     }
 
     /// Uses the existing validated row-consumer boundary and snapshot budgets.
@@ -441,11 +463,12 @@ impl<S: crate::executor::ExecutionStore> super::DatabaseReadTransaction<S> {
         external: &mut dyn crate::executor::ExternalReadOperator,
         mut consumer: impl FnMut(crate::executor::Row) -> Result<()>,
     ) -> Result<super::QueryStreamReport> {
-        let task_context = self.task_context.clone();
-        let options = super::query_runtime::QueryExecutionOptions::for_request(
-            request,
-            task_context.as_ref(),
-        );
+        let task_context = bind_request_context(self.task_context.as_ref(), request.task_context)?;
+        let request = QueryRequest {
+            task_context: task_context.as_ref(),
+            ..request
+        };
+        let options = super::query_runtime::QueryExecutionOptions::for_request(request, None);
         self.query_request_streaming_prepared_external(
             request,
             super::query_runtime::parse_runtime_execution(request.cypher)?,
@@ -476,7 +499,7 @@ impl<S: crate::executor::ExecutionStore> super::DatabaseReadTransaction<S> {
                 scoring: options.scoring,
                 access_control: options.access_control,
             },
-            consumer,
+            crate::executor::QueryStreamConsumer::Owned(consumer),
         )
     }
 }
@@ -490,6 +513,84 @@ mod tests {
     };
 
     pub(super) const QUERY: &str = "MATCH (m:Memory) WHERE m.kind = $kind RETURN m.id AS id, m.seed AS score, m.importance AS importance, m.created AS created ORDER BY id";
+
+    #[test]
+    fn snapshot_request_collects_compact_rows_with_owned_result_accounting() {
+        let mut database = Database::new();
+        let parameters = BTreeMap::from([(
+            "rows".into(),
+            Value::List(
+                (0..2_048)
+                    .map(|id| {
+                        Value::Map(BTreeMap::from([
+                            ("id".into(), Value::Int(id)),
+                            ("title".into(), Value::String("payload".into())),
+                        ]))
+                    })
+                    .collect(),
+            ),
+        )]);
+        database
+            .query_with_params(
+                "UNWIND $rows AS row CREATE (:Sample {id: row.id, title: row.title})",
+                &parameters,
+            )
+            .unwrap();
+        let mut snapshot = database.begin_read_transaction().unwrap();
+        let request = QueryRequest::new(
+            "MATCH (n:Sample) RETURN n.id AS id, n.title AS title, n.absent AS missing",
+        )
+        .with_output_limits(QueryStreamOptions {
+            max_rows: Some(2_048),
+            max_payload_bytes: Some(256 * 1_024),
+        });
+        let compact = snapshot.query_request_profiled(request).unwrap();
+        assert_eq!(compact.output.rows.len(), 2_048);
+        let mut ids = std::collections::BTreeSet::new();
+        for row in &compact.output.rows {
+            let Some(Value::Int(id)) = row.get("id") else {
+                panic!("missing integer id")
+            };
+            assert!((0..2_048).contains(id));
+            assert!(ids.insert(*id));
+            assert_eq!(row.get("title"), Some(&Value::String("payload".into())));
+            assert_eq!(row.get("missing"), Some(&Value::Null));
+        }
+        let mut delivered = 0;
+        let streamed = snapshot
+            .query_request_streaming(request, |row| {
+                assert_eq!(compact.output.rows[delivered], row);
+                delivered += 1;
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(delivered, 2_048);
+        let owned_memory = &compact.execution_profile.pipeline_memory_report;
+        let stream_memory = &streamed.execution_profile.pipeline_memory_report;
+        assert!(owned_memory.query_memory_completion_bytes > 0);
+        assert_eq!(stream_memory.query_memory_completion_bytes, 0);
+        assert!(owned_memory.query_memory_peak_bytes < stream_memory.query_memory_peak_bytes);
+        assert_eq!(
+            owned_memory.output_payload_bytes,
+            stream_memory.output_payload_bytes
+        );
+
+        for limits in [
+            QueryStreamOptions {
+                max_rows: Some(2_047),
+                max_payload_bytes: Some(256 * 1_024),
+            },
+            QueryStreamOptions {
+                max_rows: Some(2_048),
+                max_payload_bytes: Some(1),
+            },
+        ] {
+            assert!(snapshot
+                .query_request(request.with_output_limits(limits))
+                .is_err());
+        }
+        assert_eq!(snapshot.query_request(request).unwrap().rows.len(), 2_048);
+    }
 
     pub(super) fn fixture() -> Database {
         let mut database = Database::new_with_config(crate::DatabaseConfig {
@@ -513,7 +614,11 @@ mod tests {
         BTreeMap::from([("kind".into(), Value::String(kind.into()))])
     }
 
-    fn scoring(combination: ScoringCombination, search: f64, importance: f64) -> ScoringRequest {
+    pub(super) fn scoring(
+        combination: ScoringCombination,
+        search: f64,
+        importance: f64,
+    ) -> ScoringRequest {
         ScoringRequest::new(
             ScoringProgram::new(
                 combination,
@@ -1016,3 +1121,11 @@ mod graph_seed_tests;
 #[cfg(test)]
 #[path = "query_request/expansion_budget_tests.rs"]
 mod expansion_budget_tests;
+
+#[cfg(test)]
+#[path = "query_request/adapter_tests.rs"]
+mod adapter_tests;
+
+#[cfg(test)]
+#[path = "query_request/budget_tests.rs"]
+mod budget_tests;

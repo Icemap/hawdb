@@ -21,6 +21,164 @@ use crate::{Database, DatabaseConfig, SearchIndex, Value};
 use hawdb_core::{RuntimeCancellationToken, RuntimeTaskContext};
 use std::collections::BTreeMap;
 
+#[test]
+fn retrieval_from_search_preserves_admitted_memory_and_result_ceilings() {
+    let mut database = Database::new();
+    database
+        .query("CREATE (:Memory {id: 'bounded', title: 'Budgeted memory'})")
+        .unwrap();
+    let mut index = SearchIndex::in_memory();
+    index
+        .upsert_projection_row(SearchProjectionRow {
+            kind: SearchProjectionKind::Memory,
+            external_id: "bounded".into(),
+            title: "Budgeted memory".into(),
+            body: "search budget".into(),
+            embedding: None,
+            source_id: None,
+            metadata: BTreeMap::new(),
+        })
+        .unwrap();
+    let request = crate::KnowledgeRetrievalRequest::nowledge_deep(
+        "Budgeted",
+        None,
+        crate::search::SearchMode::Text,
+        1,
+        0,
+        BTreeMap::new(),
+    );
+    for (memory, result, expected_error) in [
+        (0, 4096, Some("requires admitted working memory")),
+        (
+            1 << 20,
+            0,
+            Some("requires a positive result payload budget"),
+        ),
+        (1 << 20, 4096, None),
+    ] {
+        let context = RuntimeTaskContext::default()
+            .with_memory_reservation(hawdb_core::RuntimeMemoryReservation::new(memory, result));
+        let read = database
+            .begin_read_transaction_with_context(&context)
+            .unwrap();
+        let search = index
+            .search_with_report("Budgeted", None, crate::search::SearchMode::Text, 1)
+            .unwrap();
+        let output =
+            read.try_retrieve_knowledge_from_search(search, index.projection_freshness(), &request);
+        if let Some(message) = expected_error {
+            assert!(output.unwrap_err().to_string().contains(message));
+        } else {
+            assert_eq!(output.unwrap().search.hits.len(), 1);
+        }
+    }
+}
+
+#[test]
+fn search_helpers_preserve_their_pair_while_writers_and_fresh_helpers_advance() {
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    for out_of_core in [false, true] {
+        let root = SnapshotTestRoot::new();
+        let handle = app_read_handle();
+        if out_of_core {
+            let mut store = handle.write_store().unwrap();
+            let resident = store.search_projection.take().unwrap();
+            let path = root.0.join("search");
+            let mut writer =
+                crate::SearchOutOfCoreGenerationWriter::create(&path, Default::default()).unwrap();
+            for id in ["memory:farther", "memory:nearest"] {
+                writer
+                    .push(resident.index().document(id).unwrap().clone())
+                    .unwrap();
+            }
+            writer.finish().unwrap();
+            store.out_of_core_search_projection = Some(
+                super::NowledgeMemOutOfCoreSearchProjection::open_incremental(
+                    &path,
+                    Default::default(),
+                )
+                .unwrap(),
+            );
+        }
+        let request = crate::KnowledgeRetrievalRequest::nowledge_deep(
+            "App",
+            None,
+            crate::SearchMode::Text,
+            1,
+            0,
+            BTreeMap::from([("space_id".into(), "default".into())]),
+        );
+        let documents = vec!["memory:nearest".into()];
+        let (start, started) = mpsc::channel();
+        let (finished, done) = mpsc::channel();
+        let writer_handle = handle.clone();
+        let writer = std::thread::spawn(move || {
+            if started.recv().is_ok() {
+                let result = (|| {
+                    writer_handle.with_transaction(|tx| {
+                        tx.query("MATCH (m:Memory) SET m.title = 'Updated memory'")?;
+                        Ok(())
+                    })?;
+                    writer_handle.apply_search_projection_delta_and_checkpoint(
+                        crate::SearchProjectionDelta {
+                            upserts: vec![SearchProjectionRow {
+                                kind: SearchProjectionKind::Memory,
+                                external_id: "nearest".into(),
+                                title: "Updated projection".into(),
+                                body: "App search candidate".into(),
+                                embedding: Some(vec![1.0, 0.0]),
+                                source_id: None,
+                                metadata: BTreeMap::from([("space_id".into(), "default".into())]),
+                            }],
+                            ..Default::default()
+                        },
+                    )?;
+                    Ok::<_, crate::HawDBError>(())
+                })();
+                let _ = finished.send(result);
+            }
+        });
+        let result = handle.with_admitted_search(|old| {
+            let before = old.retrieve(&request)?;
+            assert_eq!(before.output.search.hits.len(), 1);
+            assert_eq!(old.hydrate(&documents)?.documents[0].title, "nearest");
+            start.send(()).unwrap();
+            done.recv_timeout(Duration::from_secs(10)).map_err(|_| {
+                crate::HawDBError::Execution("search helper blocked writer publication".into())
+            })??;
+            let fresh = handle.retrieve_knowledge_with_report(&request)?;
+            assert!(fresh.output.graph_commit_epoch > before.output.graph_commit_epoch);
+            assert_eq!(fresh.output.search.hits.len(), 1);
+            assert_eq!(
+                handle.search_projection_documents(&documents, 1)?[0].title,
+                "Updated projection",
+            );
+            assert_eq!(old.hydrate(&documents)?.documents[0].title, "nearest");
+            assert_eq!(
+                old.retrieve(&request)?.output.graph_commit_epoch,
+                before.output.graph_commit_epoch
+            );
+            let candidates = super::NowledgeMemSearchCandidateRequest::text("App", 1)
+                .with_metadata_filters(BTreeMap::from([("space_id".into(), "default".into())]));
+            assert_eq!(handle.search_candidates(&candidates)?.hits.len(), 1);
+            assert_eq!(old.search_candidates(&candidates)?.result.hits.len(), 1,);
+            Ok(())
+        });
+        drop(start);
+        writer.join().unwrap();
+        result.unwrap();
+        assert_eq!(
+            handle
+                .runtime_governor_snapshot()
+                .unwrap()
+                .admitted_memory_bytes,
+            0
+        );
+    }
+}
+
 #[path = "nowledge_mem_snapshot_scoring_tests.rs"]
 mod scoring_tests;
 
@@ -36,10 +194,16 @@ fn snapshot_governor() -> hawdb_qos::RuntimeGovernor {
     )
 }
 
-fn app_read_handle() -> NowledgeMemEmbeddedStoreHandle {
+pub(super) fn app_read_handle() -> NowledgeMemEmbeddedStoreHandle {
+    app_read_handle_with_result_budget(16 * 1024)
+}
+
+pub(super) fn app_read_handle_with_result_budget(
+    max_read_result_payload_bytes: usize,
+) -> NowledgeMemEmbeddedStoreHandle {
     let mut database = Database::new_with_config(DatabaseConfig {
         max_read_result_rows: Some(16),
-        max_read_result_payload_bytes: Some(16 * 1024),
+        max_read_result_payload_bytes: Some(max_read_result_payload_bytes),
         ..DatabaseConfig::default()
     });
     database
@@ -301,17 +465,11 @@ fn bounded_text_seed_snapshot_retains_its_projection_during_a_writer_update() {
     let handle = app_read_handle();
     let writer_handle = handle.clone();
     let (start_tx, start_rx) = std::sync::mpsc::channel();
-    let (attempt_tx, attempt_rx) = std::sync::mpsc::channel();
     let (done_tx, done_rx) = std::sync::mpsc::channel();
     let writer = std::thread::spawn(move || {
         if start_rx.recv().is_err() {
             return;
         }
-        let blocked = matches!(
-            writer_handle.inner.try_write(),
-            Err(std::sync::TryLockError::WouldBlock)
-        );
-        attempt_tx.send(blocked).unwrap();
         let result = (|| {
             let mut store = writer_handle.write_store()?;
             store
@@ -366,19 +524,15 @@ fn bounded_text_seed_snapshot_retains_its_projection_during_a_writer_update() {
             let before = read(snapshot)?;
             let epoch = snapshot.commit_epoch();
             start_tx.send(()).unwrap();
-            assert!(attempt_rx
+            done_rx
                 .recv_timeout(std::time::Duration::from_secs(5))
-                .unwrap());
+                .expect("the retained text snapshot blocked writer publication")?;
             assert_eq!(read(snapshot)?, before);
             assert_eq!(snapshot.commit_epoch(), epoch);
             Ok(epoch)
         },
     );
     drop(start_tx);
-    done_rx
-        .recv_timeout(std::time::Duration::from_secs(5))
-        .unwrap()
-        .unwrap();
     writer.join().unwrap();
     let epoch = result.unwrap();
     handle
@@ -1552,6 +1706,7 @@ fn failed_snapshot_publication_retains_the_last_generation_and_requires_reopen()
             .unwrap()
             .as_ref()
             .unwrap()
+            .view
             .snapshot
             .begin_read_transaction(&hawdb_core::RuntimeTaskContext::default())
             .unwrap()
@@ -1576,10 +1731,11 @@ fn failed_snapshot_publication_retains_the_last_generation_and_requires_reopen()
             Err(crate::HawDBError::Execution(reason)) if reason.contains("poisoned")
         ));
     }
-    // Restoring an admissible writer does not silently clear lost-publication
-    // evidence. A fresh handle recovers the successful transaction instead.
+    // Normal writers cannot repair a failed publication. Even direct test-only
+    // restoration must preserve the evidence until the handle is reopened.
+    assert!(handle.write_store().is_err());
     {
-        let mut store = handle.write_store().unwrap();
+        let mut store = handle.inner.write().unwrap();
         *store.graph_mut().database_mut() = committed;
     }
     assert!(matches!(
@@ -2110,7 +2266,7 @@ fn bounded_out_of_core_text_seed_filters_before_top_k() {
     writer.finish().unwrap();
     let mut database = Database::new_with_config(DatabaseConfig {
         max_read_result_rows: Some(16),
-        max_read_result_payload_bytes: Some(16 * 1024),
+        max_read_result_payload_bytes: Some(1024 * 1024),
         ..Default::default()
     });
     database
@@ -2146,6 +2302,51 @@ fn bounded_out_of_core_text_seed_filters_before_top_k() {
             Default::default(),
         ))
         .unwrap();
+    let reported = handle
+        .query_with_params_with_report_options(
+            query,
+            &parameters,
+            super::NowledgeMemQueryReportOptions {
+                capture_physical_plan: true,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    assert_eq!(reported.output.rows.len(), 1);
+    assert_eq!(reported.output.rows[0]["id"], Value::String("team".into()));
+    assert!(reported
+        .report
+        .physical_operator_counts
+        .contains_key("TextSeedScan"));
+    let analyzed = handle
+        .query_with_params_with_report(&format!("EXPLAIN ANALYZE {query}"), &parameters)
+        .unwrap();
+    assert_eq!(analyzed.output.rows.len(), 1);
+    assert_eq!(analyzed.output.rows[0]["row_count"], Value::Int(1));
+    for prefix in ["EXPLAIN", "EXPLAIN ANALYZE"] {
+        handle
+            .with_bounded_read_snapshot(
+                NowledgeMemReadSnapshotBudget {
+                    max_rows: 1,
+                    max_payload_bytes: 1024 * 1024,
+                },
+                |snapshot| {
+                    let output =
+                        snapshot.query_cypher(&format!("{prefix} {query}"), &parameters, 1)?;
+                    assert_eq!(output.rows.len(), 1);
+                    assert_eq!(snapshot.report().output_rows, 1);
+                    assert_eq!(
+                        snapshot.report().output_payload_bytes,
+                        output.rows.payload_bytes()
+                    );
+                    if prefix == "EXPLAIN ANALYZE" {
+                        assert_eq!(output.rows[0]["row_count"], Value::Int(1));
+                    }
+                    Ok(())
+                },
+            )
+            .unwrap();
+    }
     handle
         .with_bounded_read_snapshot(
             NowledgeMemReadSnapshotBudget {
@@ -2200,6 +2401,119 @@ fn bounded_out_of_core_text_seed_filters_before_top_k() {
         .unwrap();
     let current_reader = crate::SearchOutOfCoreReader::open(&search_path).unwrap();
     assert_ne!(pinned_reader.generation(), current_reader.generation());
+}
+
+#[test]
+fn out_of_core_snapshot_allows_generation_publication_and_keeps_its_old_pair() {
+    use std::sync::{mpsc, Arc};
+    use std::time::Duration;
+
+    let root = SnapshotTestRoot::new();
+    let path = root.0.join("search");
+    let row = |title: &str| SearchProjectionRow {
+        kind: SearchProjectionKind::Memory,
+        external_id: "memory".into(),
+        title: title.into(),
+        body: "projection payload".into(),
+        embedding: None,
+        source_id: None,
+        metadata: BTreeMap::new(),
+    };
+    let mut writer =
+        crate::SearchOutOfCoreGenerationWriter::create(&path, Default::default()).unwrap();
+    writer.push(row("Before").into_document()).unwrap();
+    writer.finish().unwrap();
+    let mut database = Database::new_with_config(DatabaseConfig {
+        max_read_result_rows: Some(16),
+        max_read_result_payload_bytes: Some(16 * 1024),
+        ..Default::default()
+    });
+    database
+        .query("CREATE (:Memory {id: 'memory', title: 'Before'})")
+        .unwrap();
+    let graph = NowledgeMemGraph::from_database_with_runtime_governor(
+        database,
+        NowledgeMemGraphMode::WritableCutover,
+        snapshot_governor(),
+    );
+    let projection =
+        super::NowledgeMemOutOfCoreSearchProjection::open_incremental(&path, Default::default())
+            .unwrap();
+    let old_reader = Arc::downgrade(&projection.reader);
+    let handle =
+        NowledgeMemEmbeddedStoreHandle::new(NowledgeMemEmbeddedStore::new_with_out_of_core_search(
+            graph,
+            projection,
+            Default::default(),
+        ))
+        .unwrap();
+    let budget = NowledgeMemReadSnapshotBudget {
+        max_rows: 4,
+        max_payload_bytes: 8192,
+    };
+    let read_pair = |snapshot: &mut super::NowledgeMemReadSnapshot<'_>| -> crate::Result<_> {
+        let graph = snapshot.query_cypher(
+            "MATCH (m:Memory) RETURN m.title AS title",
+            &BTreeMap::new(),
+            1,
+        )?;
+        let mut titles = Vec::new();
+        let report = snapshot.visit_search_projection(4096, |document| {
+            titles.push(document.title.clone());
+            Ok(())
+        })?;
+        Ok((
+            graph.rows[0]["title"].clone(),
+            titles,
+            report.artifact_generation,
+        ))
+    };
+    let writer_handle = handle.clone();
+    let delta = crate::SearchProjectionDelta {
+        upserts: vec![row("After")],
+        ..Default::default()
+    };
+    let (start, started) = mpsc::channel();
+    let (finished, done) = mpsc::channel();
+    let writer = std::thread::spawn(move || {
+        if started.recv().is_ok() {
+            let result = (|| {
+                writer_handle.with_transaction(|tx| {
+                    tx.query("MATCH (m:Memory) SET m.title = 'After'")
+                        .map(|_| ())
+                })?;
+                writer_handle.apply_search_projection_delta_and_checkpoint(delta)
+            })();
+            let _ = finished.send(result);
+        }
+    });
+    let result = handle.with_bounded_read_snapshot(budget, |snapshot| {
+        let before = read_pair(snapshot)?;
+        start.send(()).unwrap();
+        done.recv_timeout(Duration::from_secs(10)).map_err(|_| {
+            crate::HawDBError::Execution("projection snapshot blocked publication".into())
+        })??;
+        let after = handle.with_bounded_read_snapshot(budget, read_pair)?;
+        assert_eq!(before.0, Value::String("Before".into()));
+        assert_eq!(before.1, vec!["Before"]);
+        assert_eq!(after.0, Value::String("After".into()));
+        assert_eq!(after.1, vec!["After"]);
+        assert_ne!(before.2, after.2);
+        assert_eq!(read_pair(snapshot)?, before);
+        assert!(old_reader.upgrade().is_some());
+        Ok(())
+    });
+    drop(start);
+    writer.join().unwrap();
+    result.unwrap();
+    assert!(old_reader.upgrade().is_none());
+    assert_eq!(
+        handle
+            .runtime_governor_snapshot()
+            .unwrap()
+            .admitted_memory_bytes,
+        0
+    );
 }
 
 #[test]
@@ -2303,4 +2617,105 @@ fn database_instance_identity_tracks_the_exact_published_read_view() {
                 .unwrap();
         }
     }
+}
+
+#[test]
+fn resident_snapshot_preserves_its_pair_while_writers_and_fresh_readers_advance() {
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    let handle = app_read_handle();
+    let budget = NowledgeMemReadSnapshotBudget {
+        max_rows: 16,
+        max_payload_bytes: 8192,
+    };
+    let read_pair = |snapshot: &mut super::NowledgeMemReadSnapshot<'_>| -> crate::Result<_> {
+        let output = snapshot.query_cypher(
+            "MATCH (m:Memory {id: $id}) RETURN m.title AS title",
+            &BTreeMap::from([("id".into(), Value::String("nearest".into()))]),
+            1,
+        )?;
+        let mut title = None;
+        snapshot.visit_search_projection(4096, |document| {
+            if document.id == "memory:nearest" {
+                title = Some(document.title.clone());
+            }
+            Ok(())
+        })?;
+        Ok((output.rows[0]["title"].clone(), title))
+    };
+    let writer_handle = handle.clone();
+    let (start, started) = mpsc::channel();
+    let (finished, done) = mpsc::channel();
+    let writer = std::thread::spawn(move || {
+        if started.recv().is_ok() {
+            let result = (|| {
+                for revision in 1..=3 {
+                    let title = format!("Revision {revision}");
+                    writer_handle.with_transaction(|transaction| {
+                        transaction.query_request(
+                            crate::QueryRequest::new(
+                                "MATCH (m:Memory {id: $id}) SET m.title = $title",
+                            )
+                            .with_params(&BTreeMap::from([
+                                ("id".into(), Value::String("nearest".into())),
+                                ("title".into(), Value::String(title.clone())),
+                            ])),
+                        )?;
+                        Ok(())
+                    })?;
+                    writer_handle.apply_search_projection_delta_and_checkpoint(
+                        crate::SearchProjectionDelta {
+                            upserts: vec![SearchProjectionRow {
+                                kind: SearchProjectionKind::Memory,
+                                external_id: "nearest".into(),
+                                title,
+                                body: "replacement projection".into(),
+                                embedding: Some(vec![1.0, 0.0]),
+                                source_id: None,
+                                metadata: BTreeMap::new(),
+                            }],
+                            ..Default::default()
+                        },
+                    )?;
+                }
+                Ok::<_, crate::HawDBError>(())
+            })();
+            let _ = finished.send(result);
+        }
+    });
+    let result = handle.with_bounded_read_snapshot(budget, |snapshot| {
+        let before = read_pair(snapshot)?;
+        start.send(()).unwrap();
+        done.recv_timeout(Duration::from_secs(10)).map_err(|_| {
+            crate::HawDBError::Execution("resident snapshot blocked writer progress".into())
+        })??;
+        let after = handle.with_bounded_read_snapshot(budget, read_pair)?;
+        assert_eq!(
+            before,
+            (
+                Value::String("Nearest memory".into()),
+                Some("nearest".into())
+            )
+        );
+        assert_eq!(
+            after,
+            (
+                Value::String("Revision 3".into()),
+                Some("Revision 3".into())
+            )
+        );
+        assert_eq!(read_pair(snapshot)?, before);
+        Ok(())
+    });
+    drop(start);
+    writer.join().unwrap();
+    result.unwrap();
+    assert_eq!(
+        handle
+            .runtime_governor_snapshot()
+            .unwrap()
+            .admitted_memory_bytes,
+        0
+    );
 }

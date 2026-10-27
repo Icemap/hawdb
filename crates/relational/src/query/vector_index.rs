@@ -1,5 +1,16 @@
 // Copyright 2026 Nowledge
-// Licensed under the Apache License, Version 2.0.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Explicit candidate input for a SQL table function. Identities are hydrated
 //! through the caller's canonical row snapshot; ordinary relational predicates,
@@ -8,7 +19,6 @@
 
 use super::*;
 
-mod projection_memory;
 use hawdb_storage::relational::{decode_relational_primary_key, RelationalColumnSchema};
 use projection::{
     add_relational_order_keys, execute_relational_order, strip_relational_sort_columns,
@@ -241,7 +251,7 @@ pub fn collect_vector_eligible_domain<'query, R: RelationalRowStoreReader>(
     Ok((domain, row_runtime.evidence()))
 }
 
-fn residual_selection(select: &SelectStatement) -> Option<&SqlExpression> {
+pub(super) fn residual_selection(select: &SelectStatement) -> Option<&SqlExpression> {
     if select
         .vector_index
         .as_ref()
@@ -297,6 +307,7 @@ pub fn execute_vector_index_select<R: RelationalRowStoreReader>(
         })?;
     let _schema_memory = account.reserve(schema_bytes)?;
     let mut schema = RelationalTableSchema {
+        materialized_view: None,
         name: input.table.to_owned(),
         columns: canonical_schema
             .columns

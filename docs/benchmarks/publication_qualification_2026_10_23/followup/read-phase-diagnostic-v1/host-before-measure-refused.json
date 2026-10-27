@@ -1,0 +1,14 @@
+{
+  "unix": 1792789786.310314,
+  "known_compiler_or_fuzz_processes": [
+    {
+      "pid": 50248,
+      "command": "/Users/hawkingrei/.rustup/toolchains/1.98.1-aarch64-apple-darwin/bin/cargo"
+    },
+    {
+      "pid": 50255,
+      "command": "/Users/hawkingrei/.rustup/toolchains/1.98.1-aarch64-apple-darwin/bin/clippy-driver"
+    }
+  ],
+  "visibility": "launch-time host process inventory only; no physical exclusivity claim"
+}

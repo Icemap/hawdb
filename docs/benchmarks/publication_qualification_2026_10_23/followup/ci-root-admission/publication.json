@@ -1,0 +1,29 @@
+{
+  "refs": {
+    "org": "nowledge-co",
+    "repo": "hawdb",
+    "repo_link": "https://github.com/nowledge-co/hawdb",
+    "base_ref": "main",
+    "base_sha": "8e9eab185ef880794d216d99ac6cd57442c511aa",
+    "base_link": "https://github.com/nowledge-co/hawdb/commit/8e9eab185ef880794d216d99ac6cd57442c511aa",
+    "pulls": [
+      {
+        "number": 1217,
+        "author": "hawkingrei",
+        "sha": "823e8e9c735050dcafb3e0bf024e12f0a46ea140",
+        "title": "fix(api): preserve foreground read progress during publication",
+        "head_ref": "bench/1119-sustained-publication",
+        "link": "https://github.com/nowledge-co/hawdb/pull/1217",
+        "commit_link": "https://github.com/nowledge-co/hawdb/pull/1217/commits/823e8e9c735050dcafb3e0bf024e12f0a46ea140",
+        "author_link": "https://github.com/hawkingrei"
+      }
+    ]
+  },
+  "events_retained": 926,
+  "test_result_actions": 84,
+  "test_summary_targets": 70,
+  "original_sha256": "75d83769d40bd9887e04dc0fc5d4e7a5ec00bd1ce1022031c4ffe11badd5d720",
+  "published_sha256": "bfacba0b23e55903300728c5e2006e815d142c950c30b09e6347701666576e50",
+  "transformation": "Remove client_env/test_env/repo_env option entries only; preserve all events and results.",
+  "original_uri": "gs://ci-cd-503413-prow-public/artifacts/native/pr-logs/pull/nowledge-co_hawdb/1217/pull-skein-bazel-test-root/2113716110577635328/artifacts/bepless-events.json"
+}

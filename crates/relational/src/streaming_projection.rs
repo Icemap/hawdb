@@ -124,6 +124,30 @@ impl BoundStreamingProjection {
         &self.schema
     }
 
+    pub(crate) fn admit_copy(
+        &self,
+        row: RelationalReadRowRef<'_>,
+        account: &hawdb_executor::QueryMemoryAccount,
+    ) -> Result<hawdb_executor::QueryMemoryLease> {
+        let bytes = self
+            .columns
+            .iter()
+            .try_fold(self.row_name_bytes, |bytes, column| {
+                let payload = match column.value {
+                    BoundStreamingValue::Column(ordinal) => {
+                        row.value(ordinal)?.estimated_payload_bytes()
+                    }
+                    BoundStreamingValue::UuidV7 => 16,
+                };
+                Ok::<_, HawDBError>(
+                    bytes
+                        .saturating_add(payload)
+                        .saturating_add(std::mem::size_of::<Value>()),
+                )
+            })?;
+        account.reserve(bytes.saturating_mul(2))
+    }
+
     pub fn project_into(
         &self,
         row: RelationalReadRowRef<'_>,
@@ -131,6 +155,27 @@ impl BoundStreamingProjection {
         payload_bytes: &mut usize,
         max_payload_bytes: usize,
     ) -> Result<()> {
+        let row_payload = self
+            .columns
+            .iter()
+            .try_fold(self.row_name_bytes, |bytes, column| {
+                let payload = match column.value {
+                    BoundStreamingValue::Column(ordinal) => {
+                        row.value(ordinal)?.estimated_payload_bytes()
+                    }
+                    BoundStreamingValue::UuidV7 => 16,
+                };
+                Ok::<_, HawDBError>(bytes.saturating_add(payload))
+            })?;
+        if payload_bytes.saturating_add(row_payload) > max_payload_bytes {
+            return Err(HawDBError::read_budget_exceeded(
+                ReadBudgetResource::PayloadBytes,
+                max_payload_bytes,
+                format!(
+                    "relational SQL output exceeds max_output_payload_bytes {max_payload_bytes}"
+                ),
+            ));
+        }
         let previous_payload_bytes = *payload_bytes;
         *payload_bytes = payload_bytes.saturating_add(self.row_name_bytes);
         let result = output.try_push_values(self.columns.iter().map(|column| {
@@ -278,6 +323,7 @@ mod tests {
 
     fn schema() -> RelationalTableSchema {
         RelationalTableSchema {
+            materialized_view: None,
             name: "records".to_string(),
             columns: vec![
                 RelationalColumnSchema {

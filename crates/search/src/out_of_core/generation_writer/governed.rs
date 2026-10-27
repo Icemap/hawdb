@@ -34,7 +34,9 @@ use std::path::Path;
 /// and any analyzer workspace. Build options remain component limits; they do
 /// not add up to a whole-operation memory estimate. The host selects the
 /// request from its current policy and may share a process-memory policy among
-/// governors.
+/// governors. Writer requests must also declare at least one I/O slot. A Wave
+/// reservation acquires actual capacity only during synchronous writer phases;
+/// Task reservations retain their original lifetime ownership.
 #[derive(Debug)]
 pub struct SearchGenerationAdmission {
     permit: std::sync::Arc<RuntimePermit>,

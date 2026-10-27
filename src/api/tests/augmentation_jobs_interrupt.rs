@@ -13,6 +13,47 @@
 // limitations under the License.
 
 use super::*;
+use crate::QueryRequest;
+
+const CANDIDATES: &str = "MATCH (j:AugmentationJob) WHERE j.status IN $statuses \
+    RETURN j.job_id AS job_id, j.status AS previous_status ORDER BY job_id";
+const INTERRUPT: &str = "MATCH (j:AugmentationJob) WHERE j.status IN $statuses \
+    SET j.status = $status, j.message = $message, j.error_message = $error, \
+    j.completed_at = $completed_at RETURN j.job_id AS job_id";
+
+fn bounded_query<'a>(query: &'a str, parameters: &'a BTreeMap<String, Value>) -> QueryRequest<'a> {
+    QueryRequest::new(query)
+        .with_params(parameters)
+        .with_output_limits(QueryStreamOptions {
+            max_rows: Some(4),
+            max_payload_bytes: Some(4096),
+        })
+}
+
+fn parameters(error: &str, completed_at: i64) -> Result<BTreeMap<String, Value>> {
+    // Input validation belongs to the host; graph selection belongs to Cypher.
+    if error.is_empty() {
+        return Err(HawDBError::Semantic(
+            "non-empty error message required".into(),
+        ));
+    }
+    Ok(BTreeMap::from([
+        (
+            "statuses".into(),
+            Value::List(vec![
+                Value::String("pending".into()),
+                Value::String("running".into()),
+            ]),
+        ),
+        ("status".into(), Value::String("failed".into())),
+        (
+            "message".into(),
+            Value::String("Interrupted before completion".into()),
+        ),
+        ("error".into(), Value::String(error.into())),
+        ("completed_at".into(), Value::Int(completed_at)),
+    ]))
+}
 
 #[test]
 fn interrupts_pending_and_running_augmentation_jobs_for_nowledge_orphans() {
@@ -28,26 +69,39 @@ fn interrupts_pending_and_running_augmentation_jobs_for_nowledge_orphans() {
     db.query("CREATE (:AugmentationJob {job_id: 'failed_job', status: 'failed', message: 'old failure'})")
         .unwrap();
 
-    let output = db
-        .interrupt_knowledge_augmentation_jobs(&KnowledgeAugmentationJobInterruptRequest {
-            error_message: "stale owner".to_string(),
-            completed_at: Value::Int(300),
-        })
+    let parameters = parameters("stale owner", 300).unwrap();
+    let before = db.commit_epoch().unwrap();
+    let mut transaction = db.begin_transaction().unwrap();
+    let candidates = transaction
+        .query_request(bounded_query(CANDIDATES, &parameters))
         .unwrap();
-
-    assert_eq!(output.graph_commit_epoch_before, 4);
-    assert_eq!(output.graph_commit_epoch_after, 5);
-    assert_eq!(output.candidate_count, 2);
-    assert_eq!(output.interrupted_count, 2);
-    assert_eq!(output.updated_property_count, 8);
+    assert_eq!(candidates.rows.len(), 2);
+    assert_eq!(
+        candidates.rows[0]["job_id"],
+        Value::String("pending_job".into())
+    );
+    assert_eq!(
+        candidates.rows[0]["previous_status"],
+        Value::String("pending".into())
+    );
+    assert_eq!(
+        candidates.rows[1]["job_id"],
+        Value::String("running_job".into())
+    );
+    assert_eq!(
+        candidates.rows[1]["previous_status"],
+        Value::String("running".into())
+    );
+    let output = transaction
+        .query_request(bounded_query(INTERRUPT, &parameters))
+        .unwrap();
     assert_eq!(output.rows.len(), 2);
-    assert_eq!(output.rows[0].job_id.as_deref(), Some("pending_job"));
-    assert_eq!(output.rows[0].previous_status, "pending");
-    assert_eq!(output.rows[1].job_id.as_deref(), Some("running_job"));
-    assert_eq!(output.rows[1].previous_status, "running");
+    transaction.commit().unwrap();
+    assert_eq!(before, 4);
+    assert_eq!(db.commit_epoch().unwrap(), before + 1);
 
     let rows = db
-        .query("MATCH (j:AugmentationJob) RETURN j.job_id AS id, j.status AS status, j.message AS message, j.error_message AS error, j.completed_at AS completed_at ORDER BY id ASC")
+        .query_request(bounded_query("MATCH (j:AugmentationJob) RETURN j.job_id AS id, j.status AS status, j.message AS message, j.error_message AS error, j.completed_at AS completed_at ORDER BY id ASC", &BTreeMap::new()))
         .unwrap();
     let completed = rows
         .rows
@@ -97,17 +151,12 @@ fn augmentation_job_interrupt_without_candidates_does_not_write_wal() {
     {
         let mut db = Database::open(&path).unwrap();
         let graph_commit_epoch_before = db.runtime.get().unwrap().store.commit_epoch();
+        let parameters = parameters("no candidates", 301).unwrap();
         let output = db
-            .interrupt_knowledge_augmentation_jobs(&KnowledgeAugmentationJobInterruptRequest {
-                error_message: "no candidates".to_string(),
-                completed_at: Value::Int(301),
-            })
+            .query_request(bounded_query(INTERRUPT, &parameters))
             .unwrap();
-        assert_eq!(output.graph_commit_epoch_before, graph_commit_epoch_before);
-        assert_eq!(output.graph_commit_epoch_after, graph_commit_epoch_before);
-        assert_eq!(output.candidate_count, 0);
-        assert_eq!(output.interrupted_count, 0);
-        assert_eq!(output.updated_property_count, 0);
+        assert!(output.rows.is_empty());
+        assert_eq!(db.commit_epoch().unwrap(), graph_commit_epoch_before);
     }
     let wal_after = read_test_wal(&path).unwrap();
     assert_eq!(wal_after, wal_before);
@@ -121,12 +170,7 @@ fn augmentation_job_interrupt_rejects_empty_reason_before_wal() {
         .unwrap();
     let graph_commit_epoch_before = db.runtime.get().unwrap().store.commit_epoch();
 
-    let error = db
-        .interrupt_knowledge_augmentation_jobs(&KnowledgeAugmentationJobInterruptRequest {
-            error_message: String::new(),
-            completed_at: Value::Int(302),
-        })
-        .unwrap_err();
+    let error = parameters("", 302).unwrap_err();
 
     assert!(error.to_string().contains("non-empty error message"));
     assert_eq!(
@@ -136,8 +180,8 @@ fn augmentation_job_interrupt_rejects_empty_reason_before_wal() {
 }
 
 #[test]
-fn typed_augmentation_job_interrupt_persists_as_one_wal_batch_and_replays() {
-    let path = unique_test_dir("typed_augmentation_job_interrupt_wal_replay");
+fn augmentation_job_interrupt_queries_persist_as_one_wal_batch_and_replays() {
+    let path = unique_test_dir("augmentation_job_interrupt_query_wal_replay");
     {
         let mut db = Database::open(&path).unwrap();
         db.query("CREATE (:AugmentationJob {job_id: 'pending_job', status: 'pending'})")
@@ -149,13 +193,11 @@ fn typed_augmentation_job_interrupt_persists_as_one_wal_batch_and_replays() {
     let setup_batch_count = setup_wal.matches("\tbatch\t").count();
     {
         let mut db = Database::open(&path).unwrap();
+        let parameters = parameters("shutdown", 303).unwrap();
         let output = db
-            .interrupt_knowledge_augmentation_jobs(&KnowledgeAugmentationJobInterruptRequest {
-                error_message: "shutdown".to_string(),
-                completed_at: Value::Int(303),
-            })
+            .query_request(bounded_query(INTERRUPT, &parameters))
             .unwrap();
-        assert_eq!(output.interrupted_count, 2);
+        assert_eq!(output.rows.len(), 2);
     }
     let wal = read_test_wal(&path).unwrap();
     assert!(wal.contains("set_node_property"));
@@ -163,7 +205,7 @@ fn typed_augmentation_job_interrupt_persists_as_one_wal_batch_and_replays() {
     {
         let mut db = Database::open(&path).unwrap();
         let rows = db
-            .query("MATCH (j:AugmentationJob) RETURN j.job_id AS id, j.status AS status, j.message AS message, j.error_message AS error, j.completed_at AS completed_at ORDER BY id ASC")
+            .query_request(bounded_query("MATCH (j:AugmentationJob) RETURN j.job_id AS id, j.status AS status, j.message AS message, j.error_message AS error, j.completed_at AS completed_at ORDER BY id ASC", &BTreeMap::new()))
             .unwrap();
         assert_eq!(rows.rows.len(), 2);
         for row in &rows.rows {

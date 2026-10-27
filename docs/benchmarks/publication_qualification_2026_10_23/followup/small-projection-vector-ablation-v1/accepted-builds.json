@@ -1,0 +1,163 @@
+{
+  "binary_sha256": {
+    "baseline": "be093ddbbf5e292fd7c13627adca236c0d572d15abb830c8a82c2016a43c17d5",
+    "candidate": "1452766196bceca1613e9d4752a2daf618e944539bf486258f143ef6823a241b"
+  },
+  "control": {
+    "source_manifest_sha256": "e3cab9bf2f380b281164d20a37eae226174703757788f401e08855a54fa84243",
+    "accepted_build": {
+      "container": "hawdb-1119-read-query-stages-candidate-build-1",
+      "build_state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 0,
+        "ExitCode": 0,
+        "Error": "",
+        "StartedAt": "2026-10-23T21:15:10.883869212Z",
+        "FinishedAt": "2026-10-23T21:21:10.632765379Z"
+      },
+      "metadata": {
+        "path": "/build/release/deps/concurrent_writers-ba954da0915e1c32",
+        "sha256": "be093ddbbf5e292fd7c13627adca236c0d572d15abb830c8a82c2016a43c17d5"
+      },
+      "rebuilt_targets": [
+        {
+          "kind": [
+            "lib"
+          ],
+          "crate_types": [
+            "lib"
+          ],
+          "name": "hawdb_storage",
+          "src_path": "/work/crates/storage/src/lib.rs",
+          "edition": "2024",
+          "doc": true,
+          "doctest": true,
+          "test": true
+        },
+        {
+          "kind": [
+            "lib"
+          ],
+          "crate_types": [
+            "lib"
+          ],
+          "name": "hawdb",
+          "src_path": "/work/src/lib.rs",
+          "edition": "2024",
+          "doc": true,
+          "doctest": true,
+          "test": true
+        },
+        {
+          "kind": [
+            "bin"
+          ],
+          "crate_types": [
+            "bin"
+          ],
+          "name": "hawdb",
+          "src_path": "/work/src/main.rs",
+          "edition": "2024",
+          "doc": true,
+          "doctest": false,
+          "test": true
+        },
+        {
+          "kind": [
+            "bench"
+          ],
+          "crate_types": [
+            "bin"
+          ],
+          "name": "concurrent_writers",
+          "src_path": "/work/benches/concurrent_writers.rs",
+          "edition": "2024",
+          "doc": false,
+          "doctest": false,
+          "test": false
+        }
+      ],
+      "target_directory": "CARGO_TARGET_DIR=/build"
+    },
+    "binary_sha256": "be093ddbbf5e292fd7c13627adca236c0d572d15abb830c8a82c2016a43c17d5",
+    "measurement_reuse": false
+  },
+  "candidate_container": "/hawdb-1119-small-projection-vector-build-1",
+  "candidate_state": {
+    "Status": "exited",
+    "Running": false,
+    "Paused": false,
+    "Restarting": false,
+    "OOMKilled": false,
+    "Dead": false,
+    "Pid": 0,
+    "ExitCode": 0,
+    "Error": "",
+    "StartedAt": "2026-10-23T22:11:34.273935833Z",
+    "FinishedAt": "2026-10-23T22:18:43.455379546Z"
+  },
+  "rebuilt_targets": [
+    {
+      "kind": [
+        "lib"
+      ],
+      "crate_types": [
+        "lib"
+      ],
+      "name": "hawdb_executor",
+      "src_path": "/work/crates/executor/src/lib.rs",
+      "edition": "2024",
+      "doc": true,
+      "doctest": true,
+      "test": true
+    },
+    {
+      "kind": [
+        "lib"
+      ],
+      "crate_types": [
+        "lib"
+      ],
+      "name": "hawdb",
+      "src_path": "/work/src/lib.rs",
+      "edition": "2024",
+      "doc": true,
+      "doctest": true,
+      "test": true
+    },
+    {
+      "kind": [
+        "bin"
+      ],
+      "crate_types": [
+        "bin"
+      ],
+      "name": "hawdb",
+      "src_path": "/work/src/main.rs",
+      "edition": "2024",
+      "doc": true,
+      "doctest": false,
+      "test": true
+    },
+    {
+      "kind": [
+        "bench"
+      ],
+      "crate_types": [
+        "bin"
+      ],
+      "name": "concurrent_writers",
+      "src_path": "/work/benches/concurrent_writers.rs",
+      "edition": "2024",
+      "doc": false,
+      "doctest": false,
+      "test": false
+    }
+  ],
+  "source_scope": "identical 823e implementation and query-stage harness; only frozen executor projection overlay differs"
+}

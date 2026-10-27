@@ -246,6 +246,21 @@ These finite schedules supplement restartable directory retirement, including
 the barrier making the original UUID path durably absent before recursive
 cleanup; they do not exhaust concurrent interleavings.
 
+Publication-write observations can constrain the temporary filename prefix as
+well as the project-relative path, event and before/after boundary. This keeps
+later cleanup validation scratch from replacing the manifest cut. The ordinary
+and partitioned mutation fixtures both retain manifest torn-write schedules,
+alongside the exact before/after selector-rename cuts. Later barriers never
+strengthen the retained snapshot; native coverage validation still compares the
+complete observed tree after the operation.
+
+Descriptor fixtures retain the model's native directory anchor in their baseline.
+They fill only the remaining foreground capacity for refusal/retry checks. GC
+keeps strict foreground capacity configured, while internal recovery/publication
+and cleanup retain their documented capacity exception; complete runtime closure
+must restore the original open/reserved counts. The global high-water metric is
+recorded rather than treated as a hard bound on those internal operations.
+
 ## Model mapping and limits
 
 The unchanged [lifecycle model](tla/BRANCH_LIFECYCLE_PROOF.md) represents complete

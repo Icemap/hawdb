@@ -317,7 +317,23 @@ the transaction context normally.
 notebooks, and other hosts that already hold their data. It answers the same
 `execute` / `execute_sql` calls through the same embedded admission path;
 `close()` discards everything and a later `open()` does not see it.
-`db.path` is `None` for in-memory handles.
+`db.path` is `None` for in-memory handles. `open`, `Database` and `connect`
+share the same path validation: omit the path or pass `None` for an in-memory
+database; `""` and `":memory:"` raise `ValueError` (including read-only opens).
+Unlike `sqlite3`, `":memory:"` does not select an in-memory database.
+
+Durable paths accept strings and `os.PathLike[str]`. A bare relative name
+creates or opens a project in the current directory. `Database.path` and its
+`repr` report an absolute path without resolving symlinks, so the saved path
+can reopen the same project after `os.chdir`. A regular file is refused with
+a `StorageError` naming the path and is left untouched. Writable opens refuse
+known missing parents with `StorageError`; permission and other filesystem
+errors retain their underlying cause instead of reporting a missing parent.
+Read-only opens require an existing project. DB-API `connect` preserves these
+native exception types while also mapping them into its PEP 249 hierarchy.
+The parent check is advisory: removal between validation and engine open can
+still race with the engine's parent creation. It is not an atomic
+no-parent-creation guarantee.
 
 ```python
 db = hawdb.open()
@@ -356,6 +372,50 @@ free-space refusals, `budget` is the usable space after preserving
 File-descriptor failures retain `DescriptorError`. Other execution checks may
 still raise the general `ExecutionError`. The [resource metadata contract](../../docs/EXECUTION_REQUEST_CONTRACT.md#resource-refusal-metadata)
 lists built-in budget origins and explains how to handle caller-defined origins.
+
+## DB-API (PEP 249)
+
+`hawdb.connect()` returns a PEP 249 connection for SQL. It takes the same
+arguments as `hawdb.open`, plus `autocommit`, and owns the database it opens.
+`connect` used to be another name for `open`; code that relied on that should
+call `open`, which keeps Cypher, named parameters and graph values. A
+connection holds its path like any handle, so close it before opening the same
+path with `open`.
+
+```python
+with hawdb.connect() as connection:
+    cursor = connection.cursor()
+    cursor.execute("CREATE TABLE trades (id BIGINT PRIMARY KEY, price DOUBLE PRECISION)")
+    cursor.executemany("INSERT INTO trades (id, price) VALUES ($1, $2)", [(1, 9.5), (2, 7.25)])
+    cursor.execute("SELECT id, price FROM trades WHERE id >= $1", [2])
+    print(cursor.description[1][:2])  # ('price', <class 'float'>)
+    print(cursor.fetchall())          # [(2, 7.25)]
+```
+
+Parameters bind by position to `$1`, `$2`, ... (`paramstyle` is
+`"numeric_dollar"`). Autocommit is off: statements, queries included, run in a
+transaction that `commit()` publishes and that `rollback()`, `close()` or an
+exception leaving the `with` block discards. A transaction that only reads
+still pins its snapshot until it ends, so end it promptly, or turn autocommit on
+for long-lived reading. A failed `executemany` rolls back
+the whole transaction, and the connection refuses further work until
+`rollback()`. Branch commands need autocommit, which
+`connect(..., autocommit=True)` turns on and `connection.autocommit` changes
+between transactions; read-only connections always autocommit. Errors follow
+the PEP 249 hierarchy, and engine errors keep their `hawdb.exceptions` types
+as well: a syntax error is both a `ProgrammingError` and a
+`hawdb.exceptions.ParseError`. Constraint violations such as a duplicate
+primary key are plain `DatabaseError`s, because the engine does not set them
+apart yet. Use and close a connection on the thread that opened it.
+
+Rows are tuples in SELECT-list order, and `description` lists the columns even
+when nothing matches, including queries on `information_schema`, `pg_catalog`
+and `system`. Catalog wildcards expand in the catalog's declared column order.
+SQL `EXPLAIN` reports `id, estRows, task, access object, operator info`;
+`EXPLAIN ANALYZE` reports `id, estRows, actRows, task, access object, execution info,
+operator info, memory, disk`. `pandas.read_sql` works, with a
+warning that pandas only tests SQLAlchemy and sqlite3 connections.
+`help(hawdb.dbapi)` gives the full contract.
 
 ## Pydantic rows (optional)
 

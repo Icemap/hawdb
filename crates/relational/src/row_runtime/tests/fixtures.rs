@@ -86,7 +86,7 @@ pub(super) fn fields(sql: &str, state: &RelationalState) -> RelationalFieldPlan 
     crate::field_plan::plan_relational_field_plan(&select, state).unwrap()
 }
 
-pub(super) struct Fixture {
+pub(crate) struct Fixture {
     pub directory: PathBuf,
     pub state: RelationalState,
     pub root: Arc<RelationalRowPageRootReader>,

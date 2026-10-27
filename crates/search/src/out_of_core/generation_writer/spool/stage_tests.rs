@@ -73,7 +73,8 @@ fn cleanup_unwind_preserves_evidence_and_retained_admission() {
             },
             hawdb_qos::IoConcurrencyBudget::new(2, 1),
         );
-        let request = hawdb_qos::RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024);
+        let request = hawdb_qos::RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024)
+            .with_io_wave_slots(1);
         let admission = SearchGenerationAdmission::acquire(&governor, request).unwrap();
         let mut writer = admission
             .create_writer(&fixture.0, Default::default())
@@ -108,7 +109,7 @@ fn cleanup_unwind_preserves_evidence_and_retained_admission() {
             drop(writer);
             stage::evidence::install(fixture.0.clone(), started_tx, resume_rx);
             assert!(std::panic::catch_unwind(|| {
-                SearchOutOfCoreGenerationWriter::retry_staging_cleanup(&fixture.0, 1).unwrap();
+                admitted_retry(&governor, &fixture.0, 1).unwrap();
             })
             .is_err());
         } else {
@@ -139,8 +140,7 @@ fn cleanup_unwind_preserves_evidence_and_retained_admission() {
         drop(fault);
         let admission = SearchGenerationAdmission::acquire(&governor, request).unwrap();
         drop(admission);
-        let removed =
-            SearchOutOfCoreGenerationWriter::retry_staging_cleanup(&fixture.0, 1).unwrap();
+        let removed = admitted_retry(&governor, &fixture.0, 1).unwrap();
         assert_eq!(removed.removed_stages, 1);
         assert_eq!(removed.pending_stages, 0);
         assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
@@ -313,7 +313,8 @@ fn retained_stages_do_not_exhaust_an_unrelated_root() {
         },
         hawdb_qos::IoConcurrencyBudget::new(2, 1),
     );
-    let request = hawdb_qos::RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024);
+    let request = hawdb_qos::RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024)
+        .with_io_wave_slots(1);
     let mut evidence = Vec::new();
     for index in 0_u32..256 {
         let before = fs::read_dir(&blocked)
@@ -436,8 +437,7 @@ fn retained_stages_do_not_exhaust_an_unrelated_root() {
         fs::remove_file(path.join("evidence")).unwrap();
         fs::remove_dir(path).unwrap();
     }
-    let removed =
-        crate::SearchOutOfCoreGenerationWriter::retry_staging_cleanup(&blocked, 256).unwrap();
+    let removed = admitted_retry(&governor, &blocked, 256).unwrap();
     assert_eq!(removed.removed_stages, 256);
     assert_eq!(removed.pending_stages, 0);
     assert_eq!(removed.retained_memory_bytes, 0);
@@ -458,7 +458,7 @@ fn retained_host_memory_denial_leaves_no_private_stage() {
     );
     let admission = crate::SearchGenerationAdmission::acquire(
         &governor,
-        hawdb_qos::RuntimeWorkRequest::background_maintenance(budget),
+        hawdb_qos::RuntimeWorkRequest::background_maintenance(budget).with_io_wave_slots(1),
     )
     .unwrap();
     let error = admission
@@ -487,7 +487,8 @@ fn pending_cleanup_releases_work_admission_and_retries_on_the_next_create() {
         },
         IoConcurrencyBudget::new(2, 1),
     );
-    let request = RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024);
+    let request =
+        RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024).with_io_wave_slots(1);
     let permit = std::sync::Arc::new(governor.try_admit(request).unwrap());
     let task = permit.bind_task_context(RuntimeTaskContext::default());
     let mut memory = BuildMemory::new(&task).unwrap();
@@ -510,8 +511,10 @@ fn pending_cleanup_releases_work_admission_and_retries_on_the_next_create() {
     assert!(pending.retained_memory_bytes > 0);
     assert!(path.exists());
 
-    let task = RuntimeTaskContext::default();
-    let memory = BuildMemory::new(&task).unwrap();
+    let permit = std::sync::Arc::new(governor.try_admit(request).unwrap());
+    let task = permit.bind_task_context(RuntimeTaskContext::default());
+    let mut memory = BuildMemory::new(&task).unwrap();
+    memory.host_admission = Some(permit);
     fs::remove_dir(&unexpected).unwrap();
     let next = StageDirectory::create(&fixture.0, &memory, &task).unwrap();
     assert!(!path.exists());
@@ -630,7 +633,8 @@ fn native_unlink_failure_retains_only_cleanup_metadata_until_retry() {
         },
         IoConcurrencyBudget::new(2, 1),
     );
-    let request = RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024);
+    let request =
+        RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024).with_io_wave_slots(1);
     let admission = SearchGenerationAdmission::acquire(&governor, request).unwrap();
     let mut writer = admission
         .create_writer(&fixture.0, Default::default())
@@ -690,16 +694,14 @@ fn native_unlink_failure_retains_only_cleanup_metadata_until_retry() {
         report.retained_memory_bytes as u64
     );
     assert_eq!(governor.snapshot().active_background_tasks, 0);
-    let denied =
-        crate::SearchOutOfCoreGenerationWriter::retry_staging_cleanup(&fixture.0, 1).unwrap();
+    let denied = admitted_retry(&governor, &fixture.0, 1).unwrap();
     assert_eq!(denied.attempted_stages, 1);
     assert_eq!(denied.pending_stages, 1);
     assert_eq!(denied.reserved_disk_bytes, report.reserved_disk_bytes);
     release_tx.send(()).unwrap();
     competitor.join().unwrap();
     drop(failure);
-    let released =
-        crate::SearchOutOfCoreGenerationWriter::retry_staging_cleanup(&fixture.0, 1).unwrap();
+    let released = admitted_retry(&governor, &fixture.0, 1).unwrap();
     assert_eq!(released.removed_stages, 1);
     assert_eq!(released.pending_stages, 0);
     assert_eq!(released.reserved_disk_bytes, 0);
@@ -722,7 +724,8 @@ fn persistent_cleanup_failure_keeps_evidence_without_pinning_the_fd_domain() {
         },
         hawdb_qos::IoConcurrencyBudget::new(2, 1),
     );
-    let request = hawdb_qos::RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024);
+    let request = hawdb_qos::RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024)
+        .with_io_wave_slots(1);
     let admission = crate::SearchGenerationAdmission::acquire(&governor, request).unwrap();
     let mut writer = admission
         .create_writer(&fixture.0, Default::default())
@@ -754,8 +757,7 @@ fn persistent_cleanup_failure_keeps_evidence_without_pinning_the_fd_domain() {
 
     let reopened = ProjectFileDescriptors::acquire_existing(&fixture.0, 8).unwrap();
     for _ in 0..2 {
-        let report =
-            crate::SearchOutOfCoreGenerationWriter::retry_staging_cleanup(&fixture.0, 1).unwrap();
+        let report = admitted_retry(&governor, &fixture.0, 1).unwrap();
         assert_eq!(report.attempted_stages, 1);
         assert_eq!(report.pending_stages, 1);
         assert_eq!(report.blocked_stages, 1);
@@ -790,7 +792,7 @@ fn persistent_cleanup_failure_keeps_evidence_without_pinning_the_fd_domain() {
     fs::remove_file(unexpected.join("evidence")).unwrap();
     fs::remove_dir(unexpected).unwrap();
     assert_eq!(
-        crate::SearchOutOfCoreGenerationWriter::retry_staging_cleanup(&fixture.0, 1)
+        admitted_retry(&governor, &fixture.0, 1)
             .unwrap()
             .removed_stages,
         1
@@ -940,7 +942,7 @@ fn persistent_unlink_failure_preserves_generation_and_releases_work_resources() 
     assert!(debt.retained_memory_bytes > 0);
     assert!(debt.retained_memory_bytes < 8192);
     for _ in 0..3 {
-        let report = SearchOutOfCoreGenerationWriter::retry_staging_cleanup(&fixture.0, 1).unwrap();
+        let report = admitted_retry(&governor, &fixture.0, 1).unwrap();
         assert_eq!(report.attempted_stages, 1);
         assert_eq!(report.removed_stages, 0);
         assert_eq!(report.pending_stages, 1);
@@ -973,7 +975,7 @@ fn persistent_unlink_failure_preserves_generation_and_releases_work_resources() 
     assert_idle(&governor, debt.retained_memory_bytes);
     assert_eq!(fs::read(&evidence).unwrap(), b"retained private evidence");
     drop(fault);
-    let report = SearchOutOfCoreGenerationWriter::retry_staging_cleanup(&fixture.0, 1).unwrap();
+    let report = admitted_retry(&governor, &fixture.0, 1).unwrap();
     assert_eq!(report.attempted_stages, 1);
     assert_eq!(report.removed_stages, 1);
     assert_eq!(report.pending_stages, 0);
@@ -991,4 +993,22 @@ fn persistent_unlink_failure_preserves_generation_and_releases_work_resources() 
     );
     assert_eq!(reopened.metrics().open, 0);
     assert_eq!(reopened.metrics().reserved, 0);
+}
+
+fn admitted_retry(
+    governor: &hawdb_qos::RuntimeGovernor,
+    root: impl AsRef<Path>,
+    attempts: usize,
+) -> Result<super::SearchStagingCleanupReport> {
+    let permit = governor
+        .try_admit(
+            hawdb_qos::RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024)
+                .with_io_wave_slots(1),
+        )
+        .unwrap();
+    crate::SearchOutOfCoreGenerationWriter::retry_staging_cleanup_with_context(
+        root,
+        attempts,
+        &permit.bind_task_context(RuntimeTaskContext::default()),
+    )
 }

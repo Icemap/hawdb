@@ -1,0 +1,83 @@
+{
+  "baseline_revision": "80c4b84357757ac6344e90f8fd4b73dbf9bcd0d0",
+  "candidate_code_revision": "16cf0e8320fac237d6026c7a84ede91060d49c80",
+  "source_sha256": {
+    "Cargo.toml": "db0f9b6f4ac0fa242cfd345d7c732991bf35716f899aea4d08b9b3cc498fe7ec",
+    "benches/mvcc_hot_paths.rs": "31080a33beca330dccbf5aaafda00c094449fabf800037819722da39e2b17f59",
+    "benchmarks.bzl": "be39e81069d873ab24656e87706b9a864675588ed5b324e00d489acae82b36db",
+    "crates/storage/src/consistency.rs": "f467fcc8bc5a019b480902a938c26f408dee478ad9e4aa4a7730df604ae2d355",
+    "crates/storage/src/cow.rs": "55bb0b60faefe85a474c91af96beae864d8d82f72b8e0ee5a7c83221bd69df39",
+    "crates/storage/src/cow/checkpoint.rs": "44e6a9ad4168d155b14fd29b89ca7165f22807ce2147fac721242349e9c5428b",
+    "crates/storage/src/cow/checkpoint/tests.rs": "bd63de9bfd505f2b397ffcd8c96228fc57f0ac3e6a478d6fabad4e6f3d8f3775",
+    "crates/storage/src/cow/node_map.rs": "28dfe926fdc00c0d4ed83d2e810c8960b8d0d1cec927cb4244ed00c154c3641f",
+    "crates/storage/src/cow/page.rs": "be7432350dd806432aef6de27732241b0b4195cac02e166ad0dced8fdb30b7dc",
+    "crates/storage/src/cow/rel_map.rs": "840e2143c4b5ae4190d3b9f19ffb64275296165ba24ce92e2349998a4da4f2c7",
+    "crates/storage/src/cow/retained_capacity.rs": "f652343854c71cda4323d7748d274932cb09930b6842b4239c73324bed3a9de2",
+    "crates/storage/src/cow/version_pages.rs": "fb07e002a9fb8f48d908af328c19d6a7b456f59e921e56b1f3bfae3be83a9298",
+    "crates/storage/src/graph_constraints.rs": "0d82a5c27c9cbda1cc5db58b3127401b48be891a7be3f50d7081f3c1da7223b6",
+    "crates/storage/src/graph_constraints/tests.rs": "dfa8365d81bec91105c3160218107973146ad26e56ddbfacc84f3d73375dddad",
+    "crates/storage/src/graph_overlay/cursor.rs": "c625b59345ac536087a8e1fff5b3a0dbd6617aa646968496fec49a046e51b096",
+    "crates/storage/src/statistics.rs": "41357aecec4572b00f0302159d3a951fe3a34883e4ff523b75033f4d66aca672",
+    "crates/storage/src/statistics/checkpoint.rs": "6fdae271d97090d8b3d6702df38510966d703ea75431df9b9db7910a1625c4fd",
+    "crates/storage/src/statistics/checkpoint/tests.rs": "80064487dede4947f95ff00806bd5db2fb86fadb591acb94d6b87f492837362a",
+    "crates/storage/src/store.rs": "a9663edfe1ef14ecc2358d237f87c9aa2b0fc5b007e218e8575e85196c68be03",
+    "crates/storage/src/store/durable/wal.rs": "41ddab53e4fb9d845ad2bd4f4702e0dad53f2fc9dcbd4735a02d2ce145df566f",
+    "crates/storage/src/store/graph_checkpoint.rs": "b81611ae1093e702d80b089d8a67ad1e74162a0c5b2c47d1f77a0f92cb6c2890",
+    "crates/storage/src/store/graph_checkpoint/canonical_preparation.rs": "2c71e4527da60572a5baafa6a1858d658ae8c6ae4a6c6c873ef48e866f6a6cac",
+    "crates/storage/src/store/graph_checkpoint_candidate/incremental_memory_tests.rs": "1a2b6b77bd3cfedab4e7a33547b20eb3793f4d664ed5e7946fc2004e7f97e5a5",
+    "crates/storage/src/store/graph_commit.rs": "29c56a31881d370cb2a26d2ff87eb067cec1fd08f02fa31d8565905ab5e1fb14",
+    "crates/storage/src/store/graph_recovery.rs": "3886b22516ef0e88cf0674a5c0c4e3a1c4aa28c58c13fd715191dc1379bf8fa8",
+    "crates/storage/src/version.rs": "a5445b4b3171eae3f296c64ca4b97e3718d3baf7ca60d8fbe3f4798ded5c65ed",
+    "crates/storage/src/version/history_budget.rs": "00bced97a29da023858b7ea0f9d665f0f2f11d3c1f9cfce45208d559b2e5feff",
+    "crates/storage/src/version/page_history_tests.rs": "630fc7567177a3786b3b8d98ef4264a8cad5adef3322fbbff3375ffbead7f416",
+    "crates/storage/src/wal.rs": "29ccfd085a0179eec4dfad6da9e097c39209205fa4e66ce6f42f24f88260bff6",
+    "crates/storage/src/wal/binary.rs": "e176e7a2bf0248e2a8ea791ed6293645dcbbc98dc95cc1e10e8e07c6c8cfdd20",
+    "src/api/concurrent.rs": "2e2242909329be6e60e2eff137dc831d44c143bbaf28c545a173ff422698700e",
+    "src/api/concurrent/graph_preparation_tests.rs": "6522b8783f13d5e7bf092c99bb2e4a76af303a88a6268b1404f0d52673ef293e",
+    "src/api/concurrent/publication.rs": "acba8b9c6879ce07e6619e20953fc91d211e9641f481071838816eb16491e33d",
+    "src/api/mod.rs": "2d1de68aed0b34915185e437db89f57de7dfe92d26c0bdbd4c223e88a1b903c8",
+    "src/api/query_runtime.rs": "ee190d4732f99c6877db48c18269599f4e671ad5428b3c4f0d22200cd93afec3",
+    "src/api/read_execution.rs": "0e31e0cbdde21fcde1fb3376519ad9f3552191bdb8759a179360c21c9340e79d",
+    "src/executor/entrypoint.rs": "858f12d3d9bdc0d136e8ebf1a712375e7f86f4706b640e2c61d578c124420f89"
+  },
+  "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: aarch64-apple-darwin\nrelease: 1.97.1\nLLVM version: 22.1.6",
+  "os": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0.1\nBuildVersion:\t\t26A434",
+  "machine": "Apple M3 Max",
+  "logical_cpus": "16",
+  "memory_bytes": "137438953472",
+  "cargo_profile": {
+    "name": "bench",
+    "opt-level": 3,
+    "debug": false,
+    "strip": "none",
+    "codegen-units": 1,
+    "lto": "thin",
+    "incremental": false,
+    "debug-assertions": false,
+    "overflow-checks": false,
+    "rpath": false
+  },
+  "feature_configuration": "default features, locked dependencies, repository release benchmark profile",
+  "measurement_scope": "Manual fixed-work component/API diagnostic on a shared host; no CPU affinity, cold-cache eviction, reserved host, or power-loss qualification.",
+  "generated_utc": "2026-10-24T17:23:42.890777+00:00",
+  "unchanged_configuration_sha256": {
+    "Cargo.lock": "e527aab8afdb9fdc130ccebf6959b4e698d8e01eb525ec7e744e0d42fb3bbdcc",
+    ".cargo/config.toml": "06c7ca26d39223bd90a6412acd8609c380ce2d1650a72b70c90171656ca89819",
+    "rust-toolchain.toml": "8e390d6a0838315f972690f46ef8bae8b7ecc9ee6c1ed70140ef852869c2482e",
+    ".bazelrc": "7997495acaeef67c71acad9deb518b04732b4bf9d46fc092347f7ed8fb47cd21"
+  },
+  "source_manifest_scope": "All non-Markdown files changed by code commit16cf relative to baseline80c4. Subsequent changes in this evidence commit are documentation/test-index/evidence only; the measured binary source is unchanged.",
+  "artifact_sha256": {
+    "README.md": "ecd3094952ad30c259e9e5c9760322323648b703095ee9a926530a47a901cafe",
+    "exploratory_v3.json": "38bb5cd87f04b1b417579eb311c2fe8058b55397a257bd5f078f4abf7dac927b",
+    "paired_v4_confirmation.json": "cbeedd598a8dfb79a4d9b6a5ef9c2dd9997d2c612858d2b1243b6231181679d7",
+    "paired_v4_initial.json": "446b210cf70426719adb5726acbacaabe6b655d94237479111d3646543201556"
+  },
+  "baseline_harness_setup": {
+    "added_benchmark_source": "benches/mvcc_hot_paths.rs",
+    "cargo_bench_registration": {
+      "name": "mvcc_hot_paths",
+      "harness": false
+    }
+  }
+}

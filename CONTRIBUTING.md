@@ -240,6 +240,11 @@ data shape, batch size, repetitions, cache state, durability settings, and
 CPU/memory/I/O measurements as applicable; debug timings and operation counts
 are supporting evidence, not interchangeable with release workload measurements.
 
+Keep checked-in benchmark material focused on the experimental procedure,
+measurements, and conclusions. Keep compilation/test run logs and build
+troubleshooting outside the repository; summarize validation in the PR instead
+of storing its console output under `docs/benchmarks/`.
+
 ## Review and merge
 
 Before approving a PR, verify that its `Issue Number:` line references an

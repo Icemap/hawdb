@@ -104,6 +104,9 @@ fn qualification_probe_error(
         "relational index qualification probe {ordinal} on {table}.{index} failed: {error}"
     );
     match error {
+        RelationalIndexShadowError::UnsupportedFormat(error) => {
+            HawDBError::UnsupportedStorageFormat(error)
+        }
         RelationalIndexShadowError::FileDescriptors(error) => HawDBError::FileDescriptors(error),
         RelationalIndexShadowError::Corrupt(_) => HawDBError::StorageIntegrity(context),
         RelationalIndexShadowError::Admission(_)
@@ -1675,6 +1678,7 @@ mod tests {
                     RelationalTransaction {
                         writes: vec![
                             RelationalWrite::CreateTable(RelationalTableSchema {
+                                materialized_view: None,
                                 name: "documents".to_string(),
                                 columns: vec![
                                     RelationalColumnSchema {
@@ -3492,6 +3496,7 @@ mod tests {
         RelationalTransaction {
             writes: vec![
                 RelationalWrite::CreateTable(RelationalTableSchema {
+                    materialized_view: None,
                     name: "documents".to_string(),
                     columns: vec![
                         RelationalColumnSchema {
@@ -3882,6 +3887,7 @@ mod tests {
             let context = RelationalIndexReadContext::new(limits);
             let prefix = RelationalKey(vec![RelationalValue::Text("owner-1".into())]);
             let scan = RelationalIndexRangeScan {
+                bounds: Default::default(),
                 prefix: prefix.clone(),
                 exclusive_bound: None,
                 direction: hawdb_storage::relational::RelationalIndexScanDirection::Forward,
@@ -3953,6 +3959,7 @@ mod tests {
         RelationalTransaction {
             writes: vec![
                 RelationalWrite::CreateTable(RelationalTableSchema {
+                    materialized_view: None,
                     name: "accounts".to_string(),
                     columns: vec![
                         constraint_text_column("id", false),
@@ -3970,6 +3977,7 @@ mod tests {
                     }],
                 }),
                 RelationalWrite::CreateTable(RelationalTableSchema {
+                    materialized_view: None,
                     name: "sessions".to_string(),
                     columns: vec![
                         constraint_text_column("id", false),

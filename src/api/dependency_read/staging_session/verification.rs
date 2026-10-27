@@ -275,7 +275,9 @@ mod tests {
             );
             let admission = SearchGenerationAdmission::acquire(
                 &governor,
-                RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024).with_io_wave_slots(1),
+                RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024)
+                    .with_result_bytes(16 * 1024)
+                    .with_io_wave_slots(1),
             )
             .unwrap();
             let feed = ProjectionFeedLimits {

@@ -250,6 +250,7 @@ fn checkpoint_units_relational_decode_length_and_whole_field_truncation_match_or
 
 fn schema() -> RelationalTableSchema {
     let mut schema = RelationalTableSchema {
+        materialized_view: None,
         name: "table-界".repeat(10000),
         columns: Vec::new(),
         primary_key: vec!["id".into()],

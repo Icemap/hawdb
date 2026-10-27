@@ -17,6 +17,7 @@ use crate::ExecutionMemoryConfig;
 use hawdb_core::Value;
 use std::collections::BTreeMap;
 
+mod borrowed;
 mod differential;
 
 #[test]

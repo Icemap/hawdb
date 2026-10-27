@@ -209,6 +209,7 @@ mod tests {
 
     fn relational_schema() -> RelationalTableSchema {
         RelationalTableSchema {
+            materialized_view: None,
             name: "metadata".to_string(),
             columns: vec![RelationalColumnSchema {
                 name: "id".to_string(),

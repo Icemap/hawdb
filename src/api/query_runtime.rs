@@ -24,6 +24,11 @@ pub(crate) struct PreparedRuntimeQuery {
     optimizer_environment: Option<OptimizerEnvironmentKey>,
     admission: RuntimeAdmissionPlan,
     parse_metrics: hawdb_cypher::ParseMetrics,
+    config: DatabaseConfig,
+    system_variables: QuerySystemVariables,
+    planning_memory: Option<hawdb_qos::RuntimeRetainedMemory>,
+    access_control: Option<QueryAccessControlContext>,
+    scoring_key: Option<super::query_request::ScoringPlanCacheKey>,
 }
 
 #[cfg_attr(not(feature = "tokio-runtime"), allow(dead_code))]
@@ -31,7 +36,6 @@ pub(crate) struct RuntimePlanningSnapshot {
     branch_id: Option<hawdb_core::Uuid>,
     catalog: Catalog,
     store: GraphStore,
-    published_read_view: PublishedReadView,
     optimizer: CascadesOptimizer,
     config: DatabaseConfig,
     system_variables: QuerySystemVariables,
@@ -51,30 +55,28 @@ struct RuntimePlanningContext<'a> {
 
 #[cfg_attr(not(feature = "tokio-runtime"), allow(dead_code))]
 impl RuntimePlanningSnapshot {
-    pub(crate) fn is_current_for(
-        &self,
-        database: &Database,
-        prepared: &PreparedRuntimeQuery,
-    ) -> Result<bool> {
-        let runtime = database.runtime.get()?;
-        Ok(
-            self.branch_id == database.current_branch()?.map(|current| current.info.id)
-                && self.published_read_view == runtime.store.published_read_view()
-                && self.config == database.config
-                && self.system_variables == database.system_variables
-                && prepared
-                    .optimizer_environment
-                    .as_ref()
-                    .is_none_or(|environment| {
-                        environment.is_execution_compatible(&runtime.catalog, &runtime.store)
-                    }),
+    pub(crate) fn accepts_prepared(&self, prepared: &PreparedRuntimeQuery) -> bool {
+        prepared.is_compatible(
+            self.branch_id,
+            &self.config,
+            &self.system_variables,
+            &self.catalog,
+            &self.store,
         )
     }
 
+    #[cfg(test)]
     pub(crate) fn prepare(
         &self,
-        cypher_text: String,
+        cypher: String,
         parameters: &BTreeMap<String, Value>,
+    ) -> Result<PreparedRuntimeQuery> {
+        self.prepare_request(QueryRequest::new(&cypher).with_params(parameters))
+    }
+
+    pub(crate) fn prepare_request(
+        &self,
+        request: QueryRequest<'_>,
     ) -> Result<PreparedRuntimeQuery> {
         RuntimePlanningContext {
             branch_id: self.branch_id,
@@ -85,10 +87,11 @@ impl RuntimePlanningSnapshot {
             system_variables: &self.system_variables,
         }
         .prepare(
-            cypher_text,
-            parameters,
+            request.cypher.to_owned(),
+            request.parameters.unwrap_or(&BTreeMap::new()),
             &self.plan_cache,
             &self.planning_cache,
+            QueryExecutionOptions::for_request(request, None),
         )
     }
 }
@@ -98,11 +101,35 @@ pub(super) struct PreparedRuntimeExecution {
     pub(super) optimized: Option<OptimizedQueryPlan>,
     pub(super) parse_metrics: hawdb_cypher::ParseMetrics,
     pub(super) statement_started: Option<hawdb_core::time::Instant>,
+    pub(super) planning_memory: Option<hawdb_qos::RuntimeRetainedMemory>,
+    access_control: Option<QueryAccessControlContext>,
+    scoring_key: Option<super::query_request::ScoringPlanCacheKey>,
 }
 
-#[derive(Clone, Copy)]
+impl PreparedRuntimeExecution {
+    pub(super) fn take_optimized(
+        &mut self,
+        access: Option<&QueryAccessControlContext>,
+        scoring: Option<BoundScoringRequest<'_>>,
+    ) -> Result<Option<OptimizedQueryPlan>> {
+        if self.access_control.as_ref() != access
+            || self.scoring_key != scoring.map(BoundScoringRequest::cache_key)
+        {
+            return Ok(None);
+        }
+        let Some(mut optimized) = self.optimized.take() else {
+            return Ok(None);
+        };
+        if let Some(scoring) = scoring {
+            scoring.rebind(&mut optimized.physical_plan)?;
+        }
+        Ok(Some(optimized))
+    }
+}
+
+#[derive(Clone, Copy, Default)]
 pub(super) struct QueryExecutionOptions<'a> {
-    capture_trace: bool,
+    pub(super) capture_trace: bool,
     pub(super) access_control: Option<&'a QueryAccessControlContext>,
     pub(super) task_context: Option<&'a hawdb_core::RuntimeTaskContext>,
     pub(super) scoring: Option<BoundScoringRequest<'a>>,
@@ -146,16 +173,58 @@ impl<'a> QueryExecutionOptions<'a> {
 pub(super) fn parse_runtime_execution(cypher_text: &str) -> Result<PreparedRuntimeExecution> {
     let statement_started = hawdb_core::time::Instant::now();
     let parsed = hawdb_cypher::parse_profiled(cypher_text);
+    #[cfg(feature = "qualification")]
+    super::query_preparation_metrics::record_parse(parsed.metrics.elapsed_nanos);
     Ok(PreparedRuntimeExecution {
         statement: parsed.result?,
         optimized: None,
         parse_metrics: parsed.metrics,
         statement_started: Some(statement_started),
+        planning_memory: None,
+        access_control: None,
+        scoring_key: None,
     })
+}
+
+pub(crate) fn runtime_result_memory_budget(config: &DatabaseConfig, governor_budget: u64) -> u64 {
+    // Per-statement logical payload limits cannot fund compact schema/value
+    // containers. Admission keeps the host ceiling; output checks stay separate.
+    config
+        .max_read_result_payload_bytes
+        .map(|bytes| u64::try_from(bytes).unwrap_or(u64::MAX))
+        .map_or(governor_budget, |bytes| bytes.min(governor_budget))
 }
 
 #[cfg_attr(not(feature = "tokio-runtime"), allow(dead_code))]
 impl PreparedRuntimeQuery {
+    pub(super) fn is_compatible(
+        &self,
+        branch_id: Option<hawdb_core::Uuid>,
+        config: &DatabaseConfig,
+        system_variables: &QuerySystemVariables,
+        catalog: &Catalog,
+        store: &GraphStore,
+    ) -> bool {
+        self.branch_id == branch_id
+            && self.config == *config
+            && self.system_variables == *system_variables
+            && self
+                .optimizer_environment
+                .as_ref()
+                .is_none_or(|environment| environment.is_execution_compatible(catalog, store))
+    }
+
+    pub(crate) fn with_planning_memory(mut self, memory: hawdb_qos::RuntimeRetainedMemory) -> Self {
+        self.planning_memory = Some(memory);
+        self
+    }
+
+    pub(crate) fn planning_memory_bytes(&self) -> u64 {
+        self.planning_memory
+            .as_ref()
+            .map_or(0, |memory| memory.bytes())
+    }
+
     pub(crate) fn admission(&self) -> &RuntimeAdmissionPlan {
         &self.admission
     }
@@ -168,22 +237,59 @@ impl PreparedRuntimeQuery {
         self.parse_metrics.elapsed_nanos
     }
 
+    pub(crate) fn uses_external_seed(&self) -> bool {
+        let mut required = false;
+        if let Some(optimized) = &self.optimized {
+            hawdb_plan_cypher::visit_plan(&optimized.physical_plan, &mut |plan| {
+                required |= matches!(
+                    plan,
+                    hawdb_plan_cypher::PhysicalPlan::TextSeedScan { .. }
+                        | hawdb_plan_cypher::PhysicalPlan::VectorSeedScan { .. }
+                );
+            });
+        }
+        required
+    }
+
     pub(crate) fn uses_read_snapshot(&self) -> bool {
-        if self.admission.is_mutation
-            || self
+        !self.admission.is_mutation
+            && !self
                 .optimized
                 .as_ref()
                 .is_some_and(|optimized| executor::requires_write_access(&optimized.physical_plan))
-        {
-            return false;
-        }
-        // A plain EXPLAIN may contain a mutation plan without executing it. Snapshot
-        // execution rejects that plan as a write, so keep this metadata-only path on
-        // the existing exclusive executor until it has a dedicated read API.
+    }
+
+    pub(crate) fn uses_borrowed_read(&self) -> bool {
+        self.uses_read_snapshot()
+            && !matches!(self.statement, cypher::Statement::Explain(_))
+            && self
+                .physical_plan()
+                .is_some_and(|plan| hawdb_executor::batch::BatchPlanRef::try_new(plan).is_some())
+    }
+
+    pub(crate) fn uses_transaction_kernel(&self) -> bool {
         !matches!(
-            super::statement_body(&self.statement),
-            cypher::Statement::Explain(explain) if !explain.analyze
-        )
+            statement_body(&self.statement),
+            cypher::Statement::Explain(_)
+        ) && self.optimized.as_ref().is_some_and(|optimized| {
+            matches!(
+                optimized.physical_plan.class(),
+                hawdb_plan_cypher::PhysicalPlanClass::Schema
+                    | hawdb_plan_cypher::PhysicalPlanClass::Mutation
+            )
+        })
+    }
+
+    pub(super) fn physical_plan(&self) -> Option<&PhysicalPlan> {
+        self.optimized
+            .as_ref()
+            .map(|optimized| &optimized.physical_plan)
+    }
+
+    pub(super) fn matches_request(&self, request: QueryRequest<'_>) -> bool {
+        self.cypher_text == request.cypher
+            && self.access_control.as_ref() == request.access_control
+            && self.scoring_key == request.scoring.map(|scoring| scoring.bind().cache_key())
     }
 
     pub(super) fn into_execution<R: hawdb_storage::graph_engine::GraphReadEngine>(
@@ -202,6 +308,9 @@ impl PreparedRuntimeQuery {
                 optimized: environment_matches.then_some(self.optimized).flatten(),
                 parse_metrics: self.parse_metrics,
                 statement_started: None,
+                planning_memory: self.planning_memory,
+                access_control: self.access_control,
+                scoring_key: self.scoring_key,
             },
         )
     }
@@ -217,20 +326,37 @@ impl Database {
         Ok(())
     }
 
+    fn validate_prepared_request(
+        &self,
+        prepared: &PreparedRuntimeQuery,
+        request: QueryRequest<'_>,
+    ) -> Result<()> {
+        self.validate_prepared_branch(prepared)?;
+        if let Some(access) = request.access_control {
+            self.config
+                .runtime_capabilities
+                .require(hawdb_core::RuntimeCapability::AccessControl)?;
+            access.validate()?;
+        }
+        if !prepared.matches_request(request) || !self.accepts_prepared_query(prepared)? {
+            return Err(HawDBError::Execution(
+                "prepared execution context changed; prepare and admit again".into(),
+            ));
+        }
+        Ok(())
+    }
+
     #[cfg_attr(not(feature = "tokio-runtime"), allow(dead_code))]
     pub(crate) fn runtime_planning_snapshot(&self) -> Result<RuntimePlanningSnapshot> {
         let runtime = self.runtime.get()?;
         Ok({
-            let (published_read_view, pin) = Self::pin_runtime_read_view(&runtime);
+            let (_, pin) = Self::pin_runtime_read_view(&runtime);
             RuntimePlanningSnapshot {
                 branch_id: self
                     .current_branch_from_runtime(&runtime)
                     .map(|current| current.info.id),
                 catalog: runtime.catalog.clone(),
                 store: runtime.store.snapshot_for_read(),
-                // Store snapshots omit the writable durable handle and its checkpoint
-                // metadata. Freshness must compare the original pinned publication.
-                published_read_view,
                 optimizer: runtime.optimizer.clone(),
                 config: self.config.clone(),
                 system_variables: self.system_variables.clone(),
@@ -275,22 +401,7 @@ impl Database {
         cypher_text: &str,
         parameters: &BTreeMap<String, Value>,
     ) -> Result<RuntimeAdmissionPlan> {
-        let plan_cache = SharedState::new(PlanCache::new(self.config.max_plan_cache_entries));
-        let planning_cache = SharedState::new(
-            self.runtime
-                .get()?
-                .optimizer_planning_cache
-                .borrow()
-                .clone(),
-        );
-        let runtime = self.runtime.get()?;
-        self.runtime_planning_context(&runtime)?
-            .prepare(
-                cypher_text.to_string(),
-                parameters,
-                &plan_cache,
-                &planning_cache,
-            )
+        self.prepare_runtime_query(cypher_text.to_string(), parameters)
             .map(|prepared| prepared.admission)
     }
 
@@ -305,16 +416,54 @@ impl Database {
             parameters,
             &self.runtime.get()?.plan_cache,
             &self.runtime.get()?.optimizer_planning_cache,
+            QueryExecutionOptions::default(),
         )
+    }
+    pub(crate) fn prepare_runtime_request(
+        &self,
+        request: QueryRequest<'_>,
+    ) -> Result<PreparedRuntimeQuery> {
+        let runtime = self.runtime.get()?;
+        self.runtime_planning_context(&runtime)?.prepare(
+            request.cypher.to_string(),
+            request.parameters.unwrap_or(&BTreeMap::new()),
+            &runtime.plan_cache,
+            &runtime.optimizer_planning_cache,
+            QueryExecutionOptions::for_request(request, None),
+        )
+    }
+
+    pub(crate) fn accepts_prepared_query(&self, prepared: &PreparedRuntimeQuery) -> Result<bool> {
+        let runtime = self.runtime.get()?;
+        Ok(prepared.is_compatible(
+            self.current_branch_from_runtime(&runtime)
+                .map(|current| current.info.id),
+            &self.config,
+            &self.system_variables,
+            &runtime.catalog,
+            &runtime.store,
+        ))
     }
 }
 
 impl DatabaseReadSnapshot {
-    pub(super) fn prepare_runtime_query(
+    pub(super) fn accepts_prepared(&self, prepared: &PreparedRuntimeQuery) -> bool {
+        let source = &self.0;
+        prepared.is_compatible(
+            source
+                .current_branch
+                .as_ref()
+                .map(|current| current.info.id),
+            &source.config,
+            &source.system_variables,
+            &source.catalog,
+            &source.store,
+        )
+    }
+
+    pub(super) fn prepare_runtime_request(
         &self,
-        cypher_text: String,
-        parameters: &BTreeMap<String, Value>,
-        system_variables: &QuerySystemVariables,
+        request: QueryRequest<'_>,
         plan_cache: &SharedState<PlanCache>,
     ) -> Result<PreparedRuntimeQuery> {
         let source = &self.0;
@@ -327,13 +476,14 @@ impl DatabaseReadSnapshot {
             store: &source.store,
             optimizer: &source.optimizer,
             config: &source.config,
-            system_variables,
+            system_variables: &source.system_variables,
         }
         .prepare(
-            cypher_text,
-            parameters,
+            request.cypher.to_string(),
+            request.parameters.unwrap_or(&BTreeMap::new()),
             plan_cache,
             &source.optimizer_planning_cache,
+            QueryExecutionOptions::for_request(request, None),
         )
     }
 }
@@ -345,9 +495,12 @@ impl RuntimePlanningContext<'_> {
         parameters: &BTreeMap<String, Value>,
         plan_cache: &SharedState<PlanCache>,
         planning_cache: &SharedState<OptimizerPlanningCache>,
+        options: QueryExecutionOptions<'_>,
     ) -> Result<PreparedRuntimeQuery> {
         self.store.ensure_usable()?;
         let parsed = hawdb_cypher::parse_profiled(&cypher_text);
+        #[cfg(feature = "qualification")]
+        super::query_preparation_metrics::record_parse(parsed.metrics.elapsed_nanos);
         let parse_metrics = parsed.metrics;
         let statement = parsed.result?;
         let work_request = query_work_request_for_statement(self.system_variables, &statement)?;
@@ -381,6 +534,7 @@ impl RuntimePlanningContext<'_> {
                     parameters,
                     plan_cache,
                     planning_cache,
+                    options,
                 )?;
                 let is_mutation = executor::is_mutation_plan(&optimized.physical_plan)?;
                 streaming_eligible &= !executor::requires_write_access(&optimized.physical_plan);
@@ -453,6 +607,11 @@ impl RuntimePlanningContext<'_> {
                 max_parallelism,
             },
             parse_metrics,
+            config: self.config.clone(),
+            system_variables: self.system_variables.clone(),
+            planning_memory: None,
+            access_control: options.access_control.cloned(),
+            scoring_key: options.scoring.map(BoundScoringRequest::cache_key),
         })
     }
 
@@ -463,6 +622,7 @@ impl RuntimePlanningContext<'_> {
         parameters: &BTreeMap<String, Value>,
         plan_cache: &SharedState<PlanCache>,
         planning_cache: &SharedState<OptimizerPlanningCache>,
+        options: QueryExecutionOptions<'_>,
     ) -> Result<OptimizedQueryPlan> {
         let optimizer_search =
             query_statement_variables_for_statement(self.system_variables, statement)?
@@ -487,9 +647,9 @@ impl RuntimePlanningContext<'_> {
                 config: self.config,
                 cache: plan_cache,
                 planning_cache,
-                access_control: None,
+                access_control: options.access_control,
                 optimizer_search,
-                scoring: None,
+                scoring: options.scoring,
             },
         )
     }
@@ -523,12 +683,12 @@ impl Database {
             .map(|(output, _)| output)
     }
 
-    pub(super) fn query_prepared_with_params(
+    pub(crate) fn query_prepared_request(
         &mut self,
         prepared: PreparedRuntimeQuery,
-        parameters: &BTreeMap<String, Value>,
+        request: QueryRequest<'_>,
     ) -> Result<QueryOutput> {
-        self.validate_prepared_branch(&prepared)?;
+        self.validate_prepared_request(&prepared, request)?;
         let runtime = self.runtime.get()?;
         let (cypher_text, prepared) = prepared.into_execution(&runtime.catalog, &runtime.store);
         drop(runtime);
@@ -536,15 +696,9 @@ impl Database {
         self.query_with_params_trace_and_external_prepared(
             &cypher_text,
             prepared,
-            parameters,
+            request.parameters.unwrap_or(&BTreeMap::new()),
             &mut external,
-            QueryExecutionOptions {
-                capture_trace: false,
-                access_control: None,
-                task_context: None,
-                scoring: None,
-                output_limits: QueryStreamOptions::default(),
-            },
+            QueryExecutionOptions::for_request(request, None),
         )
         .map(|(output, _)| output)
     }
@@ -573,32 +727,26 @@ impl Database {
         .map(|(output, _)| output)
     }
 
-    #[cfg_attr(not(feature = "tokio-runtime"), allow(dead_code))]
-    pub(crate) fn query_prepared_with_params_context(
+    pub(crate) fn query_prepared_request_with_trace_and_external(
         &mut self,
         prepared: PreparedRuntimeQuery,
-        parameters: &BTreeMap<String, Value>,
-        task_context: &hawdb_core::RuntimeTaskContext,
-    ) -> Result<QueryOutput> {
-        self.validate_prepared_branch(&prepared)?;
+        request: QueryRequest<'_>,
+        capture_trace: bool,
+        external: &mut dyn executor::ExternalReadOperator,
+    ) -> Result<(QueryOutput, QueryExecutionTrace)> {
+        self.validate_prepared_request(&prepared, request)?;
         let runtime = self.runtime.get()?;
         let (cypher_text, prepared) = prepared.into_execution(&runtime.catalog, &runtime.store);
         drop(runtime);
-        let mut external = executor::NoExternalReadOperator;
+        let mut options = QueryExecutionOptions::for_request(request, None);
+        options.capture_trace = capture_trace;
         self.query_with_params_trace_and_external_prepared(
             &cypher_text,
             prepared,
-            parameters,
-            &mut external,
-            QueryExecutionOptions {
-                capture_trace: false,
-                access_control: None,
-                task_context: Some(task_context),
-                scoring: None,
-                output_limits: QueryStreamOptions::default(),
-            },
+            request.parameters.unwrap_or(&BTreeMap::new()),
+            external,
+            options,
         )
-        .map(|(output, _)| output)
     }
 
     pub fn query_with_params_access_control(
@@ -664,11 +812,14 @@ impl Database {
     fn query_with_params_trace_and_external_prepared(
         &mut self,
         cypher_text: &str,
-        prepared: PreparedRuntimeExecution,
+        mut prepared: PreparedRuntimeExecution,
         parameters: &BTreeMap<String, Value>,
         external: &mut dyn executor::ExternalReadOperator,
         options: QueryExecutionOptions<'_>,
     ) -> Result<(QueryOutput, QueryExecutionTrace)> {
+        let _planning_memory = prepared.planning_memory.take();
+        let prepared_optimized =
+            prepared.take_optimized(options.access_control, options.scoring)?;
         let QueryExecutionOptions {
             capture_trace,
             access_control,
@@ -681,9 +832,9 @@ impl Database {
         query_runtime_checkpoint(task_context)?;
         let PreparedRuntimeExecution {
             statement,
-            optimized: prepared_optimized,
             parse_metrics,
             statement_started,
+            ..
         } = prepared;
         let started = statement_started.unwrap_or(execution_started);
         let body = statement_body(&statement);
@@ -745,7 +896,7 @@ impl Database {
             query_runtime_checkpoint(task_context)?;
             query_work_request_for_statement(&self.system_variables, &statement)?;
             let optimized = match prepared_optimized {
-                Some(optimized) if access_control.is_none() && scoring.is_none() => optimized,
+                Some(optimized) => optimized,
                 _ => self.optimized_query_plan_for_request(
                     cypher_text,
                     &statement,
@@ -764,18 +915,32 @@ impl Database {
                 let mut mutation_limits = self.config.mutation_limits;
                 // Graph mutation payloads use MutationLimits, checked by the
                 // executor preflight and storage tracker before publication.
-                if let Some(limit) = output_limits.max_rows.and_then(NonZeroUsize::new) {
+                if !matches!(
+                    optimized.physical_plan,
+                    PhysicalPlan::SetNodePropertiesReturn { .. }
+                ) && let Some(limit) = output_limits.max_rows.and_then(NonZeroUsize::new)
+                {
                     mutation_limits.max_result_rows = mutation_limits.max_result_rows.min(limit);
                 }
                 (
                     {
                         let mut branch_runtime_access = self.runtime.get_mut()?;
                         let branch_runtime = &mut *branch_runtime_access;
-                        executor::execute_mutation_with_limits(
+                        executor::execute_mutation_with_store_output_limits(
                             &optimized.physical_plan,
                             &mut branch_runtime.catalog,
                             &mut branch_runtime.store,
                             mutation_limits,
+                            hawdb_executor::result_delivery::OutputLimits {
+                                max_rows: restrictive_query_limit(
+                                    self.config.read_result_row_limit(),
+                                    output_limits.max_rows,
+                                ),
+                                max_payload_bytes: restrictive_query_limit(
+                                    self.config.max_read_result_payload_bytes,
+                                    output_limits.max_payload_bytes,
+                                ),
+                            },
                             task_context,
                         )
                     }?
@@ -942,6 +1107,122 @@ mod tests {
     use super::*;
 
     #[test]
+    fn plain_explain_uses_a_read_snapshot_without_executing_writes() {
+        let mut db = Database::new();
+        db.query("CREATE (:Memory {id: 'existing'})").unwrap();
+        let before = db.graph_rag_schema_context(Default::default()).unwrap();
+        let publication = crate::api::PublishedConcurrentRead::capture(&db).unwrap();
+        for statement in [
+            "CREATE (:Memory {id: 'planned'})",
+            "CREATE NODE TABLE Planned",
+        ] {
+            let query = format!("EXPLAIN {statement}");
+            let request = QueryRequest::new(&query);
+            let prepared = publication.prepare(request).unwrap();
+            assert!(prepared.uses_read_snapshot());
+            assert!(!prepared.admission().is_mutation);
+            assert_eq!(prepared.admission().required_io_slots, 0);
+            let mut read = publication
+                .begin_read_transaction_with_context(&Default::default())
+                .unwrap();
+            let output = read
+                .query_prepared_request(prepared, request)
+                .unwrap()
+                .output;
+            assert_eq!(output.rows.len(), 1);
+            assert!(matches!(&output.rows[0]["plan"], Value::String(plan) if !plan.is_empty()));
+            assert!(executor::requires_write_access(
+                &read.explain_query(statement).unwrap().physical_plan
+            ));
+            let analyze = format!("EXPLAIN ANALYZE {statement}");
+            assert!(!publication
+                .prepare(QueryRequest::new(&analyze))
+                .unwrap()
+                .uses_read_snapshot());
+            assert!(read
+                .query(&analyze)
+                .unwrap_err()
+                .to_string()
+                .contains("EXPLAIN ANALYZE only supports read queries"));
+            for limits in [
+                QueryStreamOptions {
+                    max_rows: Some(0),
+                    max_payload_bytes: None,
+                },
+                QueryStreamOptions {
+                    max_rows: Some(1),
+                    max_payload_bytes: Some(0),
+                },
+            ] {
+                assert!(read
+                    .query_request(request.with_output_limits(limits))
+                    .is_err());
+            }
+            assert_eq!(read.graph_rag_schema_context(Default::default()), before);
+        }
+        assert_eq!(
+            db.graph_rag_schema_context(Default::default()).unwrap(),
+            before
+        );
+        assert_eq!(
+            db.query("MATCH (m:Memory) RETURN m.id AS id")
+                .unwrap()
+                .rows
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn snapshot_explain_preserves_captured_query_settings_and_statement_overrides() {
+        let mut db = Database::new();
+        db.query("CREATE (:Memory {id: 'existing'})").unwrap();
+        db.query("SET system.work_priority = 'background'").unwrap();
+        db.query("SET system.work_class = 'import'").unwrap();
+        db.query("SET system.estimated_operations = 8").unwrap();
+        let direct = db.begin_read_transaction().unwrap();
+        let publication = crate::api::PublishedConcurrentRead::capture(&db).unwrap();
+        db.query("SET system.work_priority = 'foreground'").unwrap();
+        db.query("SET system.work_class = 'query'").unwrap();
+        db.query("SET system.estimated_operations = 1").unwrap();
+        let fork = publication
+            .begin_read_transaction_with_context(&Default::default())
+            .unwrap();
+        for mut read in [direct, fork] {
+            let query = "MATCH (m:Memory) RETURN m.id AS id";
+            let expected = WorkRequest::background(WorkClass::Import, 8);
+            assert_eq!(read.explain_query(query).unwrap().work_request, expected);
+            let output = read.query(&format!("EXPLAIN {query}")).unwrap();
+            let Value::Map(work) = &output.rows[0]["work_request"] else {
+                panic!("missing work request");
+            };
+            assert_eq!(work["priority"], Value::String("background".into()));
+            assert_eq!(work["class"], Value::String("import".into()));
+            assert_eq!(work["estimated_operations"], Value::Int(8));
+            let hinted = read
+                .explain_query(
+                    "CYPHER system.work_priority = 'foreground' system.estimated_operations = 3 \
+                 system.optimizer_search = 'direct_fallback' MATCH (m:Memory) RETURN m.id AS id",
+                )
+                .unwrap();
+            assert_eq!(
+                hinted.work_request,
+                WorkRequest::foreground(WorkClass::Import, 3)
+            );
+            assert_eq!(hinted.trace.search_mode.as_str(), "direct_fallback");
+            assert_eq!(read.explain_query(query).unwrap().work_request, expected);
+        }
+        assert_eq!(
+            db.begin_read_transaction()
+                .unwrap()
+                .explain_query("MATCH (m:Memory) RETURN m.id AS id")
+                .unwrap()
+                .work_request,
+            WorkRequest::foreground(WorkClass::Query, 1)
+        );
+    }
+
+    #[test]
     fn planning_cache_invalidation_does_not_reuse_an_in_flight_generation() {
         let db = Database::new();
         let planning = db.runtime_planning_snapshot().unwrap();
@@ -972,79 +1253,95 @@ mod tests {
     }
 
     #[test]
-    fn mutation_planning_freshness_checks_data_schema_and_configuration() {
+    fn mutation_preparation_reuses_data_changes_but_checks_configuration() {
         let mut db = Database::new();
+        db.query("CREATE (:Memory {id: 'initial'})").unwrap();
         let query = "CREATE (:Memory {id: 'new'})";
-        let parameters = BTreeMap::new();
         let old = db.runtime_planning_snapshot().unwrap();
-        let prepared = old.prepare(query.to_string(), &parameters).unwrap();
-        assert!(old.is_current_for(&db, &prepared).unwrap());
+        let prepared = old.prepare(query.to_string(), &BTreeMap::new()).unwrap();
+        assert!(db.accepts_prepared_query(&prepared).unwrap());
         db.query("CREATE (:Memory {id: 'other'})").unwrap();
-        assert!(!old.is_current_for(&db, &prepared).unwrap());
-        let current = db.runtime_planning_snapshot().unwrap();
-        let prepared = current.prepare(query.to_string(), &parameters).unwrap();
-        assert!(current.is_current_for(&db, &prepared).unwrap());
+        assert!(db.accepts_prepared_query(&prepared).unwrap());
         db.config.max_read_result_rows = Some(1);
-        assert!(!current.is_current_for(&db, &prepared).unwrap());
+        assert!(!db.accepts_prepared_query(&prepared).unwrap());
         let current = db.runtime_planning_snapshot().unwrap();
-        assert!(current.is_current_for(&db, &prepared).unwrap());
+        let prepared = current
+            .prepare(query.to_string(), &BTreeMap::new())
+            .unwrap();
+        assert!(db.accepts_prepared_query(&prepared).unwrap());
         db.system_variables.estimated_operations += 1;
-        assert!(!current.is_current_for(&db, &prepared).unwrap());
+        assert!(!db.accepts_prepared_query(&prepared).unwrap());
     }
 
     #[test]
-    fn durable_mutation_planning_preserves_checkpoint_identity() {
+    fn prepared_execution_rejects_changed_configuration_and_request() {
+        for changed_config in [false, true] {
+            let mut db = Database::new();
+            let text = "CREATE NODE TABLE Prepared";
+            let prepared = db.prepare_runtime_request(QueryRequest::new(text)).unwrap();
+            if changed_config {
+                db.config.max_read_result_rows = Some(1);
+            }
+            let request = QueryRequest::new(if changed_config {
+                text
+            } else {
+                "CREATE NODE TABLE Other"
+            });
+            let epoch = db.commit_epoch().unwrap();
+            assert!(db
+                .query_prepared_request(prepared, request)
+                .unwrap_err()
+                .to_string()
+                .contains("prepare and admit again"));
+            assert_eq!(db.commit_epoch().unwrap(), epoch);
+        }
+    }
+
+    #[test]
+    fn mutation_preparation_rebinds_after_checkpoint_and_reopen() {
         use hawdb_storage::config::StorageResidencyMode;
 
         for mode in [
             StorageResidencyMode::Materialized,
             StorageResidencyMode::OutOfCore,
         ] {
-            let nonce = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos();
             let path = std::env::temp_dir().join(format!(
-                "hawdb-planning-durable-{}-{nonce}-{mode:?}",
-                std::process::id()
+                "hawdb-planning-durable-{}-{mode:?}",
+                hawdb_core::generate_uuidv7().unwrap()
             ));
             let config = DatabaseConfig {
                 storage_residency_mode: mode,
-                ..DatabaseConfig::default()
+                ..Default::default()
             };
-            let parameters = BTreeMap::new();
-            let query = "CREATE (:Memory {id: 'planned'})";
             let mut db = Database::open_with_config(&path, config.clone()).unwrap();
             db.query("CREATE (:Memory {id: 'existing'})").unwrap();
-            let before = db.runtime_planning_snapshot().unwrap();
-            let prepared = before.prepare(query.to_string(), &parameters).unwrap();
-            assert!(before.is_current_for(&db, &prepared).unwrap());
-            let epoch = db.runtime.get().unwrap().store.commit_epoch();
-            db.checkpoint().unwrap();
-            assert_eq!(db.runtime.get().unwrap().store.commit_epoch(), epoch);
-            assert!(!before.is_current_for(&db, &prepared).unwrap());
-            drop(before);
-
-            let checkpointed = db.runtime_planning_snapshot().unwrap();
-            let prepared = checkpointed
-                .prepare(query.to_string(), &parameters)
+            for id in ["checkpointed", "reopened"] {
+                let planning = db.runtime_planning_snapshot().unwrap();
+                let request_text = "CREATE (:Memory {id: $id})";
+                let parameters = BTreeMap::from([("id".into(), Value::String(id.into()))]);
+                let prepared = planning.prepare(request_text.into(), &parameters).unwrap();
+                drop(planning);
+                db.checkpoint().unwrap();
+                // Physical generation replacement alone must not reject compatible
+                // syntax. The fresh kernel workspace owns the actual write source.
+                assert!(db.accepts_prepared_query(&prepared).unwrap(), "{mode:?}");
+                db.query_prepared_request(
+                    prepared,
+                    QueryRequest::new(request_text).with_params(&parameters),
+                )
                 .unwrap();
-            assert!(
-                checkpointed.is_current_for(&db, &prepared).unwrap(),
-                "{mode:?}"
+                drop(db);
+                db = Database::open_with_config(&path, config.clone()).unwrap();
+            }
+            assert_eq!(
+                db.query("MATCH (m:Memory) RETURN m.id AS id")
+                    .unwrap()
+                    .rows
+                    .len(),
+                3
             );
-            drop(checkpointed);
             drop(db);
-
-            let mut db = Database::open_with_config(&path, config).unwrap();
-            let reopened = db.runtime_planning_snapshot().unwrap();
-            let prepared = reopened.prepare(query.to_string(), &parameters).unwrap();
-            assert!(reopened.is_current_for(&db, &prepared).unwrap(), "{mode:?}");
-            db.query("CREATE (:Memory {id: 'concurrent'})").unwrap();
-            assert!(!reopened.is_current_for(&db, &prepared).unwrap());
-            drop(reopened);
-            drop(db);
-            std::fs::remove_dir_all(&path).unwrap();
+            std::fs::remove_dir_all(path).unwrap();
         }
     }
 
@@ -1093,10 +1390,8 @@ mod tests {
         let guard = db.lock().unwrap();
         let (sender, receiver) = std::sync::mpsc::channel();
         let worker = std::thread::spawn(move || {
-            let prepared = planning.prepare(
-                "MATCH (m:Memory) RETURN m.id AS id".to_string(),
-                &BTreeMap::new(),
-            );
+            let prepared =
+                planning.prepare_request(QueryRequest::new("MATCH (m:Memory) RETURN m.id AS id"));
             sender
                 .send(prepared.map(|prepared| prepared.admission.is_mutation))
                 .unwrap();
@@ -1239,6 +1534,58 @@ mod tests {
     }
 
     #[test]
+    fn preparation_reuse_revalidates_execution_context_without_retaining_a_reader_pin() {
+        let mut db = Database::new();
+        db.query("CREATE (:Sample {id: 'first'})").unwrap();
+        let query = "MATCH (n:Sample) RETURN n.id AS id ORDER BY id";
+        let parameters = BTreeMap::new();
+        let prepared = {
+            let planning = db.runtime_planning_snapshot().unwrap();
+            planning
+                .prepare_request(QueryRequest::new(query).with_params(&parameters))
+                .unwrap()
+        };
+        assert!(db
+            .runtime
+            .get()
+            .unwrap()
+            .reader_pins
+            .lock()
+            .unwrap()
+            .active_views
+            .is_empty());
+        db.query("CREATE (:Sample {id: 'second'})").unwrap();
+        let mut current = db.runtime_planning_snapshot().unwrap();
+        assert!(current.accepts_prepared(&prepared));
+        current.config.max_read_result_rows = Some(1);
+        assert!(!current.accepts_prepared(&prepared));
+        current.config = prepared.config.clone();
+        current.system_variables.estimated_operations += 1;
+        assert!(!current.accepts_prepared(&prepared));
+        current.system_variables = prepared.system_variables.clone();
+        current.branch_id = Some(hawdb_core::Uuid::nil());
+        assert!(!current.accepts_prepared(&prepared));
+        drop(current);
+        let output = db
+            .begin_read_transaction()
+            .unwrap()
+            .query_prepared_request(prepared, QueryRequest::new(query).with_params(&parameters))
+            .unwrap()
+            .output;
+        assert_eq!(output.rows.len(), 2);
+
+        let prepared = db
+            .prepare_runtime_query(query.to_string(), &parameters)
+            .unwrap();
+        db.query("CREATE (:OtherLabel {id: 'schema-change'})")
+            .unwrap();
+        assert!(!db
+            .runtime_planning_snapshot()
+            .unwrap()
+            .accepts_prepared(&prepared));
+    }
+
+    #[test]
     fn explain_analyze_reserves_the_inner_plan_memory() {
         let mut db = Database::new();
         db.query("CREATE (:Memory {id: 'explain-admission'})")
@@ -1282,12 +1629,9 @@ mod tests {
         let mut read = db.begin_read_transaction().unwrap();
 
         let output = read
-            .query_prepared_with_params_context(
-                prepared,
-                &parameters,
-                &hawdb_core::RuntimeTaskContext::default(),
-            )
-            .unwrap();
+            .query_prepared_request(prepared, QueryRequest::new(query).with_params(&parameters))
+            .unwrap()
+            .output;
 
         assert_eq!(output.rows.len(), 1);
         assert_eq!(
