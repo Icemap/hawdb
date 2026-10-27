@@ -21,6 +21,7 @@ fn step(name: &'static str, sql: &str, parameters: Vec<Value>, rollback: bool) -
         name,
         mutations: paired(sql, parameters),
         rollback,
+        boundary: Boundary::None,
         expected_error: None,
     }
 }
@@ -98,6 +99,18 @@ pub(super) fn generate(seed: u64, index: usize) -> Case {
     }
     setup.push(SqlMutation::required(
         "CREATE INDEX sm_view_order ON sm_projection (bucket, score)",
+    ));
+    // Schema changes checkpoint their rows. Append after the final DDL so the
+    // initial reopen must replay data and incremental view maintenance from WAL.
+    setup.extend(paired(
+        INSERT,
+        vec![
+            Value::Int(30),
+            Value::Int(0),
+            Value::Int(0),
+            Value::String("wal-tail".into()),
+            Value::Bool(true),
+        ],
     ));
     let mut relations = vec![
         relation("base", "SELECT * FROM sm_source".into(), "SELECT * FROM sm_reference".into()),
@@ -239,8 +252,26 @@ pub(super) fn generate(seed: u64, index: usize) -> Case {
         ],
         false,
     ));
+    let storage = StorageProfile::for_case(index);
+    if storage != StorageProfile::Memory {
+        for (position, step) in steps.iter_mut().enumerate() {
+            step.boundary = if position == 0 || step.name == "clear" {
+                Boundary::Checkpoint
+            } else if position == 1
+                || step.rollback
+                || step.expected_error.is_some()
+                || matches!(step.name, "repopulate" | "extreme_sum")
+                || rng.next_u64().is_multiple_of(4)
+            {
+                Boundary::Wal
+            } else {
+                Boundary::None
+            };
+        }
+    }
     Case {
         seed,
+        storage,
         setup,
         steps,
         relations,

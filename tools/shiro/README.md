@@ -130,15 +130,41 @@ separately. Plan counters describe the initial fixture, not every later step.
 Failures retain typed rows, queries/parameters, plans for result mismatches,
 the transaction step, complete setup and operation sequence. Reduction removes
 whole transactions on fresh databases and retains only the same failure
-signature. The campaign protocol is `shiro-multi-oracle-fuzz-v3`; older progress
+signature. The campaign protocol is `shiro-multi-oracle-fuzz-v4`; older progress
 files cannot resume with the stronger oracle. Maintenance replay bundles use
-`shiro-sql-maintenance-v1` and describe explicit commit/rollback boundaries.
+`shiro-sql-maintenance-v2` and describe explicit commit/rollback boundaries.
 
-This campaign is in-memory and checks maintenance/access-path relations. It does
-not establish WAL recovery, machine power-loss safety, concurrent-writer
-serializability, or correctness of SQL semantics shared by both executions.
-Existing persistence and MVCC campaigns remain complementary. No CI job or
-production dependency is added.
+Cases rotate deterministically through memory, file-backed Shadow indexes and
+file-backed DemandPaged indexes (`case_index % 3`). Each disk case reopens after
+initial WAL-tail writes, after checkpoints, and after further WAL mutations.
+Setup appends data after its final DDL because schema changes themselves require
+a checkpoint; the initial recovery must replay a non-empty WAL tail.
+The sequence covers rollback/refusal before reopen, empty checkpoints, later
+repopulation and continued view/index maintenance after recovery. Checkpoints
+also retain the pre-write reader until its old results have been verified.
+Before closing, the oracle keeps the complete query results and commit epoch
+outside the database. Reopened results must match these saved values as well as
+the recomputed reference, so losing both source and reference cannot pass.
+Recovery reports must prove durable admission, the expected commit/checkpoint
+epochs and actual WAL replay; a checkpoint-only reopen must replay zero entries.
+`storage_profiles` and `recovery` counters distinguish these paths in coverage.
+
+Disk fixtures use the default SyncOnEveryWrite durability. Source rows remain
+resident because materialized views require that mode; DemandPaged exercises
+file-backed indexes. Authoritative/out-of-core materialized views are unsupported.
+Automatic checkpoint age is one hour so age-triggered publication does not
+interfere with the explicit schedule in these short cases. Storage mode and
+per-step recovery boundaries survive reduction.
+Original failures retain their scratch database path in the report; successful
+and reduction-attempt fixtures are removed. Scratch paths use the platform
+temporary directory; a local invocation can set TMPDIR to a disk-backed directory.
+
+For example, replay Shadow with `--seed 7 --cases 32 --case-index 1`, and
+DemandPaged with `--seed 7 --cases 32 --case-index 2`. These test file codecs,
+WAL/checkpoint reopen and continued maintenance. They do not establish machine
+power-loss safety, crash/torn-write recovery, concurrent-writer serializability,
+or correctness of SQL semantics shared by both executions. Existing fault and
+MVCC campaigns remain complementary. No CI job or production dependency is added.
 
 ## Extended SQL operator relations
 

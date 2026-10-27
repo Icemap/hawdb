@@ -7,14 +7,18 @@ use hawdb::executor::Row;
 use hawdb::QueryOutput;
 
 mod generator;
+mod persistence;
 
-pub(crate) const PROTOCOL: &str = "shiro-sql-maintenance-v1";
+use persistence::{Boundary, Fixture, StorageProfile};
+
+pub(crate) const PROTOCOL: &str = "shiro-sql-maintenance-v2";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Step {
     name: &'static str,
     mutations: Vec<SqlMutation>,
     rollback: bool,
+    boundary: Boundary,
     expected_error: Option<&'static str>,
 }
 
@@ -28,6 +32,7 @@ struct Relation {
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Case {
     seed: u64,
+    storage: StorageProfile,
     setup: Vec<SqlMutation>,
     steps: Vec<Step>,
     relations: Vec<Relation>,
@@ -36,10 +41,11 @@ struct Case {
 impl Case {
     fn replay(&self) -> JsonValue {
         json!({
-            "protocol": PROTOCOL, "seed": self.seed,
+            "protocol": PROTOCOL, "seed": self.seed, "storage": self.storage.as_str(),
+            "initial_boundary": if self.storage == StorageProfile::Memory { "none" } else { "wal_reopen" },
             "setup": self.setup.iter().map(SqlMutation::json).collect::<Vec<_>>(),
             "steps": self.steps.iter().map(|step| json!({
-                "expected_error": step.expected_error,
+                "expected_error": step.expected_error, "recovery_boundary": step.boundary.as_str(),
                 "name": step.name, "transaction": if step.rollback || step.expected_error.is_some() { "rollback" } else { "commit" },
                 "mutations": step.mutations.iter().map(SqlMutation::json).collect::<Vec<_>>()
             })).collect::<Vec<_>>(),
@@ -139,10 +145,35 @@ struct Progress {
     operations: BTreeMap<&'static str, usize>,
     index_range_plans: usize,
     fallback_plans: usize,
+    initial_wal_replays: usize,
+    checkpoint_wal_replays: usize,
+    checkpoint_reopens: usize,
+    wal_reopens: usize,
 }
 
 fn run(case: &Case, progress: &mut Progress) -> Result<(), Failure> {
-    let mut db = Database::new();
+    run_with_retention(case, progress, false)
+}
+
+fn run_with_retention(
+    case: &Case,
+    progress: &mut Progress,
+    retain_failure: bool,
+) -> Result<(), Failure> {
+    let mut fixture = Fixture::new(case.storage)?;
+    let mut result = run_in_fixture(case, progress, &mut fixture);
+    if retain_failure && let Err(failure) = &mut result {
+        fixture.preserve_failure(failure);
+    }
+    result
+}
+
+fn run_in_fixture(
+    case: &Case,
+    progress: &mut Progress,
+    fixture: &mut Fixture,
+) -> Result<(), Failure> {
+    let mut db = fixture.open()?;
     for mutation in &case.setup {
         db.query_sql_with_params(&mutation.sql, &mutation.parameters)
             .map_err(|err| error("setup", err))?;
@@ -150,6 +181,7 @@ fn run(case: &Case, progress: &mut Progress) -> Result<(), Failure> {
     observe(&case.relations, "initial", |sql, params| {
         db.query_sql_with_params(sql, params)
     })?;
+    db = fixture.reopen(db, case, Boundary::Wal, progress)?;
     // Plan selection is telemetry, not evidence that two equal executions used
     // different access paths. Small/empty relations may legitimately scan.
     for relation in case
@@ -239,10 +271,17 @@ fn run(case: &Case, progress: &mut Progress) -> Result<(), Failure> {
                 evidence: json!({"before_epoch": epoch, "after_epoch": db.commit_epoch().ok()}),
             });
         }
+        if step.boundary == Boundary::Checkpoint {
+            // Exercise retained reader roots across checkpoint publication as
+            // well as transaction publication before releasing the old handle.
+            fixture.checkpoint(&mut db)?;
+        }
         let old = observe(&case.relations, "old_snapshot", |sql, params| {
             snapshot.query_sql_with_params(sql, params)
         })?;
         unchanged(&case.relations, "snapshot_changed", &before, &old)?;
+        drop(snapshot);
+        db = fixture.reopen(db, case, step.boundary, progress)?;
         progress.completed_steps += 1;
         *progress.operations.entry(step.name).or_default() += 1;
     }
@@ -274,9 +313,12 @@ fn reduce(case: &Case, signature: &str) -> JsonValue {
 pub(super) fn evaluate(seed: u64, index: usize) -> JsonValue {
     let case = generator::generate(seed, index);
     let mut progress = Progress::default();
-    let failure = run(&case, &mut progress).err();
+    let failure = run_with_retention(&case, &mut progress, true).err();
     json!({
-        "protocol": PROTOCOL, "success": failure.is_none(),
+        "protocol": PROTOCOL, "success": failure.is_none(), "storage": case.storage.as_str(),
+        "initial_wal_replays": progress.initial_wal_replays,
+        "checkpoint_wal_replays": progress.checkpoint_wal_replays,
+        "checkpoint_reopens": progress.checkpoint_reopens, "wal_reopens": progress.wal_reopens,
         "requested_steps": case.steps.len(), "completed_steps": progress.completed_steps,
         "operations": progress.operations,
         "index_range_plans": progress.index_range_plans, "fallback_plans": progress.fallback_plans,
@@ -290,10 +332,23 @@ pub(super) fn evaluate(seed: u64, index: usize) -> JsonValue {
 
 pub(crate) fn coverage(cases: &[JsonValue]) -> JsonValue {
     let mut operations = BTreeMap::<String, u64>::new();
+    let mut storage_profiles = BTreeMap::<String, u64>::new();
+    let mut recovery = BTreeMap::<String, u64>::new();
     let (mut attempted, mut passed, mut indexed, mut fallback) = (0, 0, 0, 0);
     for report in cases.iter().map(|case| &case["sql"]["maintenance"]) {
         if report.is_null() {
             continue;
+        }
+        if let Some(profile) = report["storage"].as_str() {
+            *storage_profiles.entry(profile.into()).or_default() += 1;
+        }
+        for field in [
+            "initial_wal_replays",
+            "checkpoint_wal_replays",
+            "checkpoint_reopens",
+            "wal_reopens",
+        ] {
+            *recovery.entry(field.into()).or_default() += report[field].as_u64().unwrap_or(0);
         }
         attempted += 1;
         passed += u64::from(report["success"] == true);
@@ -306,7 +361,7 @@ pub(crate) fn coverage(cases: &[JsonValue]) -> JsonValue {
         }
     }
     json!({ "attempted": attempted, "passed": passed, "failed": attempted - passed,
-        "operations": operations, "index_range_plans": indexed, "fallback_plans": fallback })
+        "operations": operations, "storage_profiles": storage_profiles, "recovery": recovery, "index_range_plans": indexed, "fallback_plans": fallback })
 }
 
 #[cfg(test)]
@@ -327,6 +382,13 @@ mod tests {
             });
             assert_eq!(progress.completed_steps, case.steps.len());
             assert!(progress.index_range_plans > 0);
+            if case.storage == StorageProfile::Memory {
+                assert_eq!(progress.wal_reopens + progress.checkpoint_reopens, 0);
+            } else {
+                assert_eq!(progress.initial_wal_replays, 1);
+                assert_eq!(progress.checkpoint_reopens, 3);
+                assert!(progress.checkpoint_wal_replays > 0);
+            }
             for name in [
                 "insert",
                 "upsert",
@@ -346,7 +408,7 @@ mod tests {
     fn corrupted_view_is_detected_and_reduced_without_accepting_setup_errors() {
         let mut case = generator::generate(71, 0);
         case.steps.insert(0, Step {
-            name: "corrupt_view", rollback: false,
+            name: "corrupt_view", rollback: false, boundary: Boundary::None,
                 expected_error: None,
             mutations: vec![SqlMutation::required("DROP MATERIALIZED VIEW sm_projection"),
                 SqlMutation::required("CREATE MATERIALIZED VIEW sm_projection AS SELECT bucket, score, tag FROM sm_source WHERE enabled = false")],
@@ -417,5 +479,48 @@ mod tests {
         assert!(failure
             .signature
             .starts_with("mutation_overflow_rejection_"));
+    }
+    #[test]
+    fn disk_oracle_detects_common_data_loss_and_retains_original_failure() {
+        let case = generator::generate(72, 1);
+        let mut fixture = Fixture::new(case.storage).unwrap();
+        let mut db = fixture.open().unwrap();
+        for mutation in &case.setup {
+            db.query_sql_with_params(&mutation.sql, &mutation.parameters)
+                .unwrap();
+        }
+        db = fixture
+            .reopen(db, &case, Boundary::Checkpoint, &mut Progress::default())
+            .unwrap();
+        let expected = observe(&case.relations, "saved", |sql, params| {
+            db.query_sql_with_params(sql, params)
+        })
+        .unwrap();
+        // Model a common loss affecting the source and reference. Their own
+        // relation still agrees, so the outside pre-close result is necessary.
+        let mut tx = db.begin_transaction().unwrap();
+        tx.query_sql("DELETE FROM sm_source WHERE id >= 0").unwrap();
+        tx.query_sql("DELETE FROM sm_reference WHERE id >= 0")
+            .unwrap();
+        tx.commit().unwrap();
+        db = fixture
+            .reopen(db, &case, Boundary::Wal, &mut Progress::default())
+            .unwrap();
+        let lost = observe(&case.relations, "lost", |sql, params| {
+            db.query_sql_with_params(sql, params)
+        })
+        .unwrap();
+        let failure = unchanged(&case.relations, "recovery_changed", &expected, &lost).unwrap_err();
+        assert_eq!(failure.signature, "recovery_changed_base_rows");
+        drop(db);
+
+        let mut invalid = case;
+        invalid
+            .setup
+            .push(SqlMutation::required("SELECT * FROM absent_table"));
+        let failure = run_with_retention(&invalid, &mut Progress::default(), true).unwrap_err();
+        let path = std::path::Path::new(failure.evidence["database_path"].as_str().unwrap());
+        assert!(path.is_dir());
+        std::fs::remove_dir_all(path).unwrap();
     }
 }

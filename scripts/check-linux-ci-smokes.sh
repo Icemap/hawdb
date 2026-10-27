@@ -108,7 +108,7 @@ assert storage["seed"] == 7
 assert storage["requested_case_count"] == 32
 assert storage["failed_case_count"] == 0
 assert storage["success"] is True
-assert optimizer["protocol"] == "shiro-multi-oracle-fuzz-v3"
+assert optimizer["protocol"] == "shiro-multi-oracle-fuzz-v4"
 assert optimizer["seed"] == 7
 assert optimizer["requested_case_count"] == 12
 assert optimizer["failed_case_count"] == 0
@@ -119,6 +119,10 @@ assert maintenance["passed"] == 12
 assert maintenance["failed"] == 0
 assert maintenance["index_range_plans"] > 0
 assert maintenance["operations"]["overflow_rejection"] == 12
+assert maintenance["storage_profiles"] == {"memory": 4, "disk_shadow": 4, "disk_demand_paged": 4}
+assert maintenance["recovery"]["initial_wal_replays"] == 8
+assert maintenance["recovery"]["checkpoint_reopens"] == 24
+assert maintenance["recovery"]["checkpoint_wal_replays"] >= 8
 PY
 }
 

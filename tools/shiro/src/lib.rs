@@ -113,7 +113,7 @@ mod capability_parity_tests {
     }
 }
 
-pub const CAMPAIGN_PROTOCOL: &str = "shiro-multi-oracle-fuzz-v3";
+pub const CAMPAIGN_PROTOCOL: &str = "shiro-multi-oracle-fuzz-v4";
 pub const GRAPH_PREDICATE_REWRITE_PROTOCOL: &str = "hawdb-graph-predicate-rewrite-fuzz-v1";
 pub const GRAPH_TLP_AGGREGATE_PROTOCOL: &str = "hawdb-graph-tlp-aggregate-fuzz-v1";
 pub const GRAPH_TLP_PROTOCOL: &str = "hawdb-graph-tlp-fuzz-v1";
@@ -1834,7 +1834,7 @@ impl CampaignReport {
                 "sql_tlp_aggregate": sql_oracle::sql_capability_profile_json(true),
                 "sql_predicate_rewrite": sql_oracle::sql_predicate_rewrite_capability_profile_json(),
                 "sql_join_rewrite": sql_oracle::sql_join_rewrite_capability_profile_json(),
-                "sql_maintenance": { "materialized_views": ["projection", "grouped", "global", "indexed_projection"], "aggregates": ["count", "sum", "min", "max"], "reference": "unindexed_table_full_select", "transactions": ["commit", "rollback", "pinned_old_snapshot"], "index_ranges": ["interval", "equal", "reversed", "null"], "persistence": false },
+                "sql_maintenance": { "materialized_views": ["projection", "grouped", "global", "indexed_projection"], "aggregates": ["count", "sum", "min", "max"], "reference": "unindexed_table_full_select", "transactions": ["commit", "rollback", "pinned_old_snapshot"], "index_ranges": ["interval", "equal", "reversed", "null"], "storage_profiles": ["memory", "disk_shadow", "disk_demand_paged"], "persistence": ["wal_replay", "checkpoint_reopen", "checkpoint_plus_wal"], "power_loss_qualification": false },
                 "sql_operator_relations": { "oracles": ["norec_filter", "dqp", "having_tlp", "distinct_tlp", "sum_tlp", "distinct_count", "cross_join", "ordered_limit"], "norec_reference": "sum_filter_not_case_when", "dqp_same_sql": true, "dqp_distinct_plan_reported_separately": true },
             },
             "sql_maintenance_coverage": sql_oracle::stateful::coverage(&self.cases.iter().map(CampaignCaseReport::json).collect::<Vec<_>>()),
