@@ -31,6 +31,7 @@ impl Ord for PostingCursor<'_> {
 }
 
 fn work(admission: &ProjectionAdmission<'_>) -> Result<()> {
+    admission.work.check_work_limit()?;
     admission
         .checkpoint()
         .and_then(|()| admission.charge_work(1))
@@ -64,6 +65,8 @@ impl GraphStore {
         if self.canonical_base.is_some() {
             return Ok(None);
         }
+        // Empty lookups still propagate a prior refusal on this task.
+        admit.work().check_work_limit()?;
         for value in values {
             admit.checkpoint()?;
             if !matches!(
@@ -94,7 +97,9 @@ impl GraphStore {
                     .map_err(canonical_segment_error)?;
                 Ok(admission.consume(node, consumer))
             });
-        admission.finish(result).map(Some)
+        let control = admission.finish(result)?;
+        admission.work.check_work_limit()?;
+        Ok(Some(control))
     }
 
     fn resident_postings<'a>(

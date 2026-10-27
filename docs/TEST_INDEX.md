@@ -11,6 +11,7 @@ admitted scalar-index projection reads with work budgets, single/multiple keys,
 NodeId-ordered duplicate merging, cross-property union deduplication, missing
 index fallback, residual predicates, cancellation, work refusal, early limits,
 payload/consumer refusal refunds, and pinned snapshots across update/delete.
+Empty input and early Stop preserve a prior or callback-caught work refusal.
 Its 256-row resident fixtures and complete-scan controls require selective reads
 to finish within 32/64 work units rather than enumerate the graph. One unit is
 charged before each scalar index probe and each posting-iterator advance,

@@ -76,6 +76,7 @@ struct Options<'a> {
     budget: usize,
     property: &'static str,
     fail_consumer: bool,
+    refuse_work_in_consumer: bool,
 }
 impl Default for Options<'_> {
     fn default() -> Self {
@@ -86,6 +87,7 @@ impl Default for Options<'_> {
             budget: 64 * 1024,
             property: "key",
             fail_consumer: false,
+            refuse_work_in_consumer: false,
         }
     }
 }
@@ -139,6 +141,9 @@ fn run(
         },
         &NoopExecutionObserver,
         &mut |batch| {
+            if options.refuse_work_in_consumer {
+                assert!(options.task.unwrap().charge_work(usize::MAX).is_err());
+            }
             if options.fail_consumer {
                 return Err(HawDBError::Execution("indexed consumer refused".into()));
             }
@@ -267,6 +272,20 @@ fn bounded_index_projection_refuses_work_and_cancellation_without_delivering_row
         assert!(result.is_err());
         assert!(rows.is_empty());
         assert!(task.charge_work(1).is_err(), "refusal remains sticky");
+        let (empty, rows, _) = run(
+            &catalog,
+            &store,
+            &access(&[]),
+            Options {
+                task: Some(&task),
+                ..Default::default()
+            },
+        );
+        assert!(
+            empty.is_err(),
+            "an empty lookup must propagate the same refusal"
+        );
+        assert!(rows.is_empty());
     }
 }
 
@@ -286,6 +305,31 @@ fn bounded_index_projection_stops_before_walking_remaining_postings() {
     );
     result.unwrap();
     assert_eq!(rows, vec![Value::Int(2)]);
+}
+
+#[test]
+fn bounded_index_projection_preserves_a_caught_work_refusal_at_early_stop() {
+    let (catalog, store) = fixture(true);
+    let task = RuntimeTaskContext::default().with_work_limit(64);
+    let (result, _, _) = run(
+        &catalog,
+        &store,
+        &access(&[2]),
+        Options {
+            task: Some(&task),
+            limit: ExecutionLimit::unlimited().child_for_limit(0, Some(1)),
+            refuse_work_in_consumer: true,
+            ..Default::default()
+        },
+    );
+    assert!(
+        result.is_err(),
+        "a caught refusal must not become successful completion"
+    );
+    assert!(
+        task.work_units() < 64,
+        "refusal is independent of remaining capacity"
+    );
 }
 
 #[test]
