@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::telemetry::{QueryTelemetry, TelemetrySink};
-use crate::QueryRequest;
+use crate::{ConcurrentDatabase, PlanCacheStats, QueryRequest};
 use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Default)]
@@ -45,8 +45,9 @@ fn fixture(cache_entries: usize) -> (Database, Arc<IdentityTelemetry>) {
 }
 
 fn exercise(
-    mut query: impl FnMut(QueryRequest<'_>) -> Result<QueryOutput>,
+    mut query: impl FnMut(QueryRequest<'_>) -> (Result<QueryOutput>, PlanCacheStats),
     mutation: bool,
+    cache_entries: usize,
     telemetry: &IdentityTelemetry,
 ) -> [hawdb_query::QueryIdentity; 2] {
     let queries = if mutation {
@@ -66,13 +67,26 @@ fn exercise(
         identities[0].query_text_hash(),
         identities[1].query_text_hash()
     );
+    let mut previous_stats: Option<PlanCacheStats> = None;
     for (index, text) in queries.into_iter().enumerate() {
         let id = index as i64 + 1;
         let parameters = BTreeMap::from([
             ("id".to_owned(), Value::Int(id)),
             ("value".to_owned(), Value::Int(id * 100)),
         ]);
-        let output = query(QueryRequest::new(text).with_params(&parameters)).unwrap();
+        let (output, stats) = query(QueryRequest::new(text).with_params(&parameters));
+        let output = output.unwrap();
+        if let Some(previous) = previous_stats {
+            assert_eq!(
+                stats.hits,
+                previous.hits + u64::from(!mutation && cache_entries > 0),
+                "unexpected cache reuse: mutation={mutation}, cache_entries={cache_entries}"
+            );
+            if mutation {
+                assert_eq!(stats.bypasses, previous.bypasses + 1);
+            }
+        }
+        previous_stats = Some(stats);
         assert_eq!(
             output.rows,
             vec![BTreeMap::from([(
@@ -95,8 +109,11 @@ fn exercise(
                 max_payload_bytes: None,
             }),
     )
+    .0
     .expect_err("output budget must refuse a nonempty result");
-    query(QueryRequest::new(queries[0])).expect_err("missing binding must fail preparation");
+    query(QueryRequest::new(queries[0]))
+        .0
+        .expect_err("missing binding must fail preparation");
     let digest = identities[0].query_digest().to_owned();
     assert_eq!(
         *telemetry.0.lock().unwrap(),
@@ -156,19 +173,35 @@ fn ordinary_query_identity_survives_rebinding_disabled_cache_and_failure() {
         for mutation in [false, true] {
             let (mut database, telemetry) = fixture(cache_entries);
             let identities = exercise(
-                |request| database.query_request(request),
+                |request| {
+                    let result = database.query_request(request);
+                    (result, database.plan_cache_stats().unwrap())
+                },
                 mutation,
+                cache_entries,
                 &telemetry,
             );
-            if !mutation && cache_entries > 0 {
-                assert!(database.plan_cache_stats().unwrap().hits > 0);
-            }
             assert_observations(
                 |sql, parameters| database.query_sql_with_params(sql, parameters),
                 &identities,
             );
         }
     }
+}
+
+fn concurrent_cache_stats(database: &ConcurrentDatabase) -> PlanCacheStats {
+    let mut stats = None;
+    // Inspect the same owner cache used for publication preparation. A read
+    // transaction may own a separate cache, and querying SQL would emit events.
+    database
+        .with_autocommit_exclusive(|owner| {
+            stats = Some(owner.plan_cache_stats()?);
+            Ok(QueryOutput {
+                rows: Vec::new().into(),
+            })
+        })
+        .unwrap();
+    stats.unwrap()
 }
 
 #[test]
@@ -178,8 +211,12 @@ fn concurrent_query_identity_survives_rebinding_disabled_cache_and_failure() {
             let (database, telemetry) = fixture(cache_entries);
             let database = database.into_concurrent();
             let identities = exercise(
-                |request| database.query_request(request),
+                |request| {
+                    let result = database.query_request(request);
+                    (result, concurrent_cache_stats(&database))
+                },
                 mutation,
+                cache_entries,
                 &telemetry,
             );
             assert_observations(

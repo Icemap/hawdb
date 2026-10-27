@@ -1156,7 +1156,12 @@ The root general unit lane owns `api::tests::query_observability::query_identity
 Its ordinary and concurrent cases cover read/write parameter rebinding, cache
 hits and disabled caches, exact current-text hashes across equivalent query
 spellings, telemetry, and summary/slow-log behavior after execution and planning
-refusals. Replay: `cargo test --locked -p hawdb --lib query_identity_survives`.
+refusals. Counter deltas after the two equivalent-spelling requests prove the
+ordinary and concurrent read hit, disabled-cache no-hit and SET bypass paths.
+The same lane owns `api::query_runtime::tests::prepared_query_identity_rejects_mismatched_transfer_and_records_current_text`:
+text mismatch leaves the prepared identity available, failed observation hashes
+the current text through fallback, and a matching transfer consumes it once.
+Replay: `cargo test --locked -p hawdb --lib query_identity`.
 No profile, timeout, feature selection or execution lane changes. SQL, EXPLAIN
 and deferred retained-cursor observation keep their existing owners. The manual
 [allocation probes](benchmarks/query_identity_2026_10_27/README.md) record ordinary
