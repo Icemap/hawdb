@@ -1498,6 +1498,18 @@ preserving overlap and compatibility safety. Both modes serialize the durable
 WAL decision and snapshot publication while readers continue to pin the last
 published epoch.
 
+The Mem transaction callback and statement-group adapters now use this same
+coordinator with a shared canonical owner. Their private staging maps to the
+existing active transaction states, while commit retains the same publisher and
+durability transitions. Direct Mem mutations/maintenance take the full-key
+exclusive lease before borrowing that owner. Shared-owner guards publish one
+canonical read view; they do not add a second commit decision or retain a
+separate coordinator snapshot. Callback unwind and incomplete-group publication
+are rejected by the adapter's serving-failure state. Rust Mem regressions cover
+two independent staging writers, current/old readers, callback failure, source
+poisoning and physical-view replacement. This correspondence does not extend the
+optimistic model beyond the per-key validation coverage boundary below.
+
 The model checks that stale optimistic transactions cannot publish, only one
 transaction owns the commit pipeline, overlapping shared/exclusive lock spans
 remain compatible, an optimistic publisher owns the full exclusive span,
@@ -1831,6 +1843,25 @@ rejection and pin-aware reclamation. Five unsafe-transition controls and two
 reachability controls accompany the model. This does not enable mutation-run
 serving; see the [runtime guard and proof scope](SEARCH_MUTATION_PUBLICATION_PROOF.md).
 
+The Mem out-of-core read adapter retains a complete reader owner across a
+callback and replaces the shared reader on refresh. Its unchanged segment
+owners and native pins preserve the model's `PinnedClosureRetained` obligation;
+the adapter adds no durable selector transition. The Mem publication cache pairs
+that owner with its graph read view under one publication mutex and retires
+replaced owners after unlocking. The App regression independently checks both
+old/current graph-projection pairs during actual maintenance publication and
+the final reader release. The search model does not itself model this host
+pairing. `HawDBResidentReadLease` separately models two readers, three publication
+generations and one retained-generation memory slot. Capture follows admission;
+the graph/projection pair is atomic, reads require shared funding, refusal drops
+pins, and the last source pin is released before refund. `Publish` remains enabled
+with old readers. Four manual unsafe-transition controls cover torn pairs,
+uncharged reads, queued pins and early refunds. Rust App snapshot tests exercise
+repeated writer publication and fresh reads during the resident callback; Search
+tests check actual counters, weak-owner release and frozen query-report freshness.
+The model abstracts one host governor and does not prove Rust buffer sizing,
+lazy-index build costs, filesystem semantics or general fairness.
+
 ## Derived Source Segment Publication
 
 `HawDBSourceSegmentPublication.tla` models Source scan sidecars, including the
@@ -2160,3 +2191,54 @@ invariants in `mutants/mutants.txt` and run through
 `//docs/tla:consumer_incarnation_custody_controls` and `--check-mutants`. The model
 adds no runtime publication authority; the stationary Consumer implementation
 remains open under #1092 and draft #1039.
+
+## Prepared query admission
+
+[`HawDBPreparedAdmission.tla`](HawDBPreparedAdmission.tla) covers fixed planning
+memory transfer, single-CPU admission, cancellation ownership, and the retained
+memory floor that prevents self-wait. Hard refusals release preparation before
+retrying execution alone; reachability controls cover both recovery and final
+refusal. See the
+[implementation correspondence and negative controls](PREPARED_ADMISSION_PROOF.md).
+
+### Ordinary autocommit semantic scopes
+
+`HawDBAutocommitScope` abstracts `api::concurrent::autocommit` with two writers
+and two semantic read keys. A key represents the complete predicate domain:
+a unique candidate includes a node even when another predicate excludes it;
+a range/relationship scope can cover several keys. Scope acquisition precedes
+private snapshot capture. Data-only changes outside held scopes remain enabled;
+schema changes before acquisition invalidate admission. Execution and publication
+must retain the scoped versions. The existing transaction/durability and prepared
+admission models own WAL ordering, memory ownership and waiting source pins.
+
+SQL autocommit uses the same acquire-before-snapshot ordering. Its keys represent
+primary-key predicate ranges, complete tables, or the conservative database scope
+for foreign keys/DDL/append. `preparedSchema` represents scope compatibility for
+schema-neutral SQL: the Rust adapter recomputes the fresh required scope and
+requires held-lock coverage. Compatible schema edits can bind afresh; newly
+required protection is refused. The native SQL autocommit family distinguishes
+constraint expansion, excluded candidates, FK cascades and fresh snapshots from
+unsafe binding before lock waiting. The model abstracts compatibility as a bit;
+it does not prove SQL constraint dependency discovery or repeated commit work.
+
+Tokio's ordinary writer closure holds a shared administrative execution lease;
+direct host callbacks/context replacement require the exclusive side. This maps
+administrative replacement to a transition outside active writer scopes, while
+different ordinary writers remain enabled. The original database-instance token
+survives admission-state eviction; `HawDBPreparedAdmission` owns source validation
+and retained-funding lifetime. Owner guards publish the completed immutable view
+before unlocking and retire old sources afterward; capture/unwind failures refuse
+subsequent query work. Native Tokio tests cover actual writer overlap, source
+replacement, direct-callback exclusion and admission refund. This correspondence
+does not prove RwLock fairness or arbitrary callback reentrancy.
+
+This model does not prove the AST-to-scope mapping, unique lookup/index completeness,
+lock-manager fairness, Rust ownership or physical latency. Native tests cover the
+mapping and actual adapter boundaries. The three unsafe controls remove predicate
+protection, retain an early snapshot, or omit schema validation; each must violate
+its associated invariant. Positive checking belongs to `:storage_models`; manual
+controls are `:HawDBAutocommitScopeUnprotectedPredicate_check`,
+`:HawDBAutocommitScopeEarlySnapshot_check`, and
+`:HawDBAutocommitScopeIgnoreSchema_check`. Do not infer positive qualification
+from successful counterexample controls.

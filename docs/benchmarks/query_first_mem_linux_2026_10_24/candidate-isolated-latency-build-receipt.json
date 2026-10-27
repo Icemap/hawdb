@@ -1,0 +1,19 @@
+{
+  "name": "candidate-isolated-latency",
+  "cwd": "/tmp/hawdb-query-first-api",
+  "command": [
+    "cargo",
+    "bench",
+    "--manifest-path",
+    "/tmp/hawdb-query-first-api/Cargo.toml",
+    "--locked",
+    "--bench",
+    "mem_query_concurrency",
+    "--no-run",
+    "--message-format=json"
+  ],
+  "exit_code": 0,
+  "build_seconds": 449.1990458536893,
+  "binary_sha256": "b0b91ea4345af3e4b4bf8def9765b5bf1a6a090cf89fac56267ebd3c4c8da103",
+  "benchmark_sha256": "5436fb523d5171db13e56636d2e7a06d3dc1f2c582a82808e776bd98a5f0595a"
+}

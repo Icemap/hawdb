@@ -184,21 +184,12 @@ impl DeltaPageDescriptor {
         &self,
         table: &str,
         index: &str,
-        prefix: &[u8],
-        exclusive_bound: Option<&[u8]>,
-        direction: RelationalIndexScanDirection,
+        bounds: &super::super::EncodedRelationalIndexRange,
     ) -> bool {
-        self.may_match_selector(table, index, |selector| {
-            selector.may_match_prefix(prefix)
-                && exclusive_bound.is_none_or(|bound| match direction {
-                    RelationalIndexScanDirection::Forward => {
-                        selector.upper_index_key.as_slice() > bound
-                    }
-                    RelationalIndexScanDirection::Backward => {
-                        selector.lower_index_key.as_slice() < bound
-                    }
-                })
-        })
+        !bounds.empty
+            && self.may_match_selector(table, index, |selector| {
+                bounds.overlaps(&selector.lower_index_key, &selector.upper_index_key)
+            })
     }
 
     fn may_match_selector(
@@ -1638,6 +1629,7 @@ impl RelationalIndexRecoveryReader {
             table,
             index,
             &RelationalIndexRangeScan {
+                bounds: Default::default(),
                 prefix: prefix.clone(),
                 exclusive_bound: None,
                 direction: RelationalIndexScanDirection::Forward,
@@ -1895,12 +1887,7 @@ impl RelationalIndexRecoveryReader {
         mut visit: impl FnMut(&RelationalKey, &RelationalKey) -> bool,
         read_admission: IndexReadAdmission<'_>,
     ) -> Result<RelationalIndexRecoveryReadReport, RelationalIndexShadowError> {
-        let encoded_prefix = encode_relational_key(&scan.prefix)?;
-        let encoded_bound = scan
-            .exclusive_bound
-            .as_ref()
-            .map(encode_relational_key)
-            .transpose()?;
+        let bounds = scan.encoded_bounds(encode_relational_key)?;
         if self.is_poisoned() {
             return Err(RelationalIndexShadowError::Corrupt(
                 "relational index recovery reader is poisoned".to_string(),
@@ -1922,13 +1909,7 @@ impl RelationalIndexRecoveryReader {
             stopped_early: false,
         };
         for descriptor in &self.manifest.pages {
-            if !descriptor.may_match_range(
-                table,
-                index,
-                &encoded_prefix,
-                encoded_bound.as_deref(),
-                scan.direction,
-            ) {
+            if !descriptor.may_match_range(table, index, &bounds) {
                 report.delta_pages_skipped = report
                     .delta_pages_skipped
                     .checked_add(1)
@@ -1970,17 +1951,7 @@ impl RelationalIndexRecoveryReader {
                         .ok_or_else(|| admission("recovery delta entry counter overflow"))?;
                     if entry.key.table != table
                         || entry.key.index != index
-                        || !entry.key.index_key.starts_with(&encoded_prefix)
-                        || encoded_bound
-                            .as_ref()
-                            .is_some_and(|bound| match scan.direction {
-                                RelationalIndexScanDirection::Forward => {
-                                    entry.key.index_key <= *bound
-                                }
-                                RelationalIndexScanDirection::Backward => {
-                                    entry.key.index_key >= *bound
-                                }
-                            })
+                        || !bounds.contains(&entry.key.index_key)
                     {
                         return Ok(());
                     }
@@ -2832,16 +2803,22 @@ mod tests {
         assert!(descriptor.may_match_range(
             "documents",
             "documents_owner_idx",
-            &[0x10],
-            None,
-            RelationalIndexScanDirection::Forward,
+            &super::super::super::EncodedRelationalIndexRange {
+                lower: vec![0x10],
+                lower_inclusive: true,
+                upper: None,
+                empty: false,
+            },
         ));
         assert!(!descriptor.may_match_range(
             "documents",
             "documents_owner_idx",
-            &[0x10],
-            Some(&[0x1f]),
-            RelationalIndexScanDirection::Forward,
+            &super::super::super::EncodedRelationalIndexRange {
+                lower: vec![0x1f],
+                lower_inclusive: false,
+                upper: None,
+                empty: false,
+            },
         ));
     }
 

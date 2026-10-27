@@ -1,5 +1,16 @@
 // Copyright 2026 Nowledge
-// Licensed under the Apache License, Version 2.0.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use super::*;
 use hawdb_core::{RuntimeIoWaveController, RuntimeIoWaveError, RuntimeIoWavePermit};
@@ -43,18 +54,7 @@ fn vector_index_producer_waits_for_original_io_wave_before_writing_and_can_cance
     let root = super::super::tests::test_dir("vector-consumer-io");
     std::fs::create_dir_all(&root).unwrap();
     let publication = super::super::super::SearchProjectionPublishLease::acquire(&root).unwrap();
-    let governor = RuntimeGovernor::new(
-        RuntimeGovernorConfig {
-            memory_budget_bytes: Some(256 << 20),
-            background_task_limit: Some(NonZeroUsize::new(2).unwrap()),
-            ..RuntimeGovernorConfig::shared_host()
-        },
-        RuntimeResourceSnapshot::from_parts(
-            RuntimeResourceBudget::from_limits(NonZeroUsize::new(4).unwrap(), None, None),
-            RuntimeMemorySnapshot::from_limits(Some(1 << 30), Some(1 << 30), None, None, None),
-        ),
-        IoConcurrencyBudget::new(2, 1),
-    );
+    let governor = governor();
     let blocker = governor
         .try_admit(
             RuntimeWorkRequest::io(RuntimeWorkPriority::Background, 0, 0).with_io_wave_slots(1),
@@ -74,30 +74,7 @@ fn vector_index_producer_waits_for_original_io_wave_before_writing_and_can_cance
         task,
         events: events.clone(),
     }));
-    let mut index = SearchIndex::in_memory();
-    index
-        .bind_vector_index(
-            hawdb_core::VectorIndexDescriptor::new(
-                "docs".into(),
-                hawdb_core::VectorIndexTarget::Relational {
-                    table: "docs".into(),
-                    column: "embedding".into(),
-                    column_ordinal: 1,
-                },
-                hawdb_core::VectorDimension::new(2).unwrap(),
-                hawdb_core::VectorDistance::Cosine,
-                hawdb_core::VectorIndexBackend::RaBitQ {
-                    bit_width: 4,
-                    segment_rows: 64,
-                    transform_seed: 42,
-                },
-                [7; 32],
-            )
-            .unwrap(),
-        )
-        .unwrap();
-    index.path = Some(root.clone());
-    index.source_graph_commit_epoch = Some(1);
+    let index = vector_index(&root);
     let worker_permit = Arc::clone(&permit);
     let worker = std::thread::spawn(move || {
         let result = SearchOutOfCoreGenerationWriter::write_consumer(
@@ -139,4 +116,83 @@ fn vector_index_producer_waits_for_original_io_wave_before_writing_and_can_cance
     drop(index);
     drop(permit);
     std::fs::remove_dir_all(root).unwrap();
+}
+
+fn governor() -> RuntimeGovernor {
+    RuntimeGovernor::new(
+        RuntimeGovernorConfig {
+            memory_budget_bytes: Some(256 << 20),
+            background_task_limit: Some(NonZeroUsize::new(2).unwrap()),
+            ..RuntimeGovernorConfig::shared_host()
+        },
+        RuntimeResourceSnapshot::from_parts(
+            RuntimeResourceBudget::from_limits(NonZeroUsize::new(4).unwrap(), None, None),
+            RuntimeMemorySnapshot::from_limits(Some(1 << 30), Some(1 << 30), None, None, None),
+        ),
+        IoConcurrencyBudget::new(1, 1),
+    )
+}
+
+fn vector_index(root: &std::path::Path) -> SearchIndex {
+    let mut index = SearchIndex::in_memory();
+    index
+        .bind_vector_index(
+            hawdb_core::VectorIndexDescriptor::new(
+                "docs".into(),
+                hawdb_core::VectorIndexTarget::Relational {
+                    table: "docs".into(),
+                    column: "embedding".into(),
+                    column_ordinal: 1,
+                },
+                hawdb_core::VectorDimension::new(2).unwrap(),
+                hawdb_core::VectorDistance::Cosine,
+                hawdb_core::VectorIndexBackend::RaBitQ {
+                    bit_width: 4,
+                    segment_rows: 64,
+                    transform_seed: 42,
+                },
+                [7; 32],
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    index.path = Some(root.to_path_buf());
+    index.source_graph_commit_epoch = Some(1);
+    index
+}
+
+#[test]
+fn successful_consumer_releases_its_stage_under_one_slot_wave_and_task_reservations() {
+    for task_scope in [false, true] {
+        let root = super::super::tests::test_dir("vector-consumer-cleanup-io");
+        std::fs::create_dir_all(&root).unwrap();
+        let publication =
+            super::super::super::SearchProjectionPublishLease::acquire(&root).unwrap();
+        let governor = governor();
+        let request = RuntimeWorkRequest::background_maintenance(64 << 20);
+        let request = if task_scope {
+            request.with_io_slots(1)
+        } else {
+            request.with_io_wave_slots(1)
+        };
+        let permit = Arc::new(governor.try_admit(request).unwrap());
+        let index = vector_index(&root);
+        SearchOutOfCoreGenerationWriter::write_consumer(
+            &index,
+            &publication,
+            permit.bind_task_context(Default::default()),
+            NonZeroU64::new(256 << 20).unwrap(),
+            Arc::clone(&permit),
+        )
+        .unwrap();
+        let cleanup = SearchOutOfCoreGenerationWriter::retry_staging_cleanup(&root, 0).unwrap();
+        assert_eq!(cleanup.pending_stages, 0, "{cleanup:?}");
+        assert_eq!(cleanup.retained_memory_bytes, 0);
+        assert_eq!(cleanup.reserved_disk_bytes, 0);
+        drop(publication);
+        drop(index);
+        drop(permit);
+        assert_eq!(governor.snapshot().active_background_io_slots, 0);
+        std::fs::remove_dir_all(root).unwrap();
+    }
 }

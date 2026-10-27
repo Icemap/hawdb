@@ -13,61 +13,49 @@
 // limitations under the License.
 
 use crate::{
-    tokenize, ExpressionSyntax, GraphEdgeDirection, GraphEdgePatternSyntax,
-    GraphElementPatternSyntax, GraphPathFactorSyntax, GraphPathPrimarySyntax, GraphPathSyntax,
-    GraphPatternQuantifier, GraphPatternSyntax, GraphTable, GraphTableColumn, Identifier,
-    LabeledExpressionSyntax, PgqStatement, PostgresSelectSyntax, PostgresStatementSyntax,
-    QualifiedName, Span, SyntaxError, SyntaxErrorCode, TableAlias, Token, TokenKind,
+    ExpressionSyntax, GraphEdgeDirection, GraphEdgePatternSyntax, GraphElementPatternSyntax,
+    GraphPathFactorSyntax, GraphPathPrimarySyntax, GraphPathSyntax, GraphPatternQuantifier,
+    GraphPatternSyntax, GraphTable, GraphTableColumn, Identifier, LabeledExpressionSyntax,
+    PgqStatement, PostgresSelectSyntax, PostgresStatementSyntax, QualifiedName, Span, SyntaxError,
+    SyntaxErrorCode, TableAlias, Token, TokenKind,
 };
 
 mod expression;
+mod frontend;
 mod property_graph;
 mod select;
 
 pub fn parse_postgres_statement(input: &str) -> Result<PostgresStatementSyntax, SyntaxError> {
-    let tokens = tokenize(input)?;
-    let mut parser = Parser::new(input, &tokens);
-    let statement = if parser.at_keyword("CREATE") {
-        PostgresStatementSyntax::CreatePropertyGraph(parser.parse_create_property_graph()?)
-    } else if parser.at_keyword("SELECT") {
-        PostgresStatementSyntax::Select(Box::new(parser.parse_postgres_select()?))
-    } else {
-        return Err(parser.unexpected("CREATE PROPERTY GRAPH or SELECT"));
-    };
-    parser.consume_kind(TokenKind::Semicolon);
-    parser.expect_kind(TokenKind::End, "end of statement")?;
-    Ok(statement)
+    match frontend::parse(input, "SqlInput")? {
+        frontend::Output::Select(select) => Ok(PostgresStatementSyntax::Select(select)),
+        frontend::Output::Create(create) => {
+            Ok(PostgresStatementSyntax::CreatePropertyGraph(*create))
+        }
+        frontend::Output::GraphTable(_) => {
+            unreachable!("SQL entry excludes standalone GRAPH_TABLE")
+        }
+    }
 }
 
 pub fn parse_postgres_select(input: &str) -> Result<PostgresSelectSyntax, SyntaxError> {
-    let tokens = tokenize(input)?;
-    let mut parser = Parser::new(input, &tokens);
-    let select = parser.parse_postgres_select()?;
-    parser.consume_kind(TokenKind::Semicolon);
-    parser.expect_kind(TokenKind::End, "end of SELECT")?;
-    Ok(select)
+    let frontend::Output::Select(select) = frontend::parse(input, "SelectInput")? else {
+        unreachable!("SELECT entry produces a SELECT AST")
+    };
+    Ok(*select)
 }
 
 pub fn parse_pgq_statement(input: &str) -> Result<PgqStatement, SyntaxError> {
-    let tokens = tokenize(input)?;
-    let mut parser = Parser::new(input, &tokens);
-    let statement = if parser.at_keyword("CREATE") {
-        PgqStatement::CreatePropertyGraph(parser.parse_create_property_graph()?)
-    } else {
-        return Err(parser.unexpected("CREATE PROPERTY GRAPH"));
+    let frontend::Output::Create(create) = frontend::parse(input, "PgqInput")? else {
+        unreachable!("PGQ entry produces CREATE PROPERTY GRAPH")
     };
-    parser.consume_kind(TokenKind::Semicolon);
-    parser.expect_kind(TokenKind::End, "end of statement")?;
-    Ok(statement)
+    Ok(PgqStatement::CreatePropertyGraph(*create))
 }
 
 pub fn parse_graph_table(input: &str) -> Result<GraphTable, SyntaxError> {
-    let tokens = tokenize(input)?;
-    let mut parser = Parser::new(input, &tokens);
-    let table = parser.parse_graph_table()?;
-    parser.consume_kind(TokenKind::Semicolon);
-    parser.expect_kind(TokenKind::End, "end of GRAPH_TABLE clause")?;
-    Ok(table)
+    let frontend::Output::GraphTable(table) = frontend::parse(input, "GraphTableInput")? else {
+        unreachable!("GRAPH_TABLE entry produces a GRAPH_TABLE AST")
+    };
+    Ok(*table)
 }
 
 const MAX_GRAPH_PATTERN_NESTING: usize = 128;
@@ -124,29 +112,6 @@ impl<'a> Parser<'a> {
             }
         }
         Ok(expressions)
-    }
-
-    fn parse_graph_table(&mut self) -> Result<GraphTable, SyntaxError> {
-        let start = self.expect_keyword("GRAPH_TABLE")?.span.start;
-        self.expect_kind(TokenKind::LeftParen, "(")?;
-        let graph = self.parse_qualified_name()?;
-        self.expect_keyword("MATCH")?;
-        let pattern = self.parse_graph_pattern()?;
-        self.expect_keyword("COLUMNS")?;
-
-        self.expect_kind(TokenKind::LeftParen, "(")?;
-        let columns = self.parse_graph_table_columns()?;
-        self.expect_kind(TokenKind::RightParen, ")")?;
-        self.expect_kind(TokenKind::RightParen, ")")?;
-        let alias = self.parse_optional_table_alias()?;
-
-        Ok(GraphTable {
-            graph,
-            pattern,
-            columns,
-            alias,
-            span: Span::new(start, self.previous_end()),
-        })
     }
 
     fn parse_graph_pattern(&mut self) -> Result<GraphPatternSyntax, SyntaxError> {

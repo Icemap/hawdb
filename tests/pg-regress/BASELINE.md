@@ -42,3 +42,36 @@ Reproduce the live comparison using the commands in [README.md](README.md).
 Use `--case adapted/isolation/` for the bounded passing MVCC selection, or the
 full schedule to retain the raw compatibility baseline. Never present this
 matrix as the pass rate of the entire PostgreSQL regression suite.
+
+## HawDB-only upstream regressions (2026-10-25)
+
+Engine base: `19ca97b6bc79f78fa6f8fe72c45b8cf81095adad`; no engine changes.
+The new tests execute `Database::query_sql` directly, with default HawDB in-memory
+configuration and minimal features. They do not connect to PostgreSQL. The live
+comparison matrix above is historical and was not rerun for this change.
+
+```bash
+make pg-regress-hawdb
+```
+
+Result: **21 passed**, comprising 19 migrated PostgreSQL cases and two existing
+provenance/selection controls. No ignored cases or failures:
+
+| Upstream selection | Cases | Expected output |
+| --- | ---: | --- |
+| `int8.sql`, column-left comparisons | 12 | `expected/int8.out` |
+| `select_having.sql`, ungrouped HAVING | 6 | `expected/select_having.out` |
+| `select_implicit.sql`, non-projected order key | 1 | `expected/select_implicit.out` |
+
+`data/hawdb-expectations.json` records exact output ranges, integer/text kinds
+and the two ungrouped-column error mappings. Each range must echo the unchanged
+upstream query. Expected rows are decoded from the checksum-verified original
+output, never recorded from HawDB results. The new SQL and expected files match
+the pinned PostgreSQL repository byte-for-byte.
+
+Only setup is adapted: mandatory primary keys, BIGINT/TEXT fixture types,
+explicit INSERT targets and numeric literals for the int8 input strings. The
+int8 assertion excludes only its added synthetic key column. Original values,
+duplicate counts and explicit ordering remain covered. See [README.md](README.md)
+for exclusions. All 19 selected cases passed without requiring an engine fix;
+unimplemented SQL constructs were not added or counted as successful tests.

@@ -187,6 +187,25 @@ impl DurableStore {
         self.append_entry(WalOp::Batch(ops), operation_count, pressure_signals)
     }
 
+    pub(in crate::store) fn append_prepared_batch(
+        &mut self,
+        prepared: crate::wal::binary::PreparedWalBatch,
+        pressure_signals: StoragePressureSignals,
+    ) -> Result<()> {
+        let operation_count = prepared.operation_count();
+        if self
+            .max_batch_operations
+            .is_some_and(|limit| operation_count > limit)
+        {
+            return Err(HawDBError::Storage(format!(
+                "WAL batch operation limit exceeded before append: max_wal_batch_operations={}",
+                self.max_batch_operations.unwrap_or_default()
+            )));
+        }
+        let payload = prepared.bind(self.next_lsn, self.wal_commit_epoch.saturating_add(1));
+        self.append_encoded_entry(payload, operation_count, pressure_signals)
+    }
+
     fn append_entry(
         &mut self,
         op: WalOp,
@@ -198,6 +217,15 @@ impl DurableStore {
             op,
         };
         let payload = encode_binary_wal_record(&entry, self.wal_commit_epoch.saturating_add(1))?;
+        self.append_encoded_entry(payload, operation_count, pressure_signals)
+    }
+
+    fn append_encoded_entry(
+        &mut self,
+        payload: Vec<u8>,
+        operation_count: usize,
+        pressure_signals: StoragePressureSignals,
+    ) -> Result<()> {
         if self
             .max_record_bytes
             .is_some_and(|limit| payload.len() > limit)

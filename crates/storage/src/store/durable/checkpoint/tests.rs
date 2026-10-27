@@ -554,6 +554,7 @@ fn checkpoint_units_relational_publication_cancels_every_io_preserves_evidence_a
         },
     );
     let schema = RelationalTableSchema {
+        materialized_view: None,
         name: "messages".into(),
         columns: vec![
             RelationalColumnSchema {

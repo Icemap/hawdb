@@ -137,7 +137,7 @@ fn absent_key_insertion_copies_the_target_page_with_retained_ownership() {
     let pin = map.clone();
     let (governor, admission, work) =
         admitted(2 * 1024 * 1024, RuntimeTaskContext::default(), scheduler());
-    map.prepare_checkpoint_insert_copy_for_key(&NodeId(1), &work)
+    map.prepare_checkpoint_insertions_for_key(&NodeId(1), 1, &work)
         .unwrap();
     assert!(!map.shares_storage_with(&pin));
     assert!(admission.memory_report().live_accounted_bytes >= body.len() as u64);
@@ -162,14 +162,14 @@ fn large_directory_denies_before_allocating_and_keeps_every_shared_page() {
         segments: CowSegment::from(CowPageDirectory::new(
             (0..len)
                 .map(|id| {
-                    CowSegment::from(BTreeMap::from([(
+                    CowSegment::from(CowMapPage::from(BTreeMap::from([(
                         NodeId(id),
                         NodeRecord {
                             id: NodeId(id),
                             labels: BTreeSet::new(),
                             properties: BTreeMap::new(),
                         },
-                    )]))
+                    )])))
                 })
                 .collect::<Vec<_>>(),
         )),
@@ -281,7 +281,7 @@ fn empty_map_insert_denies_initial_capacity_before_changing_shared_storage() {
     let mut map = CowSegmentedMap::<NodeId, NodeId>::default();
     let pin = map.clone();
     let (governor, admission, work) = admitted(64, RuntimeTaskContext::default(), scheduler());
-    let result = map.prepare_checkpoint_insert_copy_for_key(&NodeId(0), &work);
+    let result = map.prepare_checkpoint_insertions_for_key(&NodeId(0), 1, &work);
     assert!(
         matches!(result, Err(CheckpointWorkError::Memory(_))),
         "initial page and directory capacity must be admitted before allocation"
@@ -299,7 +299,7 @@ fn empty_map_first_page_charge_survives_insertion_task_close_and_snapshot_pins()
     let mut map = CowSegmentedMap::<NodeId, NodeId>::default();
     let original = map.clone();
     let (governor, admission, work) = admitted(4096, RuntimeTaskContext::default(), scheduler());
-    map.prepare_checkpoint_insert_copy_for_key(&NodeId(0), &work)
+    map.prepare_checkpoint_insertions_for_key(&NodeId(0), 1, &work)
         .unwrap();
     assert!(map.is_empty());
     assert!(map.get(&NodeId(0)).is_none());
@@ -336,7 +336,7 @@ fn empty_map_cancellation_at_every_initial_unit_preserves_the_original_root() {
     qos.set_telemetry_sink(Some(observer.clone()));
     let (governor, admission, work) = admitted(4096, RuntimeTaskContext::default(), qos);
     let mut map = original.clone();
-    map.prepare_checkpoint_insert_copy_for_key(&NodeId(0), &work)
+    map.prepare_checkpoint_insertions_for_key(&NodeId(0), 1, &work)
         .unwrap();
     let units = observer.calls.load(Ordering::SeqCst);
     assert!(units > 0);
@@ -360,7 +360,7 @@ fn empty_map_cancellation_at_every_initial_unit_preserves_the_original_root() {
         );
         let mut map = original.clone();
         let error = map
-            .prepare_checkpoint_insert_copy_for_key(&NodeId(0), &work)
+            .prepare_checkpoint_insertions_for_key(&NodeId(0), 1, &work)
             .unwrap_err();
         assert!(
             matches!(error, CheckpointWorkError::Stopped(_)),
@@ -385,10 +385,10 @@ fn empty_map_cancellation_at_every_initial_unit_preserves_the_original_root() {
 fn empty_map_copy_after_a_snapshot_keeps_its_first_insertion_capacity_admitted() {
     let mut map = CowSegmentedMap::<NodeId, NodeId>::default();
     let (governor, admission, work) = admitted(4096, RuntimeTaskContext::default(), scheduler());
-    map.prepare_checkpoint_insert_copy_for_key(&NodeId(0), &work)
+    map.prepare_checkpoint_insertions_for_key(&NodeId(0), 1, &work)
         .unwrap();
     let empty_pin = map.clone();
-    map.prepare_checkpoint_insert_copy_for_key(&NodeId(0), &work)
+    map.prepare_checkpoint_insertions_for_key(&NodeId(0), 1, &work)
         .unwrap();
     assert!(map.is_empty());
     assert!(!map.shares_storage_with(&empty_pin));
@@ -412,7 +412,7 @@ fn empty_map_copy_after_a_snapshot_keeps_its_first_insertion_capacity_admitted()
 fn unique_page_insertion_denies_growth_before_mutating_or_losing_ownership() {
     let mut map = CowSegmentedMap::from(BTreeMap::from([(NodeId(0), NodeId(9))]));
     let (governor, admission, work) = admitted(64, RuntimeTaskContext::default(), scheduler());
-    let result = map.prepare_checkpoint_insert_copy_for_key(&NodeId(1), &work);
+    let result = map.prepare_checkpoint_insertions_for_key(&NodeId(1), 1, &work);
     assert!(
         matches!(result, Err(CheckpointWorkError::Memory(_))),
         "a unique page still needs insertion/split capacity admission"
@@ -499,7 +499,7 @@ fn existing_growth_allowance_does_not_bypass_a_lower_resumed_memory_ceiling() {
     let charge = admission.memory_report().live_accounted_bytes;
     let (lower_governor, lower_admission, lower_work) =
         admitted(64, RuntimeTaskContext::default(), scheduler());
-    let result = map.prepare_checkpoint_insert_copy_for_key(&NodeId(1), &lower_work);
+    let result = map.prepare_checkpoint_insertions_for_key(&NodeId(1), 1, &lower_work);
     assert!(matches!(result, Err(CheckpointWorkError::Memory(_))));
     assert_eq!(map.len(), 1);
     assert_eq!(map.get(&NodeId(0)), Some(&NodeId(9)));
@@ -563,7 +563,7 @@ fn insertion_cancellation_at_every_growth_unit_keeps_the_original_root() {
     observed_scheduler.set_telemetry_sink(Some(observer.clone()));
     let (governor, admission, work) =
         admitted(4096, RuntimeTaskContext::default(), observed_scheduler);
-    map.prepare_checkpoint_insert_copy_for_key(&NodeId(1), &work)
+    map.prepare_checkpoint_insertions_for_key(&NodeId(1), 1, &work)
         .unwrap();
     let units = observer.calls.load(Ordering::SeqCst);
     assert!(units > 0);
@@ -586,7 +586,7 @@ fn insertion_cancellation_at_every_growth_unit_keeps_the_original_root() {
         let task = RuntimeTaskContext::without_deadline(token);
         let (governor, admission, work) = admitted(4096, task, observed_scheduler.clone());
         assert!(matches!(
-            map.prepare_checkpoint_insert_copy_for_key(&NodeId(1), &work),
+            map.prepare_checkpoint_insertions_for_key(&NodeId(1), 1, &work),
             Err(CheckpointWorkError::Stopped(_))
         ));
         assert!(map.shares_storage_with(&original), "unit {at}");
@@ -610,7 +610,7 @@ fn replacing_a_record_consumes_growth_before_another_split_can_be_admitted() {
     assert_eq!(map.segment_count(), 1);
     let (governor, admission, work) =
         admitted(8 * 1024, RuntimeTaskContext::default(), scheduler());
-    map.prepare_checkpoint_insert_copy_for_key(&NodeId(0), &work)
+    map.prepare_checkpoint_insertions_for_key(&NodeId(0), 1, &work)
         .unwrap();
     let previous = map
         .insert(NodeId(0), record(0, &"p".repeat(128 * 1024)))
@@ -622,7 +622,7 @@ fn replacing_a_record_consumes_growth_before_another_split_can_be_admitted() {
         "a replacement can split a primary page"
     );
     let charge = admission.memory_report().live_accounted_bytes;
-    let result = map.prepare_checkpoint_insert_copy_for_key(&NodeId(1), &work);
+    let result = map.prepare_checkpoint_insertions_for_key(&NodeId(1), 1, &work);
     assert!(
         matches!(result, Err(CheckpointWorkError::Memory(_))),
         "the first replacement consumed its allowance; the second split needs fresh admission"

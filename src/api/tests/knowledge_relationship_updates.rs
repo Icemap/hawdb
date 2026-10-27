@@ -14,309 +14,149 @@
 
 use super::*;
 
+const UPDATE: &str =
+    "MATCH (m:Memory {id: $source})-[r:MENTIONS]->(e:Entity {id: $target}) SET r.weight = $weight";
+const FILTERED_UPDATE: &str = "MATCH (m:Memory {id: $source})-[r:MENTIONS {source_reference: $reference}]->(e:Entity {id: $target}) SET r.weight = $weight";
+const REVIEW_UPDATE: &str = "MATCH (m:Memory {id: $source})-[r:MENTIONS {source_reference: $reference}]->(e:Entity {id: $target}) SET r.weight = $weight, r.review_status = $status";
+const SCOPED_UPDATE: &str = "MATCH (m:Memory {id: $source})-[r:HAS_LABEL]->(l:Label {id: $target}) WHERE m.source_id = $scope SET r.weight = $weight";
+const MENTION_PAGE: &str = "MATCH (m:Memory)-[r:MENTIONS]->(e:Entity) RETURN id(m) AS source_node_id, m.id AS source, id(e) AS target_node_id, e.id AS target, id(r) AS relationship_id, r.source_reference AS reference, r.weight AS weight, r.review_status AS status ORDER BY source, target, reference";
+const LABEL_PAGE: &str = "MATCH (m:Memory)-[r:HAS_LABEL]->(l:Label) RETURN m.id AS source, l.id AS target, id(r) AS relationship_id, r.weight AS weight ORDER BY source, target";
+
+fn parameters(source: &str, target: &str, reference: &str, weight: i64) -> BTreeMap<String, Value> {
+    BTreeMap::from([
+        ("source".into(), Value::String(source.into())),
+        ("target".into(), Value::String(target.into())),
+        ("reference".into(), Value::String(reference.into())),
+        ("weight".into(), Value::Int(weight)),
+        ("status".into(), Value::String("approved".into())),
+        ("scope".into(), Value::String("thread_1".into())),
+    ])
+}
+
 #[test]
-fn updates_knowledge_relationship_through_typed_api() {
+fn updates_knowledge_relationship_through_bounded_query() {
     let mut db = Database::new();
-    db.query("CREATE (:Memory {id: 'memory_1', source_id: 'thread_1'})-[:MENTIONS {source_reference: 'raw', weight: 1}]->(:Entity {id: 'entity_1'})")
-        .unwrap();
-
+    db.query("CREATE (:Memory {id: 'memory_1', source_id: 'thread_1'})-[:MENTIONS {source_reference: 'raw', weight: 1}]->(:Entity {id: 'entity_1'})").unwrap();
+    let parameters = parameters("memory_1", "entity_1", "raw", 9);
+    let epoch = db.commit_epoch().unwrap();
     let output = db
-        .update_knowledge_relationship(&KnowledgeRelationshipUpdateRequest {
-            source: KnowledgeEntityRequest {
-                label: "Memory".to_string(),
-                external_id: "memory_1".to_string(),
-            },
-            target: KnowledgeEntityRequest {
-                label: "Entity".to_string(),
-                external_id: "entity_1".to_string(),
-            },
-            relationship_type: "MENTIONS".to_string(),
-            relationship_properties: BTreeMap::from([(
-                "source_reference".to_string(),
-                Value::String("raw".to_string()),
-            )]),
-            assignments: BTreeMap::from([
-                ("weight".to_string(), Value::Int(9)),
-                (
-                    "review_status".to_string(),
-                    Value::String("approved".to_string()),
-                ),
-            ]),
-        })
+        .query_request(bounded_batch_query(REVIEW_UPDATE, &parameters))
         .unwrap();
-
-    assert_eq!(output.graph_commit_epoch_before, 1);
-    assert_eq!(output.graph_commit_epoch_after, 2);
-    assert_eq!(output.source_node_id, Some(0));
-    assert_eq!(output.target_node_id, Some(1));
-    assert!(output.matched);
-    assert_eq!(output.updated_relationship_count, 1);
-    assert_eq!(output.updated_property_count, 2);
-    let relationships = db
-        .query_relationships_via_cypher(&KnowledgeRelationshipsRequest {
-            seeds: vec![KnowledgeEntityRequest {
-                label: "Memory".to_string(),
-                external_id: "memory_1".to_string(),
-            }],
-            relationship_type: Some("MENTIONS".to_string()),
-            direction: KnowledgeNeighborDirection::Outgoing,
-            limit_per_seed: 4,
-        })
+    assert_eq!(output.rows.len(), 1);
+    assert_eq!(epoch, 1);
+    assert_eq!(db.commit_epoch().unwrap(), epoch + 1);
+    let rows = db
+        .query_request(bounded_batch_query(MENTION_PAGE, &parameters))
         .unwrap();
-    assert_eq!(
-        relationships.groups[0].relationships[0]
-            .relationship_properties
-            .get("weight"),
-        Some(&Value::Int(9))
-    );
-    assert_eq!(
-        relationships.groups[0].relationships[0]
-            .relationship_properties
-            .get("review_status"),
-        Some(&Value::String("approved".to_string()))
-    );
+    assert_eq!(rows.rows.len(), 1);
+    assert_eq!(rows.rows[0]["source_node_id"], Value::Int(0));
+    assert_eq!(rows.rows[0]["target_node_id"], Value::Int(1));
+    for key in ["source", "target", "reference", "weight", "status"] {
+        assert_eq!(rows.rows[0][key], parameters[key]);
+    }
 }
 
 #[test]
 fn scoped_knowledge_relationship_update_does_not_write_filtered_endpoint() {
     let mut db = Database::new();
-    db.query("CREATE (:Memory {id: 'memory_1', source_id: 'thread_1', space_id: ''})-[:HAS_LABEL {weight: 1}]->(:Label {id: 'label_1', name: 'Database'})")
+    db.query("CREATE (:Memory {id: 'memory_1', source_id: 'thread_1', space_id: ''})-[:HAS_LABEL {weight: 1}]->(:Label {id: 'label_1', name: 'Database'})").unwrap();
+    let mut parameters = parameters("memory_1", "label_1", "", 9);
+    parameters.insert("scope".into(), Value::String("thread_2".into()));
+    let before = db
+        .query_request(bounded_batch_query(LABEL_PAGE, &parameters))
         .unwrap();
-
-    let output = db
-        .update_scoped_knowledge_relationship(&KnowledgeScopedRelationshipUpdateRequest {
-            update: KnowledgeRelationshipUpdateRequest {
-                source: KnowledgeEntityRequest {
-                    label: "Memory".to_string(),
-                    external_id: "memory_1".to_string(),
-                },
-                target: KnowledgeEntityRequest {
-                    label: "Label".to_string(),
-                    external_id: "label_1".to_string(),
-                },
-                relationship_type: "HAS_LABEL".to_string(),
-                relationship_properties: BTreeMap::new(),
-                assignments: BTreeMap::from([("weight".to_string(), Value::Int(9))]),
-            },
-            source_metadata_filters: BTreeMap::from([(
-                "source_id".to_string(),
-                "thread_2".to_string(),
-            )]),
-            target_metadata_filters: BTreeMap::new(),
-        })
+    let epoch = db.commit_epoch().unwrap();
+    assert!(db
+        .query_request(bounded_batch_query(SCOPED_UPDATE, &parameters))
+        .unwrap()
+        .rows
+        .is_empty());
+    assert_eq!(db.commit_epoch().unwrap(), epoch);
+    let after = db
+        .query_request(bounded_batch_query(LABEL_PAGE, &parameters))
         .unwrap();
-
-    assert_eq!(output.graph_commit_epoch_before, 1);
-    assert_eq!(output.graph_commit_epoch_after, 1);
-    assert!(!output.matched);
-    assert!(output.source_filtered_out);
-    assert_eq!(output.updated_relationship_count, 0);
-    let relationships = db
-        .query_relationships_via_cypher(&KnowledgeRelationshipsRequest {
-            seeds: vec![KnowledgeEntityRequest {
-                label: "Memory".to_string(),
-                external_id: "memory_1".to_string(),
-            }],
-            relationship_type: Some("HAS_LABEL".to_string()),
-            direction: KnowledgeNeighborDirection::Outgoing,
-            limit_per_seed: 4,
-        })
-        .unwrap();
-    assert_eq!(
-        relationships.groups[0].relationships[0]
-            .relationship_properties
-            .get("weight"),
-        Some(&Value::Int(1))
-    );
+    assert_eq!(after.rows, before.rows);
+    assert_eq!(after.rows.len(), 1);
+    assert_eq!(after.rows[0]["weight"], Value::Int(1));
 }
 
 #[test]
-fn updates_knowledge_relationship_batch_through_typed_api() {
+fn updates_knowledge_relationship_batch_through_bounded_queries() {
     let mut db = Database::new();
-    db.query("CREATE (:Memory {id: 'memory_1', source_id: 'thread_1'})-[:MENTIONS {source_reference: 'raw_1', weight: 1}]->(:Entity {id: 'entity_1'})")
+    db.query("CREATE (:Memory {id: 'memory_1', source_id: 'thread_1'})-[:MENTIONS {source_reference: 'raw_1', weight: 1}]->(:Entity {id: 'entity_1'})").unwrap();
+    db.query("CREATE (:Memory {id: 'memory_2', source_id: 'thread_1'})-[:MENTIONS {source_reference: 'raw_2', weight: 2}]->(:Entity {id: 'entity_2'})").unwrap();
+    let epoch = db.commit_epoch().unwrap();
+    let mut transaction = db.begin_transaction().unwrap();
+    for (query, parameters) in [
+        (
+            FILTERED_UPDATE,
+            parameters("memory_1", "entity_1", "raw_1", 9),
+        ),
+        (
+            FILTERED_UPDATE,
+            parameters("memory_2", "entity_2", "raw_2", 8),
+        ),
+        (UPDATE, parameters("missing", "entity_1", "", 7)),
+    ] {
+        assert!(transaction
+            .query_request(bounded_batch_query(query, &parameters))
+            .unwrap()
+            .rows
+            .is_empty());
+    }
+    let staged = transaction
+        .query_request(bounded_batch_query(MENTION_PAGE, &BTreeMap::new()))
         .unwrap();
-    db.query("CREATE (:Memory {id: 'memory_2', source_id: 'thread_1'})-[:MENTIONS {source_reference: 'raw_2', weight: 2}]->(:Entity {id: 'entity_2'})")
+    assert_eq!(staged.rows.len(), 2);
+    for (index, source, target, reference, weight) in [
+        (0, "memory_1", "entity_1", "raw_1", 9),
+        (1, "memory_2", "entity_2", "raw_2", 8),
+    ] {
+        assert_eq!(staged.rows[index]["source"], Value::String(source.into()));
+        assert_eq!(staged.rows[index]["target"], Value::String(target.into()));
+        assert_eq!(
+            staged.rows[index]["reference"],
+            Value::String(reference.into())
+        );
+        assert_eq!(staged.rows[index]["weight"], Value::Int(weight));
+        assert_eq!(staged.rows[index]["status"], Value::Null);
+    }
+    assert_eq!(transaction.commit().unwrap().rows.len(), 2);
+    assert_eq!(db.commit_epoch().unwrap(), epoch + 1);
+    let rows = db
+        .query_request(bounded_batch_query(MENTION_PAGE, &BTreeMap::new()))
         .unwrap();
-
-    let output = db
-        .update_knowledge_relationship_batch(&KnowledgeRelationshipUpdateBatchRequest {
-            updates: vec![
-                KnowledgeRelationshipUpdateRequest {
-                    source: KnowledgeEntityRequest {
-                        label: "Memory".to_string(),
-                        external_id: "memory_1".to_string(),
-                    },
-                    target: KnowledgeEntityRequest {
-                        label: "Entity".to_string(),
-                        external_id: "entity_1".to_string(),
-                    },
-                    relationship_type: "MENTIONS".to_string(),
-                    relationship_properties: BTreeMap::from([(
-                        "source_reference".to_string(),
-                        Value::String("raw_1".to_string()),
-                    )]),
-                    assignments: BTreeMap::from([("weight".to_string(), Value::Int(9))]),
-                },
-                KnowledgeRelationshipUpdateRequest {
-                    source: KnowledgeEntityRequest {
-                        label: "Memory".to_string(),
-                        external_id: "memory_2".to_string(),
-                    },
-                    target: KnowledgeEntityRequest {
-                        label: "Entity".to_string(),
-                        external_id: "entity_2".to_string(),
-                    },
-                    relationship_type: "MENTIONS".to_string(),
-                    relationship_properties: BTreeMap::from([(
-                        "source_reference".to_string(),
-                        Value::String("raw_2".to_string()),
-                    )]),
-                    assignments: BTreeMap::from([("weight".to_string(), Value::Int(8))]),
-                },
-                KnowledgeRelationshipUpdateRequest {
-                    source: KnowledgeEntityRequest {
-                        label: "Memory".to_string(),
-                        external_id: "missing".to_string(),
-                    },
-                    target: KnowledgeEntityRequest {
-                        label: "Entity".to_string(),
-                        external_id: "entity_1".to_string(),
-                    },
-                    relationship_type: "MENTIONS".to_string(),
-                    relationship_properties: BTreeMap::new(),
-                    assignments: BTreeMap::from([("weight".to_string(), Value::Int(7))]),
-                },
-            ],
-        })
-        .unwrap();
-
-    assert_eq!(output.graph_commit_epoch_before, 2);
-    assert_eq!(output.graph_commit_epoch_after, 3);
-    assert_eq!(output.rows.len(), 3);
-    assert_eq!(output.matched_count, 2);
-    assert_eq!(output.missing_endpoint_count, 1);
-    assert_eq!(output.non_writable_count, 0);
-    assert_eq!(output.updated_relationship_count, 2);
-    assert_eq!(output.updated_property_count, 2);
-    assert!(output.rows[0].matched);
-    assert!(output.rows[1].matched);
-    assert!(!output.rows[2].matched);
-
-    let relationships = db
-        .query_relationships_via_cypher(&KnowledgeRelationshipsRequest {
-            seeds: vec![
-                KnowledgeEntityRequest {
-                    label: "Memory".to_string(),
-                    external_id: "memory_1".to_string(),
-                },
-                KnowledgeEntityRequest {
-                    label: "Memory".to_string(),
-                    external_id: "memory_2".to_string(),
-                },
-            ],
-            relationship_type: Some("MENTIONS".to_string()),
-            direction: KnowledgeNeighborDirection::Outgoing,
-            limit_per_seed: 4,
-        })
-        .unwrap();
-    assert_eq!(
-        relationships.groups[0].relationships[0]
-            .relationship_properties
-            .get("weight"),
-        Some(&Value::Int(9))
-    );
-    assert_eq!(
-        relationships.groups[1].relationships[0]
-            .relationship_properties
-            .get("weight"),
-        Some(&Value::Int(8))
-    );
+    assert_eq!(rows.rows, staged.rows);
 }
 
 #[test]
 fn scoped_knowledge_relationship_batch_update_does_not_write_filtered_endpoint() {
     let mut db = Database::new();
-    db.query("CREATE (:Memory {id: 'memory_1', source_id: 'thread_1', space_id: ''})-[:HAS_LABEL {weight: 1}]->(:Label {id: 'label_1', name: 'Database'})")
+    db.query("CREATE (:Memory {id: 'memory_1', source_id: 'thread_1', space_id: ''})-[:HAS_LABEL {weight: 1}]->(:Label {id: 'label_1', name: 'Database'})").unwrap();
+    db.query("CREATE (:Memory {id: 'memory_2', source_id: 'thread_2', space_id: ''})-[:HAS_LABEL {weight: 2}]->(:Label {id: 'label_2', name: 'Rust'})").unwrap();
+    let epoch = db.commit_epoch().unwrap();
+    let mut transaction = db.begin_transaction().unwrap();
+    for (source, target, weight) in [("memory_1", "label_1", 9), ("memory_2", "label_2", 8)] {
+        transaction
+            .query_request(bounded_batch_query(
+                SCOPED_UPDATE,
+                &parameters(source, target, "", weight),
+            ))
+            .unwrap();
+    }
+    assert_eq!(transaction.commit().unwrap().rows.len(), 1);
+    assert_eq!(db.commit_epoch().unwrap(), epoch + 1);
+    let rows = db
+        .query_request(bounded_batch_query(LABEL_PAGE, &BTreeMap::new()))
         .unwrap();
-    db.query("CREATE (:Memory {id: 'memory_2', source_id: 'thread_2', space_id: ''})-[:HAS_LABEL {weight: 2}]->(:Label {id: 'label_2', name: 'Rust'})")
-        .unwrap();
-
-    let output = db
-        .update_scoped_knowledge_relationship_batch(
-            &KnowledgeScopedRelationshipUpdateBatchRequest {
-                updates: vec![
-                    KnowledgeRelationshipUpdateRequest {
-                        source: KnowledgeEntityRequest {
-                            label: "Memory".to_string(),
-                            external_id: "memory_1".to_string(),
-                        },
-                        target: KnowledgeEntityRequest {
-                            label: "Label".to_string(),
-                            external_id: "label_1".to_string(),
-                        },
-                        relationship_type: "HAS_LABEL".to_string(),
-                        relationship_properties: BTreeMap::new(),
-                        assignments: BTreeMap::from([("weight".to_string(), Value::Int(9))]),
-                    },
-                    KnowledgeRelationshipUpdateRequest {
-                        source: KnowledgeEntityRequest {
-                            label: "Memory".to_string(),
-                            external_id: "memory_2".to_string(),
-                        },
-                        target: KnowledgeEntityRequest {
-                            label: "Label".to_string(),
-                            external_id: "label_2".to_string(),
-                        },
-                        relationship_type: "HAS_LABEL".to_string(),
-                        relationship_properties: BTreeMap::new(),
-                        assignments: BTreeMap::from([("weight".to_string(), Value::Int(8))]),
-                    },
-                ],
-                source_metadata_filters: BTreeMap::from([(
-                    "source_id".to_string(),
-                    "thread_1".to_string(),
-                )]),
-                target_metadata_filters: BTreeMap::new(),
-            },
-        )
-        .unwrap();
-
-    assert_eq!(output.graph_commit_epoch_before, 2);
-    assert_eq!(output.graph_commit_epoch_after, 3);
-    assert_eq!(output.matched_count, 1);
-    assert_eq!(output.source_filtered_out_count, 1);
-    assert_eq!(output.updated_relationship_count, 1);
-    assert!(output.rows[0].matched);
-    assert!(output.rows[1].source_filtered_out);
-    let relationships = db
-        .query_relationships_via_cypher(&KnowledgeRelationshipsRequest {
-            seeds: vec![
-                KnowledgeEntityRequest {
-                    label: "Memory".to_string(),
-                    external_id: "memory_1".to_string(),
-                },
-                KnowledgeEntityRequest {
-                    label: "Memory".to_string(),
-                    external_id: "memory_2".to_string(),
-                },
-            ],
-            relationship_type: Some("HAS_LABEL".to_string()),
-            direction: KnowledgeNeighborDirection::Outgoing,
-            limit_per_seed: 4,
-        })
-        .unwrap();
-    assert_eq!(
-        relationships.groups[0].relationships[0]
-            .relationship_properties
-            .get("weight"),
-        Some(&Value::Int(9))
-    );
-    assert_eq!(
-        relationships.groups[1].relationships[0]
-            .relationship_properties
-            .get("weight"),
-        Some(&Value::Int(2))
-    );
+    assert_eq!(rows.rows.len(), 2);
+    for (index, source, target, weight) in
+        [(0, "memory_1", "label_1", 9), (1, "memory_2", "label_2", 2)]
+    {
+        assert_eq!(rows.rows[index]["source"], Value::String(source.into()));
+        assert_eq!(rows.rows[index]["target"], Value::String(target.into()));
+        assert_eq!(rows.rows[index]["weight"], Value::Int(weight));
+    }
 }
 
 #[test]
@@ -324,96 +164,71 @@ fn knowledge_relationship_update_rejects_invalid_identifiers() {
     let mut db = Database::new();
     db.query("CREATE (:Memory {id: 'memory_1'})-[:MENTIONS]->(:Entity {id: 'entity_1'})")
         .unwrap();
-
-    let error = db
-        .update_knowledge_relationship(&KnowledgeRelationshipUpdateRequest {
-            source: KnowledgeEntityRequest {
-                label: "Memory".to_string(),
-                external_id: "memory_1".to_string(),
-            },
-            target: KnowledgeEntityRequest {
-                label: "Entity".to_string(),
-                external_id: "entity_1".to_string(),
-            },
-            relationship_type: "MENTIONS".to_string(),
-            relationship_properties: BTreeMap::new(),
-            assignments: BTreeMap::from([("bad-name".to_string(), Value::Int(1))]),
-        })
-        .unwrap_err();
-
-    assert!(error
-        .to_string()
-        .contains("relationship property identifier"));
-    assert_eq!(db.runtime.get().unwrap().store.commit_epoch(), 1);
+    let epoch = db.commit_epoch().unwrap();
+    let error = db.query_request(bounded_batch_query(
+        "MATCH (m:Memory {id: $source})-[r:MENTIONS]->(e:Entity {id: $target}) SET r.bad-name = $weight",
+        &parameters("memory_1", "entity_1", "", 1),
+    )).unwrap_err();
+    assert!(matches!(error, HawDBError::Parse(_)));
+    assert_eq!(db.commit_epoch().unwrap(), epoch);
 }
 
 #[test]
 fn knowledge_relationship_update_rejects_empty_assignments() {
-    let mut db = Database::new();
-    db.query("CREATE (:Memory {id: 'memory_1'})-[:MENTIONS]->(:Entity {id: 'entity_1'})")
-        .unwrap();
-
-    let error = db
-        .update_knowledge_relationship(&KnowledgeRelationshipUpdateRequest {
-            source: KnowledgeEntityRequest {
-                label: "Memory".to_string(),
-                external_id: "memory_1".to_string(),
-            },
-            target: KnowledgeEntityRequest {
-                label: "Entity".to_string(),
-                external_id: "entity_1".to_string(),
-            },
-            relationship_type: "MENTIONS".to_string(),
-            relationship_properties: BTreeMap::new(),
-            assignments: BTreeMap::new(),
-        })
-        .unwrap_err();
-
-    assert!(error.to_string().contains("at least one assignment"));
-    assert_eq!(db.runtime.get().unwrap().store.commit_epoch(), 1);
+    let path = unique_test_dir("relationship_update_empty_query");
+    {
+        let mut db = Database::open(&path).unwrap();
+        db.query("CREATE (:Memory {id: 'memory_1'})-[:MENTIONS]->(:Entity {id: 'entity_1'})")
+            .unwrap();
+        let epoch = db.commit_epoch().unwrap();
+        let wal = read_test_wal(&path).unwrap();
+        let error = db
+            .query_request(bounded_batch_query(
+                "MATCH (m:Memory {id: $source})-[r:MENTIONS]->(e:Entity {id: $target}) SET",
+                &parameters("memory_1", "entity_1", "", 1),
+            ))
+            .unwrap_err();
+        assert!(matches!(error, HawDBError::Parse(_)));
+        assert_eq!(db.commit_epoch().unwrap(), epoch);
+        assert_eq!(read_test_wal(&path).unwrap(), wal);
+    }
+    std::fs::remove_dir_all(path).unwrap();
 }
 
 #[test]
 fn knowledge_relationship_batch_update_does_not_write_projected_idless_identity() {
     let mut db = Database::new();
-    db.query("CREATE (:Memory {title: 'Idless memory'})")
+    db.query("CREATE (:Memory {title: 'Idless memory'})-[:MENTIONS {weight: 1}]->(:Entity {id: 'entity_1'})").unwrap();
+    let parameters = parameters("0", "entity_1", "", 9);
+    let before = db
+        .query_request(bounded_batch_query(MENTION_PAGE, &parameters))
         .unwrap();
-    db.query("CREATE (:Entity {id: 'entity_1'})").unwrap();
-
-    let output = db
-        .update_knowledge_relationship_batch(&KnowledgeRelationshipUpdateBatchRequest {
-            updates: vec![KnowledgeRelationshipUpdateRequest {
-                source: KnowledgeEntityRequest {
-                    label: "Memory".to_string(),
-                    external_id: "0".to_string(),
-                },
-                target: KnowledgeEntityRequest {
-                    label: "Entity".to_string(),
-                    external_id: "entity_1".to_string(),
-                },
-                relationship_type: "MENTIONS".to_string(),
-                relationship_properties: BTreeMap::new(),
-                assignments: BTreeMap::from([("weight".to_string(), Value::Int(9))]),
-            }],
-        })
+    assert_eq!(before.rows.len(), 1);
+    assert_eq!(before.rows[0]["source_node_id"], Value::Int(0));
+    assert_eq!(before.rows[0]["source"], Value::Null);
+    let epoch = db.commit_epoch().unwrap();
+    let mut transaction = db.begin_transaction().unwrap();
+    transaction
+        .query_request(bounded_batch_query(UPDATE, &parameters))
         .unwrap();
-
-    assert_eq!(output.graph_commit_epoch_before, 2);
-    assert_eq!(output.graph_commit_epoch_after, 2);
-    assert_eq!(output.matched_count, 0);
-    assert_eq!(output.non_writable_count, 1);
-    assert_eq!(output.updated_relationship_count, 0);
-    assert!(output.rows[0].non_writable);
+    assert!(transaction.commit().unwrap().rows.is_empty());
+    assert_eq!(db.commit_epoch().unwrap(), epoch);
+    let after = db
+        .query_request(bounded_batch_query(MENTION_PAGE, &parameters))
+        .unwrap();
+    assert_eq!(after.rows, before.rows);
+    assert_eq!(after.rows[0]["weight"], Value::Int(1));
 }
 
 #[test]
-fn read_only_database_rejects_typed_knowledge_relationship_update() {
-    let path = unique_test_dir("read_only_typed_knowledge_relationship_update");
+fn read_only_database_rejects_knowledge_relationship_update_query() {
+    let path = unique_test_dir("relationship_update_read_only_query");
     {
         let mut db = Database::open(&path).unwrap();
         db.query("CREATE (:Memory {id: 'memory_1'})-[:MENTIONS]->(:Entity {id: 'entity_1'})")
             .unwrap();
     }
+    let wal = read_test_wal(&path).unwrap();
     {
         let mut db = Database::open_with_config(
             &path,
@@ -424,28 +239,20 @@ fn read_only_database_rejects_typed_knowledge_relationship_update() {
         )
         .unwrap();
         let error = db
-            .update_knowledge_relationship(&KnowledgeRelationshipUpdateRequest {
-                source: KnowledgeEntityRequest {
-                    label: "Memory".to_string(),
-                    external_id: "memory_1".to_string(),
-                },
-                target: KnowledgeEntityRequest {
-                    label: "Entity".to_string(),
-                    external_id: "entity_1".to_string(),
-                },
-                relationship_type: "MENTIONS".to_string(),
-                relationship_properties: BTreeMap::new(),
-                assignments: BTreeMap::from([("weight".to_string(), Value::Int(9))]),
-            })
+            .query_request(bounded_batch_query(
+                UPDATE,
+                &parameters("memory_1", "entity_1", "", 9),
+            ))
             .unwrap_err();
         assert!(error.to_string().contains("read-only"));
+        assert_eq!(read_test_wal(&path).unwrap(), wal);
     }
     std::fs::remove_dir_all(path).unwrap();
 }
 
 #[test]
-fn typed_knowledge_relationship_batch_update_persists_as_one_wal_batch_and_replays() {
-    let path = unique_test_dir("typed_knowledge_relationship_batch_update_wal_replay");
+fn knowledge_relationship_batch_update_queries_persist_as_one_wal_batch_and_replay() {
+    let path = unique_test_dir("relationship_update_query_replay");
     {
         let mut db = Database::open(&path).unwrap();
         db.query(
@@ -456,74 +263,38 @@ fn typed_knowledge_relationship_batch_update_persists_as_one_wal_batch_and_repla
             "CREATE (:Memory {id: 'memory_2'})-[:MENTIONS {weight: 2}]->(:Entity {id: 'entity_2'})",
         )
         .unwrap();
-        let batch_count_before_update = read_test_wal(&path).unwrap().matches("\tbatch\t").count();
-        db.update_knowledge_relationship_batch(&KnowledgeRelationshipUpdateBatchRequest {
-            updates: vec![
-                KnowledgeRelationshipUpdateRequest {
-                    source: KnowledgeEntityRequest {
-                        label: "Memory".to_string(),
-                        external_id: "memory_1".to_string(),
-                    },
-                    target: KnowledgeEntityRequest {
-                        label: "Entity".to_string(),
-                        external_id: "entity_1".to_string(),
-                    },
-                    relationship_type: "MENTIONS".to_string(),
-                    relationship_properties: BTreeMap::new(),
-                    assignments: BTreeMap::from([("weight".to_string(), Value::Int(9))]),
-                },
-                KnowledgeRelationshipUpdateRequest {
-                    source: KnowledgeEntityRequest {
-                        label: "Memory".to_string(),
-                        external_id: "memory_2".to_string(),
-                    },
-                    target: KnowledgeEntityRequest {
-                        label: "Entity".to_string(),
-                        external_id: "entity_2".to_string(),
-                    },
-                    relationship_type: "MENTIONS".to_string(),
-                    relationship_properties: BTreeMap::new(),
-                    assignments: BTreeMap::from([("weight".to_string(), Value::Int(8))]),
-                },
-            ],
-        })
-        .unwrap();
-        let batch_count_after_update = read_test_wal(&path).unwrap().matches("\tbatch\t").count();
-        assert_eq!(batch_count_after_update, batch_count_before_update + 1);
+        let before = read_test_wal(&path).unwrap().matches("\tbatch\t").count();
+        let mut transaction = db.begin_transaction().unwrap();
+        for (source, target, weight) in [("memory_1", "entity_1", 9), ("memory_2", "entity_2", 8)] {
+            transaction
+                .query_request(bounded_batch_query(
+                    UPDATE,
+                    &parameters(source, target, "", weight),
+                ))
+                .unwrap();
+        }
+        assert_eq!(transaction.commit().unwrap().rows.len(), 2);
+        assert_eq!(
+            read_test_wal(&path).unwrap().matches("\tbatch\t").count(),
+            before + 1
+        );
     }
-    let wal = read_test_wal(&path).unwrap();
-    assert!(wal.contains("set_rel_property"));
+    assert!(read_test_wal(&path).unwrap().contains("set_rel_property"));
     {
-        let db = Database::open(&path).unwrap();
-        let output = db
-            .query_relationships_via_cypher(&KnowledgeRelationshipsRequest {
-                seeds: vec![
-                    KnowledgeEntityRequest {
-                        label: "Memory".to_string(),
-                        external_id: "memory_1".to_string(),
-                    },
-                    KnowledgeEntityRequest {
-                        label: "Memory".to_string(),
-                        external_id: "memory_2".to_string(),
-                    },
-                ],
-                relationship_type: Some("MENTIONS".to_string()),
-                direction: KnowledgeNeighborDirection::Outgoing,
-                limit_per_seed: 4,
-            })
+        let mut db = Database::open(&path).unwrap();
+        let rows = db
+            .query_request(bounded_batch_query(MENTION_PAGE, &BTreeMap::new()))
             .unwrap();
-        assert_eq!(
-            output.groups[0].relationships[0]
-                .relationship_properties
-                .get("weight"),
-            Some(&Value::Int(9))
-        );
-        assert_eq!(
-            output.groups[1].relationships[0]
-                .relationship_properties
-                .get("weight"),
-            Some(&Value::Int(8))
-        );
+        assert_eq!(rows.rows.len(), 2);
+        for (index, source, target, weight) in [
+            (0, "memory_1", "entity_1", 9),
+            (1, "memory_2", "entity_2", 8),
+        ] {
+            assert_eq!(rows.rows[index]["source"], Value::String(source.into()));
+            assert_eq!(rows.rows[index]["target"], Value::String(target.into()));
+            assert_eq!(rows.rows[index]["weight"], Value::Int(weight));
+            assert_eq!(rows.rows[index]["status"], Value::Null);
+        }
     }
     std::fs::remove_dir_all(path).unwrap();
 }

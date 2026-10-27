@@ -1,0 +1,241 @@
+{
+  "cases": [
+    {
+      "id": "adapted/int8/comparison-0",
+      "source": {
+        "file": "data/expected/int8.out",
+        "first_line": 71,
+        "last_line": 76
+      },
+      "kinds": [
+        "int",
+        "int"
+      ],
+      "fixture_key": true
+    },
+    {
+      "id": "adapted/int8/comparison-1",
+      "source": {
+        "file": "data/expected/int8.out",
+        "first_line": 78,
+        "last_line": 84
+      },
+      "kinds": [
+        "int",
+        "int"
+      ],
+      "fixture_key": true
+    },
+    {
+      "id": "adapted/int8/comparison-2",
+      "source": {
+        "file": "data/expected/int8.out",
+        "first_line": 86,
+        "last_line": 92
+      },
+      "kinds": [
+        "int",
+        "int"
+      ],
+      "fixture_key": true
+    },
+    {
+      "id": "adapted/int8/comparison-3",
+      "source": {
+        "file": "data/expected/int8.out",
+        "first_line": 94,
+        "last_line": 97
+      },
+      "kinds": [
+        "int",
+        "int"
+      ],
+      "fixture_key": true
+    },
+    {
+      "id": "adapted/int8/comparison-4",
+      "source": {
+        "file": "data/expected/int8.out",
+        "first_line": 99,
+        "last_line": 107
+      },
+      "kinds": [
+        "int",
+        "int"
+      ],
+      "fixture_key": true
+    },
+    {
+      "id": "adapted/int8/comparison-5",
+      "source": {
+        "file": "data/expected/int8.out",
+        "first_line": 109,
+        "last_line": 114
+      },
+      "kinds": [
+        "int",
+        "int"
+      ],
+      "fixture_key": true
+    },
+    {
+      "id": "adapted/int8/comparison-6",
+      "source": {
+        "file": "data/expected/int8.out",
+        "first_line": 117,
+        "last_line": 121
+      },
+      "kinds": [
+        "int",
+        "int"
+      ],
+      "fixture_key": true
+    },
+    {
+      "id": "adapted/int8/comparison-7",
+      "source": {
+        "file": "data/expected/int8.out",
+        "first_line": 123,
+        "last_line": 130
+      },
+      "kinds": [
+        "int",
+        "int"
+      ],
+      "fixture_key": true
+    },
+    {
+      "id": "adapted/int8/comparison-8",
+      "source": {
+        "file": "data/expected/int8.out",
+        "first_line": 132,
+        "last_line": 137
+      },
+      "kinds": [
+        "int",
+        "int"
+      ],
+      "fixture_key": true
+    },
+    {
+      "id": "adapted/int8/comparison-9",
+      "source": {
+        "file": "data/expected/int8.out",
+        "first_line": 139,
+        "last_line": 144
+      },
+      "kinds": [
+        "int",
+        "int"
+      ],
+      "fixture_key": true
+    },
+    {
+      "id": "adapted/int8/comparison-10",
+      "source": {
+        "file": "data/expected/int8.out",
+        "first_line": 146,
+        "last_line": 152
+      },
+      "kinds": [
+        "int",
+        "int"
+      ],
+      "fixture_key": true
+    },
+    {
+      "id": "adapted/int8/comparison-11",
+      "source": {
+        "file": "data/expected/int8.out",
+        "first_line": 154,
+        "last_line": 160
+      },
+      "kinds": [
+        "int",
+        "int"
+      ],
+      "fixture_key": true
+    },
+    {
+      "id": "adapted/select_having/min-max-equal",
+      "source": {
+        "file": "data/expected/select_having.out",
+        "first_line": 54,
+        "last_line": 57
+      },
+      "kinds": [
+        "int",
+        "int"
+      ]
+    },
+    {
+      "id": "adapted/select_having/min-max-less",
+      "source": {
+        "file": "data/expected/select_having.out",
+        "first_line": 59,
+        "last_line": 63
+      },
+      "kinds": [
+        "int",
+        "int"
+      ]
+    },
+    {
+      "id": "adapted/select_having/ungrouped-projection-error",
+      "source": {
+        "file": "data/expected/select_having.out",
+        "first_line": 66,
+        "last_line": 67
+      },
+      "error": {
+        "upstream": "ERROR:  column \"test_having.a\" must appear in the GROUP BY clause or be used in an aggregate function",
+        "hawdb": "column a must appear in GROUP BY or an aggregate"
+      }
+    },
+    {
+      "id": "adapted/select_having/ungrouped-having-error",
+      "source": {
+        "file": "data/expected/select_having.out",
+        "first_line": 70,
+        "last_line": 71
+      },
+      "error": {
+        "upstream": "ERROR:  column \"test_having.a\" must appear in the GROUP BY clause or be used in an aggregate function",
+        "hawdb": "column a must appear in GROUP BY or an aggregate"
+      }
+    },
+    {
+      "id": "adapted/select_having/constant-false",
+      "source": {
+        "file": "data/expected/select_having.out",
+        "first_line": 75,
+        "last_line": 78
+      },
+      "kinds": [
+        "int"
+      ]
+    },
+    {
+      "id": "adapted/select_having/constant-true",
+      "source": {
+        "file": "data/expected/select_having.out",
+        "first_line": 80,
+        "last_line": 84
+      },
+      "kinds": [
+        "int"
+      ]
+    },
+    {
+      "id": "adapted/select_implicit/non-projected-order-key",
+      "source": {
+        "file": "data/expected/select_implicit.out",
+        "first_line": 72,
+        "last_line": 85
+      },
+      "kinds": [
+        "text"
+      ]
+    }
+  ]
+}

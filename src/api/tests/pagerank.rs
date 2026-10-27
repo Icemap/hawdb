@@ -13,9 +13,63 @@
 // limitations under the License.
 
 use super::*;
+use crate::{HawDBError, QueryRequest, QueryStreamOptions, Result};
+
+const PAGERANK_MEMORY_UPDATE: &str = "MATCH (n:Memory) WHERE n.id = $id \
+    SET n.pagerank_score = $score RETURN count(n) AS total";
+const PAGERANK_ENTITY_UPDATE: &str = "MATCH (n:Entity) WHERE n.id = $id \
+    SET n.pagerank_score = $score RETURN count(n) AS total";
+const PAGERANK_CLEAR_QUERIES: [&str; 2] = [
+    "MATCH (n:Memory) WHERE n.id IS NOT NULL AND n.pagerank_score IS NOT NULL \
+     SET n.pagerank_score = null RETURN count(n) AS total",
+    "MATCH (n:Entity) WHERE n.id IS NOT NULL AND n.pagerank_score IS NOT NULL \
+     SET n.pagerank_score = null RETURN count(n) AS total",
+];
+const PAGERANK_SCORE_QUERIES: [&str; 2] = [
+    "MATCH (n:Memory) WHERE n.id = $id RETURN n.pagerank_score AS score",
+    "MATCH (n:Entity) WHERE n.id = $id RETURN n.pagerank_score AS score",
+];
+const PAGERANK_OUTPUT_LIMITS: QueryStreamOptions = QueryStreamOptions {
+    max_rows: Some(1),
+    max_payload_bytes: Some(128),
+};
+
+// Only host input normalization lives here. Matching, updates and counts remain
+// in the ordinary parameterized statements executed by the tests below.
+fn pagerank_parameters(
+    updates: &[(&str, &str, f64)],
+) -> Result<Vec<(&'static str, BTreeMap<String, Value>)>> {
+    let mut seen = BTreeSet::new();
+    let mut parameters = Vec::new();
+    for &(label, id, score) in updates {
+        let query = match label {
+            "Memory" | "memory" => PAGERANK_MEMORY_UPDATE,
+            "Entity" | "entity" => PAGERANK_ENTITY_UPDATE,
+            _ => return Err(HawDBError::Semantic("unsupported PageRank label".into())),
+        };
+        if id.is_empty() {
+            return Err(HawDBError::Semantic("empty PageRank external id".into()));
+        }
+        if !score.is_finite() || score < 0.0 {
+            return Err(HawDBError::Semantic(
+                "expected finite non-negative score".into(),
+            ));
+        }
+        if seen.insert((query, id)) {
+            parameters.push((
+                query,
+                BTreeMap::from([
+                    ("id".into(), Value::String(id.into())),
+                    ("score".into(), Value::Float(score)),
+                ]),
+            ));
+        }
+    }
+    Ok(parameters)
+}
 
 #[test]
-fn updates_and_clears_pagerank_scores_for_nowledge_shapes() {
+fn parameterized_pagerank_updates_and_clear_preserve_projected_entities() {
     let mut db = Database::new();
     db.query("CREATE (:Memory {id: 'memory_rank_1', title: 'Rank One'})")
         .unwrap();
@@ -25,190 +79,179 @@ fn updates_and_clears_pagerank_scores_for_nowledge_shapes() {
         .unwrap();
     db.query("CREATE (:Entity {name: 'Projected Entity', pagerank_score: 0.9})")
         .unwrap();
-
-    let output = db
-        .update_knowledge_pagerank_scores_batch(&KnowledgePageRankScoreBatchRequest {
-            updates: vec![
-                KnowledgePageRankScoreUpdate {
-                    label: "Memory".to_string(),
-                    external_id: "memory_rank_1".to_string(),
-                    score: 0.42,
-                },
-                KnowledgePageRankScoreUpdate {
-                    label: "Entity".to_string(),
-                    external_id: "entity_rank_1".to_string(),
-                    score: 0.84,
-                },
-                KnowledgePageRankScoreUpdate {
-                    label: "Memory".to_string(),
-                    external_id: "memory_rank_1".to_string(),
-                    score: 0.99,
-                },
-                KnowledgePageRankScoreUpdate {
-                    label: "Entity".to_string(),
-                    external_id: "missing".to_string(),
-                    score: 0.1,
-                },
-            ],
-        })
-        .unwrap();
-
-    assert_eq!(output.graph_commit_epoch_before, 4);
-    assert_eq!(output.graph_commit_epoch_after, 5);
-    assert_eq!(output.rows.len(), 4);
-    assert_eq!(output.matched_count, 2);
-    assert_eq!(output.missing_count, 1);
-    assert_eq!(output.duplicate_count, 1);
-    assert_eq!(output.non_writable_count, 0);
-    assert_eq!(output.updated_count, 2);
-    assert!(output.rows[2].duplicate);
-    assert!(!output.rows[3].matched);
-
-    let rows = db
-        .query_property_batch_via_cypher(&KnowledgePropertyBatchRequest {
-            entities: vec![
-                KnowledgeEntityRequest {
-                    label: "Memory".to_string(),
-                    external_id: "memory_rank_1".to_string(),
-                },
-                KnowledgeEntityRequest {
-                    label: "Entity".to_string(),
-                    external_id: "entity_rank_1".to_string(),
-                },
-            ],
-            property_names: vec!["pagerank_score".to_string()],
-        })
-        .unwrap();
+    let updates = [
+        ("Memory", "memory_rank_1", 0.42),
+        ("Entity", "entity_rank_1", 0.84),
+        ("memory", "memory_rank_1", 0.99),
+        ("Entity", "missing", 0.1),
+    ];
+    let parameters = pagerank_parameters(&updates).unwrap();
+    assert_eq!(updates.len() - parameters.len(), 1);
+    let before = db.begin_read_transaction().unwrap().commit_epoch();
+    let mut tx = db.begin_transaction().unwrap();
+    let mut matched = Vec::new();
+    for (query, parameters) in &parameters {
+        let output = tx
+            .query_request(
+                QueryRequest::new(query)
+                    .with_params(parameters)
+                    .with_output_limits(PAGERANK_OUTPUT_LIMITS),
+            )
+            .unwrap();
+        matched.push(output.rows[0]["total"].clone());
+    }
+    assert_eq!(matched, [Value::Int(1), Value::Int(1), Value::Int(0)]);
+    tx.commit().unwrap();
     assert_eq!(
-        rows.rows[0].properties.get("pagerank_score"),
-        Some(&Some(Value::Float(0.42)))
+        db.begin_read_transaction().unwrap().commit_epoch(),
+        before + 1
     );
+    for (query, id, expected) in [
+        (
+            PAGERANK_SCORE_QUERIES[0],
+            "memory_rank_1",
+            Value::Float(0.42),
+        ),
+        (
+            PAGERANK_SCORE_QUERIES[1],
+            "entity_rank_1",
+            Value::Float(0.84),
+        ),
+        (PAGERANK_SCORE_QUERIES[0], "memory_rank_2", Value::Null),
+    ] {
+        let parameters = BTreeMap::from([("id".into(), Value::String(id.into()))]);
+        let output = db
+            .query_request(
+                QueryRequest::new(query)
+                    .with_params(&parameters)
+                    .with_output_limits(PAGERANK_OUTPUT_LIMITS),
+            )
+            .unwrap();
+        assert_eq!(output.rows[0]["score"], expected);
+    }
+    let mut tx = db.begin_transaction().unwrap();
+    for query in PAGERANK_CLEAR_QUERIES {
+        let output = tx
+            .query_request(QueryRequest::new(query).with_output_limits(PAGERANK_OUTPUT_LIMITS))
+            .unwrap();
+        assert_eq!(output.rows[0]["total"], Value::Int(1));
+    }
+    tx.commit().unwrap();
     assert_eq!(
-        rows.rows[1].properties.get("pagerank_score"),
-        Some(&Some(Value::Float(0.84)))
+        db.begin_read_transaction().unwrap().commit_epoch(),
+        before + 2
     );
-
-    let clear = db
-        .clear_knowledge_pagerank_scores(&KnowledgePageRankClearRequest {
-            labels: vec!["Entity".to_string(), "Memory".to_string()],
-        })
+    for (query, id) in PAGERANK_SCORE_QUERIES
+        .into_iter()
+        .zip(["memory_rank_1", "entity_rank_1"])
+    {
+        let parameters = BTreeMap::from([("id".into(), Value::String(id.into()))]);
+        let output = db
+            .query_request(
+                QueryRequest::new(query)
+                    .with_params(&parameters)
+                    .with_output_limits(PAGERANK_OUTPUT_LIMITS),
+            )
+            .unwrap();
+        assert_eq!(output.rows[0]["score"], Value::Null);
+    }
+    let remaining = db
+        .query_request(
+            QueryRequest::new(
+                "MATCH (n:Entity) WHERE n.pagerank_score IS NOT NULL \
+         RETURN n.id AS id, n.pagerank_score AS score",
+            )
+            .with_output_limits(PAGERANK_OUTPUT_LIMITS),
+        )
         .unwrap();
-    assert_eq!(clear.graph_commit_epoch_before, 5);
-    assert_eq!(clear.graph_commit_epoch_after, 6);
-    assert_eq!(clear.candidate_count, 3);
-    assert_eq!(clear.cleared_count, 2);
-    assert_eq!(clear.non_writable_count, 1);
-    assert_eq!(clear.rows.iter().filter(|row| row.cleared).count(), 2);
-    assert_eq!(clear.rows.iter().filter(|row| row.non_writable).count(), 1);
-
-    let rows = db
-        .query_property_batch_via_cypher(&KnowledgePropertyBatchRequest {
-            entities: vec![
-                KnowledgeEntityRequest {
-                    label: "Memory".to_string(),
-                    external_id: "memory_rank_1".to_string(),
-                },
-                KnowledgeEntityRequest {
-                    label: "Entity".to_string(),
-                    external_id: "entity_rank_1".to_string(),
-                },
-            ],
-            property_names: vec!["pagerank_score".to_string()],
-        })
-        .unwrap();
-    assert_eq!(
-        rows.rows[0].properties.get("pagerank_score"),
-        Some(&Some(Value::Null))
-    );
-    assert_eq!(
-        rows.rows[1].properties.get("pagerank_score"),
-        Some(&Some(Value::Null))
-    );
-    let still_scored = db
-        .query("MATCH (e:Entity) WHERE e.pagerank_score IS NOT NULL RETURN COUNT(e) AS total")
-        .unwrap();
-    assert_eq!(still_scored.rows[0].get("total"), Some(&Value::Int(1)));
+    assert_eq!(remaining.rows.len(), 1);
+    assert_eq!(remaining.rows[0]["id"], Value::Null);
+    assert_eq!(remaining.rows[0]["score"], Value::Float(0.9));
 }
 
 #[test]
-fn pagerank_score_batch_rejects_invalid_score_before_wal() {
-    let mut db = Database::new();
-    db.query("CREATE (:Memory {id: 'memory_rank_1', title: 'Rank One'})")
-        .unwrap();
-    let graph_commit_epoch_before = db.runtime.get().unwrap().store.commit_epoch();
-
-    let error = db
-        .update_knowledge_pagerank_scores_batch(&KnowledgePageRankScoreBatchRequest {
-            updates: vec![KnowledgePageRankScoreUpdate {
-                label: "Memory".to_string(),
-                external_id: "memory_rank_1".to_string(),
-                score: f64::NAN,
-            }],
-        })
-        .unwrap_err();
-
-    assert!(error.to_string().contains("finite non-negative score"));
-    assert_eq!(
-        db.runtime.get().unwrap().store.commit_epoch(),
-        graph_commit_epoch_before
-    );
+fn pagerank_input_normalization_rejects_invalid_batches_before_wal() {
+    let path = unique_test_dir("pagerank_invalid_parameters");
+    let mut db = Database::open(&path).unwrap();
+    db.query("CREATE (:Memory {id: 'memory_rank_1'})").unwrap();
+    let epoch = db.begin_read_transaction().unwrap().commit_epoch();
+    let wal = read_test_wal(&path).unwrap();
+    for invalid in [
+        ("Memory", "memory_rank_1", f64::NAN),
+        ("Memory", "memory_rank_1", f64::INFINITY),
+        ("Memory", "memory_rank_1", -0.1),
+        ("Memory", "", 0.1),
+        ("Unknown", "memory_rank_1", 0.1),
+    ] {
+        let result = (|| -> Result<()> {
+            let parameters = pagerank_parameters(&[("Memory", "memory_rank_1", 0.42), invalid])?;
+            let mut tx = db.begin_transaction()?;
+            for (query, parameters) in parameters {
+                tx.query_request(
+                    QueryRequest::new(query)
+                        .with_params(&parameters)
+                        .with_output_limits(PAGERANK_OUTPUT_LIMITS),
+                )?;
+            }
+            tx.commit()?;
+            Ok(())
+        })();
+        assert!(result.is_err(), "{invalid:?}");
+        assert_eq!(db.begin_read_transaction().unwrap().commit_epoch(), epoch);
+        assert_eq!(read_test_wal(&path).unwrap(), wal);
+    }
+    drop(db);
+    std::fs::remove_dir_all(path).unwrap();
 }
 
 #[test]
-fn typed_pagerank_score_batch_persists_as_one_wal_batch_and_replays() {
-    let path = unique_test_dir("typed_pagerank_score_batch_wal_replay");
+fn parameterized_pagerank_batch_persists_as_one_wal_batch_and_replays() {
+    let path = unique_test_dir("parameterized_pagerank_batch_wal_replay");
     {
         let mut db = Database::open(&path).unwrap();
         db.query("CREATE (:Memory {id: 'memory_rank_1', title: 'Rank One'})")
             .unwrap();
         db.query("CREATE (:Entity {id: 'entity_rank_1', name: 'Entity One'})")
             .unwrap();
-        let batch_count_before_update = read_test_wal(&path).unwrap().matches("\tbatch\t").count();
-        db.update_knowledge_pagerank_scores_batch(&KnowledgePageRankScoreBatchRequest {
-            updates: vec![
-                KnowledgePageRankScoreUpdate {
-                    label: "Memory".to_string(),
-                    external_id: "memory_rank_1".to_string(),
-                    score: 0.42,
-                },
-                KnowledgePageRankScoreUpdate {
-                    label: "Entity".to_string(),
-                    external_id: "entity_rank_1".to_string(),
-                    score: 0.84,
-                },
-            ],
-        })
+        let batch_count_before = read_test_wal(&path).unwrap().matches("\tbatch\t").count();
+        let parameters = pagerank_parameters(&[
+            ("Memory", "memory_rank_1", 0.42),
+            ("Entity", "entity_rank_1", 0.84),
+        ])
         .unwrap();
-        let batch_count_after_update = read_test_wal(&path).unwrap().matches("\tbatch\t").count();
-        assert_eq!(batch_count_after_update, batch_count_before_update + 1);
+        let mut tx = db.begin_transaction().unwrap();
+        for (query, parameters) in parameters {
+            let output = tx
+                .query_request(
+                    QueryRequest::new(query)
+                        .with_params(&parameters)
+                        .with_output_limits(PAGERANK_OUTPUT_LIMITS),
+                )
+                .unwrap();
+            assert_eq!(output.rows[0]["total"], Value::Int(1));
+        }
+        tx.commit().unwrap();
+        let batch_count_after = read_test_wal(&path).unwrap().matches("\tbatch\t").count();
+        assert_eq!(batch_count_after, batch_count_before + 1);
     }
     let wal = read_test_wal(&path).unwrap();
     assert!(wal.contains("set_node_property"));
     {
-        let db = Database::open(&path).unwrap();
-        let rows = db
-            .query_property_batch_via_cypher(&KnowledgePropertyBatchRequest {
-                entities: vec![
-                    KnowledgeEntityRequest {
-                        label: "Memory".to_string(),
-                        external_id: "memory_rank_1".to_string(),
-                    },
-                    KnowledgeEntityRequest {
-                        label: "Entity".to_string(),
-                        external_id: "entity_rank_1".to_string(),
-                    },
-                ],
-                property_names: vec!["pagerank_score".to_string()],
-            })
-            .unwrap();
-        assert_eq!(
-            rows.rows[0].properties.get("pagerank_score"),
-            Some(&Some(Value::Float(0.42)))
-        );
-        assert_eq!(
-            rows.rows[1].properties.get("pagerank_score"),
-            Some(&Some(Value::Float(0.84)))
-        );
+        let mut db = Database::open(&path).unwrap();
+        for (query, id, score) in [
+            (PAGERANK_SCORE_QUERIES[0], "memory_rank_1", 0.42),
+            (PAGERANK_SCORE_QUERIES[1], "entity_rank_1", 0.84),
+        ] {
+            let parameters = BTreeMap::from([("id".into(), Value::String(id.into()))]);
+            let output = db
+                .query_request(
+                    QueryRequest::new(query)
+                        .with_params(&parameters)
+                        .with_output_limits(PAGERANK_OUTPUT_LIMITS),
+                )
+                .unwrap();
+            assert_eq!(output.rows[0]["score"], Value::Float(score));
+        }
     }
     std::fs::remove_dir_all(path).unwrap();
 }

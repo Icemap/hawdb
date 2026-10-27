@@ -2,16 +2,28 @@ name: Weekly Platform CI
 
 on:
   workflow_dispatch:
+    inputs:
+      scope:
+        description: Qualification lanes to run; partial scopes do not qualify other lanes
+        type: choice
+        options: [all, runtime, power-loss]
+        default: all
   schedule:
     # Scheduled workflows run the latest revision of the default branch (main).
     - cron: "37 3 * * 1"
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}${{ inputs.scope && inputs.scope != 'all' && format('-{0}', inputs.scope) || '' }}
   cancel-in-progress: true
+
+defaults:
+  run:
+    # Stop at the first failed native command on Windows as well as Unix.
+    shell: bash
 
 jobs:
   runtime-platform:
+    if: ${{ inputs.scope != 'power-loss' }}
     name: Runtime Platform (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
@@ -67,10 +79,47 @@ jobs:
       - name: Test immutable catalog symbol ownership
         run: cargo test --locked -p hawdb-core --lib schema::tests
 
+      - name: Test request context constraints
+        run: |
+          cargo test --locked -p hawdb-core --lib cancellation::
+
+      - name: Test shared query request contracts
+        run: |
+          cargo test --locked -p hawdb --lib api::query_request::
+          cargo test --locked -p hawdb --features acl --lib api::query_request::
+
+      - name: Test prepared source admission and private query fixtures
+        run: |
+          bash scripts/cargo-test-required.sh --locked -p hawdb --lib api::dependency_read::tests::prepared_source_queries_preserve_task_result_limits_and_cancellation
+          bash scripts/cargo-test-required.sh --locked -p hawdb --lib api::sql_runtime::tests::
+          bash scripts/cargo-test-required.sh --locked -p hawdb --lib api::tests::knowledge_entity_deletes::
+          bash scripts/cargo-test-required.sh --locked -p hawdb --lib graph_route_evidence::
+          bash scripts/cargo-test-required.sh --locked -p hawdb-readiness --lib graph_route_catalog::tests::
+
+      - name: Test borrowed result delivery
+        run: |
+          cargo test --locked -p hawdb-executor --lib result_delivery::tests::borrowed::
+          cargo test --locked -p hawdb-executor --lib numeric::
+          cargo test --locked -p hawdb --lib api::tests::query_execution::read_transaction_exposes_validated_compact_borrowed_rows
+          cargo test --locked -p hawdb --lib api::tests::query_execution::read_transaction_borrowed_stream_refuses_limits_without_delivering_a_prefix
+          cargo test --locked -p hawdb --lib api::tests::query_execution::native_numeric_results_preserve_borrowing_validation_and_owned_parity
+
       - name: Test Tokio query entrypoints
-        run: cargo test -p hawdb --features tokio-runtime --lib embedded_tokio::tests
+        run: |
+          cargo test --locked -p hawdb --features tokio-runtime --lib embedded_tokio::
+          cargo test --locked -p hawdb --features tokio-runtime,acl --lib embedded_tokio::request_tests
+
+      - name: Test Mem shared publication ownership
+        run: |
+          cargo test --locked -p hawdb --features tokio-runtime --lib api::concurrent::autocommit::tests::
+          bash scripts/cargo-test-required.sh --locked -p hawdb --features tokio-runtime --lib api::concurrent::autocommit::sql::tests::
+          cargo test --locked -p hawdb --features tokio-runtime --lib api::concurrent::graph_preparation_tests::
+          cargo test --locked -p hawdb --features tokio-runtime --lib nowledge_mem::concurrent_owner::
+          cargo test --locked -p hawdb --features tokio-runtime --lib nowledge_mem::read_execution::
+          cargo test --locked -p hawdb --features tokio-runtime --lib nowledge_mem::app_read_snapshot_tests
 
   vector-projection-platform:
+    if: ${{ !inputs.scope || inputs.scope == 'all' }}
     name: Vector Projection (${{ matrix.target }})
     runs-on: ${{ matrix.runner }}
     strategy:
@@ -133,6 +182,7 @@ jobs:
         run: cargo test -p hawdb-qualification production_vector
 
   storage-platform:
+    if: ${{ !inputs.scope || inputs.scope == 'all' }}
     name: Storage Platform (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
@@ -221,7 +271,8 @@ jobs:
           if-no-files-found: error
 
   branch-power-loss:
-    name: Branch Power Loss (${{ matrix.os }})
+    if: ${{ inputs.scope != 'runtime' }}
+    name: Branch Power Loss (${{ matrix.os }}, ${{ matrix.shard }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
     strategy:
@@ -229,7 +280,21 @@ jobs:
       matrix:
         # Native execution checks the implementation under explicit barrier
         # assumptions; it does not certify Windows directory-flush semantics.
-        os: [ubuntu-24.04, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-24.04
+            shard: full
+          - os: macos-latest
+            shard: full
+          - os: windows-latest
+            shard: head
+          - os: windows-latest
+            shard: manifest
+          - os: windows-latest
+            shard: root
+          - os: windows-latest
+            shard: wal-sync
+          - os: windows-latest
+            shard: remaining
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -239,8 +304,11 @@ jobs:
 
       - name: Run branch power-loss qualification
         shell: bash
+        env:
+          POWER_LOSS_SHARD: ${{ matrix.shard }}
         run: |
           set -euo pipefail
+          python3 scripts/branch-power-loss-shard.test.py
           mkdir -p branch-power-loss-results
           git rev-parse HEAD > branch-power-loss-results/source-revision.txt
           rustc --version --verbose > branch-power-loss-results/toolchain.txt
@@ -252,6 +320,14 @@ jobs:
           cargo test --locked -p hawdb --all-features --lib \
             api::tests::power_loss:: -- --list 2>&1 \
             | tee branch-power-loss-results/discovery.txt
+          python3 scripts/branch-power-loss-shard.py \
+            --discovery branch-power-loss-results/discovery.txt \
+            --shard "$POWER_LOSS_SHARD" --output-dir branch-power-loss-results
+          test_filter=$(cat branch-power-loss-results/test-filter.txt)
+          test_arguments=(--nocapture --test-threads=1)
+          while IFS= read -r argument; do
+            test_arguments+=("$argument")
+          done < branch-power-loss-results/test-arguments.txt
           set +e
           bash scripts/cargo-test-required.sh --locked -p hawdb-storage --all-features --lib \
             power_loss:: -- --nocapture --test-threads=1 2>&1 \
@@ -269,7 +345,7 @@ jobs:
             fi
           fi
           bash scripts/cargo-test-required.sh --locked -p hawdb --all-features --lib \
-            api::tests::power_loss:: -- --nocapture --test-threads=1 2>&1 \
+            "$test_filter" -- "${test_arguments[@]}" 2>&1 \
             | tee branch-power-loss-results/test-output.txt
           test_status=$?
           set -e
@@ -321,11 +397,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: branch-power-loss-${{ matrix.os }}-${{ github.sha }}
+          name: branch-power-loss-${{ matrix.os }}-${{ matrix.shard }}-${{ github.sha }}
           path: branch-power-loss-results
           if-no-files-found: error
 
   storage-crash-recovery:
+    if: ${{ !inputs.scope || inputs.scope == 'all' }}
     name: Storage Crash Recovery (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:

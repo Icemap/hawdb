@@ -35,7 +35,7 @@ enum Exit {
     Error,
 }
 
-fn check_case(seed: usize, batch_rows: usize, path: Path, exit: Exit) {
+fn check_case(seed: usize, batch_rows: usize, path: Path, exit: Exit, native: bool) {
     let floating = seed.is_multiple_of(2);
     let threshold = (seed % 7) as i64 - 3;
     let predicate = [
@@ -155,7 +155,7 @@ fn check_case(seed: usize, batch_rows: usize, path: Path, exit: Exit) {
     let observer = QueryExecutionObserver::default();
     let mut actual = Vec::new();
     let mut calls = 0;
-    let mut emit = |batch: BindingBatch| {
+    let emit = std::cell::RefCell::new(|batch: BindingBatch| {
         assert!(!batch.is_empty());
         assert!(batch.len() <= batch_rows);
         calls += 1;
@@ -165,6 +165,11 @@ fn check_case(seed: usize, batch_rows: usize, path: Path, exit: Exit) {
             Exit::Stop => Ok(BatchControl::Stop),
             Exit::Error => Err(HawDBError::Execution("numeric consumer failure".into())),
         }
+    });
+    let mut bindings = |batch| (emit.borrow_mut())(batch);
+    let mut borrowed = |row: crate::RowRef<'_>| {
+        assert!(matches!(row, crate::RowRef::Projected(_)));
+        (emit.borrow_mut())(vec![Binding::values(row.to_owned_row())])
     };
     let memory = ExecutionMemoryConfig {
         batch_rows: NonZeroUsize::new(batch_rows).unwrap(),
@@ -178,7 +183,11 @@ fn check_case(seed: usize, batch_rows: usize, path: Path, exit: Exit) {
         (&memory, &ledger),
         None,
         &observer,
-        &mut emit,
+        if native {
+            NumericOutput::Borrowed(&mut borrowed)
+        } else {
+            NumericOutput::Bindings(&mut bindings)
+        },
     );
     let mut input_rows = 0;
     let result = (|| -> Result<BatchControl> {
@@ -226,6 +235,8 @@ fn check_case(seed: usize, batch_rows: usize, path: Path, exit: Exit) {
         }
         Ok(BatchControl::Continue)
     })();
+    drop(emitter);
+    assert_eq!(ledger.snapshot().used_bytes, 0);
     let reports = observer.into_reports();
     assert_eq!(reports.pipeline_memory.columnar_input_rows, input_rows);
     match exit {
@@ -262,7 +273,7 @@ fn campaign(seeds: usize) {
                 Path::ColumnarMorsel,
             ] {
                 for exit in [Exit::Complete, Exit::Stop, Exit::Error] {
-                    check_case(seed, batch_rows, path, exit);
+                    check_case(seed, batch_rows, path, exit, false);
                 }
             }
         }
@@ -280,4 +291,22 @@ fn numeric_execution_differential_campaign() {
     super::tests::parallel_resource_failure_preserves_parent_context_and_original_error();
     campaign(256);
     eprintln!("numeric execution campaign: 256 seeds, 9216 path/batch/exit cases");
+}
+
+#[test]
+fn native_numeric_paths_match_scalar_oracle() {
+    for seed in 0..32 {
+        for batch_rows in [1, 3, 8] {
+            for path in [
+                Path::Rows,
+                Path::Lending,
+                Path::OwnedTyped,
+                Path::ColumnarMorsel,
+            ] {
+                for exit in [Exit::Complete, Exit::Stop, Exit::Error] {
+                    check_case(seed, batch_rows, path, exit, true);
+                }
+            }
+        }
+    }
 }

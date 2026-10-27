@@ -345,7 +345,7 @@ mod snapshot;
 #[cfg(test)]
 mod snapshot_tests;
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Catalog {
     labels_by_name: snapshot::CatalogSnapshot<BTreeMap<LabelNameKey, LabelId>>,
     labels: snapshot::CatalogSnapshot<Vec<Arc<Label>>>,

@@ -29,9 +29,16 @@ mod codec;
 pub(crate) use codec::schema_encoding;
 mod compaction;
 mod constraints;
+mod index_range;
 mod index_shadow;
+mod materialized_view;
+pub(crate) use index_range::EncodedRelationalIndexRange;
+pub use index_range::{RelationalIndexBound, RelationalIndexBounds};
 pub(crate) use index_shadow::{
     IndexReadAdmission, IndexReadCharge, IndexReadObserver, IndexReadPreflightError,
+};
+pub use materialized_view::{
+    MaterializedViewColumn, MaterializedViewDefinition, MaterializedViewExpression,
 };
 mod admitted_point;
 mod ordered_key;
@@ -59,7 +66,7 @@ pub(crate) use codec::{
     decode_relational_table_schema, decode_relational_wal_batch_owned, decode_row_owned,
     decode_schema_owned, encode_relational_checkpoint_with_work_context,
     encode_relational_row_payload, encode_relational_row_payload_with_work_context,
-    encode_relational_table_schema, CheckpointOutputIo,
+    encode_relational_table_schema, validate_relational_checkpoint_file_format, CheckpointOutputIo,
 };
 #[doc(hidden)]
 pub use compaction::relational_row_page_compaction_publication_config;
@@ -605,6 +612,7 @@ pub struct RelationalTableSchema {
     pub unique_constraints: Vec<Vec<String>>,
     pub foreign_keys: Vec<RelationalForeignKeySchema>,
     pub indexes: Vec<RelationalIndexSchema>,
+    pub materialized_view: Option<Box<MaterializedViewDefinition>>,
 }
 
 #[derive(Debug)]
@@ -725,6 +733,11 @@ fn clone_schema_with_allocations(
     context: &crate::background::CheckpointDecodeContext,
 ) -> Result<RelationalTableSchema, RelationalError> {
     Ok(RelationalTableSchema {
+        materialized_view: schema
+            .materialized_view
+            .as_deref()
+            .map(|view| materialized_view::clone_definition(view, context))
+            .transpose()?,
         name: clone_string_with_allocations(&schema.name, Some(context))?,
         columns: collect_results_with_allocations(
             schema
@@ -964,24 +977,15 @@ pub enum RelationalIndexScanDirection {
 ///
 /// `exclusive_bound`, when present, is a complete index key. Forward scans
 /// visit keys greater than the bound; backward scans visit keys less than it.
+/// `bounds` intersect that cursor with inclusive/exclusive leading-key bounds;
+/// a short boundary applies to every complete key sharing its trailing prefix.
+/// An empty equality prefix permits a range on the first index column.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RelationalIndexRangeScan {
     pub prefix: RelationalKey,
+    pub bounds: Option<Box<RelationalIndexBounds>>,
     pub exclusive_bound: Option<RelationalKey>,
     pub direction: RelationalIndexScanDirection,
-}
-
-impl RelationalIndexRangeScan {
-    pub fn matches(&self, key: &RelationalKey) -> bool {
-        relational_key_has_prefix(key, &self.prefix)
-            && self
-                .exclusive_bound
-                .as_ref()
-                .is_none_or(|bound| match self.direction {
-                    RelationalIndexScanDirection::Forward => key > bound,
-                    RelationalIndexScanDirection::Backward => key < bound,
-                })
-    }
 }
 
 pub fn encode_relational_primary_key(key: &RelationalKey) -> Result<Vec<u8>, RelationalError> {
@@ -3094,37 +3098,30 @@ impl RelationalIndexPages {
         scan: &RelationalIndexRangeScan,
         mut visit: impl FnMut(&'a RelationalKey, &'a RelationalKey) -> bool,
     ) {
-        let seek = scan.exclusive_bound.as_ref().unwrap_or(&scan.prefix);
-        let Some(mut start) = self.page_index(seek) else {
+        if scan.bounds().empty {
             return;
-        };
-        if scan.direction == RelationalIndexScanDirection::Backward
-            && scan.exclusive_bound.is_none()
-        {
-            while self.pages.get(start + 1).is_some_and(|page| {
-                page.first_key_value()
-                    .is_some_and(|(key, _)| relational_key_has_prefix(key, &scan.prefix))
-            }) {
-                start += 1;
-            }
         }
         match scan.direction {
             RelationalIndexScanDirection::Forward => {
-                'pages: for (page_ordinal, page) in self.pages[start..].iter().enumerate() {
-                    let lower = if page_ordinal == 0 {
-                        match &scan.exclusive_bound {
-                            Some(bound) => std::ops::Bound::Excluded(bound.clone()),
-                            None => std::ops::Bound::Included(scan.prefix.clone()),
-                        }
+                let start = self.pages.partition_point(|page| {
+                    page.last_key_value()
+                        .is_some_and(|(key, _)| scan.before(key))
+                });
+                'pages: for (ordinal, page) in self.pages[start..].iter().enumerate() {
+                    let lower = if ordinal == 0 {
+                        std::ops::Bound::Included(scan.lower_seek())
                     } else {
                         std::ops::Bound::Unbounded
                     };
-                    for (index_key, postings) in page.range((lower, std::ops::Bound::Unbounded)) {
-                        if !relational_key_has_prefix(index_key, &scan.prefix) {
+                    for (key, postings) in page.range((lower, std::ops::Bound::Unbounded)) {
+                        if scan.before(key) {
+                            continue;
+                        }
+                        if scan.after(key) {
                             break 'pages;
                         }
-                        for primary_key in postings.iter() {
-                            if !visit(index_key, primary_key) {
+                        for primary in postings.iter() {
+                            if !visit(key, primary) {
                                 break 'pages;
                             }
                         }
@@ -3132,27 +3129,27 @@ impl RelationalIndexPages {
                 }
             }
             RelationalIndexScanDirection::Backward => {
-                'pages: for (page_ordinal, page) in self.pages[..=start].iter().rev().enumerate() {
-                    let upper = if page_ordinal == 0 {
+                let end = self.pages.partition_point(|page| {
+                    page.first_key_value()
+                        .is_none_or(|(key, _)| !scan.after(key))
+                });
+                'pages: for (ordinal, page) in self.pages[..end].iter().rev().enumerate() {
+                    let upper = if ordinal == 0 {
                         scan.exclusive_bound
                             .as_ref()
-                            .map_or(std::ops::Bound::Unbounded, |bound| {
-                                std::ops::Bound::Excluded(bound.clone())
-                            })
+                            .map_or(std::ops::Bound::Unbounded, std::ops::Bound::Excluded)
                     } else {
                         std::ops::Bound::Unbounded
                     };
-                    for (index_key, postings) in
-                        page.range((std::ops::Bound::Unbounded, upper)).rev()
-                    {
-                        if !relational_key_has_prefix(index_key, &scan.prefix) {
-                            if index_key < &scan.prefix {
-                                break 'pages;
-                            }
+                    for (key, postings) in page.range((std::ops::Bound::Unbounded, upper)).rev() {
+                        if scan.after(key) {
                             continue;
                         }
-                        for primary_key in postings.iter() {
-                            if !visit(index_key, primary_key) {
+                        if scan.before(key) {
+                            break 'pages;
+                        }
+                        for primary in postings.iter() {
+                            if !visit(key, primary) {
                                 break 'pages;
                             }
                         }
@@ -3486,6 +3483,9 @@ impl RelationalState {
         let mut row_counts = BTreeMap::new();
         let mut total_rows = 0usize;
         for table in &manifest.tables {
+            if table.schema.materialized_view.is_some() {
+                return Err(RelationalError::Admission("materialized views require resident relational rows; authoritative out-of-core storage is unsupported".into()));
+            }
             if table.table != table.schema.name {
                 return Err(RelationalError::Corruption(format!(
                     "canonical row root table {} carries schema {}",
@@ -4526,6 +4526,7 @@ impl RelationalState {
                 | RelationalWrite::DeleteWhere { table, .. }
                 | RelationalWrite::UpdateWhere { table, .. }
                 | RelationalWrite::AddColumn { table, .. }
+                | RelationalWrite::DropMaterializedView { table }
                 | RelationalWrite::CreateIndex { table, .. } => (table.as_str(), false),
                 RelationalWrite::CreateTable(schema) => (schema.name.as_str(), false),
             };
@@ -4609,6 +4610,7 @@ impl RelationalState {
                     scan_tables.insert(table.clone());
                 }
                 RelationalWrite::CreateTable(_)
+                | RelationalWrite::DropMaterializedView { .. }
                 | RelationalWrite::AddColumn { .. }
                 | RelationalWrite::CreateIndex { .. } => {
                     unreachable!("schema-changing transactions were rejected above")
@@ -5744,6 +5746,24 @@ impl RelationalState {
     }
 
     /// Visits an exclusive ordered index range without materializing postings.
+    pub fn index_range_cardinality_at_most(
+        &self,
+        table: &str,
+        index: &str,
+        scan: &RelationalIndexRangeScan,
+        max_count: usize,
+    ) -> Option<usize> {
+        let index = self.segments.get(table)?.indexes.get(index)?;
+        let mut count = 0usize;
+        if max_count != 0 {
+            index.visit_range_entries(scan, |_, _| {
+                count += 1;
+                count < max_count
+            });
+        }
+        Some(count)
+    }
+
     pub fn visit_index_range_entries<'a>(
         &'a self,
         table: &str,
@@ -6151,6 +6171,9 @@ pub enum RelationalConflictAction {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RelationalWrite {
     CreateTable(RelationalTableSchema),
+    DropMaterializedView {
+        table: String,
+    },
     AddColumn {
         table: String,
         column: RelationalColumnSchema,
@@ -6209,6 +6232,7 @@ impl RelationalTransaction {
             matches!(
                 write,
                 RelationalWrite::CreateTable(_)
+                    | RelationalWrite::DropMaterializedView { .. }
                     | RelationalWrite::AddColumn { .. }
                     | RelationalWrite::CreateIndex { .. }
             )
@@ -6230,6 +6254,7 @@ impl RelationalTransaction {
                 | RelationalWrite::AddColumn { .. }
                 | RelationalWrite::CreateIndex { .. }
                 | RelationalWrite::DeleteWhere { .. }
+                | RelationalWrite::DropMaterializedView { .. }
                 | RelationalWrite::UpdateWhere { .. } => 0,
             })
             .sum()
@@ -6256,6 +6281,7 @@ impl RelationalTransaction {
                 | RelationalWrite::AddColumn { .. }
                 | RelationalWrite::CreateIndex { .. }
                 | RelationalWrite::DeleteWhere { .. }
+                | RelationalWrite::DropMaterializedView { .. }
                 | RelationalWrite::UpdateWhere { .. } => 0,
             })
             .sum()
@@ -6388,6 +6414,7 @@ pub enum RelationalError {
     Constraint(String),
     Durability(String),
     FileDescriptors(hawdb_core::error::FileDescriptorError),
+    UnsupportedFormat(hawdb_core::error::StorageFormatError),
     Corruption(String),
 }
 
@@ -6400,6 +6427,7 @@ impl fmt::Display for RelationalError {
                 write!(formatter, "relational constraint violation: {message}")
             }
             Self::FileDescriptors(error) => fmt::Display::fmt(error, formatter),
+            Self::UnsupportedFormat(error) => fmt::Display::fmt(error, formatter),
             Self::Durability(message) => {
                 write!(formatter, "relational durability error: {message}")
             }
@@ -6414,6 +6442,7 @@ impl std::error::Error for RelationalError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::FileDescriptors(error) => Some(error),
+            Self::UnsupportedFormat(error) => Some(error),
             _ => None,
         }
     }
@@ -6947,6 +6976,12 @@ fn apply_transaction_inner(
         Some(context) => state.clone_metadata_with_work_context(&context.work)?,
         None => state.clone(),
     };
+    if index_mode != TransactionIndexMode::Materialized
+        && (state.table_schemas().any(|schema| schema.materialized_view.is_some())
+            || transaction.writes.iter().any(|write| matches!(write, RelationalWrite::CreateTable(schema) if schema.materialized_view.is_some())))
+    {
+        return Err(RelationalError::Admission("materialized views do not support authoritative relational indexes".into()));
+    }
     match index_mode {
         TransactionIndexMode::Materialized => {
             if !state.materialized_index_postings_resident {
@@ -6998,12 +7033,15 @@ fn apply_transaction_inner(
     let mut replay_access_tracker = replay_access_limits
         .map(|limits| RelationalReplayAccessTracker::new(limits, checkpoint_allocations));
     let mut full_index_rebuild = BTreeSet::new();
+    let mut created_views = BTreeSet::new();
     let mut projection_rebuild_tables = BTreeSet::new();
     let mut mutation_outcomes = Vec::new();
     for write in transaction.writes {
+        materialized_view::reject_write(&next, &write)?;
         match write {
             RelationalWrite::CreateTable(schema) => {
                 validate_table_schema(&schema)?;
+                materialized_view::validate_definition(&next, &schema)?;
                 if next.schemas.contains_key(&schema.name) {
                     return Err(RelationalError::Schema(format!(
                         "table {} already exists",
@@ -7020,6 +7058,13 @@ fn apply_transaction_inner(
                     &schema.name,
                     checkpoint_allocations,
                 )?;
+                if schema.materialized_view.is_some() {
+                    insert_table_name_with_allocations(
+                        &mut created_views,
+                        &schema.name,
+                        checkpoint_allocations,
+                    )?;
+                }
                 match checkpoint_allocations {
                     Some(context) => {
                         let owned_schema =
@@ -7065,6 +7110,28 @@ fn apply_transaction_inner(
                             .insert(schema.name.clone(), Arc::new(schema.into()));
                     }
                 }
+            }
+            RelationalWrite::DropMaterializedView { table } => {
+                if !next
+                    .table_schema(&table)
+                    .is_some_and(|schema| schema.materialized_view.is_some())
+                {
+                    return Err(RelationalError::Schema(format!(
+                        "unknown materialized view {table}"
+                    )));
+                }
+                next.schemas.remove(&table);
+                next.segments.remove(&table);
+                insert_table_name_with_allocations(
+                    &mut full_index_rebuild,
+                    &table,
+                    checkpoint_allocations,
+                )?;
+                insert_table_name_with_allocations(
+                    &mut projection_rebuild_tables,
+                    &table,
+                    checkpoint_allocations,
+                )?;
             }
             RelationalWrite::AddColumn { table, column } => {
                 if let Some(context) = checkpoint_allocations {
@@ -7515,9 +7582,24 @@ fn apply_transaction_inner(
             queue_allocations: deletion_context.as_ref(),
         },
     )?;
+    materialized_view::maintain(
+        state,
+        &mut next,
+        &mut changed_keys,
+        &mut touched,
+        &created_views,
+        materialized_view::MaintenanceOptions {
+            limits,
+            overflow_config,
+            allocations: checkpoint_allocations,
+        },
+    )?;
     overflow::prune_unreachable_segments_with_allocations(&mut next, checkpoint_allocations)?;
     if index_mode == TransactionIndexMode::Materialized {
         for table in &touched {
+            if !next.schemas.contains_key(table) {
+                continue;
+            }
             if full_index_rebuild.contains(table) {
                 match checkpoint_allocations {
                     Some(context) => rebuild_indexes_with_allocations(&mut next, table, context)?,
@@ -8548,6 +8630,15 @@ fn predicate_truth(
 }
 
 fn validate_table_schema(schema: &RelationalTableSchema) -> Result<(), RelationalError> {
+    if schema
+        .materialized_view
+        .as_ref()
+        .is_some_and(|view| view.columns.len() >= schema.columns.len())
+    {
+        return Err(RelationalError::Schema(
+            "materialized view is missing its internal columns".into(),
+        ));
+    }
     if schema.name.is_empty() || schema.columns.is_empty() {
         return Err(RelationalError::Schema(
             "table name and columns must be non-empty".to_string(),

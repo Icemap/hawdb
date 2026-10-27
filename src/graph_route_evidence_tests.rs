@@ -33,6 +33,50 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
+    fn route_evidence_fails_when_a_statement_exceeds_rows_or_payload() {
+        let limits = super::queries::ROUTE_STATEMENT_OUTPUT_LIMITS;
+        for value in [
+            Value::List(vec![Value::Int(1); limits.max_rows.unwrap() + 1]),
+            Value::List(vec![Value::String("x".repeat(
+                limits.max_payload_bytes.unwrap() + 1,
+            ))]),
+        ] {
+            let mut graph = NowledgeMemGraph::from_database(
+                Database::new(),
+                NowledgeMemGraphMode::WritableCutover,
+            );
+            let routes = vec![super::RouteQuery {
+                route: "/graph/overview".into(),
+                shadow_compare_ready: false,
+                primary_read_routing_enabled: false,
+                primary_ready: false,
+                queries: vec![RouteCypherQuery {
+                    name: "oversized-output".into(),
+                    query_family: None,
+                    require_scan_pruning: false,
+                    require_pruned: false,
+                    cypher: "UNWIND $values AS value RETURN value".into(),
+                    parameters: BTreeMap::from([("values".into(), value)]),
+                }],
+                blocker_codes: vec![],
+            }];
+            let evidence = nowledge_graph_route_evidence_json(
+                &mut graph,
+                &routes,
+                Default::default(),
+                None,
+            );
+            assert_eq!(evidence["ready"], false);
+            assert_eq!(evidence["routes"][0]["query_reports"], serde_json::json!([]));
+            assert_eq!(evidence["routes"][0]["query_errors"].as_array().unwrap().len(), 1);
+            assert_eq!(
+                graph.runtime_governor().snapshot().admitted_memory_bytes,
+                0,
+            );
+        }
+    }
+
+    #[test]
     fn route_evidence_runs_queries_through_nowledge_runtime() {
         let mut db = Database::new();
         db.query("CREATE INDEX ON :Memory(id)").unwrap();

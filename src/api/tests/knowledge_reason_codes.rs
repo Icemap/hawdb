@@ -75,55 +75,6 @@ fn knowledge_fallback_reason_codes_have_stable_string_encodings() {
 }
 
 #[test]
-fn knowledge_traversal_fallback_reason_codes_have_stable_string_encodings() {
-    let cases = [
-        (
-            KnowledgeTraversalFallbackReasonCode::SeedNotFound,
-            "seed_not_found",
-        ),
-        (
-            KnowledgeTraversalFallbackReasonCode::TargetNotFound,
-            "target_not_found",
-        ),
-        (
-            KnowledgeTraversalFallbackReasonCode::MaxHopsZero,
-            "max_hops_zero",
-        ),
-        (
-            KnowledgeTraversalFallbackReasonCode::PathLimitZero,
-            "path_limit_zero",
-        ),
-        (
-            KnowledgeTraversalFallbackReasonCode::NodeLimitZero,
-            "node_limit_zero",
-        ),
-        (
-            KnowledgeTraversalFallbackReasonCode::RelationshipLimitZero,
-            "relationship_limit_zero",
-        ),
-        (
-            KnowledgeTraversalFallbackReasonCode::RelationshipTypeNotFound,
-            "relationship_type_not_found",
-        ),
-        (
-            KnowledgeTraversalFallbackReasonCode::QueryRuntimeFailed,
-            "query_runtime_failed",
-        ),
-    ];
-
-    for (code, name) in cases {
-        assert_eq!(code.as_str(), name);
-        assert_eq!(
-            name.parse::<KnowledgeTraversalFallbackReasonCode>(),
-            Ok(code)
-        );
-    }
-    assert!("missing"
-        .parse::<KnowledgeTraversalFallbackReasonCode>()
-        .is_err());
-}
-
-#[test]
 fn knowledge_fanout_reason_codes_have_stable_string_encodings() {
     let cases = [
         (KnowledgeFanoutReasonCode::DenseAdjacency, "dense_adjacency"),

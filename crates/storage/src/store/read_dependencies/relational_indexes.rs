@@ -1,5 +1,5 @@
 // Copyright 2026 Nowledge
-// Licensed under the Apache License, Version 2.0.
+// SPDX-License-Identifier: Apache-2.0
 
 //! Reuse complete staged captures, not WAL destination guesses. Index membership
 //! alone omits payload-only updates; new row capture closes that gap.
@@ -197,6 +197,7 @@ mod tests {
                 catalog,
                 RelationalTransaction {
                     writes: vec![RelationalWrite::CreateTable(RelationalTableSchema {
+                        materialized_view: None,
                         name: "rows".into(),
                         columns: vec![
                             RelationalColumnSchema {

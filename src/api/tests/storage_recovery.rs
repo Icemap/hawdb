@@ -408,7 +408,7 @@ fn forced_out_of_core_checkpoint_reopen_and_mutation_are_equivalent() {
 }
 
 #[test]
-fn typed_reads_and_mutations_include_checkpointed_canonical_rows() {
+fn query_reads_and_mutations_include_checkpointed_canonical_rows() {
     let path = unique_test_dir("out_of_core_typed_canonical_rows");
     let config = DatabaseConfig {
         storage_residency_mode: StorageResidencyMode::OutOfCore,
@@ -427,102 +427,85 @@ fn typed_reads_and_mutations_include_checkpointed_canonical_rows() {
         assert_eq!(residency.delta_node_count, 0);
         assert_eq!(residency.delta_relationship_count, 0);
 
-        let entity = db
-            .query_entity_via_cypher(&KnowledgeEntityRequest {
-                label: "Memory".to_string(),
-                external_id: "memory:one".to_string(),
-            })
+        let mut snapshot = db.begin_read_transaction().unwrap();
+        let entity = snapshot
+            .query_request(bounded_batch_query(
+                "MATCH (m:Memory {id: $id}) RETURN m.title AS title",
+                &BTreeMap::from([("id".into(), Value::String("memory:one".into()))]),
+            ))
             .unwrap();
-        assert_eq!(
-            entity.entity.unwrap().properties.get("title"),
-            Some(&Value::String("One".to_string()))
-        );
-
-        let properties = db
-            .query_property_batch_via_cypher(&KnowledgePropertyBatchRequest {
-                entities: vec![KnowledgeEntityRequest {
-                    label: "Entity".to_string(),
-                    external_id: "entity:rust".to_string(),
-                }],
-                property_names: vec!["name".to_string()],
-            })
+        assert_eq!(entity.rows.len(), 1);
+        assert_eq!(entity.rows[0]["title"], Value::String("One".into()));
+        let properties = snapshot
+            .query_request(bounded_batch_query(
+                "MATCH (e:Entity {id: $id}) RETURN e.name AS name",
+                &BTreeMap::from([("id".into(), Value::String("entity:rust".into()))]),
+            ))
             .unwrap();
-        assert_eq!(
-            properties.rows[0].properties.get("name"),
-            Some(&Some(Value::String("Rust".to_string())))
-        );
+        assert_eq!(properties.rows.len(), 1);
+        assert_eq!(properties.rows[0]["name"], Value::String("Rust".into()));
+        drop(snapshot);
 
         let neighbors = db
-            .query_neighbors_via_cypher(&KnowledgeNeighborsRequest {
-                label: "Memory".to_string(),
-                external_id: "memory:one".to_string(),
-                relationship_type: Some("LINKS".to_string()),
-                direction: KnowledgeNeighborDirection::Outgoing,
-                limit: 4,
-                max_hops: 1,
-            })
+            .query_request(bounded_batch_query(
+                "MATCH (m:Memory {id: $id})-[:LINKS]->(e:Entity) RETURN e.id AS target LIMIT 4",
+                &BTreeMap::from([("id".into(), Value::String("memory:one".into()))]),
+            ))
             .unwrap();
-        assert_eq!(neighbors.paths.len(), 1);
+        assert_eq!(neighbors.rows.len(), 1);
         assert_eq!(
-            neighbors.paths[0].target_external_id.as_deref(),
-            Some("entity:rust")
+            neighbors.rows[0]["target"],
+            Value::String("entity:rust".into())
         );
 
         let created = db
-            .create_knowledge_relationship(&KnowledgeRelationshipCreateRequest {
-                source: KnowledgeEntityRequest {
-                    label: "Memory".to_string(),
-                    external_id: "memory:one".to_string(),
-                },
-                target: KnowledgeEntityRequest {
-                    label: "Entity".to_string(),
-                    external_id: "entity:rust".to_string(),
-                },
-                relationship_type: "MENTIONS".to_string(),
-                properties: BTreeMap::from([("weight".to_string(), Value::Int(2))]),
-            })
+            .query_request(bounded_batch_query(
+                "MATCH (s:Memory {id: $source}), (t:Entity {id: $target}) \
+                CREATE (s)-[:MENTIONS {weight: $weight}]->(t)",
+                &BTreeMap::from([
+                    ("source".into(), Value::String("memory:one".into())),
+                    ("target".into(), Value::String("entity:rust".into())),
+                    ("weight".into(), Value::Int(2)),
+                ]),
+            ))
             .unwrap();
-        assert!(created.matched);
-        assert_eq!(created.created_relationship_count, 1);
+        assert_eq!(created.rows.len(), 1);
 
-        let relationships = db
-            .query_relationships_via_cypher(&KnowledgeRelationshipsRequest {
-                seeds: vec![KnowledgeEntityRequest {
-                    label: "Memory".to_string(),
-                    external_id: "memory:one".to_string(),
-                }],
-                relationship_type: None,
-                direction: KnowledgeNeighborDirection::Outgoing,
-                limit_per_seed: 4,
-            })
-            .unwrap();
-        assert_eq!(relationships.relationship_count, 2);
+        let relationships = db.query_request(bounded_batch_query(
+            "MATCH (m:Memory {id: $id})-[r]->(e:Entity) RETURN type(r) AS type, e.id AS target ORDER BY type LIMIT 4",
+            &BTreeMap::from([("id".into(), Value::String("memory:one".into()))]),
+        )).unwrap();
+        assert_eq!(relationships.rows.len(), 2);
+        assert_eq!(relationships.rows[0]["type"], Value::String("LINKS".into()));
+        assert_eq!(
+            relationships.rows[1]["type"],
+            Value::String("MENTIONS".into())
+        );
+        for row in &relationships.rows {
+            assert_eq!(row["target"], Value::String("entity:rust".into()));
+        }
         db.checkpoint().unwrap();
     }
 
     {
         let db = Database::open_with_config(&path, config).unwrap();
-        let neighbors = db
-            .query_neighbors_via_cypher(&KnowledgeNeighborsRequest {
-                label: "Memory".to_string(),
-                external_id: "memory:one".to_string(),
-                relationship_type: Some("MENTIONS".to_string()),
-                direction: KnowledgeNeighborDirection::Outgoing,
-                limit: 4,
-                max_hops: 1,
-            })
-            .unwrap();
-        assert_eq!(neighbors.paths.len(), 1);
+        let mut snapshot = db.begin_read_transaction().unwrap();
+        let neighbors = snapshot.query_request(bounded_batch_query(
+            "MATCH (m:Memory {id: $id})-[r:MENTIONS]->(e:Entity) RETURN e.id AS target, r.weight AS weight LIMIT 4",
+            &BTreeMap::from([("id".into(), Value::String("memory:one".into()))]),
+        )).unwrap();
+        assert_eq!(neighbors.rows.len(), 1);
         assert_eq!(
-            neighbors.paths[0].relationship_properties.get("weight"),
-            Some(&Value::Int(2))
+            neighbors.rows[0]["target"],
+            Value::String("entity:rust".into())
         );
+        assert_eq!(neighbors.rows[0]["weight"], Value::Int(2));
     }
     std::fs::remove_dir_all(path).unwrap();
 }
 
 #[test]
-fn typed_read_fails_closed_when_an_out_of_core_segment_is_corrupted() {
+fn entity_query_fails_closed_when_an_out_of_core_segment_is_corrupted() {
     let path = unique_test_dir("out_of_core_typed_read_corruption");
     let mut db = Database::open_with_config(
         &path,
@@ -543,16 +526,16 @@ fn typed_read_fails_closed_when_an_out_of_core_segment_is_corrupted() {
     std::fs::write(&canonical_path, bytes).unwrap();
 
     let error = db
-        .query_entity_via_cypher(&KnowledgeEntityRequest {
-            label: "Memory".to_string(),
-            external_id: "memory:one".to_string(),
-        })
+        .query_request(bounded_batch_query(
+            "MATCH (m:Memory {id: $id}) RETURN m AS entity",
+            &BTreeMap::from([("id".into(), Value::String("memory:one".into()))]),
+        ))
         .unwrap_err();
     assert!(
         error
             .to_string()
             .contains("failed content digest verification"),
-        "unexpected typed read error: {error}"
+        "unexpected query read error: {error}"
     );
     assert_eq!(
         db.storage_residency_report()
@@ -900,31 +883,23 @@ fn external_optimizer_statistics_refresh_spills_and_persists_exact_stats() {
             .unwrap();
         db.query("CREATE (:Entity {id: 'entity:hawdb', kind: 'library'})")
             .unwrap();
-        db.create_knowledge_relationship(&KnowledgeRelationshipCreateRequest {
-            source: KnowledgeEntityRequest {
-                label: "Memory".to_string(),
-                external_id: "memory:one".to_string(),
-            },
-            target: KnowledgeEntityRequest {
-                label: "Entity".to_string(),
-                external_id: "entity:rust".to_string(),
-            },
-            relationship_type: "LINKS".to_string(),
-            properties: BTreeMap::from([("weight".to_string(), Value::Int(1))]),
-        })
+        db.query_request(bounded_batch_query(
+            "MATCH (s:Memory {id: $source}), (t:Entity {id: $target}) CREATE (s)-[:LINKS {weight: $weight}]->(t)",
+            &BTreeMap::from([
+                ("source".into(), Value::String("memory:one".into())),
+                ("target".into(), Value::String("entity:rust".into())),
+                ("weight".into(), Value::Int(1)),
+            ]),
+        ))
         .unwrap();
-        db.create_knowledge_relationship(&KnowledgeRelationshipCreateRequest {
-            source: KnowledgeEntityRequest {
-                label: "Entity".to_string(),
-                external_id: "entity:rust".to_string(),
-            },
-            target: KnowledgeEntityRequest {
-                label: "Entity".to_string(),
-                external_id: "entity:hawdb".to_string(),
-            },
-            relationship_type: "LINKS".to_string(),
-            properties: BTreeMap::from([("weight".to_string(), Value::Int(2))]),
-        })
+        db.query_request(bounded_batch_query(
+            "MATCH (s:Entity {id: $source}), (t:Entity {id: $target}) CREATE (s)-[:LINKS {weight: $weight}]->(t)",
+            &BTreeMap::from([
+                ("source".into(), Value::String("entity:rust".into())),
+                ("target".into(), Value::String("entity:hawdb".into())),
+                ("weight".into(), Value::Int(2)),
+            ]),
+        ))
         .unwrap();
         let mut transaction = db.begin_transaction().unwrap();
         for id in 0..128 {
@@ -951,18 +926,14 @@ fn external_optimizer_statistics_refresh_spills_and_persists_exact_stats() {
 
         db.query("CREATE (:Memory {id: 'memory:two', kind: 'task'})")
             .unwrap();
-        db.create_knowledge_relationship(&KnowledgeRelationshipCreateRequest {
-            source: KnowledgeEntityRequest {
-                label: "Memory".to_string(),
-                external_id: "memory:two".to_string(),
-            },
-            target: KnowledgeEntityRequest {
-                label: "Entity".to_string(),
-                external_id: "entity:hawdb".to_string(),
-            },
-            relationship_type: "LINKS".to_string(),
-            properties: BTreeMap::from([("weight".to_string(), Value::Int(3))]),
-        })
+        db.query_request(bounded_batch_query(
+            "MATCH (s:Memory {id: $source}), (t:Entity {id: $target}) CREATE (s)-[:LINKS {weight: $weight}]->(t)",
+            &BTreeMap::from([
+                ("source".into(), Value::String("memory:two".into())),
+                ("target".into(), Value::String("entity:hawdb".into())),
+                ("weight".into(), Value::Int(3)),
+            ]),
+        ))
         .unwrap();
         let source_epoch = db.basic_statistics().unwrap().computed_at_commit_epoch;
         let report = db

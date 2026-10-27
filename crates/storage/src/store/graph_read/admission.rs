@@ -23,6 +23,9 @@ use crate::read_view::{
 use std::cell::{Cell, RefCell};
 use std::ops::Deref;
 
+#[path = "admission/indexed.rs"]
+mod indexed;
+
 pub(super) struct AdmittedProjection {
     pub(super) node: ProjectedNodeRecord,
     _allocation: Box<dyn GraphReadAllocation>,
@@ -308,7 +311,7 @@ impl GraphStore {
     pub fn visit_nodes_by_access_with_allocation(
         &self,
         label_id: LabelId,
-        access: &hawdb_plan_cypher::NodeProjectionAccess,
+        access: &hawdb_core::access::NodeProjectionAccess,
         admit: &mut ControlledGraphReadAllocator<'_>,
         consumer: &mut dyn FnMut(AdmittedNodeRecord) -> Result<GraphScanControl>,
     ) -> Result<GraphScanControl> {
@@ -362,7 +365,7 @@ impl GraphStore {
     pub fn visit_projected_nodes_by_access_admitted(
         &self,
         label_id: LabelId,
-        access: &hawdb_plan_cypher::NodeProjectionAccess,
+        access: &hawdb_core::access::NodeProjectionAccess,
         properties: &BTreeSet<String>,
         admit: &mut GraphReadAllocator<'_>,
         consumer: &mut dyn FnMut(ProjectedNodeRecord) -> Result<GraphScanControl>,

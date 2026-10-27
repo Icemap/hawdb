@@ -38,7 +38,7 @@ use hawdb_executor::Row;
 use hawdb_executor::{
     BindingSchema, BlockingOperatorMemoryReport, ColumnVector, ColumnarBatch, ExecutionLimit,
     QueryMemoryClass, QueryMemoryLease, QueryMemoryLedger, QueryRows, QueryRowsBuilder,
-    RelationalRowLocator, SlotDescriptor, SlotId, SlotType,
+    QuerySchema, RelationalRowLocator, SlotDescriptor, SlotId, SlotType,
 };
 use hawdb_expression::{BindingId, SortDirection, SortItem, SortKey};
 use hawdb_optimizer::{
@@ -103,6 +103,7 @@ mod explain;
 use explain::format_relational_explain;
 
 mod expression;
+pub(crate) use expression::select_output_schema;
 use expression::{
     account_intermediate, aggregate_filter_matches, bind_bound, bind_sql_value, predicate_truth,
     project_bound_row, projection_uses_non_aggregate_scalar_function, reject_non_public_schema,
@@ -389,6 +390,7 @@ impl RelationalRowStoreReader for crate::RelationalMaterializedReader {
 fn execute_fromless_select(
     select: &SelectStatement,
     parameters: &[Value],
+    state: &RelationalState,
     stage_timings: RelationalSqlStageTimings,
     hydration: RelationalHydrationBudget,
     resources: &RelationalQueryResourceContext<'_>,
@@ -407,6 +409,7 @@ fn execute_fromless_select(
         false,
     )?;
     let row = expression::project_bound_row(&BoundRow::default(), &select.projection, parameters)?;
+    let rows = QueryRows::try_from_named_rows(select_output_schema(select, state)?, vec![row])?;
     let access_path = RelationalAccessPathDescriptor {
         kind: RelationalAccessPathKind::FullScan,
         name: "(no table)".to_string(),
@@ -415,6 +418,7 @@ fn execute_fromless_select(
         equality_prefix_len: 0,
         order_prefix_len: 0,
         exclusive_range: false,
+        range: None,
         reverse_order: false,
         unique_point: false,
         covering: false,
@@ -422,7 +426,7 @@ fn execute_fromless_select(
         estimated_rows: 1,
     };
     Ok(RelationalQueryOutput {
-        rows: QueryRows::from(vec![row]),
+        rows,
         stage_timings,
         join_planning: RelationalJoinPlanningOutcome::not_eligible(
             RelationalJoinPlanningReason::NoJoin,
@@ -471,6 +475,7 @@ pub fn execute_prepared_relational_query_with_resources<'a, R: RelationalQuerySt
                 return execute_fromless_select(
                     &select,
                     parameters,
+                    state,
                     initial_stage_timings,
                     resources.limits.hydration,
                     &resources,

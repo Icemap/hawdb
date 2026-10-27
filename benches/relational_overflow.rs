@@ -139,6 +139,7 @@ fn store(mode: StorageMode) -> RelationalStore {
         .commit(
             RelationalTransaction {
                 writes: vec![RelationalWrite::CreateTable(RelationalTableSchema {
+                    materialized_view: None,
                     name: "messages".to_string(),
                     columns: vec![text_column("id"), text_column("content")],
                     primary_key: vec!["id".to_string()],

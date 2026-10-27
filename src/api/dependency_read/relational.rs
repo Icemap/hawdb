@@ -135,6 +135,8 @@ pub(in crate::api) fn collect_transaction(
             )
         }
         SqlStatement::CreateTable(_)
+        | SqlStatement::CreateMaterializedView(_)
+        | SqlStatement::DropMaterializedView(_)
         | SqlStatement::CreateIndex(_)
         | SqlStatement::AlterTableAddColumn(_) => record(dependencies, VersionKey::Database),
         SqlStatement::Explain(_) | SqlStatement::Branch(_) => {

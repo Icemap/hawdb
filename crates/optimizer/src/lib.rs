@@ -60,7 +60,7 @@ pub use relational::{
     estimate_relational_nested_loop_join_cost, select_relational_access_path,
     select_relational_access_path_with_context, skyline_prune_relational_access_paths,
     skyline_prune_relational_access_paths_with_context, RelationalAccessPathDescriptor,
-    RelationalAccessPathKind, RelationalNestedLoopJoinCost,
+    RelationalAccessPathKind, RelationalNestedLoopJoinCost, RelationalRangeAccess,
 };
 pub use relational_join::{
     enumerate_relational_inner_joins, enumerate_relational_inner_joins_with_cost_contexts,

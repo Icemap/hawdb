@@ -18,7 +18,7 @@
 //! orchestration, concrete out-of-core scans, and the WAL/publication boundary.
 
 use crate::cow::NodeRecordRead;
-use crate::{cow::CowSegmentedMap, wal::WalOp, NodeId, NodeRecord, RelId, RelRecord};
+use crate::{wal::WalOp, NodeId, NodeRecord, RelId, RelRecord};
 use hawdb_core::{
     Catalog, ConstraintSubject, HawDBError, LabelId, PropertyType, RelTypeId, Result,
     SchemaObjectState, TableKind, Value,
@@ -76,7 +76,7 @@ fn collect_touched_records(op: &WalOp, touched: &mut TouchedRecords) -> Option<(
 pub fn validate_property_schemas(
     catalog: &Catalog,
     nodes: &impl NodeRecordRead,
-    relationships: &CowSegmentedMap<RelId, RelRecord>,
+    relationships: &crate::cow::CowRelMap,
 ) -> Result<()> {
     for property in catalog.property_descriptors() {
         if property.state != SchemaObjectState::Public {
@@ -282,7 +282,7 @@ pub fn validate_unique_constraints(catalog: &Catalog, nodes: &impl NodeRecordRea
 
 pub fn validate_relationship_unique_constraints(
     catalog: &Catalog,
-    relationships: &CowSegmentedMap<RelId, RelRecord>,
+    relationships: &crate::cow::CowRelMap,
 ) -> Result<()> {
     for constraint in catalog.relationship_unique_constraints() {
         let ConstraintSubject::Relationship(rel_type_id) = constraint.subject else {
@@ -313,7 +313,7 @@ pub fn validate_node_property_exists_constraints(
 
 pub fn validate_relationship_property_exists_constraints(
     catalog: &Catalog,
-    relationships: &CowSegmentedMap<RelId, RelRecord>,
+    relationships: &crate::cow::CowRelMap,
 ) -> Result<()> {
     for constraint in catalog.relationship_property_exists_constraints() {
         let ConstraintSubject::Relationship(rel_type_id) = constraint.subject else {
@@ -355,7 +355,7 @@ pub fn validate_node_property_exists(
 
 pub fn validate_relationship_property_exists(
     catalog: &Catalog,
-    relationships: &CowSegmentedMap<RelId, RelRecord>,
+    relationships: &crate::cow::CowRelMap,
     rel_type_id: RelTypeId,
     property: &str,
 ) -> Result<()> {
@@ -407,7 +407,7 @@ pub fn validate_unique_property(
 
 pub fn validate_unique_relationship_property(
     catalog: &Catalog,
-    relationships: &CowSegmentedMap<RelId, RelRecord>,
+    relationships: &crate::cow::CowRelMap,
     rel_type_id: RelTypeId,
     property: &str,
 ) -> Result<()> {
@@ -438,7 +438,7 @@ pub fn validate_unique_relationship_property(
 pub fn validate_property_schemas_for_records(
     catalog: &Catalog,
     nodes: &impl NodeRecordRead,
-    relationships: &CowSegmentedMap<RelId, RelRecord>,
+    relationships: &crate::cow::CowRelMap,
     touched: &TouchedRecords,
 ) -> Result<()> {
     for property in catalog.property_descriptors() {
@@ -562,7 +562,7 @@ pub fn validate_unique_constraints_for_records(
 /// O(N log K) two-pass structure as `validate_unique_constraints_for_records`.
 pub fn validate_relationship_unique_constraints_for_records(
     catalog: &Catalog,
-    relationships: &CowSegmentedMap<RelId, RelRecord>,
+    relationships: &crate::cow::CowRelMap,
     touched: &TouchedRecords,
 ) -> Result<()> {
     for constraint in catalog.relationship_unique_constraints() {
@@ -650,7 +650,7 @@ pub fn validate_node_property_exists_constraints_for_records(
 /// Delta variant of `validate_relationship_property_exists_constraints`.
 pub fn validate_relationship_property_exists_constraints_for_records(
     catalog: &Catalog,
-    relationships: &CowSegmentedMap<RelId, RelRecord>,
+    relationships: &crate::cow::CowRelMap,
     touched: &TouchedRecords,
 ) -> Result<()> {
     for constraint in catalog.relationship_property_exists_constraints() {

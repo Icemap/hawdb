@@ -51,6 +51,15 @@ pub(crate) fn validate_table_schema_with_work_context<'a>(
     work: &CheckpointWorkContext,
 ) -> Result<BTreeMap<&'a str, usize>, RelationalError> {
     let unit = work.start_unit().map_err(work_error)?;
+    if schema
+        .materialized_view
+        .as_ref()
+        .is_some_and(|view| view.columns.len() >= schema.columns.len())
+    {
+        return Err(RelationalError::Schema(
+            "materialized view is missing its internal columns".into(),
+        ));
+    }
     if schema.name.is_empty() || schema.columns.is_empty() {
         return Err(RelationalError::Schema(
             "table name and columns must be non-empty".into(),

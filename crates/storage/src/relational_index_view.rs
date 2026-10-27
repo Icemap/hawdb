@@ -235,24 +235,24 @@ impl RelationalIndexLiveBatch {
                 visit_live_index_changes(self.prefix_changes(prefix).iter(), visit)
             }
             RelationalIndexReadSelector::Range(scan) => {
-                let changes = self.prefix_changes(&scan.prefix);
+                let start = self
+                    .changes
+                    .partition_point(|change| scan.before(&change.index_key));
+                let end = self
+                    .changes
+                    .partition_point(|change| !scan.after(&change.index_key));
+                let changes = if scan.bounds().empty || start > end {
+                    &self.changes[0..0]
+                } else {
+                    &self.changes[start..end]
+                };
                 match scan.direction {
-                    RelationalIndexScanDirection::Forward => visit_live_index_changes(
-                        changes.iter().filter(|change| {
-                            scan.exclusive_bound
-                                .as_ref()
-                                .is_none_or(|bound| change.index_key.as_ref() > bound)
-                        }),
-                        visit,
-                    ),
-                    RelationalIndexScanDirection::Backward => visit_live_index_changes(
-                        changes.iter().rev().filter(|change| {
-                            scan.exclusive_bound
-                                .as_ref()
-                                .is_none_or(|bound| change.index_key.as_ref() < bound)
-                        }),
-                        visit,
-                    ),
+                    RelationalIndexScanDirection::Forward => {
+                        visit_live_index_changes(changes.iter(), visit)
+                    }
+                    RelationalIndexScanDirection::Backward => {
+                        visit_live_index_changes(changes.iter().rev(), visit)
+                    }
                 }
             }
         }
@@ -896,6 +896,7 @@ impl RelationalIndexReadView {
             table,
             index,
             &RelationalIndexRangeScan {
+                bounds: Default::default(),
                 prefix: prefix.clone(),
                 exclusive_bound: None,
                 direction: RelationalIndexScanDirection::Forward,

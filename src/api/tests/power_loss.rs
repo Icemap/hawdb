@@ -104,12 +104,21 @@ impl Drop for Fixture {
 }
 
 fn open(root: &Path, durability: DurabilityPolicy) -> Database {
+    open_with_namespace_anchor(root, durability, None)
+}
+
+fn open_with_namespace_anchor(
+    root: &Path,
+    durability: DurabilityPolicy,
+    anchor: Option<&Path>,
+) -> Database {
     Database::open_with_durability_and_config(
         root,
         durability,
         DatabaseConfig {
             max_open_files: 32,
             strict_capacity_limit: true,
+            namespace_durability_anchor: anchor.map(Path::to_path_buf),
             ..Default::default()
         },
     )
@@ -799,6 +808,7 @@ fn deletion_and_gc_cuts_keep_an_unleased_nested_branch_recoverable() {
             GcCut::RetiredDirectoryUnlink,
         ] {
             let mut fixture = Fixture::new();
+            let baseline = fixture.model.project().metrics();
             let mut database = open(&fixture.root, durability);
             commit_mixed(&mut database);
             let main = database
@@ -892,11 +902,36 @@ fn deletion_and_gc_cuts_keep_an_unleased_nested_branch_recoverable() {
             if matches!(gc_cut, GcCut::FirstRetiredUnlink) {
                 assert_ne!(cut.observed_path(), Some(retired_directory.as_path()));
             }
-            assert!(fixture.model.project().metrics().high_water <= 32);
+            drop(objects);
             drop(database);
-            assert_eq!(fixture.model.project().metrics().admitted_runtimes, 0);
+            let project = fixture.model.project();
+            let metrics = project.metrics();
+            // Internal recovery/publication/cleanup may exceed the foreground
+            // capacity target. The model also owns the shared idle-file cache.
+            // Demand its capacity back to distinguish evictable cache entries
+            // from leaked runtime or generation ownership.
+            assert!(metrics.strict_capacity_limit);
+            assert_eq!(metrics.limit, 32);
+            assert_eq!(metrics.admitted_runtimes, baseline.admitted_runtimes);
+            assert_eq!(
+                metrics.ownership_locks, baseline.ownership_locks,
+                "{metrics:?}"
+            );
+            assert_eq!(metrics.mutable_wals, baseline.mutable_wals, "{metrics:?}");
+            assert_eq!(metrics.reserved, baseline.reserved, "{metrics:?}");
+            let pressure = project
+                .reserve(metrics.limit - baseline.open - baseline.reserved)
+                .unwrap();
+            let evicted = project.metrics();
+            assert_eq!(evicted.open, baseline.open, "{evicted:?}");
+            assert_eq!(
+                evicted.cached_handles, baseline.cached_handles,
+                "{evicted:?}"
+            );
+            drop(pressure);
+            assert_eq!(project.metrics().reserved, baseline.reserved);
 
-            eprintln!("branch-power-gc-v1 durability={durability:?} cut={gc_cut:?}");
+            eprintln!("branch-power-gc-v1 durability={durability:?} cut={gc_cut:?} high_water={} retained_root_fds={}", metrics.high_water, baseline.open);
             let plans = publication_fault_plans(&cut)
                 .into_iter()
                 .map(|plan| (&cut, plan))
@@ -1414,6 +1449,15 @@ fn logical_deletion_publication_cuts_are_atomic_and_retry_the_same_uuid() {
 
 #[test]
 fn initial_project_installation_preserves_ancestors_after_acknowledgement() {
+    qualify_initial_project_installation(false);
+}
+
+#[test]
+fn namespace_durability_anchor_preserves_ancestors_after_acknowledgement() {
+    qualify_initial_project_installation(true);
+}
+
+fn qualify_initial_project_installation(anchored: bool) {
     for boundary in [ObservationBoundary::Before, ObservationBoundary::After] {
         let mut fixture = Fixture::new();
         let relative = PathBuf::from("new-parent/project");
@@ -1428,9 +1472,10 @@ fn initial_project_installation_preserves_ancestors_after_acknowledgement() {
                 keep_last: false,
             })
             .unwrap();
-        let mut database = open(
+        let mut database = open_with_namespace_anchor(
             &fixture.root.join(&relative),
             DurabilityPolicy::SyncOnEveryWrite,
+            anchored.then_some(fixture.root.as_path()),
         );
         commit_mixed(&mut database);
         let main = database
@@ -1448,7 +1493,11 @@ fn initial_project_installation_preserves_ancestors_after_acknowledgement() {
         for plan in [CrashPlan::default(), cut.persist_all_plan()] {
             let anchor = fixture.image(&cut, &plan);
             let root = anchor.join(&relative);
-            let mut interrupted = open(&root, DurabilityPolicy::SyncOnEveryWrite);
+            let mut interrupted = open_with_namespace_anchor(
+                &root,
+                DurabilityPolicy::SyncOnEveryWrite,
+                anchored.then_some(anchor.as_ref()),
+            );
             // This cut precedes every schema/data transaction and identity
             // reservation. Reopening can initialize the uncommitted project.
             assert!(interrupted.query_sql("SELECT column_name FROM information_schema.columns WHERE table_name = 'atomic_tail'").unwrap().rows.is_empty());
@@ -1459,7 +1508,11 @@ fn initial_project_installation_preserves_ancestors_after_acknowledgement() {
                 .is_empty());
         }
         let anchor = fixture.image(&acknowledged, &CrashPlan::default());
-        let mut recovered = open(&anchor.join(&relative), DurabilityPolicy::SyncOnEveryWrite);
+        let mut recovered = open_with_namespace_anchor(
+            &anchor.join(&relative),
+            DurabilityPolicy::SyncOnEveryWrite,
+            anchored.then_some(anchor.as_ref()),
+        );
         assert_eq!(recovered.commit_epoch().unwrap(), epoch);
         assert!(assert_atomic(&mut recovered, main));
     }

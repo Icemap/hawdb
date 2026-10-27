@@ -20,19 +20,19 @@ use super::{
     checksum_bytes, cosine_similarity, decode_embedding, decode_metadata,
     decode_search_snapshot_text_bounded, decode_string, encode_embedding, encode_metadata,
     encode_search_snapshot_text, encode_string, lexical_analyzer_digest, lexical_documents_digest,
-    matched_query_spans_bounded, matched_query_terms, ranked_scores, rrf_child_score,
-    search_empty_reasons, top_ranked_candidates, top_ranked_ids, weighted_rrf_score, window_ranks,
-    CompressedVectorSearchMode, SearchAccessControlContext, SearchAnalyzerLexicon,
-    SearchCandidateSetReport, SearchDocument, SearchEmbeddingManifest, SearchFallbackReasonCode,
-    SearchFieldPruningAccumulator, SearchHit, SearchIndex, SearchMode, SearchPageWindow,
-    SearchPredicatePushdownReport, SearchProjectionFreshness, SearchQueryOptions, SearchResultSet,
-    SearchRetrieverReport, SearchScoredCandidate, SearchSegmentDescriptor,
-    SearchSegmentDescriptorEntry, SearchTruncationReasonCode, VectorSearchExecutionOptions,
-    FULL_REINDEX_MARKER, METADATA_REPAIR_MARKER, SEARCH_SEGMENT_DESCRIPTOR_FILE,
-    SEARCH_SEGMENT_PAYLOAD_FILE,
+    matched_query_spans_bounded, matched_query_terms, rrf_child_score, search_empty_reasons,
+    top_ranked_candidates, top_ranked_ids, weighted_rrf_score, CompressedVectorSearchMode,
+    SearchAccessControlContext, SearchAnalyzerLexicon, SearchCandidateSetReport, SearchDocument,
+    SearchEmbeddingManifest, SearchFallbackReasonCode, SearchFieldPruningAccumulator, SearchHit,
+    SearchIndex, SearchMode, SearchPageWindow, SearchPredicatePushdownReport,
+    SearchProjectionFreshness, SearchQueryOptions, SearchResultSet, SearchRetrieverReport,
+    SearchScoredCandidate, SearchSegmentDescriptor, SearchSegmentDescriptorEntry,
+    SearchTruncationReasonCode, VectorSearchExecutionOptions, FULL_REINDEX_MARKER,
+    METADATA_REPAIR_MARKER, SEARCH_SEGMENT_DESCRIPTOR_FILE, SEARCH_SEGMENT_PAYLOAD_FILE,
 };
 use crate::bounded_file::{read_bound_file, read_bounded_file};
 use crate::error::{HawDBError, Result};
+use crate::resident_documents::DocumentView;
 #[cfg(test)]
 use crate::{decode_search_segment_documents_bounded, validate_search_segment_documents};
 use crate::{
@@ -1989,6 +1989,41 @@ impl SearchOutOfCoreReader {
     /// complete closure. Published artifacts must remain immutable while readers
     /// exist. On failure this reader retains its previously pinned generation.
     pub fn refresh(&mut self) -> Result<SearchOutOfCoreRefreshReport> {
+        let (closure, report) = self.prepare_refresh()?;
+        if let Some(closure) = closure {
+            self.manifest = closure.manifest;
+            self.segments = closure.segments;
+            self.visibility = closure.visibility;
+        }
+        Ok(report)
+    }
+
+    /// Publishes a refreshed reader without changing existing snapshot owners.
+    /// Unchanged content retains its native artifact pins and shared allocations;
+    /// no reader or document corpus is cloned on snapshot acquisition.
+    pub fn refresh_shared(reader: &mut Arc<Self>) -> Result<SearchOutOfCoreRefreshReport> {
+        let (closure, report) = reader.prepare_refresh()?;
+        if let Some(closure) = closure {
+            let next = Self {
+                root: reader.root.clone(),
+                _project_files: reader._project_files.clone(),
+                config: reader.config.clone(),
+                analyzer_lexicon: reader.analyzer_lexicon.clone(),
+                manifest: closure.manifest,
+                segments: closure.segments,
+                visibility: closure.visibility,
+                lexical_source_policy: reader.lexical_source_policy,
+                lexical_term_policy: reader.lexical_term_policy,
+                runtime_capabilities: reader.runtime_capabilities,
+            };
+            *reader = Arc::new(next);
+        }
+        Ok(report)
+    }
+
+    fn prepare_refresh(
+        &self,
+    ) -> Result<(Option<LoadedArtifactClosure>, SearchOutOfCoreRefreshReport)> {
         let bytes = read_bounded_file(
             &self.root.join(OUT_OF_CORE_MANIFEST_FILE),
             MAX_OUT_OF_CORE_MANIFEST_BYTES,
@@ -2005,14 +2040,17 @@ impl SearchOutOfCoreReader {
                     ));
                 }
             }
-            return Ok(SearchOutOfCoreRefreshReport {
-                generation: manifest.generation,
-                generation_changed: false,
-                validated_retractions: 0,
-                reused_retractions: self.visibility.retractions().count(),
-                opened_content_segments: 0,
-                reused_content_segments: self.segments.len(),
-            });
+            return Ok((
+                None,
+                SearchOutOfCoreRefreshReport {
+                    generation: manifest.generation,
+                    generation_changed: false,
+                    validated_retractions: 0,
+                    reused_retractions: self.visibility.retractions().count(),
+                    opened_content_segments: 0,
+                    reused_content_segments: self.segments.len(),
+                },
+            ));
         }
         if manifest.generation <= self.manifest.generation {
             return Err(HawDBError::Storage(
@@ -2029,10 +2067,7 @@ impl SearchOutOfCoreReader {
             Some(reuse::View::from_reader(self)),
         )?;
         let report = closure.refresh;
-        self.manifest = closure.manifest;
-        self.segments = closure.segments;
-        self.visibility = closure.visibility;
-        Ok(report)
+        Ok((Some(closure), report))
     }
 
     #[cfg(all(test, feature = "full-text-search"))]
@@ -4579,7 +4614,7 @@ fn write_out_of_core_sidecars(
         for segment in &descriptor.segments {
             let documents = index
                 .documents
-                .range(segment.first_document_id.clone()..=segment.last_document_id.clone())
+                .range_documents(&segment.first_document_id, &segment.last_document_id)
                 .map(|(_, document)| document)
                 .collect::<Vec<_>>();
             if documents.len() != segment.document_count {
@@ -5144,6 +5179,8 @@ fn read_search_range(file: &File, offset: u64, bytes: &mut [u8]) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "full-text-search")]
+    mod bm25_windows;
     #[cfg(feature = "full-text-search")]
     mod candidate_budget;
     mod reader_admission;

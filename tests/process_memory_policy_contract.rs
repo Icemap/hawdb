@@ -230,6 +230,9 @@ fn embedded_instances_share_reservations_without_charging_observed_growth_twice(
     let mut second =
         HawDBEmbedded::open_with_process_memory_policy(second_directory.options(), policy.clone())
             .unwrap();
+    // Opening persistent handles may outlive the synthetic sample on a slow
+    // host. This assertion starts with fresh feedback, as a real host supplies.
+    policy.update(sample(16 * MIB));
     let governor = first.runtime_governor();
     let permit = governor
         .try_admit(

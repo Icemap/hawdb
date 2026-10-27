@@ -23,7 +23,7 @@ use crate::background::{CheckpointWorkContext, CheckpointWorkError};
 
 pub fn compute_with_work_context(
     nodes: &impl NodeRecordRead,
-    relationships: &CowSegmentedMap<RelId, RelRecord>,
+    relationships: &crate::cow::CowRelMap,
     catalog: Option<&Catalog>,
     basic_statistics: BasicGraphStatistics,
     work: &CheckpointWorkContext,

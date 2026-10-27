@@ -13,6 +13,45 @@
 // limitations under the License.
 
 use super::*;
+use crate::QueryRequest;
+
+const COUNT_SUMMARIES: &str = "MATCH (c:Community) WHERE c.ai_summary IS NOT NULL AND c.ai_summary <> '' RETURN count(c) AS total";
+const SUMMARY_PAGE: &str =
+    "MATCH (c:Community) WHERE c.ai_summary IS NOT NULL AND c.ai_summary <> '' \
+    RETURN c.id AS id, c.member_count AS member_count, c.description AS description, \
+    c.ai_summary AS ai_summary, c.updated_at AS updated_at, true AS has_summary \
+    ORDER BY c.member_count DESC, c.name, c.community_id, c.id, id(c) LIMIT $limit";
+const PRESENCE_PAGE: &str = "MATCH (c:Community) WHERE c.community_id >= $minimum \
+    RETURN c.id AS id, CASE WHEN c.ai_summary IS NOT NULL AND c.ai_summary <> '' THEN true ELSE false END AS has_summary \
+    ORDER BY has_summary DESC, c.member_count DESC, c.name, c.community_id, c.id, id(c) LIMIT $limit";
+const BY_NUMBER: &str = "MATCH (c:Community {community_id: $community_id}) \
+    RETURN c.id AS id, c.community_id AS community_id, c.name AS name, \
+    c.description AS description, c.ai_summary AS ai_summary, c.member_count AS member_count, \
+    c.updated_at AS updated_at, CASE WHEN c.ai_summary IS NOT NULL AND c.ai_summary <> '' THEN true ELSE false END AS has_summary \
+    ORDER BY id(c) LIMIT 1";
+const BY_ID: &str = "MATCH (c:Community {id: $id}) \
+    RETURN c.community_id AS community_id, CASE WHEN c.ai_summary IS NOT NULL AND c.ai_summary <> '' THEN true ELSE false END AS has_summary \
+    ORDER BY id(c) LIMIT 1";
+
+fn bounded_query<'a>(
+    query: &'a str,
+    parameters: &'a BTreeMap<String, Value>,
+    rows: usize,
+) -> QueryRequest<'a> {
+    QueryRequest::new(query)
+        .with_params(parameters)
+        .with_output_limits(QueryStreamOptions {
+            max_rows: Some(rows),
+            max_payload_bytes: Some(4096),
+        })
+}
+
+fn id_parameters(id: &str) -> Result<BTreeMap<String, Value>> {
+    if id.is_empty() {
+        return Err(HawDBError::Semantic("non-empty id required".into()));
+    }
+    Ok(BTreeMap::from([("id".into(), Value::String(id.into()))]))
+}
 
 #[test]
 fn reads_communities_for_nowledge_summary_list_shapes() {
@@ -29,87 +68,89 @@ fn reads_communities_for_nowledge_summary_list_shapes() {
         .unwrap();
     db.query("CREATE (:Community {id: 'community_negative', community_id: -1, name: 'Negative', ai_summary: 'negative summary', member_count: 100})")
         .unwrap();
-    let graph_commit_epoch = db.runtime.get().unwrap().store.commit_epoch();
-
-    let summary_only = db
-        .query_communities_via_cypher(&KnowledgeCommunityListRequest {
-            require_summary: true,
-            require_non_negative_community_id: false,
-            order: KnowledgeCommunityListOrder::MemberCountDesc,
-            limit: 2,
-        })
+    let epoch = db.commit_epoch().unwrap();
+    let mut read = db.begin_read_transaction().unwrap();
+    let count = read
+        .query_request(bounded_query(COUNT_SUMMARIES, &BTreeMap::new(), 1))
         .unwrap();
-    assert_eq!(summary_only.graph_commit_epoch, graph_commit_epoch);
-    assert_eq!(summary_only.matched_count, 3);
-    assert_eq!(summary_only.returned_count, 2);
+    assert_eq!(count.rows[0]["total"], Value::Int(3));
+    let parameters = BTreeMap::from([("limit".into(), Value::Int(2))]);
+    let summary_only = read
+        .query_request(bounded_query(SUMMARY_PAGE, &parameters, 2))
+        .unwrap();
+    assert_eq!(read.commit_epoch(), epoch);
+    assert_eq!(summary_only.rows.len(), 2);
     assert_eq!(
-        summary_only.rows[0].id.as_deref(),
-        Some("community_negative")
+        summary_only.rows[0]["id"],
+        Value::String("community_negative".into())
     );
-    assert_eq!(summary_only.rows[0].member_count, Some(100));
-    assert!(summary_only.rows[0].has_summary);
-    assert_eq!(summary_only.rows[1].id.as_deref(), Some("community_a"));
+    assert_eq!(summary_only.rows[0]["member_count"], Value::Int(100));
+    assert_eq!(summary_only.rows[0]["has_summary"], Value::Bool(true));
     assert_eq!(
-        summary_only.rows[1].description,
-        Some(Value::String("alpha description".to_string()))
+        summary_only.rows[1]["id"],
+        Value::String("community_a".into())
     );
     assert_eq!(
-        summary_only.rows[1].ai_summary,
-        Some(Value::String("alpha summary".to_string()))
+        summary_only.rows[1]["description"],
+        Value::String("alpha description".into())
     );
-    assert_eq!(summary_only.rows[1].updated_at, Some(Value::Int(10)));
+    assert_eq!(
+        summary_only.rows[1]["ai_summary"],
+        Value::String("alpha summary".into())
+    );
+    assert_eq!(summary_only.rows[1]["updated_at"], Value::Int(10));
 
-    let presence_ranked = db
-        .query_communities_via_cypher(&KnowledgeCommunityListRequest {
-            require_summary: false,
-            require_non_negative_community_id: true,
-            order: KnowledgeCommunityListOrder::SummaryPresenceThenMemberCountDesc,
-            limit: 0,
-        })
+    let parameters = BTreeMap::from([
+        ("minimum".into(), Value::Int(0)),
+        ("limit".into(), Value::Int(3)),
+    ]);
+    let count = read
+        .query_request(bounded_query(
+            "MATCH (c:Community) WHERE c.community_id >= $minimum RETURN count(c) AS total",
+            &parameters,
+            1,
+        ))
         .unwrap();
-    assert_eq!(presence_ranked.matched_count, 3);
-    assert_eq!(presence_ranked.returned_count, 3);
-    assert_eq!(presence_ranked.rows[0].id.as_deref(), Some("community_a"));
-    assert_eq!(presence_ranked.rows[1].id.as_deref(), Some("community_c"));
-    assert_eq!(presence_ranked.rows[2].id.as_deref(), Some("community_b"));
-    assert!(!presence_ranked.rows[2].has_summary);
-
-    let stats = db.plan_cache_stats().unwrap();
-    let repeated_presence_ranked = db
-        .query_communities_via_cypher(&KnowledgeCommunityListRequest {
-            require_summary: false,
-            require_non_negative_community_id: true,
-            order: KnowledgeCommunityListOrder::SummaryPresenceThenMemberCountDesc,
-            limit: 0,
-        })
+    assert_eq!(count.rows[0]["total"], Value::Int(3));
+    let presence_ranked = read
+        .query_request(bounded_query(PRESENCE_PAGE, &parameters, 3))
         .unwrap();
-    assert_eq!(repeated_presence_ranked, presence_ranked);
-    let repeated_stats = db.plan_cache_stats().unwrap();
-    assert_eq!(repeated_stats.entries, stats.entries);
-    assert_eq!(repeated_stats.misses, stats.misses);
-    assert_eq!(repeated_stats.hits, stats.hits + 1);
+    assert_eq!(presence_ranked.rows.len(), 3);
+    for (row, id) in presence_ranked
+        .rows
+        .iter()
+        .zip(["community_a", "community_c", "community_b"])
+    {
+        assert_eq!(row["id"], Value::String(id.into()));
+    }
+    assert_eq!(presence_ranked.rows[2]["has_summary"], Value::Bool(false));
+    let entries = read_test_plan_cache_metric(&read, "entries");
+    let misses = read_test_plan_cache_metric(&read, "misses");
+    let hits = read_test_plan_cache_metric(&read, "hits");
+    let repeated = read
+        .query_request(bounded_query(PRESENCE_PAGE, &parameters, 3))
+        .unwrap();
+    assert_eq!(repeated, presence_ranked);
+    assert_eq!(read_test_plan_cache_metric(&read, "entries"), entries);
+    assert_eq!(read_test_plan_cache_metric(&read, "misses"), misses);
+    assert_eq!(read_test_plan_cache_metric(&read, "hits"), hits + 1);
 }
 
 #[test]
 fn community_list_read_returns_empty_without_community_label() {
     let db = Database::new();
-
-    let output = db
-        .query_communities_via_cypher(&KnowledgeCommunityListRequest {
-            require_summary: true,
-            require_non_negative_community_id: true,
-            order: KnowledgeCommunityListOrder::SummaryPresenceThenMemberCountDesc,
-            limit: 10,
-        })
+    let mut read = db.begin_read_transaction().unwrap();
+    let epoch = read.commit_epoch();
+    let count = read
+        .query_request(bounded_query(COUNT_SUMMARIES, &BTreeMap::new(), 1))
         .unwrap();
-
-    assert_eq!(
-        output.graph_commit_epoch,
-        db.runtime.get().unwrap().store.commit_epoch()
-    );
-    assert_eq!(output.matched_count, 0);
-    assert_eq!(output.returned_count, 0);
+    assert_eq!(count.rows[0]["total"], Value::Int(0));
+    let parameters = BTreeMap::from([("limit".into(), Value::Int(10))]);
+    let output = read
+        .query_request(bounded_query(SUMMARY_PAGE, &parameters, 10))
+        .unwrap();
     assert!(output.rows.is_empty());
+    assert_eq!(read.commit_epoch(), epoch);
 }
 
 #[test]
@@ -123,70 +164,54 @@ fn reads_community_detail_for_wiki_and_mcp_shapes() {
         .unwrap();
     db.query("CREATE (:Community {id: 'community_b', community_id: 8, name: 'Beta', description: 'beta description', ai_summary: '', member_count: 3})")
         .unwrap();
-    let graph_commit_epoch = db.runtime.get().unwrap().store.commit_epoch();
-
-    let community_id_request = KnowledgeCommunityRequest {
-        key: KnowledgeCommunityLookupKey::CommunityId(7),
-    };
-    let by_community_id = db
-        .query_community_via_cypher(&community_id_request)
+    let epoch = db.commit_epoch().unwrap();
+    let mut read = db.begin_read_transaction().unwrap();
+    let parameters = BTreeMap::from([("community_id".into(), Value::Int(7))]);
+    let by_number = read
+        .query_request(bounded_query(BY_NUMBER, &parameters, 1))
         .unwrap();
-    assert_eq!(by_community_id.graph_commit_epoch, graph_commit_epoch);
-    assert!(by_community_id.found);
-    let row = by_community_id.row.as_ref().unwrap();
-    assert_eq!(row.id.as_deref(), Some("community_a"));
-    assert_eq!(row.community_id, Some(7));
-    assert_eq!(row.name.as_deref(), Some("Alpha"));
+    assert_eq!(read.commit_epoch(), epoch);
+    assert_eq!(by_number.rows.len(), 1);
+    let row = &by_number.rows[0];
+    assert_eq!(row["id"], Value::String("community_a".into()));
+    assert_eq!(row["community_id"], Value::Int(7));
+    assert_eq!(row["name"], Value::String("Alpha".into()));
     assert_eq!(
-        row.description,
-        Some(Value::String("alpha description".to_string()))
+        row["description"],
+        Value::String("alpha description".into())
     );
-    assert_eq!(
-        row.ai_summary,
-        Some(Value::String("alpha summary".to_string()))
-    );
-    assert_eq!(row.member_count, Some(5));
-    assert_eq!(row.updated_at, Some(Value::Int(10)));
-    assert!(row.has_summary);
-
-    let stats = db.plan_cache_stats().unwrap();
-    let repeated_by_community_id = db
-        .query_community_via_cypher(&community_id_request)
+    assert_eq!(row["ai_summary"], Value::String("alpha summary".into()));
+    assert_eq!(row["member_count"], Value::Int(5));
+    assert_eq!(row["updated_at"], Value::Int(10));
+    assert_eq!(row["has_summary"], Value::Bool(true));
+    let entries = read_test_plan_cache_metric(&read, "entries");
+    let misses = read_test_plan_cache_metric(&read, "misses");
+    let hits = read_test_plan_cache_metric(&read, "hits");
+    let repeated = read
+        .query_request(bounded_query(BY_NUMBER, &parameters, 1))
         .unwrap();
-    assert_eq!(repeated_by_community_id, by_community_id);
-    let repeated_stats = db.plan_cache_stats().unwrap();
-    assert_eq!(repeated_stats.entries, stats.entries);
-    assert_eq!(repeated_stats.misses, stats.misses);
-    assert_eq!(repeated_stats.hits, stats.hits + 1);
-
-    let by_id = db
-        .query_community_via_cypher(&KnowledgeCommunityRequest {
-            key: KnowledgeCommunityLookupKey::Id("community_b".to_string()),
-        })
+    assert_eq!(repeated, by_number);
+    assert_eq!(read_test_plan_cache_metric(&read, "entries"), entries);
+    assert_eq!(read_test_plan_cache_metric(&read, "misses"), misses);
+    assert_eq!(read_test_plan_cache_metric(&read, "hits"), hits + 1);
+    let parameters = id_parameters("community_b").unwrap();
+    let by_id = read
+        .query_request(bounded_query(BY_ID, &parameters, 1))
         .unwrap();
-    assert!(by_id.found);
-    let by_id_row = by_id.row.unwrap();
-    assert_eq!(by_id_row.community_id, Some(8));
-    assert!(!by_id_row.has_summary);
-
-    let missing = db
-        .query_community_via_cypher(&KnowledgeCommunityRequest {
-            key: KnowledgeCommunityLookupKey::CommunityId(99),
-        })
+    assert_eq!(by_id.rows.len(), 1);
+    assert_eq!(by_id.rows[0]["community_id"], Value::Int(8));
+    assert_eq!(by_id.rows[0]["has_summary"], Value::Bool(false));
+    let parameters = BTreeMap::from([("community_id".into(), Value::Int(99))]);
+    let missing = read
+        .query_request(bounded_query(BY_NUMBER, &parameters, 1))
         .unwrap();
-    assert!(!missing.found);
-    assert_eq!(missing.row, None);
+    assert!(missing.rows.is_empty());
 }
 
 #[test]
-fn community_detail_read_rejects_empty_id() {
-    let db = Database::new();
-
-    let error = db
-        .query_community_via_cypher(&KnowledgeCommunityRequest {
-            key: KnowledgeCommunityLookupKey::Id(String::new()),
-        })
-        .unwrap_err();
-
-    assert!(error.to_string().contains("non-empty id"));
+fn community_detail_input_rejects_empty_id() {
+    assert!(id_parameters("")
+        .unwrap_err()
+        .to_string()
+        .contains("non-empty id"));
 }

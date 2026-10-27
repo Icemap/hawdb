@@ -50,7 +50,9 @@ fn governor() -> RuntimeGovernor {
 fn permit(g: &RuntimeGovernor) -> SearchGenerationAdmission {
     SearchGenerationAdmission::acquire(
         g,
-        RuntimeWorkRequest::background_maintenance(16 << 20).with_io_wave_slots(1),
+        RuntimeWorkRequest::background_maintenance(16 << 20)
+            .with_result_bytes(16 << 10)
+            .with_io_wave_slots(1),
     )
     .unwrap()
 }

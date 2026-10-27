@@ -9,7 +9,8 @@ use std::sync::{Arc, Mutex};
 pub(super) struct RuntimeWorkBudget {
     limit: usize,
     used: AtomicUsize,
-    parent: Option<Arc<Self>>,
+    parents: [Option<Arc<Self>>; 2],
+    has_join: bool,
     refusal: Mutex<Option<ResourceBudgetError>>,
 }
 
@@ -18,9 +19,43 @@ impl RuntimeWorkBudget {
         Self {
             limit,
             used: AtomicUsize::new(0),
-            parent,
+            has_join: parent.as_ref().is_some_and(|parent| parent.has_join),
+            parents: [parent, None],
             refusal: Mutex::new(None),
         }
+    }
+
+    pub(super) fn intersect(
+        left: &Option<Arc<Self>>,
+        right: &Option<Arc<Self>>,
+    ) -> Option<Arc<Self>> {
+        match (left, right) {
+            (Some(left), Some(right)) if left.contains(right) => Some(left.clone()),
+            (Some(left), Some(right)) if right.contains(left) => Some(right.clone()),
+            (Some(left), Some(right)) if !Arc::ptr_eq(left, right) => Some(Arc::new(Self {
+                limit: usize::MAX,
+                used: AtomicUsize::new(0),
+                parents: [Some(left.clone()), Some(right.clone())],
+                has_join: true,
+                refusal: Mutex::new(None),
+            })),
+            (Some(left), _) => Some(left.clone()),
+            (_, right) => right.clone(),
+        }
+    }
+
+    fn contains(&self, ancestor: &Arc<Self>) -> bool {
+        if self.has_join {
+            return std::ptr::eq(self, Arc::as_ptr(ancestor));
+        }
+        let mut current = Some(self);
+        while let Some(scope) = current {
+            if std::ptr::eq(scope, Arc::as_ptr(ancestor)) {
+                return true;
+            }
+            current = scope.parents[0].as_deref();
+        }
+        false
     }
 
     pub(super) fn used(&self) -> usize {
@@ -32,10 +67,41 @@ impl RuntimeWorkBudget {
             .lock()
             .expect("work refusal lock")
             .clone()
-            .or_else(|| self.parent.as_ref().and_then(|parent| parent.refusal()))
+            .or_else(|| {
+                self.parents
+                    .iter()
+                    .flatten()
+                    .find_map(|parent| parent.refusal())
+            })
     }
 
     pub(super) fn charge(&self, units: usize) -> Result<()> {
+        if self.has_join {
+            self.charge_once(units, &mut std::collections::BTreeSet::new())
+        } else {
+            self.charge_local(units)?;
+            if let Some(parent) = &self.parents[0] {
+                parent.charge(units)?;
+            }
+            Ok(())
+        }
+    }
+
+    fn charge_once(
+        &self,
+        units: usize,
+        visited: &mut std::collections::BTreeSet<*const Self>,
+    ) -> Result<()> {
+        if !visited.insert(std::ptr::from_ref(self)) {
+            return Ok(());
+        }
+        self.charge_local(units)?;
+        for parent in self.parents.iter().flatten() {
+            parent.charge_once(units, visited)?;
+        }
+        Ok(())
+    }
+    fn charge_local(&self, units: usize) -> Result<()> {
         // A parent's refusal may leave a conservative child charge, never an
         // undercharge. Query failure discards the complete scoped result.
         self.used
@@ -61,9 +127,6 @@ impl RuntimeWorkBudget {
                 }
                 error
             })?;
-        if let Some(parent) = &self.parent {
-            parent.charge(units)?;
-        }
         Ok(())
     }
 }
@@ -111,5 +174,30 @@ mod tests {
         task.cancellation().cancel();
         assert!(child.charge_work(1).is_err());
         assert_eq!(task.work_units(), 0);
+    }
+
+    #[test]
+    fn joined_work_scopes_charge_shared_ancestors_once() {
+        let parent = RuntimeTaskContext::default().with_work_limit(3);
+        let request = parent.child().with_work_limit(2);
+        let combined = parent.constrained_by(&request).unwrap();
+        combined.charge_work(2).unwrap();
+        assert_eq!(parent.work_units(), 2);
+        assert_eq!(request.work_units(), 2);
+        assert!(combined.charge_work(1).is_err());
+        assert!(combined.check_work_limit().is_err());
+        assert!(parent.work_units() <= 3);
+    }
+
+    #[test]
+    fn joined_independent_work_scopes_preserve_both_limits() {
+        let parent = RuntimeTaskContext::default().with_work_limit(3);
+        let request = RuntimeTaskContext::default().with_work_limit(2);
+        let combined = parent.constrained_by(&request).unwrap();
+        combined.charge_work(2).unwrap();
+        assert_eq!(parent.work_units(), 2);
+        assert_eq!(request.work_units(), 2);
+        assert!(combined.charge_work(1).is_err());
+        assert!(combined.check_work_limit().is_err());
     }
 }

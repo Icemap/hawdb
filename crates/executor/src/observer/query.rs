@@ -203,14 +203,25 @@ impl QueryExecutionObserver {
         let payload_bytes = batch.iter().fold(0usize, |total, binding| {
             total.saturating_add(crate::binding::binding_payload_bytes(binding))
         });
+        self.record_pipeline_batch_shape(batch.len(), payload_bytes);
+    }
+
+    pub(crate) fn record_pipeline_batch_shape(&self, rows: usize, payload_bytes: usize) {
         let mut reports = self.reports.borrow_mut();
         let report = &mut reports.pipeline_memory;
-        report.intermediate_rows = report.intermediate_rows.saturating_add(batch.len());
+        report.intermediate_rows = report.intermediate_rows.saturating_add(rows);
         report.intermediate_payload_bytes = report
             .intermediate_payload_bytes
             .saturating_add(payload_bytes);
-        report.peak_batch_rows = report.peak_batch_rows.max(batch.len());
+        report.peak_batch_rows = report.peak_batch_rows.max(rows);
         report.peak_batch_payload_bytes = report.peak_batch_payload_bytes.max(payload_bytes);
+    }
+
+    pub(crate) fn record_native_projection_row(&self, payload_bytes: usize) {
+        self.record_pipeline_batch_shape(1, payload_bytes);
+        let mut reports = self.reports.borrow_mut();
+        let report = &mut reports.pipeline_memory;
+        report.native_projection_rows = report.native_projection_rows.saturating_add(1);
     }
 
     pub fn record_columnar_batch(&self, input_rows: usize, selected_rows: usize) {

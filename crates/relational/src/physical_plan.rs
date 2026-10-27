@@ -26,8 +26,8 @@ use crate::index_runtime::{RelationalIndexReadMode, RelationalIndexStoreReader};
 use hawdb_core::{HawDBError, Result};
 use hawdb_expression::BindingId;
 use hawdb_optimizer::relational_sargability::{
-    canonical_keyset_values, collect_conjunctive_join_equalities,
-    predicate_is_covered_by_equalities,
+    canonical_keyset_values_with_range, collect_conjunctive_join_equalities,
+    predicate_is_covered_by_equalities, predicate_is_covered_by_range,
 };
 use hawdb_optimizer::{
     estimate_relational_access_path_cost_with_context, estimate_relational_join_cost_with_contexts,
@@ -768,6 +768,7 @@ pub fn materialized_join_index_access(
             equality_prefix_len: 0,
             order_prefix_len: columns.len(),
             exclusive_range: false,
+            range: None,
             reverse_order: false,
             unique_point: false,
             covering: right.descriptor.covering,
@@ -777,6 +778,7 @@ pub fn materialized_join_index_access(
         access: RelationalBaseAccess::Index {
             name: name.clone(),
             scan: RelationalIndexRangeScan {
+                bounds: Default::default(),
                 prefix: RelationalKey(Vec::new()),
                 exclusive_bound: None,
                 direction: RelationalIndexScanDirection::Forward,
@@ -1202,6 +1204,8 @@ impl PreparedRelationalExecutionDescriptor {
 #[derive(Debug)]
 pub struct PreparedRelationalSelect {
     pub statement: SelectStatement,
+    /// Output columns in SELECT-list order, named before join planning.
+    pub output_schema: hawdb_executor::QuerySchema,
     pub access_plan: PreparedRelationalAccessPlan,
     pub join_planning: RelationalJoinPlanningOutcome,
     pub execution: PreparedRelationalExecutionDescriptor,
@@ -1551,13 +1555,23 @@ pub fn predicate_is_covered_by_access(
     qualifier: &str,
 ) -> bool {
     predicate_is_covered_by_equalities(predicate, &access.access_columns, table, qualifier)
+        || access.range.as_ref().is_some_and(|range| {
+            predicate_is_covered_by_range(
+                predicate,
+                &access.access_columns,
+                &range.column,
+                table,
+                qualifier,
+            )
+        })
         || (access.order_prefix_len == order_by.len()
-            && canonical_keyset_values(
+            && canonical_keyset_values_with_range(
                 predicate,
                 &access.access_columns,
                 order_by,
                 table,
                 qualifier,
+                access.range.as_ref().map(|range| range.column.as_str()),
             )
             .is_some())
 }

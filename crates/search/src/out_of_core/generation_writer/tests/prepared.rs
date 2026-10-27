@@ -297,7 +297,8 @@ fn queued_candidates_retain_governor_admission_through_publish_or_drop() {
                 },
                 IoConcurrencyBudget::new(2, 1),
             );
-            let request = RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024);
+            let request =
+                RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024).with_io_wave_slots(1);
             let admission = SearchGenerationAdmission::acquire(&governor, request).unwrap();
             let mut writer = admission
                 .create_writer(

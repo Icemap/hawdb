@@ -27,6 +27,11 @@ fn copy_tree(source: &Path, destination: &Path) {
     fs::create_dir(destination).unwrap();
     for entry in fs::read_dir(source).unwrap() {
         let entry = entry.unwrap();
+        // The destination acquires its own runtime lease. Reading the source's
+        // locked sidecar is forbidden on Windows and carries no recovery data.
+        if entry.file_name() == crate::ownership::DATABASE_DIRECTORY_LOCK_FILE {
+            continue;
+        }
         let path = destination.join(entry.file_name());
         if entry.file_type().unwrap().is_dir() {
             copy_tree(&entry.path(), &path);

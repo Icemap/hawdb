@@ -79,6 +79,7 @@ impl QueryBridge {
             }
             Err(error) => {
                 let kind = match &error {
+                    HawDBError::UnsupportedStorageFormat(_) => "unsupported_storage_format",
                     HawDBError::Parse(_) => "parse",
                     HawDBError::Semantic(_) => "semantic",
                     HawDBError::Storage(_) => "storage",

@@ -470,6 +470,9 @@ fn json_error(class: &str, message: impl ToString) -> serde_json::Value {
 
 fn json_error_from_hawdb(error: HawDBError) -> serde_json::Value {
     match error {
+        HawDBError::UnsupportedStorageFormat(error) => {
+            json_error("unsupported_storage_format", error)
+        }
         HawDBError::Parse(message) => json_error("parse", message),
         HawDBError::Semantic(message) => json_error("semantic", message),
         HawDBError::Storage(message) => json_error("storage", message),

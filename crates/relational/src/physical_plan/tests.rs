@@ -31,6 +31,7 @@ fn physical_join_plan_rejects_output_schema_drift() {
         equality_prefix_len: 0,
         order_prefix_len: 0,
         exclusive_range: false,
+        range: None,
         reverse_order: false,
         unique_point: false,
         covering: false,

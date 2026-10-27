@@ -1,0 +1,220 @@
+{
+  "source_root": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18/",
+  "artifacts": [
+    {
+      "manifest": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18/crates/plan-core/Cargo.toml",
+      "fresh": false,
+      "target": "hawdb_plan_core"
+    },
+    {
+      "manifest": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18/crates/cascades/Cargo.toml",
+      "fresh": false,
+      "target": "hawdb_cascades"
+    },
+    {
+      "manifest": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18/crates/cgroup/Cargo.toml",
+      "fresh": false,
+      "target": "hawdb_cgroup"
+    },
+    {
+      "manifest": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18/crates/optimizer-vector/Cargo.toml",
+      "fresh": false,
+      "target": "hawdb_optimizer_vector"
+    },
+    {
+      "manifest": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18/crates/integrity/Cargo.toml",
+      "fresh": false,
+      "target": "hawdb_integrity"
+    },
+    {
+      "manifest": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18/crates/optimizer-predicate/Cargo.toml",
+      "fresh": false,
+      "target": "hawdb_optimizer_predicate"
+    },
+    {
+      "manifest": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18/crates/query/Cargo.toml",
+      "fresh": false,
+      "target": "hawdb_query"
+    },
+    {
+      "manifest": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18/crates/sql-syntax/Cargo.toml",
+      "fresh": false,
+      "target": "hawdb_sql_syntax"
+    },
+    {
+      "manifest": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18/crates/ddl/Cargo.toml",
+      "fresh": false,
+      "target": "hawdb_ddl"
+    },
+    {
+      "manifest": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18/crates/fuzz-contracts/Cargo.toml",
+      "fresh": false,
+      "target": "hawdb_fuzz_contracts"
+    },
+    {
+      "manifest": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18/crates/expression/Cargo.toml",
+      "fresh": false,
+      "target": "hawdb_expression"
+    },
+    {
+      "manifest": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18/crates/telemetry/Cargo.toml",
+      "fresh": false,
+      "target": "hawdb_telemetry"
+    },
+    {
+      "manifest": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18/crates/route-ownership/Cargo.toml",
+      "fresh": false,
+      "target": "hawdb_route_ownership"
+    },
+    {
+      "manifest": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18/crates/qos/Cargo.toml",
+      "fresh": false,
+      "target": "hawdb_qos"
+    },
+    {
+      "manifest": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18/crates/analytics/Cargo.toml",
+      "fresh": false,
+      "target": "hawdb_analytics"
+    },
+    {
+      "manifest": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18/crates/cypher/Cargo.toml",
+      "fresh": false,
+      "target": "hawdb_cypher"
+    },
+    {
+      "manifest": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18/crates/optimizer-relational/Cargo.toml",
+      "fresh": false,
+      "target": "hawdb_optimizer_relational"
+    },
+    {
+      "manifest": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18/crates/core/Cargo.toml",
+      "fresh": false,
+      "target": "hawdb_core"
+    },
+    {
+      "manifest": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18/crates/evidence/Cargo.toml",
+      "fresh": false,
+      "target": "hawdb_evidence"
+    },
+    {
+      "manifest": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18/crates/optimizer/Cargo.toml",
+      "fresh": false,
+      "target": "hawdb_optimizer"
+    },
+    {
+      "manifest": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18/crates/query-policy/Cargo.toml",
+      "fresh": false,
+      "target": "hawdb_query_policy"
+    },
+    {
+      "manifest": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18/crates/plan-cache/Cargo.toml",
+      "fresh": false,
+      "target": "hawdb_plan_cache"
+    },
+    {
+      "manifest": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18/crates/plan-cypher/Cargo.toml",
+      "fresh": false,
+      "target": "hawdb_plan_cypher"
+    },
+    {
+      "manifest": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18/crates/optimizer-graph/Cargo.toml",
+      "fresh": false,
+      "target": "hawdb_optimizer_graph"
+    },
+    {
+      "manifest": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18/crates/sql/Cargo.toml",
+      "fresh": false,
+      "target": "hawdb_sql"
+    },
+    {
+      "manifest": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18/crates/runtime-tokio/Cargo.toml",
+      "fresh": false,
+      "target": "hawdb_runtime_tokio"
+    },
+    {
+      "manifest": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18/crates/vector-projection/Cargo.toml",
+      "fresh": false,
+      "target": "hawdb_vector_projection"
+    },
+    {
+      "manifest": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18/crates/artifact/Cargo.toml",
+      "fresh": false,
+      "target": "hawdb_artifact"
+    },
+    {
+      "manifest": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18/crates/resource-profile/Cargo.toml",
+      "fresh": false,
+      "target": "hawdb_resource_profile"
+    },
+    {
+      "manifest": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18/crates/explain/Cargo.toml",
+      "fresh": false,
+      "target": "hawdb_explain"
+    },
+    {
+      "manifest": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18/crates/system-sql/Cargo.toml",
+      "fresh": false,
+      "target": "hawdb_system_sql"
+    },
+    {
+      "manifest": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18/crates/relational/Cargo.toml",
+      "fresh": false,
+      "target": "hawdb_relational"
+    },
+    {
+      "manifest": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18/crates/nowledge-contracts/Cargo.toml",
+      "fresh": false,
+      "target": "hawdb_nowledge_contracts"
+    },
+    {
+      "manifest": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18/crates/bootstrap/Cargo.toml",
+      "fresh": false,
+      "target": "hawdb_bootstrap"
+    },
+    {
+      "manifest": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18/crates/executor/Cargo.toml",
+      "fresh": false,
+      "target": "hawdb_executor"
+    },
+    {
+      "manifest": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18/crates/readiness/Cargo.toml",
+      "fresh": false,
+      "target": "hawdb_readiness"
+    },
+    {
+      "manifest": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18/Cargo.toml",
+      "fresh": false,
+      "target": "hawdb"
+    },
+    {
+      "manifest": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18/crates/compat/Cargo.toml",
+      "fresh": false,
+      "target": "hawdb_compat"
+    },
+    {
+      "manifest": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18/crates/search/Cargo.toml",
+      "fresh": false,
+      "target": "hawdb_search"
+    },
+    {
+      "manifest": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18/crates/storage/Cargo.toml",
+      "fresh": false,
+      "target": "hawdb_storage"
+    },
+    {
+      "manifest": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18/Cargo.toml",
+      "fresh": false,
+      "target": "hawdb-shadow-self"
+    },
+    {
+      "manifest": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18/Cargo.toml",
+      "fresh": false,
+      "target": "mem_query_concurrency"
+    },
+    {
+      "manifest": "/home/hawkingrei/devel/nowledge/skein/target/query-first-release-baseline-8e9eab18/Cargo.toml",
+      "fresh": false,
+      "target": "hawdb"
+    }
+  ]
+}

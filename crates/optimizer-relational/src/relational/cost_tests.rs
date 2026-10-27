@@ -28,6 +28,7 @@ fn scan(rows: usize) -> RelationalAccessPathDescriptor {
         equality_prefix_len: 0,
         order_prefix_len: 0,
         exclusive_range: false,
+        range: None,
         reverse_order: false,
         unique_point: false,
         covering: false,
@@ -183,7 +184,11 @@ fn snapshot_access_oracle(
 ) -> [u64; 5] {
     let n = path.estimated_rows.max(1) as u128;
     let (mut cpu, mut random, mut sequential) = match path.kind {
-        RelationalAccessPathKind::FullScan => (n + 4, 0, n),
+        RelationalAccessPathKind::FullScan => (
+            n.max(u128::from(table_rows)) + 4,
+            0,
+            n.max(u128::from(table_rows)),
+        ),
         RelationalAccessPathKind::PrimaryKey => (n, n, 0),
         RelationalAccessPathKind::Index => (
             n * (1 + u128::from(path.requires_row_fetch)),
@@ -199,10 +204,9 @@ fn snapshot_access_oracle(
     }
     match path.kind {
         RelationalAccessPathKind::FullScan => {
-            let visits = (n * u128::from(table_pages)).div_ceil(u128::from(table_rows));
+            let visits = u128::from(table_pages);
             // Actual demand scan calls read_table_page_descriptor per page;
             // that operation opens the descriptor and key artifacts each time.
-            let visits = visits.min(u128::from(table_pages));
             cpu += visits * 3;
             sequential += visits * 3;
         }
@@ -644,4 +648,40 @@ fn skyline_and_selection_preserve_the_unpruned_minimum_cost() {
 #[ignore = "local-only deterministic access-cost campaign"]
 fn access_cost_differential_campaign() {
     campaign(2_048);
+}
+
+#[test]
+fn capped_scan_output_does_not_reduce_pinned_input_work() {
+    let context = snapshot_context(8_192, 32);
+    let complete = estimate_relational_access_path_cost_with_context(&scan(8_192), context);
+    for candidates in [1, 2, 17, 8_191, 8_192] {
+        let cost = estimate_relational_access_path_cost_with_context(&scan(candidates), context);
+        assert_eq!(cost.cpu, complete.cpu);
+        assert_eq!(cost.sequential_io, complete.sequential_io);
+        assert_eq!(cost.random_io, 0);
+        assert_eq!(cost.output_rows, candidates as u64);
+        assert_eq!(cost.estimated_rows, candidates as u64);
+    }
+    let small = snapshot_context(128, 1);
+    assert!(estimate_relational_access_path_cost_with_context(&scan(1), small).cpu < complete.cpu);
+    let point = index(1, false);
+    assert_eq!(
+        estimate_relational_access_path_cost_with_context(&point, context),
+        estimate_relational_access_path_cost_with_context(&point, snapshot_context(8_193, 32)),
+        "point lookup visits are independent of a full-scan input bound"
+    );
+    assert_cost(&scan(1));
+}
+
+#[test]
+fn capped_scan_cannot_beat_a_selective_covering_access_by_hiding_input() {
+    let context = snapshot_context(8_192, 32);
+    let scan = scan(2);
+    let covering = index(64, true);
+    assert_eq!(
+        select_relational_access_path_with_context([scan, covering.clone()], context)
+            .unwrap()
+            .unwrap(),
+        covering
+    );
 }

@@ -26,7 +26,9 @@ use crate::statistics_refresh::{
     relationship_property_supports_optimizer_statistics, sample_histogram_values,
     MAX_BOUNDED_PATH_STAT_HOPS, MAX_BOUNDED_PATH_STAT_VISITS, MAX_PROPERTY_HISTOGRAM_VALUES,
 };
-use crate::{cow::CowSegmentedMap, NodeId, NodeRecord, RelId, RelRecord};
+#[cfg(test)]
+use crate::{cow::CowSegmentedMap, RelId, RelRecord};
+use crate::{NodeId, NodeRecord};
 use hawdb_core::{
     BasicGraphStatistics, Catalog, GraphStatistics, IndexId, IndexKind, IndexStatisticsSample,
     LabelId, RelTypeId, Value,
@@ -151,7 +153,7 @@ pub fn full_text_query_tokens(query: &str) -> Vec<String> {
 
 pub fn compute_statistics(
     nodes: &impl NodeRecordRead,
-    relationships: &CowSegmentedMap<RelId, RelRecord>,
+    relationships: &crate::cow::CowRelMap,
     computed_at_commit_epoch: u64,
 ) -> GraphStatistics {
     compute_statistics_with_basic(
@@ -164,7 +166,7 @@ pub fn compute_statistics(
 
 pub fn compute_statistics_for_catalog(
     nodes: &impl NodeRecordRead,
-    relationships: &CowSegmentedMap<RelId, RelRecord>,
+    relationships: &crate::cow::CowRelMap,
     catalog: &Catalog,
     basic_statistics: BasicGraphStatistics,
 ) -> GraphStatistics {
@@ -189,7 +191,7 @@ pub fn graph_statistics_from_basic(
 
 pub fn compute_statistics_with_basic(
     nodes: &impl NodeRecordRead,
-    relationships: &CowSegmentedMap<RelId, RelRecord>,
+    relationships: &crate::cow::CowRelMap,
     catalog: Option<&Catalog>,
     basic_statistics: BasicGraphStatistics,
 ) -> GraphStatistics {
@@ -415,7 +417,7 @@ pub fn recompute_node_property_index(
 }
 
 pub fn recompute_relationship_property_index(
-    relationships: &CowSegmentedMap<RelId, RelRecord>,
+    relationships: &crate::cow::CowRelMap,
 ) -> RelationshipPropertyIndex {
     let mut index = RelationshipPropertyIndex::default();
     for relationship in relationships.values() {
@@ -430,7 +432,7 @@ pub fn recompute_relationship_property_index(
 
 pub fn compute_basic_statistics(
     nodes: &impl NodeRecordRead,
-    relationships: &CowSegmentedMap<RelId, RelRecord>,
+    relationships: &crate::cow::CowRelMap,
     computed_at_commit_epoch: u64,
 ) -> BasicGraphStatistics {
     let mut statistics = BasicGraphStatistics {

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod access;
 pub mod access_control;
 pub mod cancellation;
 pub mod capability;
@@ -40,7 +41,7 @@ pub use cancellation::{
 pub use capability::{RuntimeCapabilities, RuntimeCapability};
 pub use error::{
     HawDBError, ReadBudgetError, ReadBudgetResource, ResourceBudgetError, ResourceBudgetKind,
-    ResourceBudgetScope, Result,
+    ResourceBudgetScope, Result, StorageFormatError,
 };
 pub use graph::RelationshipDirection;
 pub use graph_rag::{

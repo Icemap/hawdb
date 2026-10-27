@@ -17,17 +17,25 @@
 
 use crate::{adjacency::AdjacencyPostingList, NodeId, NodeRecord, RelId, RelRecord};
 use hawdb_core::{IndexId, IndexStatisticsSample, LabelId, RelTypeId, Value};
+use std::borrow::Borrow;
 use std::collections::{BTreeMap, BTreeSet};
 use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, OnceLock};
 
+mod page;
+mod version_pages;
+pub(crate) use version_pages::VersionPageRetention;
 #[path = "cow/retained_capacity.rs"]
 mod retained_capacity;
+use page::CowMapPage;
 
 #[path = "cow/node_map.rs"]
 mod node_map;
+mod rel_map;
 #[doc(hidden)]
 pub use node_map::{CowNodeMap, NodeRecordRead, NodeRecordWrite};
+#[doc(hidden)]
+pub use rel_map::CowRelMap;
 
 /// An immutable snapshot segment that is cloned only when a writer mutates it.
 ///
@@ -337,21 +345,14 @@ fn cow_map_entry_bytes<K: CowPageWeight, V: CowPageWeight>(key: &K, value: &V) -
         .saturating_add(value.cow_page_bytes())
 }
 
-fn cow_map_segment_bytes<K: CowPageWeight, V: CowPageWeight>(segment: &BTreeMap<K, V>) -> usize {
-    segment
-        .iter()
-        .map(|(key, value)| cow_map_entry_bytes(key, value))
-        .fold(0usize, usize::saturating_add)
-}
-
 #[derive(Debug)]
 struct CowPageDirectory<K, V> {
-    pages: Vec<CowSegment<BTreeMap<K, V>>>,
+    pages: Vec<CowSegment<CowMapPage<K, V>>>,
     retained_capacity: OnceLock<Option<usize>>,
 }
 
 impl<K, V> CowPageDirectory<K, V> {
-    fn new(pages: Vec<CowSegment<BTreeMap<K, V>>>) -> Self {
+    fn new(pages: Vec<CowSegment<CowMapPage<K, V>>>) -> Self {
         Self {
             pages,
             retained_capacity: OnceLock::new(),
@@ -367,7 +368,7 @@ impl<K, V> Clone for CowPageDirectory<K, V> {
 }
 
 impl<K, V> Deref for CowPageDirectory<K, V> {
-    type Target = Vec<CowSegment<BTreeMap<K, V>>>;
+    type Target = Vec<CowSegment<CowMapPage<K, V>>>;
 
     fn deref(&self) -> &Self::Target {
         &self.pages
@@ -431,14 +432,16 @@ impl<K: Ord + CowPageWeight, V: CowPageWeight> CowSegmentedMap<K, V> {
                 && (segment.len() >= COW_MAP_MAX_SEGMENT_ENTRIES
                     || segment_bytes.saturating_add(entry_bytes) > COW_MAP_TARGET_SEGMENT_BYTES)
             {
-                segments.push(CowSegment::from(std::mem::take(&mut segment)));
+                segments.push(CowSegment::from(CowMapPage::from(std::mem::take(
+                    &mut segment,
+                ))));
                 segment_bytes = 0;
             }
             segment_bytes = segment_bytes.saturating_add(entry_bytes);
             segment.insert(key, value);
         }
         if !segment.is_empty() {
-            segments.push(CowSegment::from(segment));
+            segments.push(CowSegment::from(CowMapPage::from(segment)));
         }
         Self {
             segments: CowSegment::from(CowPageDirectory::new(segments)),
@@ -469,29 +472,38 @@ impl<K: Ord, V> CowSegmentedMap<K, V> {
     }
 
     #[inline]
-    fn segment_index(&self, key: &K) -> Option<usize> {
+    fn segment_index<Q: Ord + ?Sized>(&self, key: &Q) -> Option<usize>
+    where
+        K: Borrow<Q>,
+    {
         if self.segments.is_empty() {
             return None;
         }
         let index = self.segments.partition_point(|segment| {
             segment
                 .last_key_value()
-                .is_some_and(|(last_key, _)| last_key < key)
+                .is_some_and(|(last_key, _)| last_key.borrow() < key)
         });
         Some(index.min(self.segments.len() - 1))
     }
 
     #[inline]
-    pub fn get(&self, key: &K) -> Option<&V> {
+    pub fn get<Q: Ord + ?Sized>(&self, key: &Q) -> Option<&V>
+    where
+        K: Borrow<Q>,
+    {
         self.segment_index(key)
             .and_then(|index| self.segments[index].get(key))
     }
 
-    pub fn contains_key(&self, key: &K) -> bool {
+    pub fn contains_key<Q: Ord + ?Sized>(&self, key: &Q) -> bool
+    where
+        K: Borrow<Q>,
+    {
         self.get(key).is_some()
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (&K, &V)> {
+    pub fn iter(&self) -> impl DoubleEndedIterator<Item = (&K, &V)> + Clone {
         self.segments.iter().flat_map(|segment| segment.iter())
     }
 
@@ -510,23 +522,31 @@ impl<K: Ord, V> CowSegmentedMap<K, V> {
     }
 
     /// Borrow a bidirectional key interval without scanning unrelated segments.
-    pub(crate) fn range<'a>(
+    pub fn range<'a, Q: Ord + ?Sized>(
         &'a self,
-        first: &'a K,
-        last: &'a K,
-    ) -> impl DoubleEndedIterator<Item = (&'a K, &'a V)> {
+        first: &'a Q,
+        last: &'a Q,
+    ) -> impl DoubleEndedIterator<Item = (&'a K, &'a V)>
+    where
+        K: Borrow<Q>,
+    {
         assert!(first <= last, "invalid segmented-map key interval");
         let start = self.segments.partition_point(|segment| {
-            segment.last_key_value().is_some_and(|(key, _)| key < first)
+            segment
+                .last_key_value()
+                .is_some_and(|(key, _)| key.borrow() < first)
         });
         let end = self.segments.partition_point(|segment| {
             segment
                 .first_key_value()
-                .is_some_and(|(key, _)| key <= last)
+                .is_some_and(|(key, _)| key.borrow() <= last)
         });
-        self.segments[start..end]
-            .iter()
-            .flat_map(move |segment| segment.range(first..=last))
+        self.segments[start..end].iter().flat_map(move |segment| {
+            segment.range::<Q, _>((
+                std::ops::Bound::Included(first),
+                std::ops::Bound::Included(last),
+            ))
+        })
     }
 
     /// Seek the next captured record without visiting completed pages.
@@ -548,11 +568,11 @@ impl<K: Ord, V> CowSegmentedMap<K, V> {
             })
     }
 
-    pub fn keys(&self) -> impl Iterator<Item = &K> {
+    pub fn keys(&self) -> impl DoubleEndedIterator<Item = &K> + Clone {
         self.iter().map(|(key, _)| key)
     }
 
-    pub fn values(&self) -> impl Iterator<Item = &V> {
+    pub fn values(&self) -> impl DoubleEndedIterator<Item = &V> + Clone {
         self.iter().map(|(_, value)| value)
     }
 }
@@ -566,7 +586,7 @@ impl<K: Ord + Clone + CowPageWeight, V: Clone + CowPageWeight> CowSegmentedMap<K
         let pressure = u128::from(value.delta_pressure_bytes());
         if self.segments.is_empty() {
             self.segments = CowSegment::from(CowPageDirectory::new(vec![CowSegment::from(
-                BTreeMap::from([(key, value)]),
+                CowMapPage::from(BTreeMap::from([(key, value)])),
             )]));
             self.len = 1;
             self.delta_pressure_bytes = pressure;
@@ -595,19 +615,19 @@ impl<K: Ord + Clone + CowPageWeight, V: Clone + CowPageWeight> CowSegmentedMap<K
         previous
     }
 
-    fn split_oversized_segment(segments: &mut Vec<CowSegment<BTreeMap<K, V>>>, index: usize) {
+    fn split_oversized_segment(segments: &mut Vec<CowSegment<CowMapPage<K, V>>>, index: usize) {
         let memory = segments[index].0._memory.clone();
         let growth = segments[index].0.growth.clone();
         let segment = &mut *segments[index];
-        let segment_bytes = cow_map_segment_bytes(segment);
+        let segment_bytes = segment.estimated_bytes();
         if segment.len() <= 1
             || (segment.len() <= COW_MAP_MAX_SEGMENT_ENTRIES
-                && segment_bytes <= COW_MAP_TARGET_SEGMENT_BYTES)
+                && segment_bytes <= COW_MAP_TARGET_SEGMENT_BYTES as u128)
         {
             return;
         }
         let split_after_bytes = segment_bytes / 2;
-        let mut bytes = 0usize;
+        let mut bytes = 0u128;
         let split_key = segment
             .iter()
             .enumerate()
@@ -618,7 +638,7 @@ impl<K: Ord + Clone + CowPageWeight, V: Clone + CowPageWeight> CowSegmentedMap<K
                 {
                     return Some(key.clone());
                 }
-                bytes = bytes.saturating_add(cow_map_entry_bytes(key, value));
+                bytes = bytes.saturating_add(cow_map_entry_bytes(key, value) as u128);
                 None
             })
             .unwrap_or_else(|| {
@@ -653,12 +673,24 @@ impl<K: Ord + Clone + CowPageWeight, V: Clone + CowPageWeight> CowSegmentedMap<K
             return None;
         }
         let segments = &mut *self.segments;
-        let value = segments[index].get_mut(key)?;
+        let page = &mut *segments[index];
+        let page_bytes = page.payload_bytes();
+        page.bytes.take();
+        page.epoch_bounds.take();
+        let (stored_key, previous_value) = page.entries.get_key_value(key)?;
+        let entry_base_bytes = stored_key.cow_page_bytes();
+        let previous_entry_bytes =
+            entry_base_bytes as u128 + previous_value.cow_page_bytes() as u128;
+        let value = page.entries.get_mut(key)?;
         let previous = value.delta_pressure_bytes();
         Some(CowMapValueMut {
             value,
             pressure: &mut self.delta_pressure_bytes,
             previous,
+            page_bytes: &mut page.bytes,
+            previous_page_bytes: page_bytes,
+            entry_base_bytes,
+            previous_entry_bytes,
         })
     }
 
@@ -673,7 +705,10 @@ impl<K: Ord + Clone + CowPageWeight, V: Clone + CowPageWeight> CowSegmentedMap<K
             .expect("inserted segmented map entry must be available")
     }
 
-    pub fn remove(&mut self, key: &K) -> Option<V> {
+    pub fn remove<Q: Ord + ?Sized>(&mut self, key: &Q) -> Option<V>
+    where
+        K: Borrow<Q>,
+    {
         let index = self.segment_index(key)?;
         if !self.segments[index].contains_key(key) {
             return None;
@@ -724,12 +759,26 @@ impl<K, V> CowSegmentedMap<K, V> {
         self.segments.len()
     }
 
+    /// Retained page-directory allocation, excluding pages and their entries.
+    /// Deleting records does not necessarily shrink the directory's capacity.
+    pub fn page_directory_capacity_bytes(&self) -> usize {
+        std::mem::size_of::<Self>()
+            .saturating_add(std::mem::size_of::<CowData<CowPageDirectory<K, V>>>())
+            .saturating_add(2 * std::mem::size_of::<usize>())
+            .saturating_add(
+                self.segments
+                    .pages
+                    .capacity()
+                    .saturating_mul(std::mem::size_of::<CowSegment<CowMapPage<K, V>>>()),
+            )
+    }
+
     /// Shared directory capacity, including its Arc header. Page/record
     /// allocations are intentionally excluded from this metadata observation.
     pub fn directory_capacity_bytes(&self) -> usize {
         2 * std::mem::size_of::<usize>()
             + std::mem::size_of::<CowData<CowPageDirectory<K, V>>>()
-            + self.segments.capacity() * std::mem::size_of::<CowSegment<BTreeMap<K, V>>>()
+            + self.segments.capacity() * std::mem::size_of::<CowSegment<CowMapPage<K, V>>>()
     }
 
     pub fn shared_segment_count_with(&self, other: &Self) -> usize {
@@ -752,6 +801,10 @@ pub struct CowMapValueMut<'a, V: CowPageWeight> {
     value: &'a mut V,
     pressure: &'a mut u128,
     previous: u64,
+    page_bytes: &'a mut OnceLock<u128>,
+    previous_page_bytes: u128,
+    entry_base_bytes: usize,
+    previous_entry_bytes: u128,
 }
 
 impl<V: CowPageWeight> Deref for CowMapValueMut<'_, V> {
@@ -772,6 +825,11 @@ impl<V: CowPageWeight> Drop for CowMapValueMut<'_, V> {
     fn drop(&mut self) {
         *self.pressure = *self.pressure - u128::from(self.previous)
             + u128::from(self.value.delta_pressure_bytes());
+        *self.page_bytes = OnceLock::from(
+            self.previous_page_bytes - self.previous_entry_bytes
+                + self.entry_base_bytes as u128
+                + self.value.cow_page_bytes() as u128,
+        );
     }
 }
 
@@ -783,7 +841,7 @@ struct RetainPressure<'a, K, V: CowPageWeight> {
     before_pressure: u128,
 }
 
-struct RetainDirectory<'a, K, V>(&'a mut Vec<CowSegment<BTreeMap<K, V>>>);
+struct RetainDirectory<'a, K, V>(&'a mut Vec<CowSegment<CowMapPage<K, V>>>);
 
 impl<K, V> Drop for RetainDirectory<'_, K, V> {
     fn drop(&mut self) {

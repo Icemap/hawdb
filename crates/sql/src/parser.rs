@@ -26,6 +26,7 @@ use sqlparser::dialect::PostgreSqlDialect;
 use sqlparser::parser::Parser;
 
 mod branch;
+mod materialized_view;
 mod mutation;
 mod schema;
 
@@ -108,6 +109,11 @@ fn lower_statement(statement: &ParserStatement) -> Result<SqlStatement> {
         ParserStatement::Delete(delete) => lower_delete_statement(delete),
         ParserStatement::CreateTable(create) => lower_create_table_statement(create),
         ParserStatement::CreateIndex(create) => lower_create_index_statement(create),
+        ParserStatement::CreateView(create) => materialized_view::lower_create(create),
+        ParserStatement::Drop {
+            object_type: sqlparser::ast::ObjectType::MaterializedView,
+            ..
+        } => materialized_view::lower_drop(statement),
         ParserStatement::AlterTable(alter) => lower_alter_table_statement(alter),
         _ => Err(HawDBError::Semantic(
             "unsupported PostgreSQL statement kind".to_string(),

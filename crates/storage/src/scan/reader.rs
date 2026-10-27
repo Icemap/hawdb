@@ -221,6 +221,19 @@ impl RegisteredArtifact {
 }
 
 impl FileSegmentRangeReader {
+    /// Capacity of this registry and its artifact metadata, excluding the
+    /// independently owned shared segment cache and project file controller.
+    pub fn retained_capacity_bytes(&self) -> usize {
+        self.artifacts
+            .values()
+            .fold(std::mem::size_of::<Self>(), |bytes, artifact| {
+                bytes
+                    .saturating_add(artifact.path.capacity())
+                    .saturating_add(std::mem::size_of::<RegisteredArtifact>())
+                    .saturating_add(2048)
+            })
+    }
+
     pub fn new() -> Self {
         Self::default()
     }
@@ -252,6 +265,27 @@ impl FileSegmentRangeReader {
                     path,
                     file: OnceLock::new(),
                     registration,
+                }),
+            )
+            .map(|artifact| artifact.path.clone())
+    }
+
+    /// Retain an already opened immutable artifact. Reads and reader clones
+    /// keep this native file identity even when its pathname is replaced.
+    /// The caller must prevent in-place modification of the captured file.
+    pub fn register_file(
+        &mut self,
+        artifact_id: u64,
+        path: impl Into<PathBuf>,
+        file: File,
+    ) -> Option<PathBuf> {
+        self.artifacts
+            .insert(
+                artifact_id,
+                Arc::new(RegisteredArtifact {
+                    path: path.into(),
+                    file: OnceLock::from(file),
+                    registration: OnceLock::new(),
                 }),
             )
             .map(|artifact| artifact.path.clone())
@@ -296,20 +330,21 @@ impl FileSegmentRangeReader {
                 artifact_id: range.artifact_id,
                 length: range.length.get(),
             })?;
-        let registration = artifact
-            .registration()
-            .map_err(|source| range_io_error(range, source))?;
-        let shared = registration
-            .binding
-            .as_ref()
-            .map(|binding| registration.handles.get(binding, &registration.context))
-            .transpose()
-            .map_err(|source| range_io_error(range, source))?;
-        let file = if let Some(file) = &shared {
-            file.as_ref()
+        let shared;
+        let file = if let Some(file) = artifact.file.get() {
+            file
         } else {
-            match artifact.file.get() {
-                Some(file) => file,
+            let registration = artifact
+                .registration()
+                .map_err(|source| range_io_error(range, source))?;
+            shared = registration
+                .binding
+                .as_ref()
+                .map(|binding| registration.handles.get(binding, &registration.context))
+                .transpose()
+                .map_err(|source| range_io_error(range, source))?;
+            match &shared {
+                Some(file) => file.as_ref(),
                 None => {
                     let opened = crate::file_io::OpenOptions::new()
                         .read(true)
@@ -1059,6 +1094,38 @@ mod tests {
         assert_eq!(report.bytes_read, 8);
         assert_eq!(report.max_wave_bytes_read, 8);
         std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn captured_file_survives_replacement_before_first_read_and_final_clone_drop() {
+        let path = unique_test_file("captured-generation");
+        let retired_path = path.with_extension("retired");
+        std::fs::write(&path, b"original").unwrap();
+        let mut reader = FileSegmentRangeReader::new();
+        reader.register_file(7, &path, File::open(&path).unwrap());
+        let retired = Arc::downgrade(reader.artifacts.get(&7).unwrap());
+        let captured = reader.clone();
+        std::fs::rename(&path, &retired_path).unwrap();
+        std::fs::write(&path, b"replaced").unwrap();
+        std::fs::remove_file(&retired_path).unwrap();
+        let range = SegmentReadRange::new(7, 1, 0, NonZeroU64::new(8).unwrap())
+            .with_content_digest(content_digest(b"original"));
+        assert_eq!(&*captured.read_range(&range).unwrap(), b"original");
+        let wrong_digest = range
+            .clone()
+            .with_content_digest(content_digest(b"replaced"));
+        assert!(matches!(
+            captured.read_range(&wrong_digest),
+            Err(SegmentReadError::DigestMismatch { .. })
+        ));
+        reader.register_file(7, &path, File::open(&path).unwrap());
+        assert_eq!(&*reader.read_range(&wrong_digest).unwrap(), b"replaced");
+        drop(reader);
+        std::fs::remove_file(path).unwrap();
+        assert_eq!(&*captured.read_range(&range).unwrap(), b"original");
+        assert!(retired.upgrade().is_some());
+        drop(captured);
+        assert!(retired.upgrade().is_none());
     }
 
     #[test]

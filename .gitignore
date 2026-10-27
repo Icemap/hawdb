@@ -8,3 +8,13 @@ bazel-*
 MODULE.bazel.lock
 .scratch/
 /examples/wasm-playground/pkg/
+
+# Architecture raw observations are restored from the verified evidence release.
+/docs/benchmarks/architecture_2026_10_24/preintegration/scan-*.json
+/docs/benchmarks/architecture_2026_10_24/preintegration/uncontrolled_start/*.json
+/docs/benchmarks/architecture_2026_10_24/current/scan-*.json
+/docs/benchmarks/architecture_2026_10_24/current/publication-*.json
+/docs/benchmarks/architecture_2026_10_24/current/measurement-source.json
+/docs/benchmarks/architecture_2026_10_24/final/scan-*.json
+/docs/benchmarks/architecture_2026_10_24/final/publication-*.json
+/docs/benchmarks/architecture_2026_10_24/final/measurement-source.json

@@ -36,6 +36,124 @@ fn governor(policy: Option<ProcessMemoryPolicy>) -> RuntimeGovernor {
 }
 
 #[test]
+fn fixed_memory_transfer_releases_the_only_execution_slot_without_an_admission_gap() {
+    let governor = governor(None);
+    let request =
+        RuntimeWorkRequest::new(RuntimeWorkPriority::Foreground, RuntimeWorkKind::Control)
+            .with_cpu_slots(1)
+            .with_blocking(true)
+            .with_io_slots(1)
+            .with_memory_bytes(80);
+    let permit = governor.try_admit(request).unwrap();
+    let retained = permit.into_retained_memory().unwrap();
+    let after = governor.snapshot();
+    assert_eq!(retained.bytes(), 80);
+    assert_eq!(after.admitted_memory_bytes, 80);
+    assert_eq!(after.active_cpu_slots, 0);
+    assert_eq!(after.active_foreground_tasks, 0);
+    assert_eq!(after.active_blocking_tasks, 0);
+    assert_eq!(after.active_foreground_io_slots, 0);
+    let execution_request = request.with_retained_memory_bytes(retained.bytes());
+    let error = governor
+        .try_admit(execution_request.with_memory_bytes(21))
+        .unwrap_err();
+    assert!(!error.is_retryable());
+    assert_eq!(error.requested, 101);
+    assert_eq!(error.available, 100);
+    let execution = governor
+        .try_admit(execution_request.with_memory_bytes(20))
+        .unwrap();
+    assert!(retained.shares_governor_with(&execution));
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 100);
+    drop(retained);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 20);
+    drop(execution);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+}
+
+#[test]
+fn transferred_memory_keeps_the_process_reservation_and_rejects_impossible_execution() {
+    let policy =
+        ProcessMemoryPolicy::new(ProcessMemoryPolicyConfig::new(NonZeroU64::new(90).unwrap()));
+    policy.update(ProcessMemorySnapshot {
+        capabilities: ProcessMemoryCapabilities {
+            resident_memory: true,
+            ..Default::default()
+        },
+        resident_bytes: 0,
+        peak_resident_bytes: 0,
+        total_page_faults: None,
+        minor_page_faults: None,
+        major_page_faults: None,
+    });
+    let governor = governor(Some(policy.clone()));
+    let request = RuntimeWorkRequest::foreground_query(80, 0);
+    let retained = governor
+        .try_admit(request)
+        .unwrap()
+        .into_retained_memory()
+        .unwrap();
+    assert_eq!(policy.snapshot().unobserved_reserved_bytes, 80);
+    let execution_request = request.with_retained_memory_bytes(retained.bytes());
+    let error = governor
+        .try_admit(execution_request.with_memory_bytes(11))
+        .unwrap_err();
+    assert!(!error.is_retryable());
+    assert_eq!(error.requested, 91);
+    assert_eq!(error.available, 90);
+    let execution = governor
+        .try_admit(execution_request.with_memory_bytes(10))
+        .unwrap();
+    assert_eq!(policy.snapshot().unobserved_reserved_bytes, 90);
+    drop(execution);
+    assert_eq!(policy.snapshot().unobserved_reserved_bytes, 80);
+    drop(retained);
+    assert_eq!(policy.snapshot().unobserved_reserved_bytes, 0);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+}
+
+#[test]
+fn retained_floor_is_rechecked_after_a_capacity_change() {
+    let governor = governor(None);
+    let retained = governor
+        .try_admit(RuntimeWorkRequest::foreground_query(60, 0))
+        .unwrap()
+        .into_retained_memory()
+        .unwrap();
+    let request =
+        RuntimeWorkRequest::foreground_query(40, 0).with_retained_memory_bytes(retained.bytes());
+    drop(governor.try_admit(request).unwrap());
+    mutex_lock(&governor.inner.state)
+        .limits
+        .memory_capacity_bytes = 99;
+    assert!(!governor.try_admit(request).unwrap_err().is_retryable());
+    drop(retained);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+}
+
+#[test]
+fn retained_floor_cannot_overflow_the_hard_capacity_check() {
+    let request = RuntimeWorkRequest::foreground_query(u64::MAX, 0).with_retained_memory_bytes(1);
+    assert!(request.exceeds_memory_capacity(u64::MAX));
+    assert!(!request
+        .with_memory_bytes(u64::MAX - 1)
+        .exceeds_memory_capacity(u64::MAX));
+}
+
+#[test]
+fn elastic_memory_transfer_is_rejected_without_leaking_resources() {
+    let governor = governor(None);
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(80))
+        .unwrap();
+    assert!(permit.into_retained_memory().is_none());
+    let after = governor.snapshot();
+    assert_eq!(after.admitted_memory_bytes, 0);
+    assert_eq!(after.active_cpu_slots, 0);
+    assert_eq!(after.active_background_tasks, 0);
+}
+
+#[test]
 fn retained_memory_preserves_shared_work_until_the_last_active_owner() {
     let governor = governor(None);
     let request = RuntimeWorkRequest::background_maintenance(60)

@@ -25,9 +25,28 @@ use hawdb_executor::result_delivery::QueryOutputAccumulator;
 /// The resources are borrowed for the duration of the call. The executor does
 /// not retain them or create a process-global execution context.
 pub struct ExecutionResources<'a, S: ExecutionStore> {
-    catalog: &'a mut Catalog,
-    store: &'a mut S,
+    access: ExecutionAccess<'a, S>,
     external: &'a mut dyn ExternalReadOperator,
+}
+
+enum ExecutionAccess<'a, S> {
+    Mutable {
+        catalog: &'a mut Catalog,
+        store: &'a mut S,
+    },
+    ReadOnly {
+        catalog: &'a Catalog,
+        store: &'a S,
+    },
+}
+
+impl<S> ExecutionAccess<'_, S> {
+    fn read(&self) -> (&Catalog, &S) {
+        match self {
+            Self::Mutable { catalog, store } => (catalog, store),
+            Self::ReadOnly { catalog, store } => (catalog, store),
+        }
+    }
 }
 
 impl<'a, S: ExecutionStore> ExecutionResources<'a, S> {
@@ -37,8 +56,18 @@ impl<'a, S: ExecutionStore> ExecutionResources<'a, S> {
         external: &'a mut dyn ExternalReadOperator,
     ) -> Self {
         Self {
-            catalog,
-            store,
+            access: ExecutionAccess::Mutable { catalog, store },
+            external,
+        }
+    }
+
+    pub(crate) fn read_only(
+        catalog: &'a Catalog,
+        store: &'a S,
+        external: &'a mut dyn ExternalReadOperator,
+    ) -> Self {
+        Self {
+            access: ExecutionAccess::ReadOnly { catalog, store },
             external,
         }
     }
@@ -93,9 +122,27 @@ pub(super) fn execute_profiled_consumer<S: ExecutionStore>(
     .map(|(streamed, _)| streamed)
 }
 
+pub(super) fn execute_profiled_borrowed_consumer<'consumer, S: ExecutionStore>(
+    request: ExecutionRequest<'_>,
+    resources: ExecutionResources<'_, S>,
+    delivery: StreamDelivery,
+    consumer: &'consumer mut hawdb_executor::result_delivery::BorrowedRowConsumer<'consumer>,
+) -> Result<ProfiledQueryStream> {
+    execute_profiled_output(
+        request,
+        resources,
+        OutputTarget::Borrowed(delivery, consumer),
+    )
+    .map(|(streamed, _)| streamed)
+}
+
 enum OutputTarget<'a> {
     Owned,
     Consumer(ConsumerMemoryMode, &'a mut dyn FnMut(Row) -> Result<()>),
+    Borrowed(
+        StreamDelivery,
+        &'a mut hawdb_executor::result_delivery::BorrowedRowConsumer<'a>,
+    ),
 }
 
 fn execute_profiled_output<S: ExecutionStore>(
@@ -104,10 +151,10 @@ fn execute_profiled_output<S: ExecutionStore>(
     target: OutputTarget<'_>,
 ) -> Result<(ProfiledQueryStream, Option<QueryRows>)> {
     let ExecutionResources {
-        catalog,
-        store,
+        mut access,
         external,
     } = resources;
+    let (catalog, store) = access.read();
     store.ensure_usable()?;
     let plan = request.plan();
     let parameters = request.parameters();
@@ -127,6 +174,16 @@ fn execute_profiled_output<S: ExecutionStore>(
                 &memory_ledger,
                 budget_option,
                 output_memory,
+                consumer,
+            )?
+        }
+        OutputTarget::Borrowed(delivery, consumer) => {
+            QueryOutputAccumulator::new_borrowed_with_budget_option(
+                output_limits,
+                result_memory_budget,
+                &memory_ledger,
+                budget_option,
+                delivery,
                 consumer,
             )?
         }
@@ -179,21 +236,39 @@ fn execute_profiled_output<S: ExecutionStore>(
             observer: context.observer,
             host_scorer: context.host_scorer,
         };
-        execute_prepared_binding_batches(
-            batch_plan,
-            batch_context,
+        let native = hawdb_executor::numeric::try_stream_native_projection(
+            batch_plan.plan(),
+            batch_context.numeric_context(),
             execution_limit,
-            &mut |batch| {
-                for binding in batch {
-                    output.emit(binding)?;
-                }
+            &mut |row| {
+                output.emit_borrowed(row)?;
                 Ok(BatchControl::Continue)
             },
-        )?;
+        );
+        if let Some(result) = native {
+            result?;
+        } else {
+            execute_prepared_binding_batches(
+                batch_plan,
+                batch_context,
+                execution_limit,
+                &mut |batch| {
+                    for binding in batch {
+                        output.emit(binding)?;
+                    }
+                    Ok(BatchControl::Continue)
+                },
+            )?;
+        }
     } else {
+        let ExecutionAccess::Mutable { catalog, store } = &mut access else {
+            return Err(crate::HawDBError::Execution(
+                "materialized execution requires a private query workspace".into(),
+            ));
+        };
         observer.record_operator_start(plan);
         let bindings =
-            execute_bindings_with_limit(plan, catalog, store, &mut context, execution_limit)?;
+            execute_bindings_with_limit(plan, catalog, *store, &mut context, execution_limit)?;
         observer.record_operator_output(plan, bindings.len());
         for binding in bindings {
             output.emit(binding)?;

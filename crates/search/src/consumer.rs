@@ -952,7 +952,7 @@ impl ConsumerProjection {
         {
             return Err(invalid("initializer replaced the staging projection or supplied an impossible import epoch"));
         }
-        if index.analyzer_lexicon != super::SearchAnalyzerLexicon::default() {
+        if *index.analyzer_lexicon != super::SearchAnalyzerLexicon::default() {
             return Err(invalid(
                 "consumer reopen currently requires the default analyzer lexicon",
             ));
@@ -1365,7 +1365,7 @@ impl SearchIndex {
                 "registered descriptor does not match its snapshot or payload",
             ));
         }
-        self.segment_descriptor = Some(descriptor);
+        self.segment_descriptor = Some(std::sync::Arc::new(descriptor));
         self.load_lexical_projection_under_publication(publication)?;
         if self
             .lexical_projection

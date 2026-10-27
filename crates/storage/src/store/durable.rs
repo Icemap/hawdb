@@ -43,10 +43,10 @@ pub(super) use manifest::DurableManifest;
 pub(super) use wal::WalAppendFile;
 
 use super::{
-    cleanup_abandoned_checkpoint_preparations, derived_repair, doctor, has_storage_artifacts,
-    source_scan, store_id_for_path, CheckpointStatisticsState, CANONICAL_MANIFEST_MAX_BYTES,
-    MANIFEST_FILE, PROJECTED_GRAPHS_FILE, PROPERTY_PROJECTION_MANIFEST_MAX_BYTES,
-    PROPERTY_SPILL_MANIFEST_MAX_BYTES, STABLE_ID_MAPPING_FILE, WAL_BINARY_FILE_HEADER_BYTES,
+    derived_repair, doctor, has_storage_artifacts, source_scan, store_id_for_path,
+    CheckpointStatisticsState, CANONICAL_MANIFEST_MAX_BYTES, MANIFEST_FILE, PROJECTED_GRAPHS_FILE,
+    PROPERTY_PROJECTION_MANIFEST_MAX_BYTES, PROPERTY_SPILL_MANIFEST_MAX_BYTES,
+    STABLE_ID_MAPPING_FILE, WAL_BINARY_FILE_HEADER_BYTES,
 };
 use crate::error::{HawDBError, Result};
 use crate::file_io as fs;
@@ -504,9 +504,6 @@ impl DurableStore {
             ));
         };
         manifest.validate()?;
-        if !read_only {
-            cleanup_abandoned_checkpoint_preparations(artifact_path, manifest.checkpoint_epoch)?;
-        }
         let checkpoint_path = manifest.checkpoint_path(artifact_path);
         let wal_path = manifest.wal_path(path);
         let wal_bytes = match fs::metadata(&wal_path) {

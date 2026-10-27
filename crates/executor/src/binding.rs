@@ -319,19 +319,24 @@ pub fn relationship_memory_bytes(relationship: &RelRecord) -> usize {
 }
 
 pub fn value_payload_bytes(value: &Value) -> usize {
+    value_ref_payload_bytes(value.as_ref())
+}
+
+pub fn value_ref_payload_bytes(value: hawdb_core::ValueRef<'_>) -> usize {
+    use hawdb_core::ValueRef;
     match value {
-        Value::Null => 0,
-        Value::Bool(_) => std::mem::size_of::<bool>(),
-        Value::Int(_) => std::mem::size_of::<i64>(),
-        Value::Float(_) => std::mem::size_of::<f64>(),
-        Value::String(value) => value.len(),
-        Value::Binary(value) => value.len(),
-        Value::Vector(value) => value.encoded().len(),
-        Value::Uuid(_) => 16,
-        Value::List(values) => values.iter().fold(0usize, |total, value| {
+        ValueRef::Null => 0,
+        ValueRef::Bool(_) => std::mem::size_of::<bool>(),
+        ValueRef::Int(_) => std::mem::size_of::<i64>(),
+        ValueRef::Float(_) => std::mem::size_of::<f64>(),
+        ValueRef::String(value) => value.len(),
+        ValueRef::Binary(value) => value.len(),
+        ValueRef::Vector(value) => value.encoded().len(),
+        ValueRef::Uuid(_) => 16,
+        ValueRef::List(values) => values.iter().fold(0usize, |total, value| {
             total.saturating_add(value_payload_bytes(value))
         }),
-        Value::Map(values) => map_payload_bytes(values),
+        ValueRef::Map(values) => map_payload_bytes(values),
     }
 }
 

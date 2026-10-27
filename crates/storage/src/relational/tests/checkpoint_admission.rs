@@ -15,6 +15,193 @@
 use super::*;
 
 #[test]
+fn controlled_materialized_view_recovery_matches_wal_and_releases_admission() {
+    use crate::background::{CheckpointDecodeContext, CheckpointWorkContext};
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+        RuntimeWorkRequest,
+    };
+
+    let limits = RelationalMutationLimits::default();
+    let overflow = RelationalOverflowConfig::default();
+    let mut previous = RelationalState::default()
+        .stage_transaction(create_upsert_table(), limits, overflow)
+        .unwrap()
+        .stage_transaction(
+            RelationalTransaction {
+                writes: vec![RelationalWrite::Insert {
+                    table: "documents".into(),
+                    rows: vec![
+                        upsert_row("id-1", "owner-1", "old"),
+                        upsert_row("id-2", "owner-2", "old"),
+                    ],
+                    mode: RelationalInsertMode::Error,
+                }],
+            },
+            limits,
+            overflow,
+        )
+        .unwrap();
+    previous = previous
+        .stage_transaction(
+            RelationalTransaction {
+                writes: vec![RelationalWrite::CreateIndex {
+                    table: "documents".into(),
+                    index: RelationalIndexSchema {
+                        name: "by_payload".into(),
+                        columns: vec!["payload".into()],
+                        unique: false,
+                    },
+                }],
+            },
+            limits,
+            overflow,
+        )
+        .unwrap();
+    let view = MaterializedViewDefinition {
+        source: "documents".into(),
+        columns: vec![
+            MaterializedViewColumn {
+                name: "payload".into(),
+                expression: MaterializedViewExpression::Column("payload".into()),
+            },
+            MaterializedViewColumn {
+                name: "n".into(),
+                expression: MaterializedViewExpression::Count(None),
+            },
+            MaterializedViewColumn {
+                name: "first_owner".into(),
+                expression: MaterializedViewExpression::Min("owner".into()),
+            },
+            MaterializedViewColumn {
+                name: "last_owner".into(),
+                expression: MaterializedViewExpression::Max("owner".into()),
+            },
+        ],
+        group_by: vec!["payload".into()],
+        filter: Some(RelationalPredicate::Not(Box::new(
+            RelationalPredicate::IsNull {
+                column: "owner".into(),
+                negated: false,
+            },
+        ))),
+    }
+    .table_schema("stats".into(), previous.table_schema("documents").unwrap())
+    .unwrap();
+    for write in [
+        RelationalWrite::CreateTable(view),
+        RelationalWrite::CreateIndex {
+            table: "stats".into(),
+            index: RelationalIndexSchema {
+                name: "stats_payload".into(),
+                columns: vec!["payload".into()],
+                unique: false,
+            },
+        },
+        RelationalWrite::Insert {
+            table: "documents".into(),
+            rows: vec![upsert_row("id-1", "owner-1", "new")],
+            mode: RelationalInsertMode::Replace,
+        },
+        RelationalWrite::DeleteByPrimaryKey {
+            table: "documents".into(),
+            keys: vec![RelationalKey(vec![RelationalValue::Text("id-2".into())])],
+        },
+        RelationalWrite::DropMaterializedView {
+            table: "stats".into(),
+        },
+    ] {
+        let transaction = RelationalTransaction {
+            writes: vec![write],
+        };
+        let expected = apply_transaction_inner(
+            &previous,
+            transaction.clone(),
+            limits,
+            overflow,
+            TransactionApplyOptions {
+                index_capture_limits: Some(RelationalIndexChangeCaptureLimits::default()),
+                row_capture_limits: Some(RelationalRowChangeCaptureLimits::default()),
+                ..TransactionApplyOptions::materialized()
+            },
+        )
+        .unwrap();
+        let encoded = encode_relational_wal_batch(1, &transaction).unwrap();
+        for (ceiling, succeeds) in [(1, false), (16 * 1024 * 1024, true)] {
+            let governor = RuntimeGovernor::detect(
+                RuntimeGovernorConfig {
+                    memory_budget_bytes: Some(ceiling),
+                    ..RuntimeGovernorConfig::shared_host()
+                },
+                IoConcurrencyBudget::new(2, 1),
+            );
+            governor.pin_resources();
+            let permit = governor
+                .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+                .unwrap();
+            let work =
+                CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+            let context = CheckpointDecodeContext {
+                work: work.clone(),
+                memory: Default::default(),
+            };
+            let result = previous.stage_materialized_recovery_with_allocations(
+                RelationalMaterializedRecoveryStage {
+                    transaction: transaction.clone(),
+                    mutation_limits: limits,
+                    overflow_config: overflow,
+                    index_capture_limits: Some(RelationalIndexChangeCaptureLimits::default()),
+                    row_capture_limits: Some(RelationalRowChangeCaptureLimits::default()),
+                },
+                &context,
+            );
+            if succeeds {
+                let (actual, indexes, rows) = result.unwrap();
+                assert_eq!(indexes, expected.index_capture);
+                assert_eq!(rows, expected.row_capture);
+                for table in ["documents", "stats"] {
+                    assert_eq!(
+                        actual.table_schema(table),
+                        expected.state.table_schema(table)
+                    );
+                    assert_eq!(
+                        actual.rows(table).collect::<Vec<_>>(),
+                        expected.state.rows(table).collect::<Vec<_>>()
+                    );
+                }
+                let owned = decode_relational_wal_batch_owned(
+                    &encoded,
+                    RelationalDecodeLimits::wal(),
+                    &context,
+                )
+                .unwrap();
+                assert_eq!(
+                    owned,
+                    decode_relational_wal_batch(&encoded, RelationalDecodeLimits::wal()).unwrap()
+                );
+                if let Some(schema) = actual.schemas.get("stats") {
+                    let copy = schema
+                        .checkpoint_edit(&context.work, |_, _| Ok(()))
+                        .unwrap();
+                    assert_eq!(copy.schema, schema.schema);
+                }
+                drop(actual);
+            } else {
+                assert!(matches!(result, Err(RelationalError::Admission(_))));
+            }
+            drop(context);
+            assert!(
+                matches!(work.task_context().reserve_working_memory(ceiling), Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes == ceiling)
+            );
+            drop(work);
+            drop(permit);
+            assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+        }
+        previous = expected.state;
+    }
+}
+
+#[test]
 fn owned_relational_wal_decode_matches_shared_codec_and_rejects_corruption() {
     use crate::background::CheckpointDecodeContext;
     for length in [0, 1, 31, 65_535, 65_536, 65_537] {

@@ -115,6 +115,20 @@ pub struct VectorIndexDescriptor {
 }
 
 impl VectorIndexDescriptor {
+    #[doc(hidden)]
+    pub fn retained_capacity_bytes(&self) -> usize {
+        let (table, field) = match &self.target {
+            VectorIndexTarget::Relational { table, column, .. } => (table, column),
+            VectorIndexTarget::NodeProperty {
+                table, property, ..
+            } => (table, property),
+        };
+        std::mem::size_of::<Self>()
+            .saturating_add(self.name.capacity())
+            .saturating_add(table.capacity())
+            .saturating_add(field.capacity())
+    }
+
     /// Constructs a validated definition. The facade must resolve the target,
     /// dimension and digest against its pinned canonical schema before use.
     pub fn new(

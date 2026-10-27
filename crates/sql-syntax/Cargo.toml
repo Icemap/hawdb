@@ -9,3 +9,7 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
+
+[[bench]]
+name = "frontend"
+harness = false

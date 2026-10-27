@@ -133,77 +133,107 @@ fn source_reference_delete_guard_uses_named_count_queries() {
         .is_empty());
 }
 
+const SOURCE_REFERENCE_CREATE: &str = "MATCH (s:Entity {id: $source}), (t:Entity {id: $target}) \
+    CREATE (s)-[:RELATES_TO {source_reference: $source_reference}]->(t)";
+const SOURCE_REFERENCE_DELETE: &str = "MATCH (:Entity)-[r:RELATES_TO]->(:Entity) \
+    WHERE r.source_reference = $source_reference DELETE r";
+
+fn reference_parameters(reference: &str) -> Result<BTreeMap<String, Value>> {
+    if reference.trim().is_empty() {
+        return Err(HawDBError::Semantic(
+            "non-empty source_reference required".into(),
+        ));
+    }
+    Ok(BTreeMap::from([(
+        "source_reference".into(),
+        Value::String(reference.into()),
+    )]))
+}
+
 #[test]
 fn deletes_source_reference_relationships_for_nowledge_cleanup() {
     let mut db = Database::new();
-    db.query("CREATE (:Entity {id: 'entity_1'})-[:RELATES_TO {source_reference: 'source_1'}]->(:Entity {id: 'entity_2'})")
-        .unwrap();
+    db.query("CREATE (:Entity {id: 'entity_1'})-[:RELATES_TO {source_reference: 'source_1'}]->(:Entity {id: 'entity_2'})").unwrap();
     db.query("CREATE (:Entity {id: 'entity_3'})").unwrap();
     db.query("CREATE (:Entity {id: 'entity_4'})").unwrap();
-    db.create_knowledge_relationship(&KnowledgeRelationshipCreateRequest {
-        source: KnowledgeEntityRequest {
-            label: "Entity".to_string(),
-            external_id: "entity_1".to_string(),
-        },
-        target: KnowledgeEntityRequest {
-            label: "Entity".to_string(),
-            external_id: "entity_3".to_string(),
-        },
-        relationship_type: "RELATES_TO".to_string(),
-        properties: BTreeMap::from([(
-            "source_reference".to_string(),
-            Value::String("source_1".to_string()),
-        )]),
-    })
-    .unwrap();
-    db.create_knowledge_relationship(&KnowledgeRelationshipCreateRequest {
-        source: KnowledgeEntityRequest {
-            label: "Entity".to_string(),
-            external_id: "entity_1".to_string(),
-        },
-        target: KnowledgeEntityRequest {
-            label: "Entity".to_string(),
-            external_id: "entity_4".to_string(),
-        },
-        relationship_type: "RELATES_TO".to_string(),
-        properties: BTreeMap::from([(
-            "source_reference".to_string(),
-            Value::String("source_2".to_string()),
-        )]),
-    })
-    .unwrap();
-
-    let output = db
-        .delete_knowledge_source_reference_relationships(
-            &KnowledgeSourceReferenceRelationshipCleanupRequest {
-                source_reference: "source_1".to_string(),
-            },
-        )
+    for (target, reference) in [("entity_3", "source_1"), ("entity_4", "source_2")] {
+        let mut parameters = reference_parameters(reference).unwrap();
+        parameters.insert("source".into(), Value::String("entity_1".into()));
+        parameters.insert("target".into(), Value::String(target.into()));
+        db.query_request(bounded_batch_query(SOURCE_REFERENCE_CREATE, &parameters))
+            .unwrap();
+    }
+    let epoch = db.commit_epoch().unwrap();
+    let parameters = reference_parameters("source_1").unwrap();
+    let mut transaction = db.begin_transaction().unwrap();
+    let candidates = transaction
+        .query_request(bounded_batch_query(
+            SOURCE_REFERENCE_ENTITIES_QUERY,
+            &parameters,
+        ))
         .unwrap();
-
-    assert_eq!(output.graph_commit_epoch_before, 5);
-    assert_eq!(output.graph_commit_epoch_after, 6);
-    assert_eq!(output.candidate_count, 2);
-    assert_eq!(output.deleted_relationship_count, 2);
-    assert_eq!(output.rows.len(), 2);
-    assert!(output.rows.iter().all(|row| row.deleted));
-    assert!(output
+    assert_eq!(candidates.rows.len(), 2);
+    for row in &candidates.rows {
+        assert_eq!(
+            row.get("source_entity_id"),
+            Some(&Value::String("entity_1".into()))
+        );
+        assert!(matches!(row.get("relationship_id"), Some(Value::Int(_))));
+    }
+    assert_eq!(
+        candidates.rows[0]["target_entity_id"],
+        Value::String("entity_2".into())
+    );
+    assert_eq!(
+        candidates.rows[1]["target_entity_id"],
+        Value::String("entity_3".into())
+    );
+    assert!(transaction
+        .query_request(bounded_batch_query(SOURCE_REFERENCE_DELETE, &parameters))
+        .unwrap()
         .rows
-        .iter()
-        .all(|row| row.source_external_id.as_deref() == Some("entity_1")));
-
-    let dropped = db
-        .query("MATCH (:Entity)-[r:RELATES_TO]->(:Entity) WHERE r.source_reference = 'source_1' RETURN count(r) AS total")
-        .unwrap();
-    assert_eq!(dropped.rows[0].get("total"), Some(&Value::Int(0)));
+        .is_empty());
+    assert!(transaction
+        .query_request(bounded_batch_query(
+            SOURCE_REFERENCE_ENTITIES_QUERY,
+            &parameters
+        ))
+        .unwrap()
+        .rows
+        .is_empty());
+    assert_eq!(transaction.commit().unwrap().rows.len(), 2);
+    assert_eq!(epoch, 5);
+    assert_eq!(db.commit_epoch().unwrap(), epoch + 1);
+    assert!(db
+        .query_request(bounded_batch_query(
+            SOURCE_REFERENCE_ENTITIES_QUERY,
+            &parameters
+        ))
+        .unwrap()
+        .rows
+        .is_empty());
     let kept = db
-        .query("MATCH (:Entity)-[r:RELATES_TO]->(:Entity) WHERE r.source_reference = 'source_2' RETURN count(r) AS total")
+        .query_request(bounded_batch_query(
+            SOURCE_REFERENCE_ENTITIES_QUERY,
+            &reference_parameters("source_2").unwrap(),
+        ))
         .unwrap();
-    assert_eq!(kept.rows[0].get("total"), Some(&Value::Int(1)));
+    assert_eq!(kept.rows.len(), 1);
+    assert_eq!(
+        kept.rows[0]["source_entity_id"],
+        Value::String("entity_1".into())
+    );
+    assert_eq!(
+        kept.rows[0]["target_entity_id"],
+        Value::String("entity_4".into())
+    );
     let nodes = db
-        .query("MATCH (e:Entity) RETURN count(e) AS total")
+        .query_request(bounded_batch_query(
+            "MATCH (e:Entity) RETURN count(e) AS total",
+            &BTreeMap::new(),
+        ))
         .unwrap();
-    assert_eq!(nodes.rows[0].get("total"), Some(&Value::Int(4)));
+    assert_eq!(nodes.rows[0]["total"], Value::Int(4));
 }
 
 #[test]
@@ -211,25 +241,19 @@ fn source_reference_relationship_cleanup_rejects_empty_reference_before_wal() {
     let path = unique_test_dir("source_reference_cleanup_empty_before_wal");
     {
         let mut db = Database::open(&path).unwrap();
-        db.query("CREATE (:Entity {id: 'entity_1'})-[:RELATES_TO {source_reference: 'source_1'}]->(:Entity {id: 'entity_2'})")
-            .unwrap();
+        db.query("CREATE (:Entity {id: 'entity_1'})-[:RELATES_TO {source_reference: 'source_1'}]->(:Entity {id: 'entity_2'})").unwrap();
     }
     let wal_before = read_test_wal(&path).unwrap();
     {
-        let mut db = Database::open(&path).unwrap();
-        let epoch_before = db.runtime.get().unwrap().store.commit_epoch();
-        let error = db
-            .delete_knowledge_source_reference_relationships(
-                &KnowledgeSourceReferenceRelationshipCleanupRequest {
-                    source_reference: " ".to_string(),
-                },
-            )
-            .unwrap_err();
-        assert!(error.to_string().contains("non-empty source_reference"));
-        assert_eq!(db.runtime.get().unwrap().store.commit_epoch(), epoch_before);
+        let db = Database::open(&path).unwrap();
+        let epoch = db.commit_epoch().unwrap();
+        for reference in ["", " ", "\t\n"] {
+            let error = reference_parameters(reference).unwrap_err();
+            assert!(error.to_string().contains("non-empty source_reference"));
+        }
+        assert_eq!(db.commit_epoch().unwrap(), epoch);
     }
-    let wal_after = read_test_wal(&path).unwrap();
-    assert_eq!(wal_after, wal_before);
+    assert_eq!(read_test_wal(&path).unwrap(), wal_before);
     std::fs::remove_dir_all(path).unwrap();
 }
 
@@ -238,53 +262,54 @@ fn typed_source_reference_relationship_cleanup_persists_as_one_wal_batch_and_rep
     let path = unique_test_dir("typed_source_reference_cleanup_wal_replay");
     {
         let mut db = Database::open(&path).unwrap();
-        db.query("CREATE (:Entity {id: 'entity_1'})-[:RELATES_TO {source_reference: 'source_1'}]->(:Entity {id: 'entity_2'})")
-            .unwrap();
+        db.query("CREATE (:Entity {id: 'entity_1'})-[:RELATES_TO {source_reference: 'source_1'}]->(:Entity {id: 'entity_2'})").unwrap();
         db.query("CREATE (:Entity {id: 'entity_3'})").unwrap();
-        db.create_knowledge_relationship(&KnowledgeRelationshipCreateRequest {
-            source: KnowledgeEntityRequest {
-                label: "Entity".to_string(),
-                external_id: "entity_1".to_string(),
-            },
-            target: KnowledgeEntityRequest {
-                label: "Entity".to_string(),
-                external_id: "entity_3".to_string(),
-            },
-            relationship_type: "RELATES_TO".to_string(),
-            properties: BTreeMap::from([(
-                "source_reference".to_string(),
-                Value::String("source_1".to_string()),
-            )]),
-        })
-        .unwrap();
+        let mut parameters = reference_parameters("source_1").unwrap();
+        parameters.insert("source".into(), Value::String("entity_1".into()));
+        parameters.insert("target".into(), Value::String("entity_3".into()));
+        db.query_request(bounded_batch_query(SOURCE_REFERENCE_CREATE, &parameters))
+            .unwrap();
     }
-    let setup_wal = read_test_wal(&path).unwrap();
-    let setup_batch_count = setup_wal.matches("\tbatch\t").count();
+    let before = read_test_wal(&path).unwrap().matches("\tbatch\t").count();
     {
         let mut db = Database::open(&path).unwrap();
-        let output = db
-            .delete_knowledge_source_reference_relationships(
-                &KnowledgeSourceReferenceRelationshipCleanupRequest {
-                    source_reference: "source_1".to_string(),
-                },
-            )
+        let parameters = reference_parameters("source_1").unwrap();
+        let mut transaction = db.begin_transaction().unwrap();
+        assert_eq!(
+            transaction
+                .query_request(bounded_batch_query(
+                    SOURCE_REFERENCE_ENTITIES_QUERY,
+                    &parameters
+                ))
+                .unwrap()
+                .rows
+                .len(),
+            2
+        );
+        transaction
+            .query_request(bounded_batch_query(SOURCE_REFERENCE_DELETE, &parameters))
             .unwrap();
-        assert_eq!(output.candidate_count, 2);
-        assert_eq!(output.deleted_relationship_count, 2);
+        assert_eq!(transaction.commit().unwrap().rows.len(), 2);
     }
     let wal = read_test_wal(&path).unwrap();
     assert!(wal.contains("delete_rel"));
-    assert_eq!(wal.matches("\tbatch\t").count(), setup_batch_count + 1);
+    assert_eq!(wal.matches("\tbatch\t").count(), before + 1);
     {
         let mut db = Database::open(&path).unwrap();
         let relationships = db
-            .query("MATCH (:Entity)-[r:RELATES_TO]->(:Entity) RETURN count(r) AS total")
+            .query_request(bounded_batch_query(
+                "MATCH (:Entity)-[r:RELATES_TO]->(:Entity) RETURN count(r) AS total",
+                &BTreeMap::new(),
+            ))
             .unwrap();
-        assert_eq!(relationships.rows[0].get("total"), Some(&Value::Int(0)));
+        assert_eq!(relationships.rows[0]["total"], Value::Int(0));
         let nodes = db
-            .query("MATCH (e:Entity) RETURN count(e) AS total")
+            .query_request(bounded_batch_query(
+                "MATCH (e:Entity) RETURN count(e) AS total",
+                &BTreeMap::new(),
+            ))
             .unwrap();
-        assert_eq!(nodes.rows[0].get("total"), Some(&Value::Int(3)));
+        assert_eq!(nodes.rows[0]["total"], Value::Int(3));
     }
     std::fs::remove_dir_all(path).unwrap();
 }

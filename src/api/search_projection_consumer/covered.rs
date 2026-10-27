@@ -1,5 +1,5 @@
 // Copyright 2026 Nowledge
-// Licensed under the Apache License, Version 2.0.
+// SPDX-License-Identifier: Apache-2.0
 
 //! Complete-E coverage handed directly to the registered publication protocol.
 
@@ -170,6 +170,11 @@ impl ProjectionConsumerCoverageSession<'_> {
     pub fn source_epoch(&self) -> u64 {
         self.session.source_epoch()
     }
+    /// Cumulative native source work, including filtered records and descriptor
+    /// decisions. This is independent of mapped output and publication counts.
+    pub fn feed_usage(&self) -> crate::ProjectionFeedUsage {
+        self.session.feed_usage()
+    }
     pub fn advance(
         &mut self,
         feed: ProjectionFeedLimits,
@@ -280,7 +285,12 @@ impl Database {
             self.begin_prepared_projection_feed(config.after_epoch, config.reads, config.feed)?;
         source.record_source_scope(&scope)?;
         config.build.source_graph_commit_epoch = Some(source.source_epoch());
-        let permit = self.consumer_publication_permit()?;
+        // Source mappings materialize query results as well as build state.
+        // Preserve the separate result admission instead of treating the
+        // publication-only zero result reservation as unlimited query output.
+        let permit = self.consumer_publication_permit_with_results(
+            config.reads.statement_payload_bytes.get() as u64,
+        )?;
         let pin = consumer.pin(&permit)?;
         let task = config.task.clone();
         let stage = consumer.projection().prepare_source_coherent_update(

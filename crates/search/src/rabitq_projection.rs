@@ -127,8 +127,91 @@ struct RaBitQDocumentIdMap {
 }
 
 impl RaBitQCandidateProjection {
+    /// Conservative peak for all retained segments, ID maps and the one
+    /// serialized build workspace. Includes vector growth and manifest copies;
+    /// overflow or an invalid configuration refuses admission before allocation.
+    pub(crate) fn in_memory_capacity_bound(
+        documents: &impl crate::resident_documents::DocumentView,
+        identity: ProjectionIdentity,
+        options: RaBitQCandidateProjectionBuildOptions,
+    ) -> usize {
+        let mut count = 0usize;
+        let mut ids = 0usize;
+        let mut dimension = 0;
+        for document in documents.values() {
+            if let Some(embedding) = &document.embedding {
+                count = count.saturating_add(1);
+                dimension = dimension.max(embedding.len());
+                ids = ids.saturating_add(document.id.len().saturating_mul(2));
+            }
+        }
+        if count == 0 {
+            return 0;
+        }
+        let identity_bytes = identity
+            .embedding_model
+            .as_ref()
+            .map_or(0, String::capacity)
+            .saturating_add(
+                identity
+                    .embedding_version
+                    .as_ref()
+                    .map_or(0, String::capacity),
+            );
+        let Ok(admission) = build_config(dimension, identity, options).resource_admission() else {
+            return usize::MAX;
+        };
+        let segments = count.div_ceil(admission.admitted_segment_rows);
+        ids.saturating_add(identity_bytes.saturating_mul(2))
+            .saturating_add(documents.len().saturating_mul(
+                crate::build_memory::MAP_ENTRY_BYTES + std::mem::size_of::<String>(),
+            ))
+            .saturating_add(
+                segments.saturating_add(1).saturating_mul(
+                    admission
+                        .peak_working_bytes
+                        .saturating_add(4096)
+                        .saturating_mul(2),
+                ),
+            )
+    }
+
+    pub(crate) fn retained_capacity_bytes(&self) -> usize {
+        let storage = match &self.storage {
+            RaBitQCandidateProjectionStorage::InMemory(value) => value.retained_capacity_bytes(),
+            RaBitQCandidateProjectionStorage::File(value) => value.retained_capacity_bytes(),
+        };
+        let strings = self
+            .ordinal_to_document_id
+            .iter()
+            .chain(self.document_to_ordinal.keys());
+        strings
+            .fold(
+                storage.saturating_add(std::mem::size_of::<Self>()),
+                |bytes, id| bytes.saturating_add(id.capacity()),
+            )
+            .saturating_add(
+                self.ordinal_to_document_id
+                    .capacity()
+                    .saturating_mul(std::mem::size_of::<String>()),
+            )
+            .saturating_add(
+                self.document_to_ordinal
+                    .len()
+                    .saturating_mul(crate::build_memory::MAP_ENTRY_BYTES),
+            )
+    }
+
     pub fn build_from_documents(
         documents: &BTreeMap<String, SearchDocument>,
+        identity: ProjectionIdentity,
+        options: RaBitQCandidateProjectionBuildOptions,
+    ) -> Result<Option<Self>> {
+        Self::build_from_view(documents, identity, options)
+    }
+
+    pub(crate) fn build_from_view(
+        documents: &impl crate::resident_documents::DocumentView,
         identity: ProjectionIdentity,
         options: RaBitQCandidateProjectionBuildOptions,
     ) -> Result<Option<Self>> {
@@ -143,7 +226,9 @@ impl RaBitQCandidateProjection {
         let config = build_config(dimension, identity, options);
         let mut builder = ProjectionBuilder::new(config).map_err(projection_error)?;
         for (ordinal, document_id) in ordinal_to_document_id.iter().enumerate() {
-            let embedding = documents[document_id]
+            let embedding = documents
+                .get(document_id)
+                .expect("mapped document exists")
                 .embedding
                 .as_deref()
                 .expect("mapped RaBitQ document has an embedding");
@@ -167,6 +252,15 @@ impl RaBitQCandidateProjection {
         identity: ProjectionIdentity,
         options: RaBitQCandidateProjectionBuildOptions,
     ) -> Result<Option<Self>> {
+        Self::write_from_view(artifact_path, documents, identity, options)
+    }
+
+    pub(crate) fn write_from_view(
+        artifact_path: impl AsRef<Path>,
+        documents: &impl crate::resident_documents::DocumentView,
+        identity: ProjectionIdentity,
+        options: RaBitQCandidateProjectionBuildOptions,
+    ) -> Result<Option<Self>> {
         let Some(RaBitQDocumentIdMap {
             dimension,
             ordinal_to_document_id,
@@ -179,7 +273,9 @@ impl RaBitQCandidateProjection {
         let mut writer =
             ProjectionWriter::create(artifact_path, config).map_err(projection_error)?;
         for (ordinal, document_id) in ordinal_to_document_id.iter().enumerate() {
-            let embedding = documents[document_id]
+            let embedding = documents
+                .get(document_id)
+                .expect("mapped document exists")
                 .embedding
                 .as_deref()
                 .expect("mapped RaBitQ document has an embedding");
@@ -208,7 +304,7 @@ impl RaBitQCandidateProjection {
 
     pub(crate) fn load_from_path_classified(
         artifact_path: impl AsRef<Path>,
-        documents: &BTreeMap<String, SearchDocument>,
+        documents: &impl crate::resident_documents::DocumentView,
         expected_identity: &ProjectionIdentity,
     ) -> std::result::Result<Self, RaBitQCandidateProjectionLoadError> {
         let projection = FileProjection::open(artifact_path).map_err(classify_load_error)?;
@@ -218,7 +314,7 @@ impl RaBitQCandidateProjection {
     pub(crate) fn load_from_file_classified(
         file: File,
         identity_path: &Path,
-        documents: &BTreeMap<String, SearchDocument>,
+        documents: &impl crate::resident_documents::DocumentView,
         expected_identity: &ProjectionIdentity,
     ) -> std::result::Result<Self, RaBitQCandidateProjectionLoadError> {
         let projection =
@@ -228,7 +324,7 @@ impl RaBitQCandidateProjection {
 
     fn load_projection_classified(
         projection: FileProjection,
-        documents: &BTreeMap<String, SearchDocument>,
+        documents: &impl crate::resident_documents::DocumentView,
         expected_identity: &ProjectionIdentity,
     ) -> std::result::Result<Self, RaBitQCandidateProjectionLoadError> {
         let Some(RaBitQDocumentIdMap {
@@ -276,7 +372,9 @@ impl RaBitQCandidateProjection {
                 |(ordinal, document_id)| {
                     (
                         ordinal as u64,
-                        documents[document_id]
+                        documents
+                            .get(document_id)
+                            .expect("mapped document exists")
                             .embedding
                             .as_deref()
                             .expect("mapped RaBitQ document has an embedding"),
@@ -452,14 +550,14 @@ impl RaBitQCandidateProjection {
 }
 
 fn validate_and_map_documents(
-    documents: &BTreeMap<String, SearchDocument>,
+    documents: &impl crate::resident_documents::DocumentView,
 ) -> Result<Option<RaBitQDocumentIdMap>> {
     let mut dimension = None;
     let mut ordinal_to_document_id = Vec::new();
     let mut document_to_ordinal = BTreeMap::new();
     // Match the out-of-core generation writer: ascending document IDs, with
     // vectorless documents omitted. Ordinals belong only to this generation.
-    for (document_id, document) in documents {
+    for (document_id, document) in documents.iter() {
         if document_id != &document.id {
             return Err(HawDBError::Storage(format!(
                 "HawDB RaBitQ projection document key {document_id:?} does not match id {:?}",

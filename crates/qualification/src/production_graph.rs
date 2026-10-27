@@ -1108,8 +1108,9 @@ mod tests {
             "unexpected blockers: {:?}",
             report.blocker_codes
         );
-        assert_eq!(report.runtime.admissions_delta, 4);
-        assert_eq!(report.runtime.completions_delta, 4);
+        // Preparation and execution each own an admission for all four runs.
+        assert_eq!(report.runtime.admissions_delta, 8);
+        assert_eq!(report.runtime.completions_delta, 8);
         assert_eq!(report.execution.measurement_runs, 3);
         assert_eq!(report.resource_runs.len(), 3);
         assert_eq!(

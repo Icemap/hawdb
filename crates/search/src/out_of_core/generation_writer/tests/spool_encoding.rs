@@ -54,7 +54,7 @@ fn public_generation_spools_without_record_materialization_and_reopens() {
     assert!(largest_read > 0);
     assert!(largest_read <= 8192, "unbounded spool read: {largest_read}");
     assert_eq!(report.documents_digest, digest.finish());
-    let expected_documents = documents
+    let expected_documents: std::collections::BTreeMap<_, _> = documents
         .iter()
         .map(|document| (document.id.clone(), document.clone()))
         .collect();
@@ -90,10 +90,10 @@ fn spool_write_and_deferred_flush_failures_preserve_the_active_generation() {
             SearchOutOfCoreGenerationWriter::create(&root, Default::default()).unwrap();
         // A real read-only file produces a portable I/O failure, either during
         // append or later when the accepted buffered frame is flushed by finish.
-        writer.spool = Some(BufWriter::with_capacity(
+        writer.spool = Some(io_phase::Spool::new(BufWriter::with_capacity(
             if deferred { 16 * 1024 } else { 1 },
             File::open(&writer.spool_path).unwrap(),
-        ));
+        )));
         let result = writer.push(document(1));
         if deferred {
             result.unwrap();

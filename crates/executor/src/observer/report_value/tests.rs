@@ -94,6 +94,7 @@ fn pipeline_fixture(data: &mut Data, case: usize) -> (PipelineMemoryReport, Valu
         peak_batch_rows: data.size(),
         peak_batch_payload_bytes: data.size(),
         borrowed_node_projection_rows: data.size(),
+        native_projection_rows: data.size(),
         columnar_batches: data.size(),
         columnar_input_rows: data.size(),
         columnar_selected_rows: data.size(),
@@ -148,6 +149,10 @@ fn pipeline_fixture(data: &mut Data, case: usize) -> (PipelineMemoryReport, Valu
         (
             "borrowed_node_projection_rows",
             number(report.borrowed_node_projection_rows as u128),
+        ),
+        (
+            "native_projection_rows",
+            number(report.native_projection_rows as u128),
         ),
         ("columnar_batches", number(report.columnar_batches as u128)),
         (

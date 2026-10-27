@@ -168,6 +168,44 @@ pub enum BinaryWalRecordDecode<E = WalEntry> {
     Corrupt(String),
 }
 
+/// Immutable operation bytes prepared without a live WAL position. The
+/// sequencer binds only LSN/epoch; framing, admission and sync remain there.
+#[derive(Debug)]
+pub(crate) struct PreparedWalBatch {
+    bytes: Vec<u8>,
+    operation_count: usize,
+}
+
+impl PreparedWalBatch {
+    pub(crate) fn prepare(ops: &[WalOp]) -> Result<Self> {
+        validate_wal_op_values(ops)?;
+        let count = u32::try_from(ops.len())
+            .map_err(|_| HawDBError::Storage("WAL operation count overflows u32".into()))?;
+        let mut bytes = Vec::with_capacity(64);
+        bytes.extend_from_slice(&0u64.to_le_bytes());
+        bytes.push(RECORD_KIND_BATCH);
+        bytes.extend_from_slice(&0u64.to_le_bytes());
+        bytes.extend_from_slice(&count.to_le_bytes());
+        for op in ops {
+            encode_op_frame(op, &mut bytes)?;
+        }
+        Ok(Self {
+            bytes,
+            operation_count: ops.len(),
+        })
+    }
+
+    pub(crate) fn operation_count(&self) -> usize {
+        self.operation_count
+    }
+
+    pub(crate) fn bind(mut self, lsn: u64, commit_epoch: u64) -> Vec<u8> {
+        self.bytes[..8].copy_from_slice(&lsn.to_le_bytes());
+        self.bytes[9..17].copy_from_slice(&commit_epoch.to_le_bytes());
+        self.bytes
+    }
+}
+
 pub fn encode_binary_wal_record(entry: &WalEntry, commit_epoch: u64) -> Result<Vec<u8>> {
     validate_wal_op_values(std::slice::from_ref(&entry.op))?;
     let mut out = Vec::with_capacity(64);
@@ -1150,6 +1188,29 @@ mod tests {
             pin(op);
         }
         samples
+    }
+
+    #[test]
+    fn prepared_batch_binds_identical_bytes_for_every_operation_and_final_position() {
+        let ops = sample_ops()
+            .into_iter()
+            .filter(|op| !matches!(op, WalOp::Batch(_)))
+            .collect::<Vec<_>>();
+        for len in [0, 1, ops.len()] {
+            for (lsn, epoch) in [(1, 2), (u64::MAX, u64::MAX)] {
+                let prepared = PreparedWalBatch::prepare(&ops[..len]).unwrap();
+                assert_eq!(prepared.operation_count(), len);
+                let ordinary = encode_binary_wal_record(
+                    &WalEntry {
+                        lsn,
+                        op: WalOp::Batch(ops[..len].to_vec()),
+                    },
+                    epoch,
+                )
+                .unwrap();
+                assert_eq!(prepared.bind(lsn, epoch), ordinary);
+            }
+        }
     }
 
     #[test]

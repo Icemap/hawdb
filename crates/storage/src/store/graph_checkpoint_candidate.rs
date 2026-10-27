@@ -1004,7 +1004,13 @@ impl CheckpointCandidate {
                 if actual_bytes != self.candidate_wal_bytes {
                     replay_checkpoint(work)?;
                     self.wal_sync_pending = true;
-                    output.set_len(self.candidate_wal_bytes)?;
+                    // Append-only Windows handles cannot truncate. Reuse the
+                    // original-object rollback path and its descriptor accounting.
+                    let header = encode_binary_wal_header(
+                        durable.wal_generation,
+                        durable.wal_replay_start_lsn,
+                    );
+                    output.rollback_wal_append(self.candidate_wal_bytes, &header)?;
                 }
                 self.wal_write_attempt_end = None;
             }

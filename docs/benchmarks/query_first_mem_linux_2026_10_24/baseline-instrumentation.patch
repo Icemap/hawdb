@@ -1,0 +1,752 @@
+--- a/src/api/publication.rs
++++ b/src/api/publication.rs
+@@ -1,9 +1,20 @@
+ //! Shared ownership of a canonical database and its host-owned projections.
++
++#[cfg(any(test, feature = "qualification"))]
++mod metrics;
++#[cfg(feature = "qualification")]
++pub use metrics::PublicationLockDurationSnapshot;
++#[cfg(any(test, feature = "qualification"))]
++pub use metrics::PublicationLockMetricsSnapshot;
++#[cfg(any(test, feature = "qualification"))]
++use metrics::{LockTiming, PublicationLockMetrics};
++#[cfg(any(test, feature = "qualification"))]
++use std::time::Instant;
+ 
+ use super::{Database, DatabaseReadTransaction};
+ use crate::{HawDBError, Result};
+ use std::ops::{Deref, DerefMut};
+-use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
++use std::sync::{PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard, TryLockError};
+ 
+ /// State whose graph mutations and projection publications share one owner.
+ /// The canonical database must remain the same instance throughout a validated
+@@ -27,12 +38,16 @@
+ #[derive(Debug)]
+ pub struct DatabasePublicationOwner<S> {
+     state: RwLock<S>,
++    #[cfg(any(test, feature = "qualification"))]
++    metrics: PublicationLockMetrics,
+ }
+ 
+ impl<S> DatabasePublicationOwner<S> {
+     pub fn new(state: S) -> Self {
+         Self {
+             state: RwLock::new(state),
++            #[cfg(any(test, feature = "qualification"))]
++            metrics: PublicationLockMetrics::default(),
+         }
+     }
+ 
+@@ -46,19 +61,62 @@
+         operation(&mut state)
+     }
+ 
+-    pub(crate) fn read(&self) -> Result<RwLockReadGuard<'_, S>> {
+-        self.state.read().map_err(|_| poisoned())
++    /// Qualification-only observations of this owner, without acquiring its lock.
++    #[cfg(any(test, feature = "qualification"))]
++    pub fn lock_metrics(&self) -> PublicationLockMetricsSnapshot {
++        self.metrics.snapshot()
++    }
++
++    pub(crate) fn read(&self) -> Result<DatabasePublicationReadGuard<'_, S>> {
++        #[cfg(any(test, feature = "qualification"))]
++        let started = Instant::now();
++        let state = self.state.read().map_err(|_| poisoned())?;
++        Ok(DatabasePublicationReadGuard {
++            state,
++            #[cfg(any(test, feature = "qualification"))]
++            timing: LockTiming::acquired(&self.metrics.read, started),
++        })
+     }
+ 
+     pub(crate) fn write(&self) -> Result<DatabasePublicationWriteGuard<'_, S>> {
++        #[cfg(any(test, feature = "qualification"))]
++        let started = Instant::now();
++        let state = self.state.write().map_err(|_| poisoned())?;
+         Ok(DatabasePublicationWriteGuard {
+-            state: self.state.write().map_err(|_| poisoned())?,
++            state,
++            #[cfg(any(test, feature = "qualification"))]
++            timing: Some(LockTiming::acquired(&self.metrics.write, started)),
+         })
+     }
+ 
+-    #[cfg(test)]
+-    pub(crate) fn try_write(&self) -> std::sync::TryLockResult<RwLockWriteGuard<'_, S>> {
+-        self.state.try_write()
++    pub(crate) fn try_write(
++        &self,
++    ) -> std::sync::TryLockResult<DatabasePublicationWriteGuard<'_, S>> {
++        #[cfg(any(test, feature = "qualification"))]
++        let started = Instant::now();
++        match self.state.try_write() {
++            Ok(state) => Ok(DatabasePublicationWriteGuard {
++                state,
++                #[cfg(any(test, feature = "qualification"))]
++                timing: Some(LockTiming::acquired(&self.metrics.write, started)),
++            }),
++            Err(TryLockError::WouldBlock) => {
++                #[cfg(any(test, feature = "qualification"))]
++                self.metrics.busy_try_write();
++                Err(TryLockError::WouldBlock)
++            }
++            Err(TryLockError::Poisoned(error)) => Err(TryLockError::Poisoned(PoisonError::new(
++                DatabasePublicationWriteGuard {
++                    state: error.into_inner(),
++                    #[cfg(any(test, feature = "qualification"))]
++                    timing: None,
++                },
++            ))),
++        }
++    }
++
++    pub(crate) fn is_poisoned(&self) -> bool {
++        self.state.is_poisoned()
+     }
+ }
+ 
+@@ -74,8 +132,41 @@
+     }
+ }
+ 
++// Fields drop in declaration order: unlock before recording histogram samples.
++pub(crate) struct DatabasePublicationReadGuard<'a, S> {
++    state: RwLockReadGuard<'a, S>,
++    #[cfg(any(test, feature = "qualification"))]
++    timing: LockTiming<'a>,
++}
++
++impl<S> Deref for DatabasePublicationReadGuard<'_, S> {
++    type Target = S;
++
++    fn deref(&self) -> &S {
++        &self.state
++    }
++}
++
++#[cfg(any(test, feature = "qualification"))]
++impl<S> Drop for DatabasePublicationReadGuard<'_, S> {
++    fn drop(&mut self) {
++        self.timing.stop();
++    }
++}
++
+ pub(crate) struct DatabasePublicationWriteGuard<'a, S> {
+     state: RwLockWriteGuard<'a, S>,
++    #[cfg(any(test, feature = "qualification"))]
++    timing: Option<LockTiming<'a>>,
++}
++
++#[cfg(any(test, feature = "qualification"))]
++impl<S> Drop for DatabasePublicationWriteGuard<'_, S> {
++    fn drop(&mut self) {
++        if let Some(timing) = &mut self.timing {
++            timing.stop();
++        }
++    }
+ }
+ 
+ impl<S: DatabasePublicationState> DatabasePublicationWriteGuard<'_, S> {
+@@ -121,6 +212,52 @@
+         fn database(&self) -> &Database {
+             &self.graph
+         }
++    }
++
++    #[test]
++    fn lock_metrics_count_completed_guards_and_exclude_busy_attempts() {
++        let owner = DatabasePublicationOwner::new(0);
++        let read = owner.read().unwrap();
++        assert_eq!(
++            owner.lock_metrics().read_hold.buckets.iter().sum::<u64>(),
++            0
++        );
++        assert!(matches!(owner.try_write(), Err(TryLockError::WouldBlock)));
++        drop(read);
++        let write = owner.try_write().unwrap();
++        assert_eq!(
++            owner.lock_metrics().write_hold.buckets.iter().sum::<u64>(),
++            0
++        );
++        drop(write);
++        let metrics = owner.lock_metrics();
++        for duration in [
++            metrics.read_wait,
++            metrics.read_hold,
++            metrics.write_wait,
++            metrics.write_hold,
++        ] {
++            assert_eq!(duration.buckets.iter().sum::<u64>(), 1);
++            assert!(duration.total_nanos >= duration.max_nanos);
++        }
++        assert_eq!(metrics.busy_try_writes, 1);
++    }
++
++    #[test]
++    fn lock_metrics_record_unwind_but_not_poisoned_acquisition() {
++        let owner = DatabasePublicationOwner::new(0);
++        let failed = std::panic::catch_unwind(|| {
++            let _write = owner.write().unwrap();
++            panic!("qualification unwind");
++        });
++        assert!(failed.is_err());
++        assert!(owner.read().is_err());
++        assert!(owner.write().is_err());
++        assert!(matches!(owner.try_write(), Err(TryLockError::Poisoned(_))));
++        let metrics = owner.lock_metrics();
++        assert_eq!(metrics.read_hold.buckets.iter().sum::<u64>(), 0);
++        assert_eq!(metrics.write_hold.buckets.iter().sum::<u64>(), 1);
++        assert_eq!(metrics.busy_try_writes, 0);
+     }
+ 
+     fn owner() -> Arc<DatabasePublicationOwner<State>> {
+--- a/src/api/publication/metrics.rs
++++ b/src/api/publication/metrics.rs
+@@ -0,0 +1,158 @@
++//! Fixed-memory qualification counters for the actual publication owner lock.
++
++use serde::Serialize;
++use std::sync::atomic::{AtomicU64, Ordering};
++use std::time::Instant;
++
++const BUCKETS: usize = 64;
++
++/// Logarithmic nanosecond histogram. Bucket zero includes 0 and 1 ns; buckets
++/// 1..62 have inclusive upper bound 2^index; the final bucket ends at u64::MAX.
++/// Concurrent snapshots are observations, not atomic cross-field snapshots.
++#[derive(Debug, Clone, Serialize)]
++pub struct PublicationLockDurationSnapshot {
++    pub buckets: Vec<u64>,
++    pub total_nanos: u64,
++    pub max_nanos: u64,
++}
++
++/// Successful acquisitions completed since owner creation, including unwinds.
++/// Wait ends just after lock acquisition. Hold ends immediately before unlock;
++/// histogram updates happen after unlock and are excluded from both intervals.
++/// Failed and poisoned acquisitions do not contribute duration samples.
++#[derive(Debug, Clone, Serialize)]
++pub struct PublicationLockMetricsSnapshot {
++    pub read_wait: PublicationLockDurationSnapshot,
++    pub read_hold: PublicationLockDurationSnapshot,
++    pub write_wait: PublicationLockDurationSnapshot,
++    pub write_hold: PublicationLockDurationSnapshot,
++    pub busy_try_writes: u64,
++}
++
++#[derive(Debug)]
++struct Histogram {
++    buckets: [AtomicU64; BUCKETS],
++    total_nanos: AtomicU64,
++    max_nanos: AtomicU64,
++}
++
++impl Default for Histogram {
++    fn default() -> Self {
++        Self {
++            buckets: std::array::from_fn(|_| AtomicU64::new(0)),
++            total_nanos: AtomicU64::new(0),
++            max_nanos: AtomicU64::new(0),
++        }
++    }
++}
++
++fn saturating_add(counter: &AtomicU64, value: u64) {
++    let _ = counter.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |old| {
++        Some(old.saturating_add(value))
++    });
++}
++
++impl Histogram {
++    fn record(&self, nanos: u64) {
++        let bucket = (u64::BITS - nanos.saturating_sub(1).leading_zeros()) as usize;
++        saturating_add(&self.buckets[bucket.min(BUCKETS - 1)], 1);
++        saturating_add(&self.total_nanos, nanos);
++        self.max_nanos.fetch_max(nanos, Ordering::Relaxed);
++    }
++
++    fn snapshot(&self) -> PublicationLockDurationSnapshot {
++        PublicationLockDurationSnapshot {
++            buckets: self
++                .buckets
++                .iter()
++                .map(|v| v.load(Ordering::Relaxed))
++                .collect(),
++            total_nanos: self.total_nanos.load(Ordering::Relaxed),
++            max_nanos: self.max_nanos.load(Ordering::Relaxed),
++        }
++    }
++}
++
++#[derive(Debug, Default)]
++pub(super) struct LockMetrics {
++    wait: Histogram,
++    hold: Histogram,
++}
++
++#[derive(Debug, Default)]
++pub(super) struct PublicationLockMetrics {
++    pub(super) read: LockMetrics,
++    pub(super) write: LockMetrics,
++    busy_try_writes: AtomicU64,
++}
++
++impl PublicationLockMetrics {
++    pub(super) fn busy_try_write(&self) {
++        saturating_add(&self.busy_try_writes, 1);
++    }
++
++    pub(super) fn snapshot(&self) -> PublicationLockMetricsSnapshot {
++        PublicationLockMetricsSnapshot {
++            read_wait: self.read.wait.snapshot(),
++            read_hold: self.read.hold.snapshot(),
++            write_wait: self.write.wait.snapshot(),
++            write_hold: self.write.hold.snapshot(),
++            busy_try_writes: self.busy_try_writes.load(Ordering::Relaxed),
++        }
++    }
++}
++
++pub(super) struct LockTiming<'a> {
++    metrics: &'a LockMetrics,
++    acquired: Instant,
++    waited_nanos: u64,
++    held_nanos: Option<u64>,
++}
++
++impl<'a> LockTiming<'a> {
++    pub(super) fn acquired(metrics: &'a LockMetrics, started: Instant) -> Self {
++        let acquired = Instant::now();
++        Self {
++            metrics,
++            acquired,
++            waited_nanos: acquired
++                .duration_since(started)
++                .as_nanos()
++                .min(u64::MAX as u128) as u64,
++            held_nanos: None,
++        }
++    }
++
++    pub(super) fn stop(&mut self) {
++        self.held_nanos = Some(self.acquired.elapsed().as_nanos().min(u64::MAX as u128) as u64);
++    }
++}
++
++impl Drop for LockTiming<'_> {
++    fn drop(&mut self) {
++        if let Some(held) = self.held_nanos {
++            self.metrics.wait.record(self.waited_nanos);
++            self.metrics.hold.record(held);
++        }
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn histogram_bounds_and_saturation_preserve_samples() {
++        let histogram = Histogram::default();
++        for nanos in [0, 1, 2, 3, 4, 5, 1 << 62, 1 << 63, u64::MAX] {
++            histogram.record(nanos);
++        }
++        let snapshot = histogram.snapshot();
++        assert_eq!(snapshot.buckets.iter().sum::<u64>(), 9);
++        assert_eq!(&snapshot.buckets[..4], &[2, 1, 2, 1]);
++        assert_eq!(snapshot.buckets[62], 1);
++        assert_eq!(snapshot.buckets[63], 2);
++        assert_eq!(snapshot.total_nanos, u64::MAX);
++        assert_eq!(snapshot.max_nanos, u64::MAX);
++    }
++}
+--- a/benches/mem_query_concurrency.rs
++++ b/benches/mem_query_concurrency.rs
+@@ -0,0 +1,319 @@
++// Copyright 2026 Nowledge
++// SPDX-License-Identifier: Apache-2.0
++
++//! Manual ordinary Mem adapter qualification. Use identical job files and build
++//! profiles on both revisions. Qualification instrumentation changes timings;
++//! compare uninstrumented latency separately from allocator/owner observations.
++
++#[cfg(feature = "qualification")]
++#[path = "../bindings/benchmarks/native_alloc.rs"]
++mod native_profile;
++
++use hawdb::{
++    DatabaseConfig, NowledgeMemEmbeddedStoreHandle, NowledgeMemGraphMode, NowledgeMemOpenOptions,
++    NowledgeMemReadOptions, StorageResidencyMode, Value,
++};
++use serde::{Deserialize, Serialize};
++use serde_json::{json, Value as JsonValue};
++use std::collections::BTreeMap;
++use std::path::PathBuf;
++use std::sync::atomic::{AtomicUsize, Ordering};
++use std::sync::Barrier;
++use std::time::Instant;
++
++type Store = NowledgeMemEmbeddedStoreHandle;
++const WRITE: &str =
++    "MATCH (n:Boundary {id: $id}) SET n.value = n.value + 1 RETURN n.value AS value";
++const POINT: &str = "MATCH (n:Boundary {id: $id}) RETURN n.value AS value LIMIT 1";
++const SCAN: &str = "MATCH (n:Boundary) RETURN n.value AS value LIMIT $limit";
++const PAYLOAD_BYTES: usize = 4 * 1024 * 1024;
++
++#[derive(Clone, Copy, Deserialize, Serialize)]
++#[serde(rename_all = "snake_case")]
++enum ReadKind {
++    Point,
++    Stream,
++    Report,
++}
++
++#[derive(Deserialize, Serialize)]
++#[serde(deny_unknown_fields)]
++struct Job {
++    path: PathBuf,
++    writers: usize,
++    readers: usize,
++    writer_iterations: usize,
++    reader_iterations: usize,
++    rows: usize,
++    read_kind: ReadKind,
++    out_of_core: bool,
++}
++
++#[derive(Serialize)]
++struct Sample {
++    started_ns: u64,
++    elapsed_ns: u64,
++    acknowledged_writes: usize,
++}
++
++#[derive(Default, Serialize)]
++struct Worker {
++    writer: bool,
++    index: usize,
++    samples: Vec<Sample>,
++    errors: BTreeMap<String, usize>,
++    successful: usize,
++    checksum: u64,
++    reported_plan_cache_hits: usize,
++    reported_plan_cache_misses: usize,
++}
++
++fn nanos(elapsed: std::time::Duration) -> u64 {
++    elapsed.as_nanos().min(u64::MAX as u128) as u64
++}
++
++fn integer(value: &Value) -> u64 {
++    let Value::Int(value) = value else {
++        panic!("expected integer fixture value")
++    };
++    (*value).try_into().expect("nonnegative fixture value")
++}
++
++fn parameters(id: usize) -> BTreeMap<String, Value> {
++    BTreeMap::from([("id".into(), Value::Int(id.try_into().unwrap()))])
++}
++
++fn read(store: &Store, job: &Job, id: usize) -> hawdb::Result<u64> {
++    let options = NowledgeMemReadOptions {
++        max_rows: Some(job.rows),
++        max_estimated_payload_bytes: Some(PAYLOAD_BYTES),
++    };
++    match job.read_kind {
++        ReadKind::Point => {
++            let output = store.read_query_with_params(POINT, &parameters(id), &options)?;
++            assert_eq!(output.output.rows.len(), 1);
++            Ok(integer(&output.output.rows[0]["value"]))
++        }
++        ReadKind::Report => {
++            let output = store.query_with_params_with_report(POINT, &parameters(id))?;
++            assert_eq!(output.output.rows.len(), 1);
++            Ok(integer(&output.output.rows[0]["value"]))
++        }
++        ReadKind::Stream => {
++            let mut sum = 0u64;
++            let mut rows = 0;
++            store.read_query_with_params_streaming(
++                SCAN,
++                &BTreeMap::from([("limit".into(), Value::Int(job.rows.try_into().unwrap()))]),
++                &options,
++                |row| {
++                    rows += 1;
++                    sum += integer(&row["value"]);
++                    Ok(())
++                },
++            )?;
++            assert_eq!(rows, job.rows);
++            Ok(sum)
++        }
++    }
++}
++
++fn worker(
++    store: &Store,
++    job: &Job,
++    index: usize,
++    ready: &Barrier,
++    go: &Barrier,
++    origin: Instant,
++    committed: &AtomicUsize,
++) -> Worker {
++    let writer = index < job.writers;
++    let iterations = if writer {
++        job.writer_iterations
++    } else {
++        job.reader_iterations
++    };
++    let mut result = Worker {
++        writer,
++        index,
++        samples: Vec::with_capacity(iterations),
++        ..Worker::default()
++    };
++    let params = parameters(index);
++    ready.wait();
++    go.wait();
++    for iteration in 0..iterations {
++        let started = Instant::now();
++        let output = if writer {
++            store
++                .query_with_params_with_report(WRITE, &params)
++                .map(|output| {
++                    assert_eq!(output.output.rows.len(), 1);
++                    result.reported_plan_cache_hits += usize::from(output.report.plan_cache_hit);
++                    result.reported_plan_cache_misses += usize::from(output.report.plan_cache_miss);
++                    committed.fetch_add(1, Ordering::Relaxed);
++                    integer(&output.output.rows[0]["value"])
++                })
++        } else {
++            read(store, job, iteration % job.writers)
++        };
++        let elapsed_ns = nanos(started.elapsed());
++        result.samples.push(Sample {
++            started_ns: nanos(started.duration_since(origin)),
++            elapsed_ns,
++            acknowledged_writes: committed.load(Ordering::Relaxed),
++        });
++        match output {
++            Ok(value) => {
++                result.successful += 1;
++                result.checksum = result.checksum.wrapping_add(value);
++            }
++            Err(error) => *result.errors.entry(error.to_string()).or_default() += 1,
++        }
++    }
++    result
++}
++
++fn latency(workers: &[Worker], writer: bool) -> JsonValue {
++    let mut samples: Vec<_> = workers
++        .iter()
++        .filter(|w| w.writer == writer)
++        .flat_map(|w| w.samples.iter().map(|s| s.elapsed_ns))
++        .collect();
++    samples.sort_unstable();
++    let percentile = |percent: usize| samples[(samples.len() * percent).div_ceil(100) - 1];
++    json!({"calls": samples.len(), "p50_ns": percentile(50), "p95_ns": percentile(95),
++        "p99_ns": percentile(99), "max_ns": samples.last(),
++        "includes_failed_calls": true})
++}
++
++fn main() {
++    let job_path = std::env::args()
++        .nth(1)
++        .expect("usage: mem_query_concurrency job.json");
++    let job: Job = serde_json::from_slice(&std::fs::read(job_path).unwrap()).unwrap();
++    assert!((1..=64).contains(&job.writers) && (1..=64).contains(&job.readers));
++    assert!((job.writers..=4096).contains(&job.rows));
++    assert!((1..=1_000_000).contains(&job.writer_iterations));
++    assert!((1..=1_000_000).contains(&job.reader_iterations));
++    // Refuse an existing path; this local tool never overwrites another database.
++    std::fs::create_dir(&job.path).expect("new fixture directory");
++    let config = DatabaseConfig {
++        storage_residency_mode: if job.out_of_core {
++            StorageResidencyMode::OutOfCore
++        } else {
++            StorageResidencyMode::Materialized
++        },
++        max_read_result_rows: Some(job.rows),
++        max_read_result_payload_bytes: Some(PAYLOAD_BYTES),
++        ..DatabaseConfig::default()
++    };
++    let options = NowledgeMemOpenOptions::graph_only(
++        job.path.join("graph"),
++        NowledgeMemGraphMode::WritableCutover,
++    )
++    .with_database_config(config);
++    let (store, _) = Store::open_with_options(options.clone()).unwrap();
++    store
++        .query_with_report("CREATE CONSTRAINT ON :Boundary(id) ASSERT UNIQUE")
++        .unwrap();
++    for id in 0..job.rows {
++        store
++            .query_with_params_with_report(
++                "CREATE (:Boundary {id: $id, value: 0})",
++                &parameters(id),
++            )
++            .unwrap();
++    }
++    store.checkpoint().unwrap();
++    drop(store);
++    let (store, _) = Store::open_with_options(options.clone()).unwrap();
++    let residency_before = store.storage_residency_report().unwrap();
++    assert_eq!(residency_before.out_of_core, job.out_of_core);
++    for id in 0..job.writers {
++        store
++            .query_with_params_with_report(WRITE, &parameters(id))
++            .unwrap();
++        read(&store, &job, id).unwrap();
++    }
++    let resources = store.runtime_governor_snapshot().unwrap();
++    let ready = Barrier::new(job.writers + job.readers + 1);
++    let go = Barrier::new(job.writers + job.readers + 1);
++    let committed = AtomicUsize::new(0);
++    let origin = Instant::now();
++    let (workers, elapsed_ns, instrumentation) = std::thread::scope(|scope| {
++        let threads: Vec<_> = (0..job.writers + job.readers)
++            .map(|index| {
++                let (store, job, ready, go, committed) = (&store, &job, &ready, &go, &committed);
++                scope.spawn(move || worker(store, job, index, ready, go, origin, committed))
++            })
++            .collect();
++        ready.wait();
++        #[cfg(feature = "qualification")]
++        let locks_before = store.publication_lock_metrics();
++        #[cfg(feature = "qualification")]
++        let allocations_before = native_profile::snapshot();
++        let started = Instant::now();
++        go.wait();
++        let workers: Vec<_> = threads.into_iter().map(|t| t.join().unwrap()).collect();
++        let elapsed_ns = nanos(started.elapsed());
++        #[cfg(feature = "qualification")]
++        let allocations_after = native_profile::snapshot();
++        #[cfg(feature = "qualification")]
++        let instrumentation = json!({
++            "lock_before": locks_before, "lock_after": store.publication_lock_metrics(),
++            "allocation_calls": allocations_after.allocation_calls - allocations_before.allocation_calls,
++            "allocated_bytes": allocations_after.allocated_bytes - allocations_before.allocated_bytes,
++            "deallocation_calls": allocations_after.deallocation_calls - allocations_before.deallocation_calls,
++            "deallocated_bytes": allocations_after.deallocated_bytes - allocations_before.deallocated_bytes,
++            "reallocation_calls": allocations_after.reallocation_calls - allocations_before.reallocation_calls,
++            "live_requested_bytes_before": allocations_before.live_requested_bytes,
++            "live_requested_bytes_after": allocations_after.live_requested_bytes,
++            "process_peak_requested_bytes": allocations_after.process_peak_requested_bytes,
++        });
++        #[cfg(not(feature = "qualification"))]
++        let instrumentation = JsonValue::Null;
++        (workers, elapsed_ns, instrumentation)
++    });
++    let after = store.runtime_governor_snapshot().unwrap();
++    let residency_after = store.storage_residency_report().unwrap();
++    let successful_writes: usize = workers
++        .iter()
++        .filter(|w| w.writer)
++        .map(|w| w.successful)
++        .sum();
++    assert_eq!(committed.load(Ordering::Relaxed), successful_writes);
++    let errors: usize = workers.iter().flat_map(|w| w.errors.values()).sum();
++    drop(store);
++    let (reopened, _) = Store::open_with_options(options).unwrap();
++    for worker in workers.iter().filter(|w| w.writer) {
++        let actual = reopened
++            .query_with_params_with_report(POINT, &parameters(worker.index))
++            .unwrap();
++        assert_eq!(
++            integer(&actual.output.rows[0]["value"]),
++            1 + worker.successful as u64
++        );
++    }
++    println!(
++        "{}",
++        json!({
++            "protocol": "hawdb-mem-query-concurrency-v1", "job": job,
++            "profile": "repository bench", "instrumented": cfg!(feature = "qualification"),
++            "durability": "SyncOnEveryWrite (facade default)", "elapsed_ns": elapsed_ns,
++            "writes": latency(&workers, true), "reads": latency(&workers, false),
++            "successful_writes": successful_writes, "errors": errors, "durable_reopen": true,
++            "cpu": {"host_parallelism": resources.resources.cpu.host_parallelism,
++                "cgroup_quota_parallelism": resources.resources.cpu.cgroup_quota_parallelism,
++                "cpuset_parallelism": resources.resources.cpu.cpuset_parallelism,
++                "effective_parallelism": resources.resources.cpu.effective_parallelism},
++            "runtime_before": format!("{resources:?}"), "runtime_after": format!("{after:?}"),
++            "residency_before": format!("{residency_before:?}"),
++            "residency_after": format!("{residency_after:?}"),
++            "instrumentation": instrumentation, "workers": workers,
++        })
++    );
++    if errors != 0 {
++        std::process::exit(1);
++    }
++}
+--- a/src/nowledge_mem.rs
++++ b/src/nowledge_mem.rs
+@@ -152,7 +152,7 @@
+ use std::mem::size_of;
+ use std::path::{Path, PathBuf};
+ use std::sync::atomic::{AtomicBool, Ordering};
+-use std::sync::{Arc, Mutex, MutexGuard, RwLockReadGuard};
++use std::sync::{Arc, Mutex, MutexGuard};
+ use std::time::Instant;
+ 
+ #[cfg(test)]
+@@ -2828,6 +2828,11 @@
+         Ok((Self::new(store)?, report))
+     }
+ 
++    #[cfg(feature = "qualification")]
++    pub fn publication_lock_metrics(&self) -> crate::PublicationLockMetricsSnapshot {
++        self.inner.lock_metrics()
++    }
++
+     pub fn runtime_governor_snapshot(&self) -> Result<RuntimeGovernorSnapshot> {
+         Ok(self.read_store()?.runtime_governor_snapshot())
+     }
+@@ -4039,7 +4044,7 @@
+         store.graph.try_admit_runtime(request)
+     }
+ 
+-    fn read_store(&self) -> Result<RwLockReadGuard<'_, NowledgeMemEmbeddedStore>> {
++    fn read_store(&self) -> Result<crate::api::publication::DatabasePublicationReadGuard<'_, NowledgeMemEmbeddedStore>> {
+         self.inner.read().map_err(|_| {
+             HawDBError::Execution("nowledge mem embedded store read lock poisoned".to_string())
+         })
+--- a/src/api/mod.rs
++++ b/src/api/mod.rs
+@@ -130,6 +130,8 @@
+ mod observability;
+ mod plan_cache;
+ pub(crate) mod publication;
++#[cfg(feature = "qualification")]
++pub use publication::{PublicationLockDurationSnapshot, PublicationLockMetricsSnapshot};
+ pub use publication::{DatabasePublicationOwner, DatabasePublicationState};
+ mod query_request;
+ mod query_runtime;
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -85,6 +85,8 @@
+     PageRankOptions, PageRankProcedureOptions, PageRankScore, ProjectedGraph, ProjectionLayout,
+     ProjectionMemoryAdmissionError, ProjectionMemoryBudget, ProjectionMemoryEstimate,
+ };
++#[cfg(feature = "qualification")]
++pub use api::{PublicationLockDurationSnapshot, PublicationLockMetricsSnapshot};
+ pub use api::{
+     hawdb_lightning_initial_import_advance_checkpoint,
+     hawdb_lightning_initial_import_advance_durable_state_streaming,
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -324,3 +324,7 @@
+ [[bench]]
+ name = "composite_ordered_seek"
+ harness = false
++
++[[bench]]
++name = "mem_query_concurrency"
++harness = false

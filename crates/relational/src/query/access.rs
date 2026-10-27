@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod range;
+
 pub(super) use crate::physical_plan::predicate_is_covered_by_access;
 pub(super) use hawdb_optimizer::relational_sargability::collect_conjunctive_join_equalities;
 use hawdb_optimizer::relational_sargability::{
-    canonical_keyset_values, collect_conjunctive_equalities, predicate_is_covered_by_equalities,
+    canonical_keyset_values_with_range, collect_conjunctive_equalities,
+    predicate_is_covered_by_equalities, predicate_is_covered_by_range,
 };
 
 use super::{
@@ -135,6 +138,7 @@ pub(super) fn choose_base_access(
             equality_prefix_len: 0,
             order_prefix_len: 0,
             exclusive_range: false,
+            range: None,
             reverse_order: false,
             unique_point: false,
             covering: false,
@@ -156,6 +160,7 @@ pub(super) fn choose_base_access(
                     equality_prefix_len: schema.primary_key.len(),
                     order_prefix_len: 0,
                     exclusive_range: false,
+                    range: None,
                     reverse_order: false,
                     unique_point: true,
                     covering: false,
@@ -261,20 +266,43 @@ pub(super) fn index_access_candidate(
         .iter()
         .map_while(|column| bound.get(column).cloned())
         .collect::<Vec<_>>();
-    if prefix.is_empty() {
-        return Ok(None);
-    }
     let prefix_len = prefix.len();
-    if !index_prefix_covers_matches(schema, columns, prefix_len, unique) {
+    let key = RelationalKey(prefix);
+    let bounds = range::bind_range(planning, columns, &key)?;
+    if prefix_len == 0 && bounds.is_none() {
         return Ok(None);
     }
-    let (mut order_prefix_len, mut direction) =
-        index_order_prefix(order_by, columns, prefix_len, schema, table, qualifier);
-    let key = RelationalKey(prefix);
+    if !index_prefix_covers_matches(
+        schema,
+        columns,
+        prefix_len + usize::from(bounds.is_some()),
+        unique,
+    ) {
+        return Ok(None);
+    }
+    let range_column = bounds.as_ref().map(|_| columns[prefix_len].as_str());
+    let (mut order_prefix_len, mut direction) = index_order_prefix(
+        order_by,
+        columns,
+        prefix_len,
+        schema,
+        table,
+        qualifier,
+        range_column,
+    );
     let access_columns = columns[..prefix_len]
         .iter()
         .cloned()
         .collect::<BTreeSet<_>>();
+    let range_covered = range_column.is_some_and(|column| {
+        predicate_is_covered_by_range(
+            planning.predicate,
+            &access_columns,
+            column,
+            table,
+            qualifier,
+        )
+    });
     let equality_covered =
         predicate_is_covered_by_equalities(planning.predicate, &access_columns, table, qualifier);
     let exclusive_bound = if equality_covered {
@@ -282,15 +310,49 @@ pub(super) fn index_access_candidate(
     } else if order_prefix_len == order_by.len()
         && prefix_len.saturating_add(order_by.len()) == columns.len()
     {
-        bind_canonical_keyset_bound(planning, &key, &access_columns)?
+        bind_canonical_keyset_bound(planning, &key, &access_columns, range_column)?
     } else {
         None
     };
-    if !equality_covered && exclusive_bound.is_none() {
+    if !equality_covered && !range_covered && exclusive_bound.is_none() {
         order_prefix_len = 0;
         direction = RelationalIndexScanDirection::Forward;
     }
-    let estimated_rows =
+    let scan = RelationalIndexRangeScan {
+        prefix: key.clone(),
+        bounds: bounds.clone().map(Box::new),
+        exclusive_bound: exclusive_bound.clone(),
+        direction,
+    };
+    let estimated_rows = if bounds.is_some() {
+        // Never count an entire interval during preparation of a bounded page.
+        // Small resident ranges have an exact count; larger or detached ranges
+        // use a cost estimate, not a scan or a claim of exact cardinality.
+        let probe_limit = (*cardinality_limit).min(64);
+        let observed = if state.materialized_index_postings_resident() {
+            state
+                .index_range_cardinality_at_most(table, &name, &scan, probe_limit)
+                .ok_or_else(|| {
+                    HawDBError::Execution(format!(
+                        "relational index {name} on table {table} is not materialized"
+                    ))
+                })?
+        } else {
+            probe_limit
+        };
+        if observed < probe_limit {
+            observed
+        } else {
+            planning
+                .index_read_mode
+                .probe_statistics(table, &name, prefix_len)
+                .map(|s| usize::try_from(s.average_fanout()).unwrap_or(usize::MAX))
+                .unwrap_or_else(|| state.row_count(table))
+                .div_ceil(3)
+                .max(observed)
+                .min(*cardinality_limit)
+        }
+    } else {
         match state.index_prefix_cardinality_at_most(table, &name, &key, *cardinality_limit) {
             Some(rows) => rows,
             None if !state.materialized_index_postings_resident() => {
@@ -330,7 +392,9 @@ pub(super) fn index_access_candidate(
                 )));
             }
         }
-        .max(1);
+    };
+    let estimated_rows = estimated_rows.max(1);
+
     Ok(Some(RelationalAccessCandidate {
         descriptor: RelationalAccessPathDescriptor {
             kind: RelationalAccessPathKind::Index,
@@ -340,20 +404,21 @@ pub(super) fn index_access_candidate(
             equality_prefix_len: prefix_len,
             order_prefix_len,
             exclusive_range: exclusive_bound.is_some(),
+            range: bounds
+                .as_ref()
+                .map(|bounds| hawdb_optimizer::RelationalRangeAccess {
+                    column: columns[prefix_len].clone(),
+                    lower_inclusive: bounds.lower.as_ref().map(|b| b.inclusive),
+                    upper_inclusive: bounds.upper.as_ref().map(|b| b.inclusive),
+                    empty: bounds.empty,
+                }),
             reverse_order: direction == RelationalIndexScanDirection::Backward,
             unique_point: unique && prefix_len == columns.len(),
             covering: false,
             requires_row_fetch: true,
             estimated_rows,
         },
-        access: RelationalBaseAccess::Index {
-            name,
-            scan: RelationalIndexRangeScan {
-                prefix: key,
-                exclusive_bound,
-                direction,
-            },
-        },
+        access: RelationalBaseAccess::Index { name, scan },
     }))
 }
 
@@ -364,6 +429,7 @@ pub(super) fn index_order_prefix(
     schema: &RelationalTableSchema,
     table: &str,
     qualifier: &str,
+    non_null_range: Option<&str>,
 ) -> (usize, RelationalIndexScanDirection) {
     if order_by.is_empty()
         || equality_prefix_len.saturating_add(order_by.len()) > index_columns.len()
@@ -391,6 +457,7 @@ pub(super) fn index_order_prefix(
             return (0, RelationalIndexScanDirection::Forward);
         };
         if schema.columns[position].nullable
+            && non_null_range != Some(column.name.as_str())
             && (direction == RelationalIndexScanDirection::Backward
                 || !matches!(item.nulls, SqlNullOrder::First))
         {
@@ -407,6 +474,7 @@ pub(super) fn bind_canonical_keyset_bound(
     >,
     prefix: &RelationalKey,
     access_columns: &BTreeSet<String>,
+    range_column: Option<&str>,
 ) -> Result<Option<RelationalKey>> {
     let RelationalBaseAccessPlanning {
         predicate,
@@ -417,9 +485,14 @@ pub(super) fn bind_canonical_keyset_bound(
         parameters,
         ..
     } = planning;
-    let Some((first, second)) =
-        canonical_keyset_values(*predicate, access_columns, order_by, table, qualifier)
-    else {
+    let Some((first, second)) = canonical_keyset_values_with_range(
+        *predicate,
+        access_columns,
+        order_by,
+        table,
+        qualifier,
+        range_column,
+    ) else {
         return Ok(None);
     };
     let mut bound = prefix.0.clone();
@@ -431,7 +504,8 @@ pub(super) fn bind_canonical_keyset_bound(
             bind_sql_value(value, parameters)?,
             schema.columns[position].scalar_type,
         )?;
-        if schema.columns[position].nullable
+        if (schema.columns[position].nullable
+            && range_column != Some(item.expression.require_column()?.name.as_str()))
             || matches!(value, RelationalValue::Null)
             || value.scalar_type() != Some(schema.columns[position].scalar_type)
         {
@@ -471,6 +545,7 @@ pub(super) fn choose_join_access(
             equality_prefix_len: 0,
             order_prefix_len: 0,
             exclusive_range: false,
+            range: None,
             reverse_order: false,
             unique_point: false,
             covering: false,
@@ -491,6 +566,7 @@ pub(super) fn choose_join_access(
                     equality_prefix_len: schema.primary_key.len(),
                     order_prefix_len: 0,
                     exclusive_range: false,
+                    range: None,
                     reverse_order: false,
                     unique_point: true,
                     covering: false,
@@ -615,6 +691,7 @@ pub(super) fn join_index_access_candidate(
             equality_prefix_len,
             order_prefix_len: 0,
             exclusive_range: false,
+            range: None,
             reverse_order: false,
             unique_point,
             covering: false,

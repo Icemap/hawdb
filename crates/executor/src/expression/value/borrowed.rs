@@ -29,6 +29,21 @@ impl<'a> ProjectedValue<'a> {
         }
     }
 
+    /// Numeric projection eligibility permits borrowed payloads and inline
+    /// scalars only. No computed allocation can cross this lending boundary.
+    pub(crate) fn into_source_ref(self) -> hawdb_core::ValueRef<'a> {
+        use hawdb_core::ValueRef;
+        match self.value {
+            Cow::Borrowed(value) => value.as_ref(),
+            Cow::Owned(Value::Null) => ValueRef::Null,
+            Cow::Owned(Value::Bool(value)) => ValueRef::Bool(value),
+            Cow::Owned(Value::Int(value)) => ValueRef::Int(value),
+            Cow::Owned(Value::Float(value)) => ValueRef::Float(value),
+            Cow::Owned(Value::Uuid(value)) => ValueRef::Uuid(value),
+            Cow::Owned(_) => unreachable!("native numeric projections never allocate payloads"),
+        }
+    }
+
     /// The caller must admit the complete owned output row before this copy.
     pub(crate) fn into_owned(self) -> Value {
         self.value.into_owned()

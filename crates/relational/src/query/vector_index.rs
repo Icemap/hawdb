@@ -307,6 +307,7 @@ pub fn execute_vector_index_select<R: RelationalRowStoreReader>(
         })?;
     let _schema_memory = account.reserve(schema_bytes)?;
     let mut schema = RelationalTableSchema {
+        materialized_view: None,
         name: input.table.to_owned(),
         columns: canonical_schema
             .columns

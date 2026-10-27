@@ -13,64 +13,91 @@
 // limitations under the License.
 
 use super::*;
+use crate::QueryRequest;
+
+fn bounded_query(query: &str) -> QueryRequest<'_> {
+    QueryRequest::new(query).with_output_limits(QueryStreamOptions {
+        max_rows: Some(4),
+        max_payload_bytes: Some(4096),
+    })
+}
 
 #[test]
-fn deletes_communities_for_nowledge_replace_cleanup() {
+fn deletes_communities_through_query_without_affecting_other_labels() {
     let mut db = Database::new();
     db.query("CREATE (:Community {id: 'community_1', name: 'One'})")
         .unwrap();
     db.query("CREATE (:Community {id: 'community_2', name: 'Two'})")
         .unwrap();
     db.query("CREATE (:Entity {id: 'entity_1'})").unwrap();
-
+    let candidates = db
+        .query_request(bounded_query(
+            "MATCH (c:Community) RETURN c.id AS id ORDER BY c.id",
+        ))
+        .unwrap();
+    assert_eq!(candidates.rows.len(), 2);
+    assert_eq!(
+        candidates.rows[0]["id"],
+        Value::String("community_1".into())
+    );
+    assert_eq!(
+        candidates.rows[1]["id"],
+        Value::String("community_2".into())
+    );
+    assert_eq!(db.commit_epoch().unwrap(), 3);
     let output = db
-        .delete_knowledge_communities(&KnowledgeCommunityCleanupRequest { detach: false })
+        .query_request(bounded_query("MATCH (c:Community) DELETE c"))
         .unwrap();
-
-    assert_eq!(output.graph_commit_epoch_before, 3);
-    assert_eq!(output.graph_commit_epoch_after, 4);
-    assert_eq!(output.candidate_count, 2);
-    assert_eq!(output.deleted_count, 2);
     assert_eq!(output.rows.len(), 2);
-    assert!(output.rows.iter().all(|row| row.deleted));
-    assert_eq!(output.rows[0].id.as_deref(), Some("community_1"));
-    assert_eq!(output.rows[1].id.as_deref(), Some("community_2"));
-
-    let communities = db
-        .query("MATCH (c:Community) RETURN count(c) AS total")
-        .unwrap();
-    assert_eq!(communities.rows[0].get("total"), Some(&Value::Int(0)));
-    let entities = db
-        .query("MATCH (e:Entity) RETURN count(e) AS total")
-        .unwrap();
-    assert_eq!(entities.rows[0].get("total"), Some(&Value::Int(1)));
+    assert_eq!(db.commit_epoch().unwrap(), 4);
+    assert_eq!(
+        db.query_request(bounded_query(
+            "MATCH (c:Community) RETURN count(c) AS total",
+        ))
+        .unwrap()
+        .rows[0]["total"],
+        Value::Int(0)
+    );
+    assert_eq!(
+        db.query_request(bounded_query("MATCH (e:Entity) RETURN count(e) AS total"))
+            .unwrap()
+            .rows[0]["total"],
+        Value::Int(1)
+    );
 }
 
 #[test]
-fn detach_deletes_communities_for_nowledge_undo_cleanup() {
+fn detach_deletes_communities_and_incident_edges() {
     let mut db = Database::new();
     db.query("CREATE (:Entity {id: 'entity_1'})-[:BELONGS_TO]->(:Community {id: 'community_1'})")
         .unwrap();
     db.query("CREATE (:Community {id: 'community_2'})").unwrap();
-
     let output = db
-        .delete_knowledge_communities(&KnowledgeCommunityCleanupRequest { detach: true })
+        .query_request(bounded_query("MATCH (c:Community) DETACH DELETE c"))
         .unwrap();
-
-    assert_eq!(output.candidate_count, 2);
-    assert_eq!(output.deleted_count, 2);
-    let communities = db
-        .query("MATCH (c:Community) RETURN count(c) AS total")
-        .unwrap();
-    assert_eq!(communities.rows[0].get("total"), Some(&Value::Int(0)));
-    let entities = db
-        .query("MATCH (e:Entity) RETURN count(e) AS total")
-        .unwrap();
-    assert_eq!(entities.rows[0].get("total"), Some(&Value::Int(1)));
-    let relationships = db
-        .query("MATCH (:Entity)-[r:BELONGS_TO]->(:Community) RETURN count(r) AS total")
-        .unwrap();
-    assert_eq!(relationships.rows[0].get("total"), Some(&Value::Int(0)));
+    assert_eq!(output.rows.len(), 2);
+    assert_eq!(
+        db.query_request(bounded_query(
+            "MATCH (c:Community) RETURN count(c) AS total",
+        ))
+        .unwrap()
+        .rows[0]["total"],
+        Value::Int(0)
+    );
+    assert_eq!(
+        db.query_request(bounded_query("MATCH (e:Entity) RETURN count(e) AS total"))
+            .unwrap()
+            .rows[0]["total"],
+        Value::Int(1)
+    );
+    assert_eq!(
+        db.query_request(bounded_query(
+            "MATCH (:Entity)-[r:BELONGS_TO]->(:Community) RETURN count(r) AS total",
+        ))
+        .unwrap()
+        .rows[0]["total"],
+        Value::Int(0)
+    );
 }
 
 #[test]
@@ -80,26 +107,23 @@ fn community_cleanup_without_candidates_does_not_write_wal() {
         let mut db = Database::open(&path).unwrap();
         db.query("CREATE (:Entity {id: 'entity_1'})").unwrap();
     }
-    let wal_before = read_test_wal(&path).unwrap();
+    let wal = read_test_wal(&path).unwrap();
     {
         let mut db = Database::open(&path).unwrap();
-        let graph_commit_epoch_before = db.runtime.get().unwrap().store.commit_epoch();
+        let epoch = db.commit_epoch().unwrap();
         let output = db
-            .delete_knowledge_communities(&KnowledgeCommunityCleanupRequest { detach: true })
+            .query_request(bounded_query("MATCH (c:Community) DETACH DELETE c"))
             .unwrap();
-        assert_eq!(output.graph_commit_epoch_before, graph_commit_epoch_before);
-        assert_eq!(output.graph_commit_epoch_after, graph_commit_epoch_before);
-        assert_eq!(output.candidate_count, 0);
-        assert_eq!(output.deleted_count, 0);
+        assert!(output.rows.is_empty());
+        assert_eq!(db.commit_epoch().unwrap(), epoch);
     }
-    let wal_after = read_test_wal(&path).unwrap();
-    assert_eq!(wal_after, wal_before);
+    assert_eq!(read_test_wal(&path).unwrap(), wal);
     std::fs::remove_dir_all(path).unwrap();
 }
 
 #[test]
-fn typed_community_cleanup_persists_as_one_wal_batch_and_replays() {
-    let path = unique_test_dir("typed_community_cleanup_wal_replay");
+fn community_cleanup_persists_as_one_wal_batch_and_replays() {
+    let path = unique_test_dir("community_cleanup_wal_replay");
     {
         let mut db = Database::open(&path).unwrap();
         db.query(
@@ -108,29 +132,34 @@ fn typed_community_cleanup_persists_as_one_wal_batch_and_replays() {
         .unwrap();
         db.query("CREATE (:Community {id: 'community_2'})").unwrap();
     }
-    let setup_wal = read_test_wal(&path).unwrap();
-    let setup_batch_count = setup_wal.matches("\tbatch\t").count();
+    let batches = read_test_wal(&path).unwrap().matches("\tbatch\t").count();
     {
         let mut db = Database::open(&path).unwrap();
         let output = db
-            .delete_knowledge_communities(&KnowledgeCommunityCleanupRequest { detach: true })
+            .query_request(bounded_query("MATCH (c:Community) DETACH DELETE c"))
             .unwrap();
-        assert_eq!(output.deleted_count, 2);
+        assert_eq!(output.rows.len(), 2);
     }
     let wal = read_test_wal(&path).unwrap();
     assert!(wal.contains("delete_node"));
     assert!(wal.contains("delete_rel"));
-    assert_eq!(wal.matches("\tbatch\t").count(), setup_batch_count + 1);
+    assert_eq!(wal.matches("\tbatch\t").count(), batches + 1);
     {
         let mut db = Database::open(&path).unwrap();
-        let communities = db
-            .query("MATCH (c:Community) RETURN count(c) AS total")
-            .unwrap();
-        assert_eq!(communities.rows[0].get("total"), Some(&Value::Int(0)));
-        let entities = db
-            .query("MATCH (e:Entity) RETURN count(e) AS total")
-            .unwrap();
-        assert_eq!(entities.rows[0].get("total"), Some(&Value::Int(1)));
+        assert_eq!(
+            db.query_request(bounded_query(
+                "MATCH (c:Community) RETURN count(c) AS total",
+            ))
+            .unwrap()
+            .rows[0]["total"],
+            Value::Int(0)
+        );
+        assert_eq!(
+            db.query_request(bounded_query("MATCH (e:Entity) RETURN count(e) AS total"))
+                .unwrap()
+                .rows[0]["total"],
+            Value::Int(1)
+        );
     }
     std::fs::remove_dir_all(path).unwrap();
 }

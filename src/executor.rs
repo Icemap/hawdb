@@ -97,6 +97,7 @@ pub(crate) use hawdb_executor::memory::{
     enforced_result_memory_budget_with_option, estimated_execution_memory,
     estimated_mutation_memory_bytes, max_external_read_parallelism,
 };
+pub(crate) use hawdb_executor::mutation::execute_mutation_with_store_output_limits;
 use hawdb_executor::pipeline::{runtime_checkpoint, BatchControl};
 use hawdb_executor::QueryMemoryLedger;
 #[cfg(test)]
@@ -123,6 +124,7 @@ use vector::*;
 
 pub type Row = hawdb_executor::Row;
 pub type RowRef<'a> = hawdb_executor::RowRef<'a>;
+pub type ProjectedRowRef<'a> = hawdb_executor::ProjectedRowRef<'a>;
 pub type QueryRow = hawdb_executor::QueryRow;
 pub type QueryRowRef<'a> = hawdb_executor::QueryRowRef<'a>;
 pub type QueryRows = hawdb_executor::QueryRows;
@@ -182,20 +184,32 @@ pub fn execute_with_request_consumer<S: ExecutionStore>(
     )
 }
 
-pub(crate) fn execute_with_request_consumer_with_delivery<S: ExecutionStore>(
+pub(crate) enum QueryStreamConsumer<'a> {
+    Owned(&'a mut dyn FnMut(Row) -> Result<()>),
+    Borrowed(&'a mut hawdb_executor::result_delivery::BorrowedRowConsumer<'a>),
+}
+
+pub(crate) fn execute_with_request_stream<S: ExecutionStore>(
     request: ExecutionRequest<'_>,
     resources: ExecutionResources<'_, S>,
     delivery: StreamDelivery,
-    consumer: &mut dyn FnMut(Row) -> Result<()>,
+    consumer: QueryStreamConsumer<'_>,
 ) -> Result<ProfiledQueryStream> {
-    let limits = request.output_limits();
-    let bounded = limits.max_rows.is_some() || limits.max_payload_bytes.is_some();
-    execute_profiled_consumer(
-        request,
-        resources,
-        delivery.consumer_memory_mode(bounded),
-        consumer,
-    )
+    match consumer {
+        QueryStreamConsumer::Owned(consumer) => {
+            let limits = request.output_limits();
+            let bounded = limits.max_rows.is_some() || limits.max_payload_bytes.is_some();
+            execute_profiled_consumer(
+                request,
+                resources,
+                delivery.consumer_memory_mode(bounded),
+                consumer,
+            )
+        }
+        QueryStreamConsumer::Borrowed(consumer) => {
+            execute_profiled_borrowed_consumer(request, resources, delivery, consumer)
+        }
+    }
 }
 
 pub(crate) fn supports_default_morsel_parallelism(plan: &PhysicalPlan, catalog: &Catalog) -> bool {

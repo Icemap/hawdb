@@ -137,7 +137,10 @@ fuzz-help:
 # PostgreSQL SQL compatibility; the DSN stays in the caller's environment.
 PG_REGRESS_ARGS ?=
 
-.PHONY: pg-regress pg-regress-list
+.PHONY: pg-regress pg-regress-list pg-regress-hawdb
+pg-regress-hawdb:
+	cargo test --locked --manifest-path tests/pg-regress/Cargo.toml --no-default-features --test upstream_sql
+
 pg-regress:
 	cargo run --locked --manifest-path tests/pg-regress/Cargo.toml -- $(PG_REGRESS_ARGS)
 

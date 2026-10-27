@@ -19,7 +19,7 @@ use super::{
     typed_row_set_locator, visit_relational_rows, AccountedBindingBatch, BatchControl,
     BindingBatch, BindingBatchSource, BlockingExecutionContext, BlockingOperatorMemoryReport,
     BoundRow, Catalog, ExecutionLimit, ExecutionObserver, ExecutorBinding, ExternalTopN,
-    HawDBError, NonZeroUsize, PlannedJoin, QueryMemoryLedger, QueryRows, RefCell,
+    HawDBError, NonZeroUsize, PlannedJoin, QueryMemoryLedger, QueryRows, QuerySchema, RefCell,
     RelationalBaseAccess, RelationalIndexRuntime, RelationalOrderTarget,
     RelationalPhysicalJoinExecution, RelationalPipelineState, RelationalQueryLimits,
     RelationalRowRuntime, RelationalSortKey, RelationalSortRecord, RelationalState,
@@ -322,6 +322,7 @@ impl BindingBatchSource<()> for ProjectedSortKeyBatchSource<'_> {
 #[allow(clippy::too_many_arguments)]
 pub(super) fn execute_blocking_projection<'a>(
     select: &'a SelectStatement,
+    output_schema: &QuerySchema,
     parameters: &'a [Value],
     state: &'a RelationalState,
     base_schema: &'a RelationalTableSchema,
@@ -362,7 +363,7 @@ pub(super) fn execute_blocking_projection<'a>(
 
     if detection_limit == 0 {
         return Ok(StreamingProjectionOutput {
-            rows: output.into(),
+            rows: QueryRows::try_from_named_rows(output_schema.clone(), output)?,
             blocking_operator_memory_reports: Vec::new(),
         });
     }
@@ -583,7 +584,7 @@ pub(super) fn execute_blocking_projection<'a>(
         observer.record_blocking_memory_report(report);
     }
     Ok(StreamingProjectionOutput {
-        rows: output.into(),
+        rows: QueryRows::try_from_named_rows(output_schema.clone(), output)?,
         blocking_operator_memory_reports: observer.reports.into_inner(),
     })
 }

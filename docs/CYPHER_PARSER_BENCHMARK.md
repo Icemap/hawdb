@@ -10,23 +10,20 @@ Run the production parser benchmark with:
 cargo bench -p hawdb-cypher --bench cypher_parser
 ```
 
-The isolated Yacc experiment compares a generated `lrpar`/`lrlex` parser with
-the production parser for a parameterized exact lookup. It rejects every parse
-repair and verifies AST equality before collecting timing samples.
+The retired single-query Yacc experiment has been removed. It did not cover
+the production grammar or establish a migration decision. Cypher continues to
+use the production parser and weighted benchmark above. A future Cypher parser
+migration still requires:
 
-```bash
-cargo run --release --manifest-path experiments/cypher-yacc/Cargo.toml
-```
-
-The experiment is deliberately outside the workspace so parser-generator build
-dependencies do not affect production builds. Its result does not justify a
-full migration by itself. A migration requires all of the following:
-
-- an equal AST and equal rejection behavior over the production query corpus;
+- equal AST and rejection behavior over the production query corpus;
 - differential fuzz coverage for valid and invalid inputs;
 - no allocation or error-path regression;
 - at least 20 percent parser throughput improvement on the weighted corpus;
 - a measurable end-to-end query CPU or latency improvement.
+
+The owned SQL/PGQ frontend uses a separate [token PEG implementation](SQL_PEG_PARSER.md).
+This is a syntax-maintainability change, not evidence for a Cypher throughput
+improvement or a production relational SQL parser switch.
 
 The asynchronous runtime prepares each query once. It reuses the prepared AST
 and physical plan only while the optimizer schema and statistics epoch match;

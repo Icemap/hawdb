@@ -27,6 +27,7 @@ fn bootstrap_rows(store: &mut GraphStore, catalog: &mut Catalog) {
             RelationalTransaction {
                 writes: vec![
                     RelationalWrite::CreateTable(RelationalTableSchema {
+                        materialized_view: None,
                         name: "documents".into(),
                         columns: vec![RelationalColumnSchema {
                             name: "id".into(),

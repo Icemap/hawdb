@@ -14,9 +14,11 @@
 
 //! Capacity admission and ownership transfer for compact owned query results.
 
-use super::{QueryRowStorage, QueryRowsBuilder, QuerySchema, Row, OWNED_RESULT_SEGMENT_ROWS};
+use super::{
+    QueryRowStorage, QueryRowsBuilder, QuerySchema, Row, RowRef, OWNED_RESULT_SEGMENT_ROWS,
+};
 use crate::{QueryMemoryAccount, QueryMemoryLease};
-use hawdb_core::{HawDBError, Result, Value};
+use hawdb_core::{HawDBError, Result, Value, ValueRef};
 use std::sync::Arc;
 
 impl QueryRowsBuilder {
@@ -31,17 +33,6 @@ impl QueryRowsBuilder {
         account: &QueryMemoryAccount,
         retained: &mut QueryMemoryLease,
     ) -> Result<()> {
-        if let Some(schema) = &self.schema
-            && (row.len() != schema.len() || !row.keys().eq(schema.columns().iter()))
-        {
-            return Err(HawDBError::Execution(
-                "query result row does not match its bound schema".into(),
-            ));
-        }
-        let next_count = self
-            .row_count
-            .checked_add(1)
-            .ok_or_else(result_capacity_overflow)?;
         let heap_bytes = row.values().try_fold(0usize, |total, value| {
             checked_result_add(total, retained_value_heap_bytes(value)?)
         })?;
@@ -58,25 +49,90 @@ impl QueryRowsBuilder {
             )?,
             checked_result_add(heap_bytes, key_bytes)?,
         )?)?;
+        let next_count = self.prepare_budgeted_row(
+            row.keys().map(String::as_str),
+            row.len(),
+            heap_bytes,
+            account,
+            retained,
+        )?;
+        self.values.extend(row.into_values());
+        self.row_count = next_count;
+        drop(transient);
+        Ok(())
+    }
+
+    pub(crate) fn push_budgeted_borrowed_row(
+        &mut self,
+        row: RowRef<'_>,
+        account: &QueryMemoryAccount,
+        retained: &mut QueryMemoryLease,
+    ) -> Result<()> {
+        let heap_bytes = row.iter().try_fold(0usize, |total, (_, value)| {
+            checked_result_add(total, cloned_value_heap_bytes(value)?)
+        })?;
+        let next_count = self.prepare_budgeted_row(
+            row.iter().map(|(name, _)| name),
+            row.len(),
+            heap_bytes,
+            account,
+            retained,
+        )?;
+        // Source buffers stay producer-owned. Only values that outlive this
+        // call are copied, after their complete retained footprint is admitted.
+        self.values
+            .extend(row.iter().map(|(_, value)| value.to_owned_value()));
+        self.row_count = next_count;
+        Ok(())
+    }
+
+    fn prepare_budgeted_row<'row>(
+        &mut self,
+        names: impl Iterator<Item = &'row str> + Clone,
+        width: usize,
+        heap_bytes: usize,
+        account: &QueryMemoryAccount,
+        retained: &mut QueryMemoryLease,
+    ) -> Result<usize> {
+        if let Some(schema) = &self.schema {
+            if width != schema.len()
+                || !names
+                    .clone()
+                    .eq(schema.columns().iter().map(String::as_str))
+            {
+                return Err(HawDBError::Execution(
+                    "query result row does not match its bound schema".into(),
+                ));
+            }
+        } else {
+            // Columnar slot schemas need not have unique names. Reject aliases
+            // that cannot be represented by a result schema without allocating
+            // an unaccounted temporary set.
+            for (index, name) in names.clone().enumerate() {
+                if names.clone().take(index).any(|previous| previous == name) {
+                    return Err(HawDBError::Execution(format!(
+                        "query result schema contains duplicate column {name}"
+                    )));
+                }
+            }
+        }
+        let next_count = self
+            .row_count
+            .checked_add(1)
+            .ok_or_else(result_capacity_overflow)?;
         if self.schema.is_none() {
-            let slots = checked_result_mul(row.len(), std::mem::size_of::<String>())?;
-            let names = row
-                .keys()
+            let slots = checked_result_mul(width, std::mem::size_of::<String>())?;
+            let name_bytes = names
+                .clone()
                 .try_fold(0usize, |total, name| checked_result_add(total, name.len()))?;
-            // The schema Arc header is pre-admitted with the result owner,
-            // including queries that emit no rows.
-            let schema_bytes = checked_result_add(slots, names)?;
+            // The schema Arc header is pre-admitted with the result owner.
             let staging = account.reserve(slots)?;
-            retained.grow(schema_bytes)?;
-            let columns = row.keys().cloned().collect::<Vec<_>>();
-            // BTreeMap already proves uniqueness and deterministic order;
-            // avoid a second temporary tree solely to recheck the schema.
+            retained.grow(checked_result_add(slots, name_bytes)?)?;
             self.schema = Some(QuerySchema {
-                columns: Arc::from(columns),
+                columns: Arc::from(names.map(str::to_owned).collect::<Vec<_>>()),
             });
             drop(staging);
         }
-        let width = row.len();
         let rows_in_segment = self.row_count % OWNED_RESULT_SEGMENT_ROWS;
         let starts_segment = width != 0 && rows_in_segment == 0 && self.row_count != 0;
         let mut next_segment = Vec::new();
@@ -117,10 +173,7 @@ impl QueryRowsBuilder {
                 .expect("budgeted results use segmented storage")
                 .push(std::mem::replace(&mut self.values, next_segment));
         }
-        self.values.extend(row.into_values());
-        self.row_count = next_count;
-        drop(transient);
-        Ok(())
+        Ok(next_count)
     }
 }
 
@@ -167,6 +220,50 @@ fn retained_value_heap_bytes(value: &Value) -> Result<usize> {
         ),
         Value::Null | Value::Bool(_) | Value::Int(_) | Value::Float(_) | Value::Uuid(_) => Ok(0),
     }
+}
+
+/// Footprint of the owned copy, independent of spare capacity in its source.
+/// The pinned Vec/String clone implementations allocate their logical length;
+/// nested maps use the same conservative native-node bound as moved results.
+fn cloned_value_heap_bytes(value: ValueRef<'_>) -> Result<usize> {
+    match value {
+        ValueRef::String(value) => Ok(value.len()),
+        ValueRef::Binary(value) => Ok(value.len()),
+        ValueRef::Vector(value) => Ok(value.encoded().len()),
+        ValueRef::List(values) => values.iter().try_fold(
+            checked_result_mul(values.len(), std::mem::size_of::<Value>())?,
+            |total, value| checked_result_add(total, cloned_value_heap_bytes(value.as_ref())?),
+        ),
+        ValueRef::Map(values) => values.iter().try_fold(
+            retained_map_node_bound(values.len())?,
+            |total, (name, value)| {
+                checked_result_add(
+                    total,
+                    checked_result_add(name.len(), cloned_value_heap_bytes(value.as_ref())?)?,
+                )
+            },
+        ),
+        ValueRef::Null
+        | ValueRef::Bool(_)
+        | ValueRef::Int(_)
+        | ValueRef::Float(_)
+        | ValueRef::Uuid(_) => Ok(0),
+    }
+}
+
+pub(crate) fn cloned_row_memory_bytes(row: RowRef<'_>) -> Result<usize> {
+    row.iter().try_fold(
+        checked_result_add(
+            std::mem::size_of::<Row>(),
+            retained_map_node_bound(row.len())?,
+        )?,
+        |total, (name, value)| {
+            checked_result_add(
+                total,
+                checked_result_add(name.len(), cloned_value_heap_bytes(value)?)?,
+            )
+        },
+    )
 }
 
 fn reserve_result_capacity<T>(
