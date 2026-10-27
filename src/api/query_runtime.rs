@@ -1320,8 +1320,8 @@ mod tests {
             statement_summary_capacity: 8,
             ..DatabaseConfig::default()
         });
-        let original = "RETURN 1 AS value";
-        let current = " return 2 as value; ";
+        let original = "MATCH (n:Memory) RETURN 1 AS value";
+        let current = " match (n:Memory) return 2 as value; ";
         let original_identity = hawdb_query::QueryIdentity::new("cypher", original);
         let current_identity = hawdb_query::QueryIdentity::new("cypher", current);
         assert_eq!(
