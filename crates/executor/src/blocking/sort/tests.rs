@@ -23,7 +23,11 @@ use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 #[test]
 fn inline_integer_sort_matches_general_keys_and_stable_ties() {
     assert!(
-        std::mem::size_of::<SortKeyValues>() <= std::mem::size_of::<Vec<(Value, SortDirection)>>()
+        std::mem::size_of::<RunKeyValues>() <= std::mem::size_of::<Vec<(Value, SortDirection)>>()
+    );
+    assert!(
+        std::mem::size_of::<SortRunRow>()
+            <= std::mem::size_of::<(Vec<(Value, SortDirection)>, u64, Binding)>()
     );
     let budget = NonZeroUsize::new(1 << 20).unwrap();
     let ledger = QueryMemoryLedger::new(budget);
@@ -59,10 +63,11 @@ fn inline_integer_sort_matches_general_keys_and_stable_ties() {
                 let first =
                     SortRunRow::new(&Catalog::default(), &items, 0, left_binding, &keys, None)
                         .unwrap();
-                assert_eq!(first.values.memory_bytes(), expected_bytes);
+                let mode = RunKeyMode::for_row(&first.values.sort_values, &items);
+                assert_eq!(first.values.memory_bytes(mode), expected_bytes);
                 assert_eq!(first.allocation.bytes(), prepared_bytes);
                 assert_eq!(
-                    matches!(first.values.sort_values, SortKeyValues::Integer(..)),
+                    mode.is_inline(&first.values.sort_values),
                     matches!(left, Value::Int(_)),
                 );
                 let second = SortRunRow::new(
@@ -79,10 +84,103 @@ fn inline_integer_sort_matches_general_keys_and_stable_ties() {
                     SortDirection::Desc => left.cmp(right).reverse(),
                 }
                 .then(Ordering::Less);
-                assert_eq!(first.values.cmp_key(&second.values), expected);
-                assert_eq!(second.values.cmp_key(&first.values), expected.reverse());
+                assert_eq!(first.values.cmp_mixed(&second.values, direction), expected);
+                assert_eq!(
+                    second.values.cmp_mixed(&first.values, direction),
+                    expected.reverse()
+                );
                 drop(first);
                 drop(second);
+                assert_eq!(ledger.snapshot().used_bytes, 0);
+            }
+        }
+    }
+}
+
+#[test]
+fn sort_run_modes_preserve_complete_typed_order_and_key_charges() {
+    let cases = [
+        vec![Value::Int(9), Value::Int(-1), Value::Int(9), Value::Int(0)],
+        vec![Value::Null, Value::Null, Value::Null],
+        vec![
+            Value::Float(3.0),
+            Value::Float(f64::NAN),
+            Value::Float(-0.0),
+        ],
+        vec![
+            Value::Int(3),
+            Value::Null,
+            Value::Float(3.0),
+            Value::Int(-2),
+        ],
+        vec![Value::String("z".into()), Value::String("a".into())],
+    ];
+    for direction in [SortDirection::Asc, SortDirection::Desc] {
+        for with_key in [true, false] {
+            let items = if with_key {
+                vec![SortItem {
+                    key: SortKey::Column("value".into()),
+                    direction,
+                }]
+            } else {
+                Vec::new()
+            };
+            for values in &cases {
+                let budget = NonZeroUsize::new(1 << 20).unwrap();
+                let ledger = QueryMemoryLedger::new(budget);
+                let account = ledger.account(QueryMemoryClass::BlockingState, "test", budget);
+                let keys = KeyMemory::new(&account, budget, "test", "expressions", "keys");
+                let mut mode = RunKeyMode::Empty;
+                let mut allocations = Vec::new();
+                let mut rows = Vec::new();
+                for (ordinal, value) in values.iter().enumerate() {
+                    let binding = Binding::scalar("value", value.clone());
+                    let reference = keys
+                        .sort(&items, &Catalog::default(), &binding, None)
+                        .unwrap();
+                    let expected_bytes = binding_memory_bytes(&binding)
+                        + crate::binding::sort_values_memory_bytes(&reference.values);
+                    drop(reference);
+                    let prepared = SortRunRow::new(
+                        &Catalog::default(),
+                        &items,
+                        ordinal as u64,
+                        binding,
+                        &keys,
+                        None,
+                    )
+                    .unwrap();
+                    let row_mode = RunKeyMode::for_row(&prepared.values.sort_values, &items);
+                    assert_eq!(prepared.values.memory_bytes(row_mode), expected_bytes);
+                    mode = mode.include(row_mode);
+                    allocations.push(prepared.allocation);
+                    rows.push(prepared.values);
+                }
+                // Empty-key rows must retain ordinal order as well; their empty
+                // slices are not inline integer keys and carry no tuple charge.
+                rows.reverse();
+                mode.sort(&mut rows);
+                let mut expected: Vec<_> = (0..values.len()).collect();
+                expected.sort_by(|left, right| {
+                    let order = if with_key {
+                        let order = values[*left].cmp(&values[*right]);
+                        match direction {
+                            SortDirection::Asc => order,
+                            SortDirection::Desc => order.reverse(),
+                        }
+                    } else {
+                        Ordering::Equal
+                    };
+                    order.then_with(|| left.cmp(right))
+                });
+                assert_eq!(
+                    rows.iter()
+                        .map(|row| row.ordinal as usize)
+                        .collect::<Vec<_>>(),
+                    expected
+                );
+                drop(rows);
+                drop(allocations);
                 assert_eq!(ledger.snapshot().used_bytes, 0);
             }
         }
@@ -315,6 +413,103 @@ fn spilled_sort_output_does_not_compete_with_merge_heap_account() {
 #[test]
 fn spilled_top_n_output_does_not_compete_with_merge_heap_account() {
     assert_spilled_output_has_its_own_account(true);
+}
+
+#[test]
+fn sort_run_modes_keep_stable_results_across_spill_boundaries() {
+    let cases = [
+        vec![Value::Int(7), Value::Int(-2), Value::Int(7)],
+        vec![Value::Null, Value::Float(-0.0), Value::String("z".into())],
+        vec![
+            Value::Int(7),
+            Value::Null,
+            Value::Float(7.0),
+            Value::Int(-2),
+        ],
+    ];
+    for values in cases {
+        for direction in [SortDirection::Asc, SortDirection::Desc] {
+            for spilling in [false, true] {
+                let directory = Directory::new();
+                let memory = ExecutionMemoryConfig {
+                    blocking_operator_bytes: NonZeroUsize::new(if spilling {
+                        2048
+                    } else {
+                        1 << 20
+                    })
+                    .unwrap(),
+                    query_memory_bytes: NonZeroUsize::new(2 << 20).unwrap(),
+                    batch_payload_bytes: NonZeroUsize::new(2048).unwrap(),
+                    batch_rows: NonZeroUsize::new(4).unwrap(),
+                    min_spill_free_bytes: NonZeroU64::MIN,
+                    spill_directory: directory.0.clone(),
+                    ..ExecutionMemoryConfig::default()
+                };
+                let bindings: Vec<_> = (0..48)
+                    .map(|position| {
+                        Binding::values(BTreeMap::from([
+                            ("value".into(), values[position % values.len()].clone()),
+                            ("position".into(), Value::Int(position as i64)),
+                        ]))
+                    })
+                    .collect();
+                let mut expected = bindings.clone();
+                expected.sort_by(|left, right| {
+                    let order = left.values["value"].cmp(&right.values["value"]);
+                    match direction {
+                        SortDirection::Asc => order,
+                        SortDirection::Desc => order.reverse(),
+                    }
+                });
+                let mut source = Rows(bindings);
+                let ledger = QueryMemoryLedger::new(memory.query_memory_bytes);
+                let catalog = Catalog::default();
+                let items = [SortItem {
+                    key: SortKey::Column("value".into()),
+                    direction,
+                }];
+                let input = PhysicalPlan::SeqNodeScan {
+                    variable: "n".into(),
+                    label: String::new(),
+                };
+                let mut output = Vec::new();
+                stream_sort_batches(
+                    &input,
+                    &items,
+                    &mut source,
+                    BlockingExecutionContext {
+                        catalog: &catalog,
+                        memory: &memory,
+                        memory_ledger: &ledger,
+                        task_context: None,
+                        observer: &NoopExecutionObserver,
+                    },
+                    ExecutionLimit::unlimited(),
+                    &mut |batch| {
+                        output.extend(batch);
+                        Ok(BatchControl::Continue)
+                    },
+                )
+                .unwrap();
+                assert_eq!(output, expected);
+                let snapshot = ledger.snapshot();
+                assert_eq!(snapshot.used_bytes, 0);
+                assert!(snapshot.peak_bytes <= memory.query_memory_bytes.get());
+                assert_eq!(
+                    snapshot.classes.iter().any(|class| {
+                        class.class == QueryMemoryClass::SpillStaging && class.peak_bytes > 0
+                    }),
+                    spilling
+                );
+                assert_eq!(
+                    memory
+                        .spill_pool_snapshot()
+                        .map_or(0, |pool| pool.active_runs),
+                    0
+                );
+            }
+        }
+    }
 }
 
 fn check_in_memory_output_accounting(top_n: bool) {
@@ -807,7 +1002,7 @@ fn legacy_merge_entrypoint_keeps_pipeline_accounting_and_signature() {
                 binding: Binding::scalar("value", Value::Int(value)),
             })
             .collect();
-        runs.push(spill_sort_run(&mut rows, &mut spill, None).unwrap());
+        runs.push(spill_sort_run(&mut rows, RunKeyMode::General, &mut spill, None).unwrap());
     }
     let mut output = Vec::new();
     merge_sort_runs(
@@ -865,11 +1060,11 @@ fn legacy_merge_refusal_preserves_explicit_budget_origin_and_releases_state() {
             binding: Binding::scalar("value", Value::Int(value)),
         })
         .collect();
-    let item_bytes = rows[0].memory_bytes();
+    let item_bytes = rows[0].memory_bytes(RunKeyMode::General);
     let decoded_bytes = binding_memory_bytes(&rows[0].binding);
     let mut runs = Vec::new();
     for row in rows {
-        runs.push(spill_sort_run(&mut vec![row], &mut spill, None).unwrap());
+        runs.push(spill_sort_run(&mut vec![row], RunKeyMode::General, &mut spill, None).unwrap());
     }
     for (budget, should_pass) in [(item_bytes, false), (item_bytes * 2, true)] {
         let mut output = Vec::new();
@@ -971,7 +1166,9 @@ fn spilled_json_sort_keys_use_query_working_memory_during_merge_and_compaction()
                     ordinal: rank as u64,
                     binding,
                 }];
-                runs.push(spill_sort_run(&mut rows, &mut spill, None).unwrap());
+                runs.push(
+                    spill_sort_run(&mut rows, RunKeyMode::General, &mut spill, None).unwrap(),
+                );
             }
             let mut output = Vec::new();
             let result = (|| {

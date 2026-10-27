@@ -6,6 +6,16 @@ operator. The original tuple allowance, row charge, cancellation points, stable
 ordinal ties, typed `Value` ordering and spill format remain the contracts.
 Top-N and computed/multiple-key preparation retain their existing paths.
 
+In-memory runs select integer, general or mixed comparison once per run.
+General comparisons use the original typed slice comparator; integer runs use
+their common direction and stable ordinal ties. Only mixed runs inspect key
+representation during comparison. Run keys keep the original Vec-header width,
+including for general keys; the empty-key case retains its original charge.
+Spill records still contain bindings and ordinals. Heap merges reconstruct the
+original tagged keys and retain their existing comparison and admission rules.
+The homogeneous/mixed run and forced-spill guards cover both directions and
+complete stable output under unchanged resource limits.
+
 The manual `concurrent_writers` control mode calls the embedded Rust API with
 parameterized synthetic writes. It returns all 256 or 4,096 rows ordered by one
 projected column. Cases use integer, float, 256-byte string, NULL and mixed
