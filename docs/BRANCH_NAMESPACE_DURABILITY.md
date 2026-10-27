@@ -31,6 +31,16 @@ self-test directory durable merely because mkdir succeeded. This avoids needing
 write access to unrelated ancestors such as `C:\Users` while retaining barriers
 for every newly required application and project directory.
 
+On Windows, `None` walks through the volume root. Every covered directory must
+permit a write-capable open and a successful flush; ordinary-user write access
+to the project does not imply write access to its ancestors. An access refusal
+never chooses an implicit boundary or weakens the barrier. Hosts using private
+profile storage must explicitly provide their guaranteed durable anchor.
+Directory-synchronization failures identify the operation (`resolve`, `open`,
+`inspect` or `flush`) and exact directory, retain the IO error kind and native
+source, and remain failures. Typed descriptor refusals remain discoverable
+through `hawdb_core::error::file_descriptor_error`.
+
 An immutable store establishes its ancestry on its first publication, rather
 than on read-only open. It remembers only successful object-kind name barriers
 (at most five kinds); each new object's contents and final name still require

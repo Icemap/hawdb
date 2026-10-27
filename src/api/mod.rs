@@ -414,6 +414,9 @@ pub struct DatabaseConfig {
     /// the project through this anchor, inclusive. The host must keep that
     /// namespace stable while the project is open; existence is not proof.
     /// `None` retains the default walk through the existing filesystem mount.
+    /// On Windows this includes the volume root and requires writable directory
+    /// handles at every level. Ordinary user-profile storage should select an
+    /// explicit host-guaranteed anchor; access denial never supplies one.
     /// Concurrent opens of one project must use the same canonical anchor.
     pub namespace_durability_anchor: Option<PathBuf>,
     /// Maximum monotonic age of uncheckpointed data in an admitted persistent
