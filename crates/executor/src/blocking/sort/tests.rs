@@ -727,6 +727,7 @@ struct Case {
     parent_cap: Option<usize>,
     direction: SortDirection,
     output_bytes: usize,
+    blocking_bytes: Option<usize>,
     root_bytes: usize,
     exit: Exit,
 }
@@ -738,6 +739,7 @@ impl Default for Case {
             parent_cap: None,
             direction: SortDirection::Asc,
             output_bytes: 512,
+            blocking_bytes: None,
             root_bytes: 4096,
             exit: Exit::Complete,
         }
@@ -796,7 +798,10 @@ fn run_case(
         .max()
         .unwrap_or(256);
     let memory = ExecutionMemoryConfig {
-        blocking_operator_bytes: NonZeroUsize::new(merge_row_bytes * 2).unwrap(),
+        blocking_operator_bytes: NonZeroUsize::new(
+            case.blocking_bytes.unwrap_or(merge_row_bytes * 2),
+        )
+        .unwrap(),
         batch_payload_bytes: NonZeroUsize::new(case.output_bytes).unwrap(),
         batch_rows: NonZeroUsize::new(4).unwrap(),
         query_memory_bytes: NonZeroUsize::new(case.root_bytes).unwrap(),
@@ -866,6 +871,58 @@ fn run_case(
     assert_eq!(spill.active_runs, 0);
     assert_eq!(spill.active_bytes, 0);
     (result, output, snapshot)
+}
+
+#[test]
+fn in_place_sort_preserves_tie_order_with_and_without_spilling() {
+    let rows = tied_rows(43);
+    for blocking_bytes in [None, Some(16 * 1024)] {
+        for top_n in [None, Some((2, 12))] {
+            for direction in [SortDirection::Asc, SortDirection::Desc] {
+                let case = Case {
+                    blocking_bytes,
+                    top_n,
+                    direction,
+                    output_bytes: 2048,
+                    root_bytes: 32 * 1024,
+                    ..Case::default()
+                };
+                let (result, output, snapshot) = run_case(&rows, case);
+                result.unwrap();
+                assert_eq!(output, expected_rows(&rows, case));
+                let spilled = snapshot.classes.iter().any(|class| {
+                    class.class == QueryMemoryClass::SpillStaging && class.peak_bytes > 0
+                });
+                assert_eq!(spilled, blocking_bytes.is_none());
+            }
+        }
+    }
+}
+
+#[test]
+fn spilled_sort_and_top_n_preserve_wide_rows() {
+    let mut rows = tied_rows(47);
+    for (index, row) in rows.iter_mut().enumerate() {
+        row.values.insert(
+            "payload".to_string(),
+            Value::Binary(vec![index as u8; 16 * 1024]),
+        );
+    }
+    for top_n in [None, Some((2, 12))] {
+        let case = Case {
+            top_n,
+            blocking_bytes: Some(64 * 1024),
+            output_bytes: 64 * 1024,
+            root_bytes: 256 * 1024,
+            ..Case::default()
+        };
+        let (result, output, snapshot) = run_case(&rows, case);
+        result.unwrap();
+        assert_eq!(output, expected_rows(&rows, case));
+        assert!(snapshot.classes.iter().any(|class| {
+            class.class == QueryMemoryClass::SpillStaging && class.peak_bytes > 0
+        }));
+    }
 }
 
 #[test]
@@ -1260,6 +1317,8 @@ fn spilled_json_sort_keys_use_query_working_memory_during_merge_and_compaction()
 #[test]
 #[ignore = "deterministic local sort merge differential campaign"]
 fn sort_merge_account_differential_campaign() {
+    in_place_sort_preserves_tie_order_with_and_without_spilling();
+    spilled_sort_and_top_n_preserve_wide_rows();
     let mut cases = 0;
     for seed in 0..3 {
         let rows = tied_rows(seed);

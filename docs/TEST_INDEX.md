@@ -6,6 +6,17 @@ authoritative; this is a map of test families, not an exhaustive list of every
 Rust test function. Update it when changing a family's scope, build profile,
 execution lane, fixture size, isolation or known failure mode.
 
+The executor `spill::tests` family covers streaming binding encoding with a
+full query-memory account, read/decode admission, exact disk quotas, nesting
+preflight, short writes, I/O errors and scalar/nested/vector round trips.
+`blocking::sort::tests` compares Sort/TopN tie order with and without spilling
+and checks 16-KiB rows through bounded merges. The existing executor unit target
+owns these regressions; replay with `cargo test --locked -p hawdb-executor --lib
+spill::tests` and the `blocking::sort::tests` filter. The existing local-only
+`//crates/executor:hawdb_sort_merge_account_fuzz_tests` campaign also exercises
+the tie-order and wide-row controls. Test lanes, profiles and deadlines stay
+unchanged; allocation microprobes do not establish end-to-end RSS or latency.
+
 The executor `scan::indexed_tests::bounded_index_projection` family covers
 admitted scalar-index projection reads with work budgets, single/multiple keys,
 NodeId-ordered duplicate merging, cross-property union deduplication, missing
@@ -421,7 +432,7 @@ workload does not change default or CI benchmark selection.
 | Sparse composite prefix ranges | `//crates/optimizer-graph:hawdb_optimizer_graph_tests`, `//crates/storage:hawdb_storage_tests` and root `//:hawdb_unit_general_tests` cover [#1183](https://github.com/nowledge-co/hawdb/issues/1183): missing/NULL suffix values, one or multiple leading equalities, strict/inclusive bounds, checkpoint/delta/reopen and retained views. Storage differentials force owned/admitted access independently of planner selection, preserve Stop and admission refusal, and check native index work for complete keys. Unconstrained wider suffixes use a complete fallback; full-key ranges retain their existing path. The contiguous-prefix projection fixture uses a complete `(prefix, range)` key; candidate guards separately reject an unconstrained suffix. Existing profiles and lanes apply; fixtures stay small. Focused Cargo replay: `cargo test --locked -p hawdb-storage sparse_composite`, `cargo test --locked -p hawdb sparse_composite`, or optimizer-graph package filter `composite_range_candidates`. |
 | SQL composite index intervals | Root `//:hawdb_unit_general_tests` (`api::tests::relational_range`), relational unit and storage unit / existing Prow crates lanes. Compare indexed SQL with an unindexed database across open/closed, one-sided, NULL/contradictory bounds, duplicates, aliases, parameters, residuals, uniform ASC/DESC, OFFSET/LIMIT and first-column ranges. Cover nullable unique suffixes, checkpoint/live/pinned/private/recovery views in Shadow/DemandPaged/Authoritative modes. A 5,000-row prefix must deliver a late LIMIT 3 under a four-row index budget with three observed index rows and early Stop. Tiny-page and scalar/encoded-bound differentials cover trailing-key ties and extrema. Replay: `cargo test --locked -p hawdb --lib api::tests::relational_range`, storage filters `encoded_partial_bounds` / `relational_index_shadow_range_seek`, and the relational index-runtime suite. See [contract](specs/POSTGRES_RELATIONAL_CONTENT_STORE_SPEC.md). No new grammar, persisted format, lane or profile. |
 | Executor and query/query-policy | Operator execution, result delivery, cancellation and budget/refusal behavior. Small borrowed-projection units in the existing executor unit / Prow crates lane compare 1–8 simple columns with the general path, preserve duplicate-alias and computed/wide fallback, exact wide-row refusal and workspace refunds, and release preparation before a byte-boundary Stop without repeated evaluation. Replay: `cargo test --locked -p hawdb-executor --lib expression::projection::tests`. No new lane, feature, fixture deadline or profile. Text-seed result-owner unit cases cover prepaid window storage and the internal capacity-growth path, including simultaneous replacement admission, exact row limits, sticky refusal and parent-allowance retention. Allocation probes use the repository profile; compare measurements only within the same profile. |
-| Single-column sort-key preparation | Existing executor unit / Prow crates owner covers 64-bit inline integer keys, mixed Value ordering, stable ties, exact tuple/payload admission and refunds, missing/NULL columns, cancellation, and the general multi-key fallback. Run-mode guards compare homogeneous integer/general and mixed output in both directions, preserve empty-key charges and the original row width, and exercise the same stable results with and without actual spill; staging and final-zero ownership are checked. The existing compaction guards remain in this same owner. Only mixed in-memory runs dispatch on key representation during comparison. Minimal browser WASM keeps owned keys. Local replay: `cargo test --locked -p hawdb-executor --lib inline_integer_sort` and filter `sort_run_single_column`. The manual `concurrent_writers --sort-key-control` release mode compares integer, float, 256-byte string, NULL and mixed keys at 256/4096 rows against a bounded stable canonical reference. One labelled warmup and eight retained queries per case use one pinned snapshot; full typed output and physical Sort/Column shape must match. The [control protocol](benchmarks/SORT_KEY_PREPARATION_PROTOCOL.md) retains 40 process pairs and a warmup pair. These read-only controls do not replace the complete concurrent publication performance matrix. No scheduled/default lane is added. |
+| Single-column sort-key preparation | Existing executor unit / Prow crates owner covers 64-bit inline integer keys, mixed Value ordering, stable ties, exact tuple/payload admission and refunds, missing/NULL columns, cancellation, and the general multi-key fallback. Run-mode guards compare homogeneous integer/general and mixed output in both directions, preserve empty-key charges and the original row width, and exercise the same stable results with and without actual spill; staging and final-zero ownership are checked. Each mode sorts in place with ordinal tie-breaking, retaining the streaming-spill scratch contract. The existing compaction guards remain in this same owner. Only mixed in-memory runs dispatch on key representation during comparison. Minimal browser WASM keeps owned keys. Local replay: `cargo test --locked -p hawdb-executor --lib inline_integer_sort` and filter `sort_run_single_column`. The manual `concurrent_writers --sort-key-control` release mode compares integer, float, 256-byte string, NULL and mixed keys at 256/4096 rows against a bounded stable canonical reference. One labelled warmup and eight retained queries per case use one pinned snapshot; full typed output and physical Sort/Column shape must match. The [control protocol](benchmarks/SORT_KEY_PREPARATION_PROTOCOL.md) retains 40 process pairs and a warmup pair. These read-only controls do not replace the complete concurrent publication performance matrix. No scheduled/default lane is added. |
 | Complete lexical and grouped evidence | Existing Cypher/Plan-Cypher, executor, Search, readiness and root general lanes cover opt-in complete providers, exhaustion/skipped reports, candidate ceilings before canonical filtering, lazy capacity growth, scalar MAX and bounded per-group evidence. Root differentials cover mixed supported keys, signed zero, ID maxima, permutations, graph eligibility and retained reads across raw/resident/layered disk sources with replacement and deletion. Executor allocation probes cover ID admission, one owned copy of repeated wide scalar keys, retained callback ownership and cancellation/error precedence. Search regressions compare canonical field phrase-alias occurrences and full-corpus scores, including raw window/complete parity and actual allocation peaks. Sparse overlapping-layer regressions cover metadata predicates, external identities and exact live-corpus scores in window/complete modes. The `grouped_evidence` and `grouped_evidence_native` release benches manually qualify scalar and native lexical/graph paths; neither is a CI performance gate. See [measured results](benchmarks/GROUPED_RETRIEVAL_RESULTS.md). See [contract](specs/GROUPED_RETRIEVAL_SPEC.md). |
 | Mixed numeric range projections | Existing storage unit (`//crates/storage:hawdb_storage_tests`) and root general (`//:hawdb_unit_general_tests`) CI owners. Scalar node, relationship and composite projection ranges preserve numeric predicates when Value ordering separates Int and Float. Reference envelopes cover clipped equality prefixes, strict/inclusive bounds, extreme values and NaN; homogeneous blocks must still prune. Persistent/API cases refresh bounded statistics and rebind after cold reopen to require native scalar/composite range plans, then cover delta type changes, pinned reads and reopen; the original reference and snapshot assertions remain intact. Replay filters: `mixed_numeric`, `composite_numeric_range_envelopes`. No lane, feature or profile change. |
 | Storage descriptor bound traversal | Existing `//crates/storage:hawdb_storage_tests` / Prow crates owner. Forward and reverse inclusive-bound scans retain ordered delivery, tree-height/page/descriptor admission, early Stop and caller refusal. Reverse guards cover cross-leaf/group boundaries and binary upper-bound work on a verified warm page; skipped prefixes must not be visited. Replay: `cargo test --locked -p hawdb-storage --lib reverse_bound_scan` and `warm_page_views_reuse_integrity_proof`. No new profile or lane. |
@@ -434,6 +445,7 @@ workload does not change default or CI benchmark selection.
 | Default resident DiskANN | Existing Search unit targets and the unchanged vector feature profiles own `resident_diskann` (`cargo test --locked -p hawdb-search --lib resident_diskann`). They compare default filtered graph candidates with explicit exhaustive scoring across replacement, deletion, NULL and reinsertion, preserve original graph identity, and cover zero/signed-cosine behavior, non-finite-source refusal, offset pagination, hybrid fusion versus exact scoring, validated delta atomicity, checkpoint/reopen, typed memory/work refusal, cancellation and retry, and retained runtime allocation ownership through cache destruction. Concurrent admission blocking must not retain the cache lock, and initialization wait obeys the query deadline. Checkpoint cases require HDANN002, actual native graph execution, unchanged retained-reader bytes/results, and explicit RaBitQ settings across reopen/replacement. Reopen must reuse a verified mapping, remain queryable below the construction envelope, and keep its original baseline across CRUD and clean checkpoint copying. Corruption cases retain quarantine evidence and reject stale-source fallback. Directory replacement, stale cleanup and memory/cancellation fixtures retain both explicit RaBitQ and default graph coverage. Native registered source/MVCC and persistent artifact qualification have separate owners below. No CI lane or profile change. |
 | Default out-of-core DiskANN | Existing Search targets and feature-matrix lanes own `generation_writer::tests::diskann` (`cargo test --locked -p hawdb-search --all-features --lib generation_writer::tests::diskann`). Filtered default queries compare with explicit exhaustive scoring after insert/replacement/delete/NULL deltas, with and without LSG. Guards check inherited topology settings, unchanged base graph bytes/native inode, retained old-reader results, abandoned-candidate rollback, cancellation and typed graph memory refusal, empty and deletion-only layers, legacy zero-cosine semantics across mixed graph/compatible layers, and refusal to satisfy explicit compression with a raw graph. Readiness also covers an empty-vector first segment, complete graph/visibility identity, exact live vector counts after mixed text/vector retractions, deletion-only and NULL-only heads, empty vector domains, old pins, cold reopen, and reuse of validated retraction counts during refresh. Mixed graph/legacy-codec closures cannot qualify as a pure graph. Explicit RaBitQ parameters also survive default delta preparation. The ordinary reader-refresh identity case checks model/version/dimension drift against the persisted graph binding. These are standalone projection segment-reuse cases; schema-bound canonical source-feed publication and power-loss qualification remain separate. Existing RaBitQ fixtures select their backend explicitly. No feature matrix, profile or lane is removed. See [delivery contract](specs/FILTERED_DISKANN_SPEC.md). |
 | Analytics and vector-projection | Streaming algorithms, projected artifact IO and vector representation behavior. `//crates/vector-projection:hawdb_vector_projection_tests` also owns the Filtered DiskANN kernel/artifact family (`cargo test --locked -p hawdb-vector-projection --all-features diskann`; omit `--all-features` for standalone file I/O): Vamana full-beam/exhaustive distance parity, small-beam filtered recall against exhaustive ground truth, navigation without rejected-vector scoring, optional LSG and duplicate radii, deterministic construction, typed work/memory refusal, work-bounded workspace on a virtual large graph, and cancellation. File cases cover parameter/link/distance round trips, byte-identical mapped successor copying and cancelled-copy source retention, bounded header inspection, source/epoch/generation drift, truncation/trailing bytes/checksums, semantically invalid records with a matching checksum, admission refusal/retry and release of all charges. Core `projection_distance` tests also cover raw queries against unaligned byte-backed vectors and cooperative failure. Small synthetic fixtures use the repository profile; this is kernel/artifact evidence, not default-engine or database CRUD/MVCC qualification. See [delivery contract](specs/FILTERED_DISKANN_SPEC.md). |
+| RaBitQ SIMD scoring | Existing `//crates/vector-projection:hawdb_vector_projection_tests` and native vector-platform CI own bitwise scalar/AVX2/NEON parity, CPU selection, all code values, unaligned and short inputs, dimension tails, filtered memory/file scans, ties and worker merging. Replay: `cargo test --locked -p hawdb-vector-projection kernel::`. The two ignored `simd_` release probes are local-only throughput and deadline-response measurements, run serially. The existing `rabitq_query_profile` example adds a local `compare` mode for interleaved scalar/native-SIMD complete-query measurements over 100,000 vectors, including raw-vector reranking and hydration with exact final-result parity. These probes do not replace native AArch64 qualification. See [method and limitations](RABITQ_VECTOR_PROJECTION_BENCHMARK.md). No CI lane, profile or fuzz job is added. |
 | QoS, cgroup, telemetry, resource-profile and runtime-tokio | Resource detection/admission, metrics and synchronous/async runtime boundaries. |
 | Readiness, evidence, route-ownership, nowledge-contracts, compat and qualification | Typed readiness, complete evidence identity, compatibility and host integration contracts. |
 | `crates/fuzz-contracts` | Production readiness contract values only. Its fast unit tests are not the Shiro generator/campaign. |
@@ -997,6 +1009,25 @@ versus cache hits, cold build cost and required target inventory.
   oracle fails; `SHIRO_SECONDS=30` adds a local time budget. Explicit `--cases`
   and `--case-index` support finite verification/replay. See
   [tools/shiro](../tools/shiro/README.md).
+- SQL maintenance and ranges: every Shiro case compares backfilled projection,
+  grouped/global COUNT/SUM/BIGINT-and-TEXT extrema and indexed view reads with an
+  unindexed reference after random INSERT/UPSERT/UPDATE/DELETE, commit, rollback,
+  overflow rejection and clear/repopulation. It verifies pinned old snapshots
+  and ordered composite ranges with inclusive/exclusive/equal/reversed/NULL
+  bounds and residual filters. Local `//tools/shiro:shiro_fast_tests` owns the
+  generator, positive campaign and corrupted-view negative controls; no CI
+  ownership is added. `sql_maintenance_coverage` separates actual initial range
+  plans from fallback plans. Replay with `--seed 7 --cases 32 --case-index 0`;
+  the v4 campaign protocol rejects old resume reports. Cases rotate memory,
+  file-backed Shadow and file-backed DemandPaged indexes. Disk cases compare
+  full pre-close results/epochs after initial WAL replay, checkpoint reopen and
+  checkpoint-plus-WAL recovery, then continue mutations; retained snapshots
+  also cross checkpoint publication. Recovery reports prove the selected paths.
+  The common-data-loss negative control prevents a jointly lost source and
+  reference from passing. Original failing databases are retained; reduction
+  scratch is cleaned. Replay indexes 1/2 for the disk modes. Source rows remain
+  resident as required by materialized views; this is file recovery evidence,
+  not out-of-core view support or crash/power-loss qualification.
 - MVCC: `make mvcc-fuzz` defaults to 30 seconds of local transaction histories.
   Generate editable cases, replay failures and shrink them before introducing a
   focused deterministic regression. See [tools/mvcc-fuzz](../tools/mvcc-fuzz/README.md).
@@ -1151,18 +1182,54 @@ selection/profile/count matrix, cache policy, cold-build costs and local replay.
 The daily/manual abandonment lane remains separate and requires eight passing
 cases with the selected 1/2/4/8-thread setting. No fuzz campaign is added.
 
+## Query identity encoding
+
+The existing `//crates/query:hawdb_query_tests` / Prow crates lane owns published
+`q1`/`t1` vectors, length-prefixed UTF-8/NUL framing, zero/max-u16 version headers,
+lowercase hex, and ASCII-only language canonicalization across borrowed canonical
+names, mixed ASCII case, Unicode whitespace and preserved non-ASCII case.
+Replay: `cargo test --locked -p hawdb-query --lib`. These extend the existing
+normalization family without changing its feature matrix, profile or lane.
+The separate manual [encoding allocation experiment](benchmarks/query_identity_encoding_2026_10_27/README.md)
+records source-bound constructor/retained-byte and admitted-host controls;
+its probe is unpublished and is not registered in CI.
+
 ## Request-owned Cypher identity
 
 The root general unit lane owns `api::tests::query_observability::query_identity`.
 Its ordinary and concurrent cases cover read/write parameter rebinding, cache
-hits and disabled caches, exact current-text hashes across equivalent query
+hits and disabled caches, enabled/disabled summaries, recovery from failed
+observation to successful completion, exact current-text hashes across equivalent query
 spellings, telemetry, and summary/slow-log behavior after execution and planning
-refusals. Replay: `cargo test --locked -p hawdb --lib query_identity_survives`.
+refusals. Counter deltas after the two equivalent-spelling requests prove the
+ordinary and concurrent read hit, disabled-cache no-hit and SET bypass paths.
+The same lane owns `api::query_runtime::tests::prepared_query_identity_rejects_mismatched_transfer_and_records_current_text`:
+text mismatch leaves the prepared identity available, failed observation hashes
+the current text through fallback, and a matching transfer consumes it once.
+Replay: `cargo test --locked -p hawdb --lib query_identity`.
 No profile, timeout, feature selection or execution lane changes. SQL, EXPLAIN
 and deferred retained-cursor observation keep their existing owners. The manual
 [allocation probes](benchmarks/query_identity_2026_10_27/README.md) record ordinary
 and concurrent facade requests separately from admitted-host controls; no new
 CI benchmark target is registered.
+
+## Borrowed statement-summary completion
+
+The existing `//crates/system-sql:hawdb_system_sql_tests` / Prow crates owner
+covers borrowed versus owned completion, disabled capacity, first-sample
+retention across text/language/kind changes, UTF-8 truncation, failure recovery,
+FIFO eviction and saturating counters. Replay:
+`cargo test --locked -p hawdb-system-sql --lib statement_summary_tests`.
+The root general unit identity family above covers ordinary and concurrent
+facade integration, including telemetry and slow logs when summaries are disabled.
+No test profile, feature selection, timeout or execution lane changes.
+The Cargo-only `statement_summary_allocations` example is a manual host-owned
+allocation control; it compares current owned/borrowed inputs, separately from
+historical whole-query producers, and is not registered in CI. Build with
+`cargo build --locked --example statement_summary_allocations` and run
+`target/debug/examples/statement_summary_allocations 1000`.
+The [allocation record](benchmarks/statement_summary_2026_10_27/README.md)
+retains complete facade/component samples and admitted-host negative controls.
 
 ## Strict append preparation
 

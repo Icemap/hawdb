@@ -172,24 +172,16 @@ impl StatementRecordingTarget<'_> {
                 &fallback_identity
             }
         };
-        let execution = match result {
-            Ok(row_count) => system_sql::StatementExecution::completed(
-                query_language,
-                query_text,
-                statement_kind,
-                query_identity,
-                elapsed_micros,
-                row_count,
-            ),
-            Err(error) => system_sql::StatementExecution::failed(
+        let summary_execution = result.map_err(|error| {
+            system_sql::StatementExecution::failed(
                 query_language,
                 query_text,
                 statement_kind,
                 query_identity,
                 elapsed_micros,
                 error.to_string(),
-            ),
-        };
+            )
+        });
         if let Some(telemetry) = self.telemetry {
             let pipeline = context
                 .execution_profile
@@ -220,7 +212,17 @@ impl StatementRecordingTarget<'_> {
                 major_page_faults: pipeline.and_then(|report| report.major_page_faults),
             });
         }
-        self.statement_summary.borrow_mut().record(execution);
+        match summary_execution {
+            Ok(row_count) => self.statement_summary.borrow_mut().record_completed(
+                query_language,
+                query_text,
+                statement_kind,
+                query_identity,
+                elapsed_micros,
+                row_count,
+            ),
+            Err(execution) => self.statement_summary.borrow_mut().record(execution),
+        }
 
         let Ok(row_count) = result else {
             return;

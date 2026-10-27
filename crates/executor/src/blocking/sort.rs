@@ -142,23 +142,24 @@ impl RunKeyMode {
     }
 
     fn sort(self, rows: &mut [SortRunRow]) {
+        // Ordinals order equal keys, so in-place sorting preserves output ties.
         // Select once per run. Pure fallback comparisons have exactly the
         // original slice comparator, without checking both keys' layouts.
         match self {
             Self::Empty => debug_assert!(rows.is_empty()),
-            Self::General => rows.sort_by(|left, right| {
+            Self::General => rows.sort_unstable_by(|left, right| {
                 compare_sort_values(&left.sort_values.owned, &right.sort_values.owned)
                     .then_with(|| left.ordinal.cmp(&right.ordinal))
             }),
             #[cfg(target_pointer_width = "64")]
-            Self::Integers(SortDirection::Asc) => rows.sort_by(|left, right| {
+            Self::Integers(SortDirection::Asc) => rows.sort_unstable_by(|left, right| {
                 left.sort_values
                     .integer
                     .cmp(&right.sort_values.integer)
                     .then_with(|| left.ordinal.cmp(&right.ordinal))
             }),
             #[cfg(target_pointer_width = "64")]
-            Self::Integers(SortDirection::Desc) => rows.sort_by(|left, right| {
+            Self::Integers(SortDirection::Desc) => rows.sort_unstable_by(|left, right| {
                 right
                     .sort_values
                     .integer
@@ -166,7 +167,9 @@ impl RunKeyMode {
                     .then_with(|| left.ordinal.cmp(&right.ordinal))
             }),
             #[cfg(target_pointer_width = "64")]
-            Self::Mixed(direction) => rows.sort_by(|left, right| left.cmp_mixed(right, direction)),
+            Self::Mixed(direction) => {
+                rows.sort_unstable_by(|left, right| left.cmp_mixed(right, direction))
+            }
         }
     }
 }
@@ -445,6 +448,8 @@ impl<'plan, 'runtime> SortOperator<'plan, 'runtime> {
             )?);
             self.tracker.reset();
         }
+        // Run generation reuses this allocation; merging no longer needs it.
+        self.rows = Vec::new();
         self.runs = compact_sort_runs(
             self.runs,
             self.items,
@@ -678,7 +683,7 @@ impl<'plan, 'runtime> TopNOperator<'plan, 'runtime> {
         }
         self.record_memory_report();
         let mut selected = self.heap.into_vec();
-        selected.sort();
+        selected.sort_unstable();
         emit_sorted_output(
             selected.into_iter().map(|entry| {
                 let bytes = entry.memory_bytes();
@@ -777,7 +782,7 @@ pub fn spill_top_n_run(
 ) -> Result<spill::SpillRun> {
     runtime_checkpoint(task_context)?;
     let mut rows = std::mem::take(heap).into_vec();
-    rows.sort();
+    rows.sort_unstable();
     let (run, mut writer) = spill_budget.create_run("topn")?;
     for row in rows {
         runtime_checkpoint(task_context)?;

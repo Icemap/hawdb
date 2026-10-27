@@ -483,12 +483,48 @@ impl StatementSummary {
             return;
         }
 
-        let digest = execution.query_digest.clone();
-        if let Some(record) = self.records.get_mut(&digest) {
+        if let Some(record) = self.records.get_mut(execution.query_digest.as_str()) {
             record.apply(execution);
             return;
         }
+        self.insert_execution(execution);
+    }
 
+    /// Updates a successful execution without owning metadata already retained
+    /// by the first sample for this digest.
+    pub fn record_completed(
+        &mut self,
+        query_language: &str,
+        query_text: &str,
+        statement_kind: &str,
+        query_identity: &QueryIdentity,
+        elapsed_micros: u128,
+        row_count: usize,
+    ) {
+        if self.capacity == 0 {
+            return;
+        }
+        if let Some(record) = self.records.get_mut(query_identity.query_digest()) {
+            record.apply_metrics(
+                saturating_i64_from_u128(elapsed_micros),
+                i64::try_from(row_count).unwrap_or(i64::MAX),
+                true,
+                None,
+            );
+            return;
+        }
+        self.insert_execution(StatementExecution::completed(
+            query_language,
+            query_text,
+            statement_kind,
+            query_identity,
+            elapsed_micros,
+            row_count,
+        ));
+    }
+
+    fn insert_execution(&mut self, execution: StatementExecution) {
+        let digest = execution.query_digest.clone();
         while self.records.len() >= self.capacity {
             let Some(evicted) = self.insertion_order.pop_front() else {
                 break;
@@ -537,22 +573,35 @@ impl StatementSummaryRecord {
     }
 
     fn apply(&mut self, execution: StatementExecution) {
+        self.apply_metrics(
+            execution.elapsed_micros,
+            execution.row_count,
+            execution.success,
+            execution.error,
+        );
+    }
+
+    fn apply_metrics(
+        &mut self,
+        elapsed_micros: i64,
+        row_count: i64,
+        success: bool,
+        error: Option<String>,
+    ) {
         self.execution_count = self.execution_count.saturating_add(1);
-        if execution.success {
+        if success {
             self.success_count = self.success_count.saturating_add(1);
         } else {
             self.error_count = self.error_count.saturating_add(1);
         }
-        self.total_elapsed_micros = self
-            .total_elapsed_micros
-            .saturating_add(execution.elapsed_micros);
-        self.max_elapsed_micros = self.max_elapsed_micros.max(execution.elapsed_micros);
-        self.total_row_count = self.total_row_count.saturating_add(execution.row_count);
+        self.total_elapsed_micros = self.total_elapsed_micros.saturating_add(elapsed_micros);
+        self.max_elapsed_micros = self.max_elapsed_micros.max(elapsed_micros);
+        self.total_row_count = self.total_row_count.saturating_add(row_count);
         self.last_seen_unix_micros = unix_now_micros();
-        self.last_elapsed_micros = execution.elapsed_micros;
-        self.last_row_count = execution.row_count;
-        self.last_success = execution.success;
-        self.last_error = execution.error;
+        self.last_elapsed_micros = elapsed_micros;
+        self.last_row_count = row_count;
+        self.last_success = success;
+        self.last_error = error;
     }
 }
 
@@ -2675,6 +2724,9 @@ fn truncate_utf8(input: &str, max_bytes: usize) -> String {
 }
 
 mod graph_store_adapter;
+
+#[cfg(test)]
+mod statement_summary_tests;
 
 #[cfg(test)]
 mod tests {
