@@ -95,6 +95,7 @@ case "$shard" in
     rust_case consumer-failure-boundaries "$storage" storage_all positive 1 consumer_allocation::bootstrap_tests file_io::source_directory::control_candidate::tests held_wal_rollback captured_wal_first_rollback captured_link
     ;;
   search)
+    rust_case resident-diskann-cache "$search" search_all positive 1 resident_diskann::tests::
     rust_case held-generation-spool "$search" search_all positive 1 generation_spool
     rust_case captured-publication-capacity "$search" search_all positive 1 out_of_core::publish_lease::tests::captured_lease
     rust_case consumer-publication-refusal "$search" search_all 1 1 consumer::tests::windows_publication_refusal_preserves_receipt_and_native_lease --exact

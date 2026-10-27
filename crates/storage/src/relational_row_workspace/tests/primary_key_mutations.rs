@@ -33,6 +33,78 @@ fn policy() -> RelationalSparseLiveHydrationOptions {
 }
 
 #[test]
+fn primary_key_update_validates_non_key_unique_values_and_replay_closure() {
+    let mut table = schema();
+    table.foreign_keys.clear();
+    table.unique_constraints = vec![vec!["body".into()]];
+    let fixture = Fixture::with_table_schema(8, table);
+    let policy = policy();
+    let transaction = |values: &[(i64, &str)]| RelationalTransaction {
+        writes: values
+            .iter()
+            .map(|(id, body)| RelationalWrite::UpdateWhere {
+                table: "nodes".into(),
+                assignments: vec![RelationalUpdateAssignment {
+                    column: "body".into(),
+                    value: RelationalUpdateValue::Value(RelationalValue::Text((*body).into())),
+                }],
+                predicate: equals("id", RelationalValue::BigInt(*id)),
+            })
+            .collect(),
+    };
+    let stage = |transaction| {
+        fixture
+            .materialized
+            .stage_transaction_with_index_row_and_replay_access(
+                transaction,
+                policy.mutation_limits,
+                policy.overflow_config,
+                policy.index_capture_limits,
+                policy.row_capture_limits,
+            )
+    };
+    for writes in [vec![(3, "row-5-8")], vec![(3, "same"), (5, "same")]] {
+        assert!(
+            matches!(
+                stage(transaction(&writes)),
+                Err(RelationalError::Constraint(_))
+            ),
+            "point writes must enforce UNIQUE"
+        );
+        fixture.assert_rows(Arc::clone(&fixture.view), &fixture.materialized);
+    }
+    let transaction = transaction(&[(3, "changed-unique")]);
+    let (next, indexes, rows, access) = stage(transaction.clone()).unwrap();
+    assert!(access.entries().len() <= policy.row_capture_limits.max_entries.get());
+    let expected = fixture
+        .materialized
+        .stage_transaction(
+            transaction.clone(),
+            policy.mutation_limits,
+            policy.overflow_config,
+        )
+        .unwrap();
+    let (recovered, recovered_indexes, recovered_rows) = fixture
+        .materialized
+        .stage_transaction_for_authoritative_recovery_with_replay_access(
+            transaction,
+            policy.mutation_limits,
+            policy.overflow_config,
+            policy.index_capture_limits,
+            policy.row_capture_limits,
+            &access,
+        )
+        .unwrap();
+    assert_eq!(recovered_indexes, indexes);
+    assert_eq!(recovered_rows, rows);
+    assert_eq!(recovered.row_count("nodes"), next.row_count("nodes"));
+    let original =
+        RelationalTransactionRowView::new(Arc::clone(&fixture.view), policy.row_capture_limits);
+    let successor = original.stage_advance(rows).unwrap();
+    fixture.assert_rows(Arc::clone(successor.read_view()), &expected);
+}
+
+#[test]
 fn resident_primary_key_mutations_fit_the_same_bounded_replay_budget() {
     let fixture = Fixture::with_foreign_keys(8, false);
     let transaction = RelationalTransaction {

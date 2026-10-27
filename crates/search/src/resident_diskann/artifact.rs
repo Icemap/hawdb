@@ -108,6 +108,16 @@ pub(crate) fn write(
     let Some((dimension, count)) = shape(index, metric, Some(task))? else {
         return Ok(None);
     };
+    // An unbound cache is optional. Decide before creating the candidate file:
+    // the existing streaming codec must own that same slot on cache refusal.
+    // Bound descriptors still require their declared graph and typed admission.
+    if index.vector_index_descriptor.is_none()
+        && !index
+            .resident_diskann
+            .admits_complete_cache(index, dimension, Some(task))?
+    {
+        return Ok(None);
+    }
     let identity = identity(index, config, dimension, generation, Some(task))?;
     let options = crate::VectorSearchExecutionOptions::admitted(CACHE_BYTES, task);
     let name = path

@@ -88,6 +88,7 @@ pub enum VectorFallbackReasonCode {
     VectorIndexEmpty,
     CompressedVectorProjectionUnavailable,
     CompressedVectorBudgetExceeded,
+    DiskAnnCacheBudgetExceeded,
     QueryEmbeddingMissing,
 }
 
@@ -100,6 +101,7 @@ impl VectorFallbackReasonCode {
                 "compressed_vector_projection_unavailable"
             }
             Self::CompressedVectorBudgetExceeded => "compressed_vector_budget_exceeded",
+            Self::DiskAnnCacheBudgetExceeded => "diskann_cache_budget_exceeded",
             Self::QueryEmbeddingMissing => "query_embedding_missing",
         }
     }

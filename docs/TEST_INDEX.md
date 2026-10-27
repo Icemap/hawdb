@@ -527,6 +527,24 @@ unique entry selection at ordinal/address-space boundaries. Existing arbitrary
 provider multi-hop cases remain covered. Replay with
 `cargo test --locked -p hawdb-vector-projection --all-features diskann`.
 
+The existing Search resident DiskANN owner additionally covers an actual
+1,024 x 16,384 source above the 64 MiB cache cap: default vector/hybrid and ACL
+queries retain filtered scalar results and a typed fallback reason, and full
+checkpoint/reopen preserves deletes and NULL transitions. A second fixture
+holds a dirty cache with more than 32 MiB of real ID storage while checkpoint
+uses the streaming compatible codec. Small-source graph use and explicit
+query-budget/cancellation refusals remain covered by the same family. Replay:
+`cargo test --locked -p hawdb-search --all-features --lib resident_diskann::tests`.
+The storage `relational_row_workspace::tests::primary_key_mutations` family
+also compares a non-PK UNIQUE update against the full reference, rejects both
+existing-row and same-batch collisions, and replays the bounded access closure.
+The power-loss partition script's six native controls include a discovered
+case whose name contains the exact GC case; the remaining partition uses
+complete exact names, preserving its membership without substring exclusions.
+The existing Windows native search shard also executes the resident family,
+retaining a separate fresh BEP/log/XML for it. No test lane, compilation profile
+or timeout changes.
+
 Resident read generations additionally retain default graph state and isolated
 CRUD retractions alongside shared immutable document pages. The existing Search
 owner covers old/current exact-result parity after insert, replacement, NULL and
@@ -1006,7 +1024,7 @@ in the existing TLA suite; native capacity-band tests own Tokio waiter renewal.
 
 ## Windows native contract ownership
 
-The native workflow runs seven independent Bazel shards and a separate strict
+The native workflow runs twelve independent Bazel shards and a separate strict
 Cargo Clippy job. The original `Windows native contracts` check requires every
 result to pass. See [Windows native CI](WINDOWS_NATIVE_CI.md) for the complete
 selection/profile/count matrix, cache policy, cold-build costs and local replay.

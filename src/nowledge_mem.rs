@@ -2483,6 +2483,9 @@ fn vector_fallback_reason_code(
         SearchFallbackReasonCode::CompressedVectorBudgetExceeded => {
             Some(hawdb_executor::VectorFallbackReasonCode::CompressedVectorBudgetExceeded)
         }
+        SearchFallbackReasonCode::DiskAnnCacheBudgetExceeded => {
+            Some(hawdb_executor::VectorFallbackReasonCode::DiskAnnCacheBudgetExceeded)
+        }
         SearchFallbackReasonCode::QueryEmbeddingMissing => {
             Some(hawdb_executor::VectorFallbackReasonCode::QueryEmbeddingMissing)
         }

@@ -112,20 +112,9 @@ def main() -> None:
     elif args.shard == "search-publication":
         test_filter, test_arguments = SEARCH_PREFIX, []
     elif args.shard == "remaining":
-        test_filter, test_arguments = PREFIX, [
-            "--skip",
-            AUTOMATIC_PREFIX,
-            "--skip",
-            RECOVERY_PREFIX,
-            "--skip",
-            ABANDONMENT_PREFIX,
-            "--skip",
-            CONSUMER_PREFIX,
-            "--skip",
-            SEARCH_PREFIX,
-            "--skip",
-            GC_CASE,
-        ]
+        # libtest --skip is substring based. Select the discovered names exactly
+        # so a future case containing GC_CASE is neither lost nor run twice.
+        test_filter, test_arguments = selected[0], ["--exact", *selected[1:]]
     else:
         test_filter, test_arguments = PREFIX, []
     args.output_dir.mkdir(parents=True, exist_ok=True)

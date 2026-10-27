@@ -50,6 +50,7 @@ class PowerLossShardTests(unittest.TestCase):
                 SHARD.CONSUMER_PREFIX + "vector_incremental::case",
                 SHARD.SEARCH_PREFIX + "case",
                 SHARD.GC_CASE,
+                SHARD.GC_CASE + "_with_retained_reader",
                 SHARD.PREFIX + "recovery",
                 SHARD.PREFIX + "retained_branch",
             ]
@@ -108,9 +109,11 @@ class PowerLossShardTests(unittest.TestCase):
                         shard in SHARD.AUTOMATIC_CASES
                         or shard in SHARD.RECOVERY_CASES
                         or shard == "branch-gc"
+                        or shard == "remaining"
                     ):
-                        self.assertEqual(arguments, ["--exact"])
-                        selected = [name for name in self.names if name == test_filter]
+                        self.assertEqual(arguments[0], "--exact")
+                        exact_names = [test_filter, *arguments[1:]]
+                        selected = [name for name in self.names if name in exact_names]
                     else:
                         self.assertTrue(
                             all(option == "--skip" for option in arguments[::2])

@@ -140,6 +140,9 @@ impl Database {
     /// Rebuild the same target and algorithm from a complete current snapshot.
     /// Deletes, updates and transitions to NULL are reflected in the successor;
     /// previously bound read domains retain their own source and generation.
+    /// Retryable pre-effect admission and `BranchBusy` handling follow
+    /// [`Self::catch_up_vector_index`]; an uncertain publication requires
+    /// Consumer recovery, never an unconditional rebuild retry.
     pub fn rebuild_vector_index(
         &mut self,
         consumer: &mut SearchProjectionConsumer,

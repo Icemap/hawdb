@@ -560,6 +560,7 @@ pub enum SearchFallbackReasonCode {
     VectorIndexEmpty,
     CompressedVectorProjectionUnavailable,
     CompressedVectorBudgetExceeded,
+    DiskAnnCacheBudgetExceeded,
     QueryEmbeddingMissing,
     TextQueryEmpty,
 }
@@ -575,6 +576,7 @@ impl SearchFallbackReasonCode {
             SearchFallbackReasonCode::CompressedVectorBudgetExceeded => {
                 "compressed_vector_budget_exceeded"
             }
+            SearchFallbackReasonCode::DiskAnnCacheBudgetExceeded => "diskann_cache_budget_exceeded",
             SearchFallbackReasonCode::QueryEmbeddingMissing => "query_embedding_missing",
             SearchFallbackReasonCode::TextQueryEmpty => "text_query_empty",
         }
@@ -593,6 +595,9 @@ impl FromStr for SearchFallbackReasonCode {
             }
             "compressed_vector_budget_exceeded" => {
                 Ok(SearchFallbackReasonCode::CompressedVectorBudgetExceeded)
+            }
+            "diskann_cache_budget_exceeded" => {
+                Ok(SearchFallbackReasonCode::DiskAnnCacheBudgetExceeded)
             }
             "query_embedding_missing" => Ok(SearchFallbackReasonCode::QueryEmbeddingMissing),
             "text_query_empty" => Ok(SearchFallbackReasonCode::TextQueryEmpty),
@@ -2909,6 +2914,8 @@ impl SearchIndex {
     }
 
     /// Searches resident documents, returning unavailable-capability and execution errors.
+    /// Sources exceeding the optional graph cache use scalar search; use
+    /// [`Self::search_with_report`] for the fallback diagnostic.
     /// This entrypoint preserves in-memory payload access; `try_*` methods may read persisted ranges.
     pub fn search(
         &self,
@@ -2947,6 +2954,8 @@ impl SearchIndex {
 
     /// Searches resident documents, returning unavailable-capability and execution errors.
     /// This entrypoint preserves in-memory payload access; `try_*` methods may read persisted ranges.
+    /// Sources exceeding the optional graph cache use scalar search and report
+    /// [`SearchFallbackReasonCode::DiskAnnCacheBudgetExceeded`].
     pub fn search_with_options(
         &self,
         query_text: &str,
@@ -2986,6 +2995,8 @@ impl SearchIndex {
     }
 
     /// Default graph candidates under the caller's memory and cancellation limits.
+    /// Sources exceeding the ordinary graph cache use scalar search with a
+    /// reported cache-budget fallback. Caller-selected limits remain binding.
     pub fn try_search_with_options_context(
         &self,
         query_text: &str,
@@ -3717,7 +3728,28 @@ impl SearchIndex {
                             && vector.iter().any(|coordinate| *coordinate != 0.0)
                     });
                     if !vector_execution_options.exact && mode != SearchMode::Text && valid_query {
-                        VectorSearchBackend::DiskAnn { index: self }
+                        let candidate_limit = options
+                            .offset
+                            .saturating_add(limit)
+                            .max(options.rank_window.unwrap_or(0))
+                            .max(
+                                hawdb_vector_projection::diskann::DiskAnnSearchOptions::default()
+                                    .beam_width,
+                            );
+                        if self.resident_diskann.admits_default_search(
+                            self,
+                            &filtered_documents,
+                            query_embedding.expect("valid query").len(),
+                            candidate_limit,
+                            vector_execution_options,
+                        )? {
+                            VectorSearchBackend::DiskAnn { index: self }
+                        } else {
+                            vector_fallback_reason_codes
+                                .push(SearchFallbackReasonCode::DiskAnnCacheBudgetExceeded);
+                            vector_fallback_reasons.push("resident DiskANN cache exceeds its memory envelope; using scalar vector scan".into());
+                            VectorSearchBackend::Scalar
+                        }
                     } else {
                         VectorSearchBackend::Scalar
                     }
@@ -10156,6 +10188,10 @@ mod tests {
             (
                 SearchFallbackReasonCode::CompressedVectorBudgetExceeded,
                 "compressed_vector_budget_exceeded",
+            ),
+            (
+                SearchFallbackReasonCode::DiskAnnCacheBudgetExceeded,
+                "diskann_cache_budget_exceeded",
             ),
             (
                 SearchFallbackReasonCode::QueryEmbeddingMissing,

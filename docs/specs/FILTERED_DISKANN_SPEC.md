@@ -113,8 +113,9 @@ This is regression evidence on a small fixed fixture, not representative recall,
 latency, RSS or scalability qualification. Validated sorted-ID providers seed
 eligible entry points from deterministic disjoint allowlist buckets. Domains no
 larger than the beam use bounded ID lookup and score all present eligible IDs
-without link traversal. Larger domains expand at most one rejected bridge from
-each eligible frontier vertex; rejected second-hop vertices can be promoted if
+without link traversal. Larger domains expand one rejected hop from
+each eligible frontier vertex, considering all its rejected neighbors within
+the visit/work budget; rejected second-hop vertices can be promoted if
 later reached directly from an eligible vertex. No rejected vector is scored.
 The complete ordinal-ID domain retains ordinary Vamana traversal. Providers
 without a sorted-ID contract retain recursive bridging with work refusal.
@@ -220,6 +221,14 @@ the raw reranking window. Its full workspace is preflighted against the existing
 query memory/work limits; insufficient admission fails rather than shrinking
 the beam or returning partial results. Cache construction has a 64 MiB ceiling and query admission includes
 its conservative retained envelope, ordinal selection and candidate workspace.
+Before choosing the default resident graph, the facade preflights that cache
+and its query workspace. If it cannot fit the ordinary cache envelope, default
+resident search uses the existing scalar path and reports
+`diskann_cache_budget_exceeded` with `scalar_vector_scan` as the actual backend.
+Exact and explicit compressed requests retain their own backend contracts.
+Smaller caller-selected query budgets remain binding, and work refusal,
+cancellation, invalid data and corruption are not converted into cache fallback.
+Fallback cannot qualify the default graph's recall or readiness.
 Runtime allocation leases retain cache ownership and cover candidate execution.
 Cache readers capture an immutable Arc and release the cache lock before
 execution admission and graph traversal. Exclusive mutations update retraction
@@ -241,6 +250,28 @@ held publication directory and carries the originating task through snapshot,
 graph construction and sidecar publication. A compatible complete cache can
 supply the immutable graph without another vector copy. Dirty caches rebuild at
 this explicit checkpoint boundary; ordinary CRUD queries retain their overlay.
+For an unbound index, a complete graph that exceeds the cache, including a
+retained dirty predecessor, selects the existing streaming compatible codec
+before creating the candidate file. This preserves checkpoint/reopen of the
+complete canonical source. It does not enlarge the cache or admit a partial
+graph. A schema-bound DiskANN descriptor still requires its declared graph and
+its explicit construction/task admission; it cannot silently change codec.
+
+The bound depends on both vector count and dimension, IDs, degree, beam and LSG,
+rather than a fixed row-count limit. On a 64-bit host, construction-only
+preflights with default degree 32 / beam 128 / no LSG and 16-byte IDs require
+approximately 39.0 MiB for 50,000 x 128, 48.3 MiB for 15,000 x 768, and 49.2 MiB
+for 8,000 x 1,536, including a conservative 1 KiB wrapper allowance. Query
+workspace and canonical documents are additional; these are admission
+calculations, not executed scale qualifications or process RSS limits. The
+1,024 x 16,384 regression exceeds the actual 64 MiB construction cap and
+checks scalar fallback, filtered vector/hybrid results, checkpoint, mutation
+and reopen. Registered canonical builds separately enforce their source-mapping
+and host/task envelopes; above those explicit limits they return a typed
+resource refusal and retain the previous completed generation. The 100k x 128
+lifecycle evidence uses its explicit 320 MiB build/reopen and 2 GiB host limits,
+not the library defaults. No supported million-vector default-memory claim is
+made.
 
 Calling `set_rabitq_projection_build_options` explicitly selects a RaBitQ
 checkpoint. Its bit width, segment rows and seed are sealed in the snapshot and
@@ -289,6 +320,21 @@ publication generation. Feed gaps, schema drift, algorithm changes, cancellation
 and resource refusals cannot advance a partial source cursor. A rebuild remains
 explicit. The same algorithm options must accompany maintenance; they cannot
 change the persisted definition.
+
+Remaining long-running-host work is tracked by #1245. Graph-node change feeds
+currently carry native IDs without label domains, so unrelated-label changes
+still consume incremental candidate/hydration admission. Catch-up layers and
+mutation runs are not automatically folded; retained query and manifest costs
+can grow with the number of catch-ups, and an unfiltered retracted layer still
+materializes its eligible-ID allowlist. Hosts must not treat the current
+incremental path as a bounded steady-state Mem default. Label-aware feeds and a
+source-aligned layer/fold policy, including old-pin and recovery qualification,
+remain required before that use. Dense construction scratch clearing,
+unconditional reciprocal pruning, deadline-check granularity, sparse visited
+hash distribution and descriptor tuning ceilings also remain performance
+follow-ups. The review's optional kernel changes are not represented as fixes
+or covered by prior scale measurements. This PR does not authorize Mem
+activation.
 
 Canonical SQL point mutations derive their hydration working set from complete
 primary-key equalities, including conjunctions with residual predicates. Every

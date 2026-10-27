@@ -28,6 +28,149 @@ fn options() -> SearchQueryOptions {
     }
 }
 
+#[test]
+fn oversized_default_resident_graph_falls_back_and_checkpoints_complete_source() {
+    let root = std::env::temp_dir().join(format!(
+        "hawdb-resident-graph-over-cap-{}",
+        hawdb_core::generate_uuidv7().unwrap()
+    ));
+    let mut index = SearchIndex::open(&root).unwrap();
+    let dimension = 16_384;
+    let mut vector = vec![0.0; dimension];
+    vector[0] = 1.0;
+    for id in 0..1024 {
+        let mut row = document(id, Some(vector.clone()));
+        row.content = "oversized graph fallback".into();
+        index.upsert(row).unwrap();
+    }
+    let (_, _, required) = Projection::memory_bound(&index.documents, dimension, None).unwrap();
+    assert!(
+        required > CACHE_BYTES,
+        "fixture must exceed the real graph cap"
+    );
+    let assert_fallback = |result: SearchResultSet| {
+        let report = &result.retrievers[0];
+        assert_eq!(report.backend, "scalar_vector_scan");
+        assert!(report
+            .fallback_reason_codes
+            .iter()
+            .any(|code| code.as_str() == "diskann_cache_budget_exceeded"));
+        assert_eq!(result.hits.len(), 8);
+        assert!(result.hits.iter().all(|hit| {
+            hit.id.parse::<usize>().unwrap().is_multiple_of(2) && hit.vector_score == 1.0
+        }));
+    };
+    for mode in [SearchMode::Vector]
+        .into_iter()
+        .chain(cfg!(feature = "full-text-search").then_some(SearchMode::Hybrid))
+    {
+        assert_fallback(
+            index
+                .search_with_options("fallback", Some(&vector), mode, options())
+                .unwrap(),
+        );
+        assert_fallback(
+            index
+                .try_search_with_options("fallback", Some(&vector), mode, options())
+                .unwrap(),
+        );
+        #[cfg(feature = "acl")]
+        assert_fallback(
+            index
+                .try_search_with_options_access_control(
+                    "fallback",
+                    Some(&vector),
+                    mode,
+                    options(),
+                    crate::SearchAccessControlContext::visibility_scopes(1, "group", ["even"]),
+                )
+                .unwrap(),
+        );
+    }
+    assert!(index.resident_diskann.projection.lock().unwrap().is_none());
+    let recall = index.validate_sampled_vector_recall(crate::VectorRecallValidationOptions {
+        max_samples: 1,
+        top_k: 1,
+        candidate_limit: 8,
+        minimum_recall_per_million: 950_000,
+        metadata_filters: options().metadata_filters,
+    });
+    assert!(!recall.ready);
+    assert_eq!(recall.fallback_count, 1);
+    assert!(!recall.validates_default_approximate_backend());
+    let cancellation = hawdb_core::RuntimeCancellationToken::new();
+    cancellation.cancel();
+    let task = hawdb_core::RuntimeTaskContext::without_deadline(cancellation);
+    assert!(index
+        .try_search_with_options_context(
+            "",
+            Some(&vector),
+            SearchMode::Vector,
+            options(),
+            VectorSearchExecutionOptions::admitted(CACHE_BYTES, &task),
+        )
+        .is_err());
+    index.checkpoint().unwrap();
+    drop(index);
+    let mut index = SearchIndex::open(&root).unwrap();
+    assert_eq!(index.document_count(), 1024);
+    assert_fallback(
+        index
+            .try_search_with_options("", Some(&vector), SearchMode::Vector, options())
+            .unwrap(),
+    );
+    index.delete("0000");
+    index.upsert(document(2, None)).unwrap();
+    index.checkpoint().unwrap();
+    drop(index);
+    let index = SearchIndex::open(&root).unwrap();
+    assert_eq!(index.document_count(), 1023);
+    let actual = index
+        .try_search_with_options("", Some(&vector), SearchMode::Vector, options())
+        .unwrap();
+    assert!(actual
+        .hits
+        .iter()
+        .all(|hit| hit.id != "0000" && hit.id != "0002"));
+    assert_fallback(actual);
+    drop(index);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn dirty_resident_checkpoint_can_stream_while_a_large_previous_cache_is_pinned() {
+    let root = std::env::temp_dir().join(format!(
+        "hawdb-resident-graph-pinned-cap-{}",
+        hawdb_core::generate_uuidv7().unwrap()
+    ));
+    let mut index = SearchIndex::open(&root).unwrap();
+    // Long IDs make the actual retained ordinal map exceed half the cache,
+    // without spending the regression's time constructing a large ANN graph.
+    let suffix = "x".repeat(128 << 10);
+    for id in 0..300 {
+        let mut row = document(id, Some(vec![1.0, id as f32]));
+        row.id.push_str(&suffix);
+        index.upsert(row).unwrap();
+    }
+    let graph = index
+        .resident_diskann
+        .snapshot(&index, 2, Default::default())
+        .unwrap();
+    assert!(graph.memory_bytes > CACHE_BYTES / 2 && graph.memory_bytes < CACHE_BYTES);
+    drop(graph);
+    index.upsert(document(10, Some(vec![1.0, 0.0]))).unwrap();
+    let retained = index.resident_diskann.capture();
+    index.checkpoint().unwrap();
+    assert!(retained.projection.lock().unwrap().as_ref().unwrap().dirty);
+    drop(index);
+    let index = SearchIndex::open(&root).unwrap();
+    assert_eq!(index.document_count(), 301);
+    assert!(index.documents.contains_key("0010"));
+    drop(index);
+    drop(retained);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
 fn query(index: &SearchIndex, exact: bool) -> SearchResultSet {
     if exact {
         index.search_with_options_exact("", Some(&[1.0, 0.0]), SearchMode::Vector, options())

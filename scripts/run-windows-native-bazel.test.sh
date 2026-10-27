@@ -87,7 +87,8 @@ done
 grep -qx instance-identity-default-views "$fixture/snapshots/testlogs/instance-identity-default-views/test.xml"
 grep -qx instance-identity-minimal-views "$fixture/snapshots/testlogs/instance-identity-minimal-views/test.xml"
 # Preserve every original selection and add five isolated recovery selections.
-[[ "$(wc -l <"$fixture/commands.txt" | tr -d ' ')" == 33 ]]
+[[ "$(wc -l <"$fixture/commands.txt" | tr -d ' ')" == 34 ]]
+grep -q -- '--test_arg=resident_diskann::tests::' "$fixture/commands.txt"
 grep -q -- '--test_arg=vector_index_incremental --test_arg=vector_index_canonical_completion' "$fixture/commands.txt"
 grep -q -- '--test_arg=--skip --test_arg=api::tests::power_loss::consumer_vector_incremental::faults::recovery::' "$fixture/commands.txt"
 [[ "$(grep -c -- '--test_arg=api::tests::power_loss::consumer_vector_incremental::faults::recovery::vector_index_' "$fixture/commands.txt")" == 5 ]]

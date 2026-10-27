@@ -262,6 +262,51 @@ impl ResidentDiskAnn {
         ))
     }
 
+    /// Cache residency is optional for legacy, unbound SearchIndex callers.
+    /// Caller-selected limits below the ordinary envelope remain hard limits.
+    pub(super) fn admits_default_search(
+        &self,
+        index: &SearchIndex,
+        documents: &[&SearchDocument],
+        dimension: usize,
+        limit: usize,
+        options: crate::VectorSearchExecutionOptions<'_>,
+    ) -> Result<bool> {
+        checkpoint(options.task_context)?;
+        let current = self.lock(options.task_context)?;
+        let (count, memory) = match current.as_ref() {
+            Some(projection) => (projection.graph.len(), projection.memory_bytes),
+            None => {
+                let (count, _, memory) =
+                    Projection::memory_bound(&index.documents, dimension, options.task_context)?;
+                (count, memory)
+            }
+        };
+        if memory > CACHE_BYTES {
+            return Ok(false);
+        }
+        let (query_bytes, _) = query_memory(documents, count, limit.min(documents.len()), options)?;
+        Ok(memory.saturating_add(query_bytes) <= options.max_working_bytes.max(CACHE_BYTES))
+    }
+
+    fn admits_complete_cache(
+        &self,
+        index: &SearchIndex,
+        dimension: usize,
+        task: Option<&hawdb_core::RuntimeTaskContext>,
+    ) -> Result<bool> {
+        let current = self.lock(task)?;
+        if current.as_ref().is_some_and(|projection| !projection.dirty) {
+            return Ok(true);
+        }
+        let (_, _, required) = Projection::memory_bound(&index.documents, dimension, task)?;
+        let retained = current
+            .as_ref()
+            .filter(|projection| Arc::strong_count(projection) > 1)
+            .map_or(0, |projection| projection.memory_bytes);
+        Ok(required.saturating_add(retained) <= CACHE_BYTES)
+    }
+
     fn complete_snapshot(
         &self,
         index: &SearchIndex,
@@ -332,29 +377,8 @@ impl ResidentDiskAnn {
         checkpoint()?;
         let projection = self.snapshot(index, query.len(), options)?;
         let limit = limit.min(documents.len());
-        let max_id_bytes = documents
-            .iter()
-            .map(|document| document.id.len())
-            .max()
-            .unwrap_or(0);
-        let retained_bytes = documents
-            .len()
-            .saturating_mul(size_of::<u64>())
-            .saturating_add(
-                limit
-                    .saturating_mul(size_of::<VectorCandidate>() + max_id_bytes)
-                    .saturating_mul(2),
-            );
-        let graph_options = DiskAnnSearchOptions {
-            beam_width: limit.max(crate::vector_execution::DISKANN_NAVIGATION_BEAM),
-            max_working_bytes: options.max_working_bytes.saturating_sub(retained_bytes),
-            task: options.task_context,
-            ..Default::default()
-        };
-        let query_bytes = graph_options
-            .working_memory_bound(projection.graph.len(), limit)
-            .map_err(projection_error)?
-            .saturating_add(retained_bytes);
+        let (query_bytes, graph_options) =
+            query_memory(documents, projection.graph.len(), limit, options)?;
         let combined = query_bytes.saturating_add(projection.memory_bytes);
         if combined > options.max_working_bytes {
             return Err(memory_error(combined, options.max_working_bytes));
@@ -485,6 +509,38 @@ impl ResidentDiskAnn {
             memory,
         })
     }
+}
+
+fn query_memory<'a>(
+    documents: &[&SearchDocument],
+    count: usize,
+    limit: usize,
+    options: crate::VectorSearchExecutionOptions<'a>,
+) -> Result<(usize, DiskAnnSearchOptions<'a>)> {
+    let max_id_bytes = documents
+        .iter()
+        .map(|document| document.id.len())
+        .max()
+        .unwrap_or(0);
+    let retained_bytes = documents
+        .len()
+        .saturating_mul(size_of::<u64>())
+        .saturating_add(
+            limit
+                .saturating_mul(size_of::<VectorCandidate>() + max_id_bytes)
+                .saturating_mul(2),
+        );
+    let graph_options = DiskAnnSearchOptions {
+        beam_width: limit.max(crate::vector_execution::DISKANN_NAVIGATION_BEAM),
+        max_working_bytes: options.max_working_bytes.saturating_sub(retained_bytes),
+        task: options.task_context,
+        ..Default::default()
+    };
+    let bytes = graph_options
+        .working_memory_bound(count, limit)
+        .map_err(projection_error)?
+        .saturating_add(retained_bytes);
+    Ok((bytes, graph_options))
 }
 
 impl Projection {

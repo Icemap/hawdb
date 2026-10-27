@@ -23,6 +23,14 @@ impl Database {
     /// Hydrate only changed native keys and retain every unchanged graph segment.
     /// The definition must match the build options. A feed gap or schema change
     /// requires an explicit rebuild; no partial cursor is acknowledged.
+    ///
+    /// A typed retryable background-admission refusal or pre-effect `BranchBusy`
+    /// may be retried with bounded backoff only after checking that this same
+    /// Consumer still has its completed generation and source epoch. Check the
+    /// task's cancellation/deadline between attempts. The qualification host
+    /// uses 25 ms backoff for at most 30 seconds; the library does not retry
+    /// automatically. Pending or uncertain publication must use Consumer
+    /// recovery, rather than being treated as a pre-effect refusal.
     pub fn catch_up_vector_index(
         &mut self,
         consumer: &mut SearchProjectionConsumer,
