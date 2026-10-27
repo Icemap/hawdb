@@ -1186,7 +1186,8 @@ its probe is unpublished and is not registered in CI.
 
 The root general unit lane owns `api::tests::query_observability::query_identity`.
 Its ordinary and concurrent cases cover read/write parameter rebinding, cache
-hits and disabled caches, exact current-text hashes across equivalent query
+hits and disabled caches, enabled/disabled summaries, recovery from failed
+observation to successful completion, exact current-text hashes across equivalent query
 spellings, telemetry, and summary/slow-log behavior after execution and planning
 refusals. Counter deltas after the two equivalent-spelling requests prove the
 ordinary and concurrent read hit, disabled-cache no-hit and SET bypass paths.
@@ -1199,6 +1200,24 @@ and deferred retained-cursor observation keep their existing owners. The manual
 [allocation probes](benchmarks/query_identity_2026_10_27/README.md) record ordinary
 and concurrent facade requests separately from admitted-host controls; no new
 CI benchmark target is registered.
+
+## Borrowed statement-summary completion
+
+The existing `//crates/system-sql:hawdb_system_sql_tests` / Prow crates owner
+covers borrowed versus owned completion, disabled capacity, first-sample
+retention across text/language/kind changes, UTF-8 truncation, failure recovery,
+FIFO eviction and saturating counters. Replay:
+`cargo test --locked -p hawdb-system-sql --lib statement_summary_tests`.
+The root general unit identity family above covers ordinary and concurrent
+facade integration, including telemetry and slow logs when summaries are disabled.
+No test profile, feature selection, timeout or execution lane changes.
+The Cargo-only `statement_summary_allocations` example is a manual host-owned
+allocation control; it compares current owned/borrowed inputs, separately from
+historical whole-query producers, and is not registered in CI. Build with
+`cargo build --locked --example statement_summary_allocations` and run
+`target/debug/examples/statement_summary_allocations 1000`.
+The [allocation record](benchmarks/statement_summary_2026_10_27/README.md)
+retains complete facade/component samples and admitted-host negative controls.
 
 ## Strict append preparation
 
