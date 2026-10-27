@@ -806,6 +806,19 @@ selection/profile/count matrix, cache policy, cold-build costs and local replay.
 The daily/manual abandonment lane remains separate and requires eight passing
 cases with the selected 1/2/4/8-thread setting. No fuzz campaign is added.
 
+## Request-owned Cypher identity
+
+The root general unit lane owns `api::tests::query_observability::query_identity`.
+Its ordinary and concurrent cases cover read/write parameter rebinding, cache
+hits and disabled caches, exact current-text hashes across equivalent query
+spellings, telemetry, and summary/slow-log behavior after execution and planning
+refusals. Replay: `cargo test --locked -p hawdb --lib query_identity_survives`.
+No profile, timeout, feature selection or execution lane changes. SQL, EXPLAIN
+and deferred retained-cursor observation keep their existing owners. The manual
+[allocation probes](benchmarks/query_identity_2026_10_27/README.md) record ordinary
+and concurrent facade requests separately from admitted-host controls; no new
+CI benchmark target is registered.
+
 ## Strict append preparation
 
 - Existing storage unit owner: `//crates/storage:hawdb_storage_tests`, discovered

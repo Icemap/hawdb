@@ -883,6 +883,7 @@ impl ProjectionRelationalReadBinding {
 
 #[derive(Debug, Clone, Copy, Default)]
 pub(super) struct StatementExecutionContext<'a> {
+    query_identity: Option<&'a hawdb_query::QueryIdentity>,
     execution_profile: Option<&'a executor::ReadExecutionProfile>,
     retained_profile: Option<&'a RetainedQueryProfile>,
     access_control: Option<&'a QueryAccessControlContext>,

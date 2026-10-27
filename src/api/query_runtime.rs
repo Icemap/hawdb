@@ -237,6 +237,18 @@ impl PreparedRuntimeQuery {
         self.parse_metrics.elapsed_nanos
     }
 
+    pub(super) fn take_query_identity(
+        &mut self,
+        cypher_text: &str,
+    ) -> Option<hawdb_query::QueryIdentity> {
+        // An incompatible request must not inherit the prepared text's hash,
+        // even when execution is refused before the ordinary request guards.
+        if self.cypher_text != cypher_text {
+            return None;
+        }
+        self.optimized.as_mut()?.query_identity.take()
+    }
+
     pub(crate) fn uses_external_seed(&self) -> bool {
         let mut required = false;
         if let Some(optimized) = &self.optimized {
@@ -892,10 +904,11 @@ impl Database {
                 QueryExecutionTrace::uncached(statement),
             ));
         }
+        let mut query_identity = None;
         let query_result = (|| {
             query_runtime_checkpoint(task_context)?;
             query_work_request_for_statement(&self.system_variables, &statement)?;
-            let optimized = match prepared_optimized {
+            let mut optimized = match prepared_optimized {
                 Some(optimized) => optimized,
                 _ => self.optimized_query_plan_for_request(
                     cypher_text,
@@ -906,6 +919,7 @@ impl Database {
                     scoring,
                 )?,
             };
+            query_identity = optimized.query_identity.take();
             let is_mutation = executor::is_mutation_plan(&optimized.physical_plan)?;
             if is_mutation {
                 self.ensure_writable()?;
@@ -1015,6 +1029,7 @@ impl Database {
             started,
             statement_result,
             StatementExecutionContext {
+                query_identity: query_identity.as_ref(),
                 execution_profile,
                 retained_profile: None,
                 access_control,
