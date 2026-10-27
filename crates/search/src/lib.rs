@@ -5330,6 +5330,13 @@ struct SearchProjectionProbeFieldSummary {
 fn search_projection_probe_compressed_vector_projection_report(
     index: &SearchIndex,
 ) -> serde_json::Value {
+    // This capability describes compiled dispatch support; per-query candidate
+    // metrics report the actual selected kernel, including scalar fallback.
+    let supports_runtime_simd_dispatch = cfg!(any(
+        target_arch = "x86",
+        target_arch = "x86_64",
+        target_arch = "aarch64"
+    ));
     let projection = index.rabitq_projection().or_else(|| {
         index
             .path
@@ -5360,7 +5367,7 @@ fn search_projection_probe_compressed_vector_projection_report(
             "supports_allowlist": true,
             "supports_filter_bitmap": true,
             "supports_scalar_reference": true,
-            "supports_runtime_simd_dispatch": false,
+            "supports_runtime_simd_dispatch": supports_runtime_simd_dispatch,
             "supports_governed_parallelism": true,
             "raw_rerank_required": true,
             "persisted_artifact_used": projection.is_file_backed(),
@@ -5380,7 +5387,7 @@ fn search_projection_probe_compressed_vector_projection_report(
             "supports_allowlist": true,
             "supports_filter_bitmap": true,
             "supports_scalar_reference": true,
-            "supports_runtime_simd_dispatch": false,
+            "supports_runtime_simd_dispatch": supports_runtime_simd_dispatch,
             "supports_governed_parallelism": true,
             "raw_rerank_required": true,
             "persisted_artifact_used": false,
@@ -13511,6 +13518,14 @@ mod tests {
             "hawdb_rabitq_scan"
         );
         assert_eq!(probe["compressed_vector_projection"]["compiled"], true);
+        assert_eq!(
+            probe["compressed_vector_projection"]["supports_runtime_simd_dispatch"],
+            cfg!(any(
+                target_arch = "x86",
+                target_arch = "x86_64",
+                target_arch = "aarch64"
+            ))
+        );
         assert_eq!(probe["compressed_vector_projection"]["ready"], true);
         assert_eq!(
             probe["compressed_vector_projection"]["bit_width"],

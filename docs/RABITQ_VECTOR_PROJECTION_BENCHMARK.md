@@ -1,16 +1,146 @@
 # RaBitQ Vector Projection Benchmark
 
-The 1-bit and 4-bit RaBitQ projections currently share one portable scalar
-scoring kernel. Their code layout follows Faiss: an LSB-first sign plane and,
-for multi-bit codes, a separate LSB-first refinement plane. There are no AVX2
-or NEON throughput claims yet. On Arm, the explicit NEON preference reaches
-the same scalar fallback that Faiss currently uses for RaBitQ; it is not a
-vectorized kernel. Measurements from a different quantization format are not
-comparable and are not evidence for RaBitQ.
+RaBitQ remains an explicitly selectable compressed candidate backend; the
+default DiskANN engine has separate scoring. The existing RaBitQ memory and file scan paths select AVX2 automatically on capable
+x86/x86_64 CPUs. AArch64 also has a NEON scorer, selected explicitly with
+`KernelPreference::Neon`; automatic selection remains scalar there until native
+qualification is complete. Other CPUs retain the portable scalar scorer. Both
+the default 4-bit and optional 1-bit encodings are supported without changing artifacts,
+public APIs, candidate ordering, or the raw-vector reranking stage.
 
-Build options default to 4-bit RaBitQ (`RaBitQBitWidth::Four`). Select
-`RaBitQBitWidth::One` explicitly for the 1-bit control. Qualify the recall and
-resource profile of each width separately.
+## Faiss SIMD adaptation
+
+The scorer adapts the eight-coordinate sign expansion in
+[Faiss `multibit::ip_bitplane_avx2`](https://github.com/facebookresearch/faiss/blob/71c7f482d2da0aa1fbed179485818184a5d7df42/faiss/utils/simd_impl/rabitq_avx2.cpp).
+For HawDB's three refinement bits, AVX2 variable shifts unpack eight codes from
+exactly three bytes. This replaces upstream BMI2 PEXT and avoids its padded
+wide reads. Products use SIMD, but additions retain scalar coordinate order:
+there is no FMA, horizontal reassociation, or numerical tolerance relaxation.
+The remaining zero to seven coordinates use the scalar decoder. Runtime
+feature detection and slice bounds guard the unsafe intrinsic calls.
+
+Upstream MIT notices are retained in
+[`kernel/avx2.rs`](../crates/vector-projection/src/kernel/avx2.rs) and
+[`kernel/neon.rs`](../crates/vector-projection/src/kernel/neon.rs); crate metadata
+declares `Apache-2.0 AND MIT`. No C++ runtime or new dependency is introduced.
+Faiss FastScan, IVF/PQ/OPQ, GPU indexes, and collector changes are not included:
+they do not supply a verified drop-in improvement to this existing scan path.
+
+The NEON version adapts
+[Faiss `multibit::ip_multibit_neon`](https://github.com/facebookresearch/faiss/blob/71c7f482d2da0aa1fbed179485818184a5d7df42/faiss/utils/simd_impl/rabitq_neon.cpp).
+It specializes the three refinement bits to two four-lane 32-bit shifts and
+keeps the same scalar accumulation order and bounded tail reads as AVX2.
+32-bit Arm retains its previous scalar fallback.
+
+## Local full-scan benchmark
+
+```bash
+cargo test --locked --release -p hawdb-vector-projection \
+  simd_ -- --ignored --nocapture --test-threads=1
+```
+
+These ignored local benchmarks are excluded from routine CI. The scan benchmark
+compares the unchanged scalar scorer with explicit native AVX2 or NEON through
+complete `InMemoryProjection::search` and `FileProjection::search` calls. Timings include
+query transformation, filtering, scoring, top-k selection, and worker setup
+and merging. They exclude projection construction, artifact open, and final
+raw-vector reranking by the embedded database facade.
+
+The deterministic workload has 4,096 rows in four segments, duplicate vectors
+for tie handling, top-k 10, and three queries. It covers 1-bit and 4-bit codes;
+384, 768, 769, and 1,536 dimensions; 1% and 50% allowlists plus unfiltered
+scans; and one or four requested workers. Sparse admission can reduce four
+requested workers to one. Each case warms both paths, alternates execution
+order across 15 samples, and reports median microseconds. File mappings use a
+warm OS page cache. Payload/query CRC32 checksums, actual worker counts,
+scored rows, and admitted working bytes are emitted with each result.
+Keep raw logs outside Git.
+
+Every measured query asserts bit-identical scores and identical candidate IDs.
+All report fields except the selected kernel must match, including memory
+admission. The benchmark also checks packed-code parity across dimension tails,
+unaligned inputs, signed zeros, subnormals, and mixed finite magnitudes.
+Ordinary CI additionally covers all code values and lanes, short input rejection,
+empty/sparse/dense allowlists, ties, multiple top-k limits, and parallel merging.
+
+Local observation (2026-10-27): Linux x86_64, AMD Ryzen 7 7735HS, pinned Rust
+1.97.1, repository release profile, base
+`804f1a6139f73470c58167411f6cad871efffdbf` plus the uncommitted SIMD adaptation.
+This is a synthetic development measurement, not representative Mem workload
+or production qualification. Across 96 cases, speedup ranged from 2.99–7.07x
+for 1-bit and 3.83–6.95x for 4-bit, with no measured regression in this matrix.
+The following subset uses default 4-bit codes, one worker, and no allowlist:
+
+| Dimensions | Backend | Scalar median (us) | AVX2 median (us) | Speedup |
+| ---: | --- | ---: | ---: | ---: |
+| 384 | Memory | 7363.0 | 1084.3 | 6.79x |
+| 384 | File | 7319.4 | 1082.4 | 6.76x |
+| 768 | Memory | 14694.7 | 2139.1 | 6.87x |
+| 768 | File | 14868.3 | 2172.6 | 6.84x |
+| 769 | Memory | 14648.9 | 2144.9 | 6.83x |
+| 769 | File | 14770.3 | 2153.5 | 6.86x |
+| 1536 | Memory | 29210.5 | 4204.1 | 6.95x |
+| 1536 | File | 29128.3 | 4202.3 | 6.93x |
+
+The kernel adds no heap allocation or per-query lookup table. Existing
+32-row cancellation checkpoints remain unchanged. A companion benchmark measures
+response to a 1 ms deadline on warm, unfiltered 8,192-row, 1,536-dimensional
+scans for both widths, backends, and one/four workers. It reports the median and
+maximum deadline overshoot over 15 searches, plus cancelled/completed counts.
+These observations include OS scheduling and do not impose a universal latency
+threshold. Peak process RSS, cold I/O, full facade latency, and production recall
+are outside these local probes. In this run, all 120 searches per kernel reached
+the deadline: scalar per-case median overshoot ranged from 142.6–242.5 us
+(maximum 542.7 us), versus 5.3–67.7 us for AVX2 (maximum 92.3 us).
+No ARM/NEON throughput claim is made.
+
+## Initial development validation
+
+The existing Cargo/Bazel crate-test targets discover the new parity tests.
+Native platform execution remains required in CI, including explicit NEON parity
+on AArch64 and AVX2 parity on capable Linux/Windows x86_64 runners. The ignored
+release benchmark is local performance evidence, not a substitute for those
+platform checks or representative workload qualification.
+
+Initial local validation on base
+`804f1a6139f73470c58167411f6cad871efffdbf` plus the SIMD adaptation is recorded
+below. The PR description records checks after porting to current `main`.
+
+- `cargo fmt --all -- --check`: passed.
+- `cargo clippy --locked -p hawdb-vector-projection --all-targets --all-features --target <target> -- -D warnings`:
+  passed for `x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu`, and
+  `x86_64-pc-windows-gnu`. Cross-target checks do not establish native runtime parity.
+- The two ignored release benchmarks above: all 96 scan comparisons,
+  packed-code differential checks, and 16 deadline-response cases passed.
+- `bazel test //crates/fuzz:hawdb_fuzz_tests //crates/fuzz:hawdb_fuzz_cli_tests //:hawdb_linux_ci_fuzz_smoke_test`:
+  passed 95 targets (33 executed, 62 cached) after AVX2 integration. The later
+  AArch64-only kernel extension is cross-checked above; native NEON execution
+  remains pending.
+- Ordinary crate regression and native platform tests are registered with
+  existing CI targets; they were not run locally and CI results are pending.
+
+## Native AArch64 qualification
+
+Run the same command above on the ARM machine with the pinned Rust toolchain.
+It must emit `"kernel":"neon"` for the scan benchmark and validate every timed
+query against scalar results. No target flags or C++ dependencies are needed.
+The command runs benchmarks serially to avoid measuring their CPU contention.
+For the ordinary regression corpus, use:
+
+```bash
+cargo test --locked -p hawdb-vector-projection kernel::
+```
+
+Record CPU/OS, compiler, build profile, complete benchmark output, and any
+regressions. Native correctness and speedup are pending; cross-compilation alone
+does not authorize changing AArch64 `Auto` to NEON. Existing application options
+can select `VectorSearchKernelPreference::Neon` explicitly for host measurements.
+
+## Earlier scalar baseline and full-query profile
+
+The following baseline and end-to-end profile predate this SIMD port. Their
+source revisions and evidence remain unchanged. Candidate-scan speedups above
+are not whole-query or default-DiskANN speedups.
 
 ## Required Measurements Before SIMD Dispatch
 
