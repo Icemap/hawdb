@@ -1150,6 +1150,18 @@ selection/profile/count matrix, cache policy, cold-build costs and local replay.
 The daily/manual abandonment lane remains separate and requires eight passing
 cases with the selected 1/2/4/8-thread setting. No fuzz campaign is added.
 
+## Query identity encoding
+
+The existing `//crates/query:hawdb_query_tests` / Prow crates lane owns published
+`q1`/`t1` vectors, length-prefixed UTF-8/NUL framing, zero/max-u16 version headers,
+lowercase hex, and ASCII-only language canonicalization across borrowed canonical
+names, mixed ASCII case, Unicode whitespace and preserved non-ASCII case.
+Replay: `cargo test --locked -p hawdb-query --lib`. These extend the existing
+normalization family without changing its feature matrix, profile or lane.
+The separate manual [encoding allocation experiment](benchmarks/query_identity_encoding_2026_10_27/README.md)
+records source-bound constructor/retained-byte and admitted-host controls;
+its probe is unpublished and is not registered in CI.
+
 ## Request-owned Cypher identity
 
 The root general unit lane owns `api::tests::query_observability::query_identity`.
