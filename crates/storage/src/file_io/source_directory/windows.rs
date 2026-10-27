@@ -842,8 +842,9 @@ pub(super) fn relabel_directory_new(
         name: [u16; 256],
     }
     let mut info = RenameInfo {
-        // Neither REPLACE_IF_EXISTS nor POSIX replacement is allowed.
-        flags: 0,
+        // Request POSIX semantics without REPLACE_IF_EXISTS. Existing targets
+        // must still refuse; held-descendant availability needs native proof.
+        flags: 2,
         root: root.as_raw_handle(),
         length: u32::try_from(target.0.len() * 2).expect("bounded component"),
         name: [0; 256],

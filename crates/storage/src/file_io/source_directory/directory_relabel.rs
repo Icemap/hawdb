@@ -198,7 +198,7 @@ impl CapturedDirectoryRelabel<'_> {
                 std::str::from_utf8(&self.target[..self.target_length]).expect("ASCII target"),
             );
             let state = &mut self.state;
-            let mut native = || {
+            let mut native = || -> io::Result<()> {
                 #[cfg(test)]
                 hooks::invoke(hooks::Boundary::BeforeNative)?;
                 *state = State::Attempted;

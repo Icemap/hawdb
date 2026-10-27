@@ -40,7 +40,12 @@ The native operation always uses the captured parent on both sides:
   check because native aliases can produce a successful no-op.
 - Windows: admitted direct/no-reparse DELETE-capable source helper, verified
   against the original live child, then `NtSetInformationFile` class65 with the
-  captured RootDirectory and replacement flags disabled. The target-only probe
+  captured RootDirectory and `FILE_RENAME_POSIX_SEMANTICS` (0x2) alone;
+  `FILE_RENAME_REPLACE_IF_EXISTS` (0x1) remains absent, so an existing target
+  must refuse. This requested flag does not establish that an open descendant
+  permits movement: native Windows qualification must demonstrate both held-anchor
+  positive cases and all no-replace guards. The earlier flags0 implementation
+  returned Access Denied in both held-anchor positives. The target-only probe
   reads `FileCaseSensitiveInformation` (class71) from the original held parent
   using its FILE_READ_ATTRIBUTES capability, validates the complete returned
   struct and known flag, then uses exact target lookup for a case-sensitive
