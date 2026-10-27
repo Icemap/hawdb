@@ -6,6 +6,25 @@ authoritative; this is a map of test families, not an exhaustive list of every
 Rust test function. Update it when changing a family's scope, build profile,
 execution lane, fixture size, isolation or known failure mode.
 
+The executor `scan::indexed_tests::bounded_index_projection` family covers
+admitted scalar-index projection reads with work budgets, single/multiple keys,
+NodeId-ordered duplicate merging, cross-property union deduplication, missing
+index fallback, residual predicates, cancellation, work refusal, early limits,
+payload/consumer refusal refunds, and pinned snapshots across update/delete.
+Its 256-row resident fixtures and complete-scan controls require selective reads
+to finish within 32/64 work units rather than enumerate the graph. One unit is
+charged before each scalar index probe and each posting-iterator advance,
+including end-of-list; heap capacity is admitted and proportional to query keys,
+not matching rows. The existing `//crates/executor:hawdb_executor_unit_tests`
+owner discovers all cases through `:hawdb_executor_tests`; replay with
+`cargo test --locked -p hawdb-executor --lib bounded_index_projection`.
+The existing `hawdb_projection_allocation_tests` owner retains before-copy
+payload-admission coverage. No test lane, timeout or feature scope changes.
+Root `api::tests::query_execution::bounded_scalar_index_queries_rebind_in_and_union_parameters`
+also checks ordinary parameterized Cypher equality/IN/OR, fused projection plans,
+ordered output and parameter rebinding under a 64-unit task budget. Its existing
+general root owner runs both default/minimal selections.
+
 The `api::tests::materialized_views` family covers synchronous SQL view DDL,
 projection/group retractions, differential SELECT equality, admission refusals,
 rollback, concurrent commits, cascade deletes and WAL/checkpoint recovery.
