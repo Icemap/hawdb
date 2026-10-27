@@ -4,6 +4,13 @@
 //! Configured directory names retain native OS spelling. Artifact names keep
 //! their separate portable ASCII contract; neither name grants publication or
 //! cleanup authority.
+//!
+//! Windows operations use verbatim NT components. Acceptance does not guarantee
+//! ordinary Win32 pathname or Explorer interoperability: trailing dots/spaces
+//! and DOS device names can have different meanings there. Before effects,
+//! configured-root callers must either validate names for every pathname API
+//! they will use or retain native-component operations through reopen and
+//! cleanup. This primitive does not choose or qualify that caller policy.
 
 use super::{directory_candidate::State, *};
 use std::ffi::OsString;
