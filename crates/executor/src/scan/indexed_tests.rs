@@ -280,7 +280,7 @@ fn bounded_index_projection_stops_before_walking_remaining_postings() {
         &access(&[255, 2, 17]),
         Options {
             task: Some(&task),
-            limit: ExecutionLimit::from_user_max_rows(Some(1)).unwrap(),
+            limit: ExecutionLimit::unlimited().child_for_limit(0, Some(1)),
             ..Default::default()
         },
     );
