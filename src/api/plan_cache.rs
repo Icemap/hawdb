@@ -71,6 +71,9 @@ pub(super) struct PlanCacheContext<'a, S = GraphStore> {
 }
 
 pub(super) struct OptimizedQueryPlan {
+    // Request-owned, never retained in a shared plan-cache entry. The recorder
+    // takes this after planning so cache hits preserve the current text hash.
+    pub(super) query_identity: Option<hawdb_query::QueryIdentity>,
     pub(super) physical_plan: PhysicalPlan,
     pub(super) trace: OptimizerTrace,
     pub(super) plan_cache_lookup: PlanCacheLookup,
@@ -789,6 +792,7 @@ pub(super) fn optimized_query_plan_for<S: crate::executor::ExecutionStore>(
                 .push("plan cache hit: parameterized physical plan template".to_string());
             record_access_control_plan_decision(&mut trace, context.access_control);
             return Ok(OptimizedQueryPlan {
+                query_identity: Some(query_identity),
                 physical_plan,
                 trace,
                 plan_cache_lookup: PlanCacheLookup::Hit,
@@ -911,6 +915,7 @@ pub(super) fn optimized_query_plan_for<S: crate::executor::ExecutionStore>(
             .decisions
             .push("plan cache miss: optimized parameterized physical plan template".to_string());
         return Ok(OptimizedQueryPlan {
+            query_identity: Some(query_identity),
             physical_plan,
             trace,
             plan_cache_lookup: PlanCacheLookup::Miss,
@@ -924,6 +929,7 @@ pub(super) fn optimized_query_plan_for<S: crate::executor::ExecutionStore>(
             .decisions
             .push(format!("plan cache bypass: {}", reason.as_str()));
         return Ok(OptimizedQueryPlan {
+            query_identity: Some(query_identity),
             physical_plan,
             trace,
             plan_cache_lookup: PlanCacheLookup::Bypass(reason),

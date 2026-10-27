@@ -17,6 +17,8 @@ use crate::optimizer::OptimizerTrace;
 #[cfg(feature = "acl")]
 use crate::{QueryAccessControlContext, RuntimeCapabilities, RuntimeCapability};
 
+mod query_identity;
+
 #[test]
 fn explain_reports_memo_allocation_limits_without_plan_degradation_warnings() {
     for (max_groups, exceeded) in [(0, true), (128, false)] {

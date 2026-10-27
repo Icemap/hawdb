@@ -1,5 +1,5 @@
 // Copyright 2026 Nowledge
-// Licensed under the Apache License, Version 2.0.
+// SPDX-License-Identifier: Apache-2.0
 
 //! Captured logical directory paired with SourceDirectory's live native handle.
 //! Paths label observations; child operations use held inodes and native roots.
@@ -35,6 +35,24 @@ impl NativeDirectoryTrace {
         self.core.mutate_observed(
             Some((IoEvent::CreateDirectory, &label)),
             |engine| engine.create_directory_at(self.inode, name).map(|_| ()),
+            native,
+        )
+    }
+
+    pub(crate) fn link_child_new(
+        &self,
+        name: &Path,
+        target: &Self,
+        target_name: &Path,
+        native: impl FnOnce() -> io::Result<()>,
+    ) -> io::Result<()> {
+        if !Arc::ptr_eq(&self.core, &target.core) {
+            return Err(invalid("captured hard link crosses recorder domains"));
+        }
+        let label = target.opened_path.join(target_name);
+        self.core.mutate_observed(
+            Some((IoEvent::HardLink, &label)),
+            |engine| engine.hard_link_at(self.inode, name, target.inode, target_name),
             native,
         )
     }

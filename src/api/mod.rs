@@ -112,7 +112,7 @@ mod vector_index;
 pub use vector_index::{
     VectorIndexBuildError, VectorIndexBuildOptions, VectorIndexField, VectorIndexLanguageBudget,
     VectorIndexLanguageReport, VectorIndexReadError, VectorIndexReadTransaction,
-    VectorIndexSqlReport, VectorIndexSqlRequest,
+    VectorIndexSqlReport, VectorIndexSqlRequest, VectorIndexUpdateReport,
 };
 mod transaction_read_dependencies;
 pub use transaction_read_dependencies::{
@@ -883,6 +883,7 @@ impl ProjectionRelationalReadBinding {
 
 #[derive(Debug, Clone, Copy, Default)]
 pub(super) struct StatementExecutionContext<'a> {
+    query_identity: Option<&'a hawdb_query::QueryIdentity>,
     execution_profile: Option<&'a executor::ReadExecutionProfile>,
     retained_profile: Option<&'a RetainedQueryProfile>,
     access_control: Option<&'a QueryAccessControlContext>,

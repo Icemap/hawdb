@@ -164,13 +164,20 @@ impl StatementRecordingTarget<'_> {
         context: StatementExecutionContext<'_>,
     ) {
         let elapsed_micros = started.elapsed().as_micros();
-        let query_identity = hawdb_query::QueryIdentity::new(query_language, query_text);
+        let fallback_identity;
+        let query_identity = match context.query_identity {
+            Some(identity) => identity,
+            None => {
+                fallback_identity = hawdb_query::QueryIdentity::new(query_language, query_text);
+                &fallback_identity
+            }
+        };
         let execution = match result {
             Ok(row_count) => system_sql::StatementExecution::completed(
                 query_language,
                 query_text,
                 statement_kind,
-                &query_identity,
+                query_identity,
                 elapsed_micros,
                 row_count,
             ),
@@ -178,7 +185,7 @@ impl StatementRecordingTarget<'_> {
                 query_language,
                 query_text,
                 statement_kind,
-                &query_identity,
+                query_identity,
                 elapsed_micros,
                 error.to_string(),
             ),
@@ -229,7 +236,7 @@ impl StatementRecordingTarget<'_> {
                     query_language,
                     statement_kind,
                     query_text,
-                    query_identity: &query_identity,
+                    query_identity,
                     elapsed_micros,
                     row_count,
                     success: true,

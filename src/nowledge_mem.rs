@@ -2426,8 +2426,12 @@ fn vector_score_source(value: &str) -> Result<hawdb_executor::VectorScoreSource>
     match value {
         "unavailable" | "none" => Ok(hawdb_executor::VectorScoreSource::Unavailable),
         "raw_vector" => Ok(hawdb_executor::VectorScoreSource::RawVector),
-        "ann_approximate" => Ok(hawdb_executor::VectorScoreSource::AnnApproximate),
-        "quantized_approximate" => Ok(hawdb_executor::VectorScoreSource::QuantizedApproximate),
+        "ann_approximate" | "graph_distance" => {
+            Ok(hawdb_executor::VectorScoreSource::AnnApproximate)
+        }
+        "quantized_approximate" | "quantized_projection" => {
+            Ok(hawdb_executor::VectorScoreSource::QuantizedApproximate)
+        }
         _ => Err(HawDBError::Execution(
             "vector search returned an unsupported score source".to_string(),
         )),
@@ -2478,6 +2482,9 @@ fn vector_fallback_reason_code(
         }
         SearchFallbackReasonCode::CompressedVectorBudgetExceeded => {
             Some(hawdb_executor::VectorFallbackReasonCode::CompressedVectorBudgetExceeded)
+        }
+        SearchFallbackReasonCode::DiskAnnCacheBudgetExceeded => {
+            Some(hawdb_executor::VectorFallbackReasonCode::DiskAnnCacheBudgetExceeded)
         }
         SearchFallbackReasonCode::QueryEmbeddingMissing => {
             Some(hawdb_executor::VectorFallbackReasonCode::QueryEmbeddingMissing)

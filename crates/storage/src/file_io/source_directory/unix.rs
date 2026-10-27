@@ -1,5 +1,5 @@
 // Copyright 2026 Nowledge
-// Licensed under the Apache License, Version 2.0.
+// SPDX-License-Identifier: Apache-2.0
 
 use super::*;
 use std::os::fd::{AsRawFd, FromRawFd};
@@ -16,6 +16,36 @@ fn name_bytes(name: ChildName<'_>) -> [u8; 256] {
     let mut bytes = [0; 256];
     bytes[..name.0.len()].copy_from_slice(name.0.as_bytes());
     bytes
+}
+
+pub(super) fn link_child_new(
+    source: &std::fs::File,
+    source_name: ChildName<'_>,
+    _expected: &std::fs::File,
+    target: &std::fs::File,
+    target_name: ChildName<'_>,
+    _context: &FileOpenContext,
+) -> io::Result<()> {
+    let source_name = name_bytes(source_name);
+    let target_name = name_bytes(target_name);
+    // SAFETY: both captured roots and terminated single components remain
+    // live. Flags zero never follow a source symlink; an occupied destination
+    // is rejected. The owner excludes source replacement and validates the
+    // linked inode against its original held source before acknowledgement.
+    let status = unsafe {
+        libc::linkat(
+            source.as_raw_fd(),
+            source_name.as_ptr().cast(),
+            target.as_raw_fd(),
+            target_name.as_ptr().cast(),
+            0,
+        )
+    };
+    if status == -1 {
+        Err(io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
 }
 
 pub(super) fn create_directory(root: &std::fs::File, name: ChildName<'_>) -> io::Result<()> {

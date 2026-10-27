@@ -8732,6 +8732,7 @@ mod tests {
         let store = GraphStore::open(&path, &mut catalog).unwrap();
         assert_eq!(store.commit_epoch(), 2);
         assert_eq!(store.search_projection_change_log_start_epoch(), 0);
+        assert!(store.node_owned(NodeId(0)).unwrap().is_none());
         assert_eq!(
             store.search_projection_graph_changes_after(0),
             vec![
@@ -8747,7 +8748,7 @@ mod tests {
                 },
                 SearchProjectionGraphChange {
                     commit_epoch: 2,
-                    upsert_node_ids: Vec::new(),
+                    upsert_node_ids: vec![0],
                     delete_document_ids: vec!["memory:deleted-memory".to_string()],
                     relational_primary_key_changes:
                         hawdb_storage::relational::RelationalPrimaryKeyChangeCapture::Captured {

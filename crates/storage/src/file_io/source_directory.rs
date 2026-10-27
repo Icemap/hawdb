@@ -1,5 +1,5 @@
 // Copyright 2026 Nowledge
-// Licensed under the Apache License, Version 2.0.
+// SPDX-License-Identifier: Apache-2.0
 
 //! Captured native directory authority; caller owns publication exclusion and
 //! artifact registrations separately. No pathname is retained or consulted by
@@ -25,6 +25,16 @@ mod platform;
 mod platform {
     use super::*;
     pub(super) fn create_directory(_root: &std::fs::File, _name: ChildName<'_>) -> io::Result<()> {
+        Err(unsupported())
+    }
+    pub(super) fn link_child_new(
+        _source: &std::fs::File,
+        _source_name: ChildName<'_>,
+        _expected: &std::fs::File,
+        _target: &std::fs::File,
+        _target_name: ChildName<'_>,
+        _context: &FileOpenContext,
+    ) -> io::Result<()> {
         Err(unsupported())
     }
     pub(super) fn create_control_candidate(
@@ -421,9 +431,103 @@ impl SourceDirectory {
         let name = ChildName::new(name)?;
         let scope = native_scope(context)?;
         self.require_scope(&scope)?;
+        self.matches_child_file_scoped(context, name, file)
+    }
+
+    fn matches_child_file_scoped(
+        &self,
+        context: &FileOpenContext,
+        name: ChildName<'_>,
+        file: &File,
+    ) -> io::Result<bool> {
         self.root.with_native(|root| {
             file.with_native(|file| platform::matches_child_file(root, name, file, context))
         })
+    }
+
+    /// Reuse one immutable regular file in another captured directory without
+    /// copying its bytes or resolving either directory's diagnostic pathname.
+    /// Both directories must belong to the same project/recorder; `expected`
+    /// pins the original source file. The caller excludes source mutation and
+    /// target-name reuse and owns the target's cleanup/publication custody.
+    ///
+    /// Creation is exclusive. A later identity check or lost response can fail
+    /// after the link exists: retain original target custody rather than adopt
+    /// or retry the name. This does not synchronize the target directory or
+    /// grant integrity, source-watermark, publication or retirement authority.
+    pub fn link_child_new(
+        &self,
+        context: &FileOpenContext,
+        source_name: &str,
+        expected: &File,
+        target: &Self,
+        target_name: &str,
+    ) -> io::Result<()> {
+        self.require_context(context)?;
+        target.require_context(context)?;
+        let FileBacking::Native(native_expected) = &expected.backing else {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "immutable link requires an already held native source",
+            ));
+        };
+        self.require_context(&native_expected.permit.context)?;
+        let source_name = ChildName::new(source_name)?;
+        let target_name = ChildName::new(target_name)?;
+        let scope = native_scope(context)?;
+        self.require_scope(&scope)?;
+        target.require_scope(&scope)?;
+        if !self.matches_child_file_scoped(context, source_name, expected)? {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "immutable link source binding changed",
+            ));
+        }
+        let native = || {
+            self.root
+                .with_native(|source| {
+                    target.root.with_native(|destination| {
+                        // The directory recorder owns model exclusion around
+                        // this native call. Re-entering the file trace would
+                        // recursively lock that same model. Native custody was
+                        // checked above; no cache lookup or fresh open occurs.
+                        platform::link_child_new(
+                            source,
+                            source_name,
+                            &native_expected.inner,
+                            destination,
+                            target_name,
+                            context,
+                        )
+                    })
+                })
+                .map_err(|error| context.map_open_error(error))
+        };
+        #[cfg(any(test, feature = "test-support"))]
+        match (self.trace.as_deref(), target.trace.as_deref()) {
+            (Some(source), Some(target)) => source.link_child_new(
+                Path::new(source_name.0),
+                target,
+                Path::new(target_name.0),
+                native,
+            )?,
+            (None, None) => native()?,
+            _ => {
+                return Err(io::Error::new(
+                    io::ErrorKind::Unsupported,
+                    "immutable link has mismatched recorder custody",
+                ))
+            }
+        }
+        #[cfg(not(any(test, feature = "test-support")))]
+        native()?;
+        if !target.matches_child_file_scoped(context, target_name, expected)? {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "immutable linked target binding changed",
+            ));
+        }
+        Ok(())
     }
 
     /// Existing current-generation WAL only: no create, truncate or publication.

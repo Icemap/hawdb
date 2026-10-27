@@ -478,7 +478,15 @@ sh_test(
     name = "power_loss_partition_script_test",
     size = "small",
     srcs = ["scripts/branch-power-loss-shard.test.py"],
-    data = ["scripts/branch-power-loss-shard.py"],
+    data = [
+        "scripts/branch-power-loss-shard.py",
+        "scripts/vector_recovery_cases.py",
+        "scripts/automatic_checkpoint_cases.py",
+        ".github/workflows/ci.yml",
+        ".github/workflows/native-bindings.yml",
+        "src/api/tests/power_loss/consumer_vector_incremental/faults/recovery.rs",
+        "src/api/tests/power_loss/automatic_checkpoint.rs",
+    ],
 )
 
 test_suite(

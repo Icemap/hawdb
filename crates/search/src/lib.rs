@@ -77,6 +77,8 @@ mod compression_tests;
 /// Internal assembly support for the embedded database facade.
 #[doc(hidden)]
 pub mod consumer;
+#[cfg(feature = "vector-search")]
+mod diskann_identity;
 #[cfg(test)]
 mod document_decoding_tests;
 mod document_encoding;
@@ -98,6 +100,8 @@ pub mod projection_evidence;
 #[doc(hidden)]
 pub mod projection_evidence_cli;
 mod query_control;
+#[cfg(feature = "vector-search")]
+mod resident_diskann;
 mod resident_text_seed;
 
 #[doc(hidden)]
@@ -264,7 +268,6 @@ pub use recall_validation::{
     MAX_VECTOR_RECALL_VALIDATION_TOP_K, MINIMUM_VECTOR_QUALIFICATION_DOCUMENT_COUNT,
     VECTOR_RECALL_PRODUCTION_QUALIFICATION_PROTOCOL, VECTOR_RECALL_VALIDATION_PROTOCOL,
 };
-use snapshot_writer::write_search_snapshot;
 pub use snapshot_writer::SearchCheckpointReport;
 use vector_execution::{execute_search_vector_plan, SearchVectorExecutionRequest};
 
@@ -276,6 +279,22 @@ const SEARCH_SEGMENT_DESCRIPTOR_FILE: &str = "search_projection_segments.hawdb";
 const SEARCH_SEGMENT_PAYLOAD_FILE: &str = "search_projection_segment_payloads.hawdb";
 const SEARCH_SEGMENT_PAYLOAD_ARTIFACT_ID: u64 = 1;
 const RABITQ_CANDIDATE_BACKEND: &str = "hawdb_rabitq_candidate_projection";
+const DISKANN_CANDIDATE_BACKEND: &str = "hawdb_diskann_candidate_projection";
+
+#[derive(Clone, Copy)]
+enum VectorRecallProbeBackend {
+    Default,
+    Compressed,
+}
+
+impl VectorRecallProbeBackend {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Default => DISKANN_CANDIDATE_BACKEND,
+            Self::Compressed => RABITQ_CANDIDATE_BACKEND,
+        }
+    }
+}
 static QUARANTINE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 #[cfg(feature = "vector-search")]
 const SEARCH_RABITQ_PROJECTION_PREFIX: &str = "search_rabitq.";
@@ -542,6 +561,7 @@ pub enum SearchFallbackReasonCode {
     VectorIndexEmpty,
     CompressedVectorProjectionUnavailable,
     CompressedVectorBudgetExceeded,
+    DiskAnnCacheBudgetExceeded,
     QueryEmbeddingMissing,
     TextQueryEmpty,
 }
@@ -557,6 +577,7 @@ impl SearchFallbackReasonCode {
             SearchFallbackReasonCode::CompressedVectorBudgetExceeded => {
                 "compressed_vector_budget_exceeded"
             }
+            SearchFallbackReasonCode::DiskAnnCacheBudgetExceeded => "diskann_cache_budget_exceeded",
             SearchFallbackReasonCode::QueryEmbeddingMissing => "query_embedding_missing",
             SearchFallbackReasonCode::TextQueryEmpty => "text_query_empty",
         }
@@ -575,6 +596,9 @@ impl FromStr for SearchFallbackReasonCode {
             }
             "compressed_vector_budget_exceeded" => {
                 Ok(SearchFallbackReasonCode::CompressedVectorBudgetExceeded)
+            }
+            "diskann_cache_budget_exceeded" => {
+                Ok(SearchFallbackReasonCode::DiskAnnCacheBudgetExceeded)
             }
             "query_embedding_missing" => Ok(SearchFallbackReasonCode::QueryEmbeddingMissing),
             "text_query_empty" => Ok(SearchFallbackReasonCode::TextQueryEmpty),
@@ -878,6 +902,7 @@ pub struct VectorSearchExecutionOptions<'a> {
     pub kernel: VectorSearchKernelPreference,
     pub task_context: Option<&'a hawdb_core::RuntimeTaskContext>,
     capture_candidate_ids: bool,
+    exact: bool,
 }
 
 impl<'a> VectorSearchExecutionOptions<'a> {
@@ -892,6 +917,7 @@ impl<'a> VectorSearchExecutionOptions<'a> {
             kernel: VectorSearchKernelPreference::Auto,
             task_context,
             capture_candidate_ids: false,
+            exact: false,
         }
     }
 
@@ -911,6 +937,12 @@ impl<'a> VectorSearchExecutionOptions<'a> {
         self
     }
 
+    /// Bypass approximate graph candidates and score the complete eligible set.
+    pub fn with_exact_search(mut self) -> Self {
+        self.exact = true;
+        self
+    }
+
     pub fn capture_candidates_for_validation(mut self) -> Self {
         self.capture_candidate_ids = true;
         self
@@ -925,6 +957,7 @@ impl Default for VectorSearchExecutionOptions<'_> {
             kernel: VectorSearchKernelPreference::Auto,
             task_context: None,
             capture_candidate_ids: false,
+            exact: false,
         }
     }
 }
@@ -1016,6 +1049,10 @@ fn recall_validation_candidate_ids(
 #[derive(Clone, Copy)]
 enum VectorSearchBackend<'a> {
     Scalar,
+    #[cfg(feature = "vector-search")]
+    DiskAnn {
+        index: &'a SearchIndex,
+    },
     CompressedRequiredUnavailable,
     #[cfg(not(feature = "vector-search"))]
     _Lifetime(std::marker::PhantomData<&'a ()>),
@@ -1062,6 +1099,7 @@ impl<'a> AdaptiveVectorExecutionControls<'a> {
             kernel: VectorSearchKernelPreference::Auto,
             task_context: None,
             capture_candidate_ids: false,
+            exact: false,
         },
     };
     const PERSISTED: Self = Self {
@@ -1073,6 +1111,7 @@ impl<'a> AdaptiveVectorExecutionControls<'a> {
             kernel: VectorSearchKernelPreference::Auto,
             task_context: None,
             capture_candidate_ids: false,
+            exact: false,
         },
     };
     const RECALL_CANDIDATES: Self = Self {
@@ -1084,6 +1123,7 @@ impl<'a> AdaptiveVectorExecutionControls<'a> {
             kernel: VectorSearchKernelPreference::Auto,
             task_context: None,
             capture_candidate_ids: true,
+            exact: false,
         },
     };
 
@@ -1098,6 +1138,7 @@ impl<'a> AdaptiveVectorExecutionControls<'a> {
 
 #[derive(Clone, Copy)]
 enum VectorSearchBackendRequest<'a> {
+    Default,
     Fixed(VectorSearchBackend<'a>),
     Adaptive(AdaptiveVectorSearchRequest),
 }
@@ -1117,6 +1158,17 @@ struct PreparedAdaptiveVectorBackend {
 }
 
 impl<'a> SearchExecutionStrategy<'a> {
+    fn default_vector(
+        use_physical_range_reads: bool,
+        options: VectorSearchExecutionOptions<'a>,
+    ) -> Self {
+        let mut strategy = Self::fixed(VectorSearchBackend::Scalar, None, use_physical_range_reads);
+        strategy.vector_backend = VectorSearchBackendRequest::Default;
+        strategy.capture_candidate_ids = options.capture_candidate_ids;
+        strategy.vector_execution_options = options;
+        strategy
+    }
+
     fn fixed(
         vector_backend: VectorSearchBackend<'a>,
         vector_backend_fallback_reason: Option<String>,
@@ -1191,6 +1243,8 @@ impl VectorSearchBackend<'_> {
     fn report_name(self) -> &'static str {
         match self {
             Self::Scalar => "scalar_vector_scan",
+            #[cfg(feature = "vector-search")]
+            Self::DiskAnn { .. } => DISKANN_CANDIDATE_BACKEND,
             Self::CompressedRequiredUnavailable => "compressed_vector_projection_required",
             #[cfg(not(feature = "vector-search"))]
             Self::_Lifetime(_) => "scalar_vector_scan",
@@ -1204,6 +1258,8 @@ impl VectorSearchBackend<'_> {
     fn candidate_source(self) -> VectorCandidateSource {
         match self {
             Self::Scalar | Self::CompressedRequiredUnavailable => VectorCandidateSource::Scalar,
+            #[cfg(feature = "vector-search")]
+            Self::DiskAnn { .. } => VectorCandidateSource::Ann,
             #[cfg(not(feature = "vector-search"))]
             Self::_Lifetime(_) => VectorCandidateSource::Scalar,
             #[cfg(feature = "vector-search")]
@@ -1220,6 +1276,8 @@ impl VectorSearchBackend<'_> {
             .count();
         let covered_count = match self {
             Self::Scalar => candidate_count,
+            #[cfg(feature = "vector-search")]
+            Self::DiskAnn { .. } => candidate_count,
             Self::CompressedRequiredUnavailable => 0,
             #[cfg(not(feature = "vector-search"))]
             Self::_Lifetime(_) => candidate_count,
@@ -1453,6 +1511,9 @@ pub struct SearchIndex {
     read_freshness: Option<Arc<SearchProjectionFreshness>>,
     documents: ResidentDocuments,
     vector_index_descriptor: Option<hawdb_core::VectorIndexDescriptor>,
+    vector_document_summary: Option<vector_index::VectorDocumentSummary>,
+    canonical_vector_source_epoch: Option<u64>,
+    canonical_vector_delta: Option<vector_index::CanonicalVectorDelta>,
     consumer_binding: Option<consumer::ConsumerBinding>,
     consumer_binding_valid: bool,
     consumer_owner: std::sync::Weak<consumer::MutationOwner>,
@@ -1461,6 +1522,7 @@ pub struct SearchIndex {
     path: Option<PathBuf>,
     _project_files: Option<hawdb_storage::file_descriptors::ProjectFileDescriptors>,
     embedding_dimension: Option<usize>,
+    rabitq_checkpoint: Option<(u8, usize, u64)>,
     embedding_manifest: Option<SearchEmbeddingManifest>,
     import_source_graph_commit_epoch: Option<u64>,
     source_graph_commit_epoch: Option<u64>,
@@ -1474,6 +1536,8 @@ pub struct SearchIndex {
     rabitq_projection: Mutex<Option<Arc<RaBitQCandidateProjection>>>,
     #[cfg(feature = "vector-search")]
     rabitq_build_options: RaBitQCandidateProjectionBuildOptions,
+    #[cfg(feature = "vector-search")]
+    resident_diskann: resident_diskann::ResidentDiskAnn,
     segment_descriptor: Option<Arc<SearchSegmentDescriptor>>,
     segment_payload_reader: Option<Arc<hawdb_storage::scan::FileSegmentRangeReader>>,
     range_read_config: SearchRangeReadConfig,
@@ -1536,6 +1600,11 @@ impl SearchIndex {
                 error
             }
         })?;
+        if index.vector_document_summary.is_some() {
+            return Err(HawDBError::Storage(
+                "metadata-only vector Consumers require registered native reopen".into(),
+            ));
+        }
         if registered {
             out_of_core::validate_captured_resident_snapshot_identity(&index, publication)?;
         } else {
@@ -1661,6 +1730,11 @@ impl SearchIndex {
         options: RaBitQCandidateProjectionBuildOptions,
     ) {
         let _consumer_mutation = self.mark_untracked_consumer_mutation();
+        self.rabitq_checkpoint = Some((
+            options.bit_width.bits(),
+            options.segment_rows,
+            options.transform_seed,
+        ));
         self.rabitq_build_options = options;
         self.invalidate_rabitq_projection();
     }
@@ -1686,6 +1760,18 @@ impl SearchIndex {
             Err(_) => return Ok(()),
         };
         for (generation, artifact_path) in artifacts {
+            match resident_diskann::artifact::validate_file(self, &artifact_path, generation) {
+                Ok(resident_diskann::artifact::Restore::Ready) => return Ok(()),
+                Ok(resident_diskann::artifact::Restore::Skip) => continue,
+                Ok(resident_diskann::artifact::Restore::Other) => {}
+                Err(HawDBError::StorageIntegrity(_)) => {
+                    if let Some(name) = artifact_path.file_name().and_then(|name| name.to_str()) {
+                        quarantine_rebuildable_artifact(path, name);
+                    }
+                    continue;
+                }
+                Err(error) => return Err(error),
+            }
             let identity = self.rabitq_projection_identity(generation);
             match RaBitQCandidateProjection::load_from_path_classified(
                 &artifact_path,
@@ -1856,6 +1942,8 @@ impl SearchIndex {
             )?;
             self.validate_or_set_dimension(embedding.len())?;
         }
+        #[cfg(feature = "vector-search")]
+        self.resident_diskann.record_change(&document.id);
         self.record_lexical_upsert(&document);
         self.documents.insert(document.id.clone(), document);
         #[cfg(feature = "vector-search")]
@@ -1871,6 +1959,8 @@ impl SearchIndex {
 
     pub fn delete(&mut self, id: &str) {
         let _consumer_mutation = self.mark_untracked_consumer_mutation();
+        #[cfg(feature = "vector-search")]
+        self.resident_diskann.record_change(id);
         self.record_lexical_delete(id);
         self.documents.remove(id);
         #[cfg(feature = "vector-search")]
@@ -1933,6 +2023,8 @@ impl SearchIndex {
         let source_graph_commit_epoch_before = self.source_graph_commit_epoch;
         let mut deleted_documents = 0;
         for id in deletes {
+            #[cfg(feature = "vector-search")]
+            self.resident_diskann.record_change(&id);
             self.record_lexical_delete(&id);
             if self.documents.remove(&id).is_some() {
                 deleted_documents += 1;
@@ -1941,6 +2033,8 @@ impl SearchIndex {
         let upserted_documents = upserts.len();
         for row in upserts {
             let document = row.into_document();
+            #[cfg(feature = "vector-search")]
+            self.resident_diskann.record_change(&document.id);
             self.record_lexical_upsert(&document);
             self.documents.insert(document.id.clone(), document);
         }
@@ -2022,7 +2116,8 @@ impl SearchIndex {
     }
 
     pub fn document_count(&self) -> usize {
-        self.documents.len()
+        self.vector_document_summary
+            .map_or(self.documents.len(), |summary| summary.document_count)
     }
 
     /// Returns vector-bearing document IDs accepted by HawDB's metadata
@@ -2072,7 +2167,7 @@ impl SearchIndex {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         SearchProjectionFreshness {
-            document_count: self.documents.len(),
+            document_count: self.document_count(),
             import_source_graph_commit_epoch: self.import_source_graph_commit_epoch,
             source_graph_commit_epoch: self.source_graph_commit_epoch,
             durable_source_graph_commit_epoch,
@@ -2230,6 +2325,8 @@ impl SearchIndex {
         self.embedding_dimension = Some(manifest.dimension);
         self.embedding_manifest = Some(manifest);
         #[cfg(feature = "vector-search")]
+        self.resident_diskann.reset();
+        #[cfg(feature = "vector-search")]
         self.invalidate_rabitq_projection();
         Ok(())
     }
@@ -2278,6 +2375,8 @@ impl SearchIndex {
             self.documents = next_documents.into();
             self.segment_descriptor = None;
             self.segment_payload_reader = None;
+            #[cfg(feature = "vector-search")]
+            self.resident_diskann.reset();
             self.invalidate_lexical_projection();
             #[cfg(feature = "vector-search")]
             self.invalidate_rabitq_projection();
@@ -2633,9 +2732,23 @@ impl SearchIndex {
         &self,
         publication: Option<&out_of_core::SearchProjectionPublishLease>,
     ) -> Result<SearchCheckpointReport> {
+        self.checkpoint_with_task(publication, &RuntimeTaskContext::default())
+    }
+
+    fn checkpoint_with_task(
+        &self,
+        publication: Option<&out_of_core::SearchProjectionPublishLease>,
+        task: &RuntimeTaskContext,
+    ) -> Result<SearchCheckpointReport> {
         let Some(path) = &self.path else {
             return Ok(SearchCheckpointReport::in_memory(self.documents.len()));
         };
+        task.checkpoint()
+            .map_err(|reason| HawDBError::Execution(format!("checkpoint {reason}")))?;
+        let _io = task
+            .acquire_io_wave(NonZeroUsize::MIN)
+            .map_err(|error| HawDBError::Execution(error.to_string()))?;
+        let memory = build_memory::BuildMemory::new(task)?;
         let started = hawdb_core::time::Instant::now();
         let result = (|| {
             let owned_publication = if publication.is_some() {
@@ -2647,7 +2760,7 @@ impl SearchIndex {
                 .or(owned_publication.as_ref())
                 .expect("checkpoint retains publication authority");
             let snapshot_path = path.join(SEARCH_SNAPSHOT_FILE);
-            let snapshot = write_search_snapshot(
+            let snapshot = snapshot_writer::write_search_snapshot_with_context(
                 &snapshot_path,
                 snapshot_writer::SearchSnapshotMetadata {
                     source_graph_commit_epoch: self.source_graph_commit_epoch,
@@ -2656,14 +2769,19 @@ impl SearchIndex {
                     embedding_dimension: self.embedding_dimension,
                     consumer_binding: self.consumer_binding.as_ref(),
                     vector_index_descriptor: self.vector_index_descriptor.as_ref(),
+                    vector_document_summary: None,
+                    canonical_vector_source_epoch: None,
+                    rabitq_checkpoint: self.rabitq_checkpoint,
                 },
                 self.documents.values(),
+                &memory,
+                task,
             )?;
             let generation =
                 out_of_core::next_generation(path, self.lexical_config.max_manifest_bytes.get())?;
             #[cfg(feature = "vector-search")]
             let (generation, rabitq_bytes_written, rabitq) =
-                self.write_rabitq_projection(path, generation)?;
+                self.write_rabitq_projection(path, generation, task, publication_lease)?;
             #[cfg(not(feature = "vector-search"))]
             let rabitq_bytes_written = 0;
             let publication = out_of_core::write_resident_artifacts(
@@ -2675,6 +2793,7 @@ impl SearchIndex {
                     #[cfg(feature = "vector-search")]
                     rabitq,
                 },
+                task,
             )?;
             let projection_bytes_written = publication
                 .bytes_written
@@ -2733,6 +2852,8 @@ impl SearchIndex {
         &self,
         path: &Path,
         minimum_generation: u64,
+        task: &RuntimeTaskContext,
+        publication: &out_of_core::SearchProjectionPublishLease,
     ) -> Result<(u64, u64, Option<out_of_core::ResidentRaBitQArtifact>)> {
         if self
             .documents
@@ -2753,6 +2874,12 @@ impl SearchIndex {
             .max(loaded_generation.saturating_add(1))
             .max(artifact_generation.saturating_add(1));
         let artifact_path = path.join(rabitq_artifact_file(generation));
+        if let Some(artifact) =
+            resident_diskann::artifact::write(self, &artifact_path, generation, task, publication)?
+        {
+            self.invalidate_rabitq_projection();
+            return Ok((generation, artifact.reference.byte_length, Some(artifact)));
+        }
         let projection = RaBitQCandidateProjection::write_from_view(
             &artifact_path,
             &self.documents,
@@ -2778,6 +2905,7 @@ impl SearchIndex {
             vector_document_count: projection.manifest().document_count,
             payload_checksum: projection.manifest().payload_checksum,
             peak_build_working_bytes: projection.manifest().peak_build_working_bytes,
+            diskann_source_digest: None,
         };
         *self
             .rabitq_projection
@@ -2787,6 +2915,8 @@ impl SearchIndex {
     }
 
     /// Searches resident documents, returning unavailable-capability and execution errors.
+    /// Sources exceeding the optional graph cache use scalar search; use
+    /// [`Self::search_with_report`] for the fallback diagnostic.
     /// This entrypoint preserves in-memory payload access; `try_*` methods may read persisted ranges.
     pub fn search(
         &self,
@@ -2825,6 +2955,8 @@ impl SearchIndex {
 
     /// Searches resident documents, returning unavailable-capability and execution errors.
     /// This entrypoint preserves in-memory payload access; `try_*` methods may read persisted ranges.
+    /// Sources exceeding the optional graph cache use scalar search and report
+    /// [`SearchFallbackReasonCode::DiskAnnCacheBudgetExceeded`].
     pub fn search_with_options(
         &self,
         query_text: &str,
@@ -2837,7 +2969,49 @@ impl SearchIndex {
             query_embedding,
             mode,
             options,
-            SearchExecutionStrategy::fixed(VectorSearchBackend::Scalar, None, false),
+            SearchExecutionStrategy::default_vector(false, VectorSearchExecutionOptions::default()),
+            None,
+        )
+    }
+
+    /// Exhaustively score the complete eligible resident vector domain.
+    pub fn search_with_options_exact(
+        &self,
+        query_text: &str,
+        query_embedding: Option<&[f32]>,
+        mode: SearchMode,
+        options: SearchQueryOptions,
+    ) -> Result<SearchResultSet> {
+        self.try_search_with_options_using_vector_backend(
+            query_text,
+            query_embedding,
+            mode,
+            options,
+            SearchExecutionStrategy::default_vector(
+                false,
+                VectorSearchExecutionOptions::default().with_exact_search(),
+            ),
+            None,
+        )
+    }
+
+    /// Default graph candidates under the caller's memory and cancellation limits.
+    /// Sources exceeding the ordinary graph cache use scalar search with a
+    /// reported cache-budget fallback. Caller-selected limits remain binding.
+    pub fn try_search_with_options_context(
+        &self,
+        query_text: &str,
+        query_embedding: Option<&[f32]>,
+        mode: SearchMode,
+        options: SearchQueryOptions,
+        vector_options: VectorSearchExecutionOptions<'_>,
+    ) -> Result<SearchResultSet> {
+        self.try_search_with_options_using_vector_backend(
+            query_text,
+            query_embedding,
+            mode,
+            options,
+            SearchExecutionStrategy::default_vector(true, vector_options),
             None,
         )
     }
@@ -2854,7 +3028,7 @@ impl SearchIndex {
             query_embedding,
             mode,
             options,
-            SearchExecutionStrategy::fixed(VectorSearchBackend::Scalar, None, true),
+            SearchExecutionStrategy::default_vector(true, VectorSearchExecutionOptions::default()),
             None,
         )
     }
@@ -2872,7 +3046,7 @@ impl SearchIndex {
             query_embedding,
             mode,
             options,
-            SearchExecutionStrategy::fixed(VectorSearchBackend::Scalar, None, true),
+            SearchExecutionStrategy::default_vector(true, VectorSearchExecutionOptions::default()),
             Some(&access_control),
         )
     }
@@ -3012,11 +3186,39 @@ impl SearchIndex {
         )
     }
 
+    /// Validate the explicit compressed candidate path rather than the default engine.
+    pub fn validate_sampled_compressed_vector_recall(
+        &self,
+        options: VectorRecallValidationOptions,
+    ) -> VectorRecallValidationReport {
+        self.validate_sampled_vector_recall_with_backend(
+            options,
+            AdaptiveVectorExecutionControls::IN_MEMORY,
+            AdaptiveVectorExecutionControls::RECALL_CANDIDATES,
+            VectorRecallProbeBackend::Compressed,
+        )
+    }
+
     fn validate_sampled_vector_recall_with_controls(
         &self,
         options: VectorRecallValidationOptions,
         exact_controls: AdaptiveVectorExecutionControls<'_>,
         approximate_controls: AdaptiveVectorExecutionControls<'_>,
+    ) -> VectorRecallValidationReport {
+        self.validate_sampled_vector_recall_with_backend(
+            options,
+            exact_controls,
+            approximate_controls,
+            VectorRecallProbeBackend::Default,
+        )
+    }
+
+    fn validate_sampled_vector_recall_with_backend(
+        &self,
+        options: VectorRecallValidationOptions,
+        exact_controls: AdaptiveVectorExecutionControls<'_>,
+        approximate_controls: AdaptiveVectorExecutionControls<'_>,
+        backend: VectorRecallProbeBackend,
     ) -> VectorRecallValidationReport {
         let predicate_pushdown = search_metadata_predicate_pushdown(&options.metadata_filters);
         let eligible = || {
@@ -3027,7 +3229,8 @@ impl SearchIndex {
         };
         let sample_candidate_count = eligible().count();
         let mut accumulator =
-            VectorRecallValidationAccumulator::new(sample_candidate_count, &options);
+            VectorRecallValidationAccumulator::new(sample_candidate_count, &options)
+                .with_backend(backend.name());
         if predicate_pushdown.report.parse_error.is_some() {
             accumulator.mark_metadata_filter_invalid();
             return accumulator.finish();
@@ -3077,16 +3280,30 @@ impl SearchIndex {
                 rank_window: Some(accumulator.candidate_limit().saturating_add(1)),
                 ..exact_query_options
             };
-            let Ok(approximate) = self
-                .try_search_with_options_compressed_vector_projection_mode_internal(
-                    "",
-                    Some(embedding),
-                    SearchMode::Vector,
-                    approximate_query_options,
-                    AdaptiveVectorSearchOptions::new(CompressedVectorSearchMode::Required),
-                    approximate_controls,
-                )
-            else {
+            let approximate = match backend {
+                VectorRecallProbeBackend::Default => self
+                    .try_search_with_options_using_vector_backend(
+                        "",
+                        Some(embedding),
+                        SearchMode::Vector,
+                        approximate_query_options,
+                        SearchExecutionStrategy::default_vector(
+                            approximate_controls.use_physical_range_reads,
+                            approximate_controls.vector_execution_options,
+                        ),
+                        None,
+                    ),
+                VectorRecallProbeBackend::Compressed => self
+                    .try_search_with_options_compressed_vector_projection_mode_internal(
+                        "",
+                        Some(embedding),
+                        SearchMode::Vector,
+                        approximate_query_options,
+                        AdaptiveVectorSearchOptions::new(CompressedVectorSearchMode::Required),
+                        approximate_controls,
+                    ),
+            };
+            let Ok(approximate) = approximate else {
                 accumulator.mark_probe_execution_failed();
                 break;
             };
@@ -3117,18 +3334,49 @@ impl SearchIndex {
 
     pub fn validate_sampled_vector_recall_access_control(
         &self,
+        options: VectorRecallValidationOptions,
+        access_control: &SearchAccessControlContext,
+    ) -> VectorRecallValidationReport {
+        self.validate_sampled_vector_recall_access_control_backend(
+            options,
+            access_control,
+            VectorRecallProbeBackend::Default,
+        )
+    }
+
+    pub fn validate_sampled_compressed_vector_recall_access_control(
+        &self,
+        options: VectorRecallValidationOptions,
+        access_control: &SearchAccessControlContext,
+    ) -> VectorRecallValidationReport {
+        self.validate_sampled_vector_recall_access_control_backend(
+            options,
+            access_control,
+            VectorRecallProbeBackend::Compressed,
+        )
+    }
+
+    fn validate_sampled_vector_recall_access_control_backend(
+        &self,
         mut options: VectorRecallValidationOptions,
         access_control: &SearchAccessControlContext,
+        backend: VectorRecallProbeBackend,
     ) -> VectorRecallValidationReport {
         match access_control.effective_metadata_filters(&options.metadata_filters) {
             Ok(filters) => options.metadata_filters = filters,
             Err(_) => {
-                let mut accumulator = VectorRecallValidationAccumulator::new(0, &options);
+                let mut accumulator = VectorRecallValidationAccumulator::new(0, &options)
+                    .with_backend(backend.name());
                 accumulator.mark_metadata_filter_invalid();
                 return accumulator.finish();
             }
         }
-        self.validate_sampled_vector_recall(options)
+        self.validate_sampled_vector_recall_with_backend(
+            options,
+            AdaptiveVectorExecutionControls::IN_MEMORY,
+            AdaptiveVectorExecutionControls::RECALL_CANDIDATES,
+            backend,
+        )
     }
 
     pub fn vector_projection_qualification_identity(
@@ -3136,6 +3384,9 @@ impl SearchIndex {
     ) -> Option<VectorProjectionQualificationIdentity> {
         #[cfg(feature = "vector-search")]
         {
+            if self.rabitq_checkpoint.is_none() {
+                return self.resident_diskann.qualification_identity(self);
+            }
             let projection = self.rabitq_projection()?;
             let manifest = projection.manifest();
             Some(VectorProjectionQualificationIdentity {
@@ -3164,6 +3415,9 @@ impl SearchIndex {
     pub fn vector_projection_resource_evidence(&self) -> Option<VectorProjectionResourceEvidence> {
         #[cfg(feature = "vector-search")]
         {
+            // Resident graph snapshots do not persist construction measurements.
+            // Never manufacture their resource evidence from an unrelated codec.
+            self.rabitq_checkpoint?;
             let projection = self.rabitq_projection()?;
             let manifest = projection.manifest();
             let raw_vector_bytes = u64::try_from(manifest.document_count)
@@ -3203,6 +3457,22 @@ impl SearchIndex {
         expected_identity: crate::ProductionQualificationIdentity,
     ) -> VectorRecallProductionQualificationReport {
         let recall = self.validate_sampled_vector_recall(options);
+        VectorRecallProductionQualificationReport::evaluate(
+            recall,
+            self.vector_projection_qualification_identity()
+                .unwrap_or_default(),
+            evidence_binding,
+            expected_identity,
+        )
+    }
+
+    pub fn qualify_sampled_compressed_vector_recall_for_production(
+        &self,
+        options: VectorRecallValidationOptions,
+        evidence_binding: crate::ProductionEvidenceBinding,
+        expected_identity: crate::ProductionQualificationIdentity,
+    ) -> VectorRecallProductionQualificationReport {
+        let recall = self.validate_sampled_compressed_vector_recall(options);
         VectorRecallProductionQualificationReport::evaluate(
             recall,
             self.vector_projection_qualification_identity()
@@ -3443,7 +3713,53 @@ impl SearchIndex {
         filtered_documents.sort_unstable_by(|left, right| left.id.cmp(&right.id));
         let filtered_document_count = filtered_documents.len();
         let mut prepared_adaptive_backend = None;
+        let vector_backend_request = if vector_execution_options.exact {
+            VectorSearchBackendRequest::Fixed(VectorSearchBackend::Scalar)
+        } else {
+            vector_backend_request
+        };
         let vector_backend = match vector_backend_request {
+            VectorSearchBackendRequest::Default => {
+                #[cfg(feature = "vector-search")]
+                {
+                    let valid_query = query_embedding.is_some_and(|vector| {
+                        Some(vector.len()) == self.embedding_dimension
+                            && !vector.is_empty()
+                            && vector.iter().all(|coordinate| coordinate.is_finite())
+                            && vector.iter().any(|coordinate| *coordinate != 0.0)
+                    });
+                    if !vector_execution_options.exact && mode != SearchMode::Text && valid_query {
+                        let candidate_limit = options
+                            .offset
+                            .saturating_add(limit)
+                            .max(options.rank_window.unwrap_or(0))
+                            .max(
+                                hawdb_vector_projection::diskann::DiskAnnSearchOptions::default()
+                                    .beam_width,
+                            );
+                        if self.resident_diskann.admits_default_search(
+                            self,
+                            &filtered_documents,
+                            query_embedding.expect("valid query").len(),
+                            candidate_limit,
+                            vector_execution_options,
+                        )? {
+                            VectorSearchBackend::DiskAnn { index: self }
+                        } else {
+                            vector_fallback_reason_codes
+                                .push(SearchFallbackReasonCode::DiskAnnCacheBudgetExceeded);
+                            vector_fallback_reasons.push("resident DiskANN cache exceeds its memory envelope; using scalar vector scan".into());
+                            VectorSearchBackend::Scalar
+                        }
+                    } else {
+                        VectorSearchBackend::Scalar
+                    }
+                }
+                #[cfg(not(feature = "vector-search"))]
+                {
+                    VectorSearchBackend::Scalar
+                }
+            }
             VectorSearchBackendRequest::Fixed(backend) => backend,
             VectorSearchBackendRequest::Adaptive(request)
                 if mode != SearchMode::Text && query_embedding.is_some() =>
@@ -3558,7 +3874,7 @@ impl SearchIndex {
                 documents: &filtered_documents,
                 backend: vector_backend,
                 filter_fields: vector_filter_fields,
-                limit,
+                limit: options.offset.saturating_add(limit),
                 rank_window: options.rank_window,
                 capture_candidate_ids,
                 vector_execution_options,
@@ -4089,6 +4405,27 @@ impl SearchIndex {
             }
             let fields = line.split('\t').collect::<Vec<_>>();
             match fields.as_slice() {
+                ["canonical_vector_source_epoch", epoch] => {
+                    if self.canonical_vector_source_epoch.is_some() {
+                        return Err(vector_index::invalid("duplicate canonical vector source"));
+                    }
+                    self.canonical_vector_source_epoch =
+                        Some(parse_u64(epoch, "canonical vector source epoch")?);
+                }
+                ["vector_document_summary", documents, vectors, digest] => {
+                    if self.vector_document_summary.is_some() || !self.documents.is_empty() {
+                        return Err(vector_index::invalid(
+                            "duplicate or misplaced vector summary",
+                        ));
+                    }
+                    let summary = vector_index::VectorDocumentSummary {
+                        document_count: parse_usize(documents, "logical vector documents")?,
+                        vector_document_count: parse_usize(vectors, "vector-bearing documents")?,
+                        documents_digest: parse_u64(digest, "vector documents digest")?,
+                    };
+                    summary.validate()?;
+                    self.vector_document_summary = Some(summary);
+                }
                 ["vector_index_binding", encoded] => {
                     if self.vector_index_descriptor.is_some() || !self.documents.is_empty() {
                         return Err(HawDBError::StorageIntegrity(
@@ -4147,6 +4484,33 @@ impl SearchIndex {
                     };
                     self.embedding_dimension = Some(manifest.dimension);
                     self.embedding_manifest = Some(manifest);
+                    #[cfg(feature = "vector-search")]
+                    self.resident_diskann.reset();
+                }
+                ["rabitq_checkpoint", bits, rows, seed] => {
+                    let bits = parse_u64(bits, "RaBitQ bit width")?;
+                    let rows = parse_usize(rows, "RaBitQ segment rows")?;
+                    let seed = parse_u64(seed, "RaBitQ seed")?;
+                    if self.rabitq_checkpoint.is_some()
+                        || !matches!(bits, 1 | 4)
+                        || rows == 0
+                        || rows > u32::MAX as usize
+                    {
+                        return Err(HawDBError::StorageIntegrity(
+                            "invalid explicit RaBitQ checkpoint settings".into(),
+                        ));
+                    }
+                    self.rabitq_checkpoint = Some((bits as u8, rows, seed));
+                    #[cfg(feature = "vector-search")]
+                    {
+                        self.rabitq_build_options.bit_width = if bits == 1 {
+                            hawdb_vector_projection::RaBitQBitWidth::One
+                        } else {
+                            hawdb_vector_projection::RaBitQBitWidth::Four
+                        };
+                        self.rabitq_build_options.segment_rows = rows;
+                        self.rabitq_build_options.transform_seed = seed;
+                    }
                 }
                 ["embedding_dimension", raw] => {
                     let dimension = parse_usize(raw, "embedding dimension")?;
@@ -4161,6 +4525,11 @@ impl SearchIndex {
                     self.embedding_dimension = Some(dimension);
                 }
                 ["doc", raw_id, raw_title, raw_content, raw_embedding, raw_metadata] => {
+                    if self.vector_document_summary.is_some() {
+                        return Err(vector_index::invalid(
+                            "vector summary cannot contain resident rows",
+                        ));
+                    }
                     let embedding = decode_embedding(raw_embedding)?;
                     if let Some(embedding) = &embedding {
                         vector_index::validate_embedding(
@@ -4186,6 +4555,23 @@ impl SearchIndex {
                     )));
                 }
             }
+        }
+        if self.vector_document_summary.is_some()
+            && (self.vector_index_descriptor.is_none() || self.consumer_binding.is_none())
+        {
+            return Err(vector_index::invalid(
+                "vector summary requires a bound Consumer",
+            ));
+        }
+        if self.canonical_vector_source_epoch.is_some()
+            && (self.canonical_vector_source_epoch != self.source_graph_commit_epoch
+                || !self
+                    .vector_document_summary
+                    .is_some_and(|summary| summary.document_count == summary.vector_document_count))
+        {
+            return Err(vector_index::invalid(
+                "canonical vector source requires a complete vector-only summary at the same epoch",
+            ));
         }
         if self
             .vector_index_descriptor
@@ -4331,8 +4717,12 @@ impl Default for SearchIndex {
             path: None,
             _project_files: None,
             embedding_dimension: None,
+            rabitq_checkpoint: None,
             embedding_manifest: None,
             vector_index_descriptor: None,
+            vector_document_summary: None,
+            canonical_vector_source_epoch: None,
+            canonical_vector_delta: None,
             import_source_graph_commit_epoch: None,
             source_graph_commit_epoch: None,
             durable_source_graph_commit_epoch: Mutex::new(None),
@@ -4343,6 +4733,8 @@ impl Default for SearchIndex {
             lexical_config: LexicalProjectionConfig::default(),
             #[cfg(feature = "vector-search")]
             rabitq_projection: Mutex::new(None),
+            #[cfg(feature = "vector-search")]
+            resident_diskann: Default::default(),
             #[cfg(feature = "vector-search")]
             rabitq_build_options: RaBitQCandidateProjectionBuildOptions::default(),
             segment_descriptor: None,
@@ -8543,16 +8935,16 @@ mod tests {
             .expect("expected text retriever report");
         assert!(vector.available);
         assert!(text.available);
-        assert_eq!(vector.backend, "scalar_vector_scan");
+        assert_eq!(vector.backend, "hawdb_diskann_candidate_projection");
         assert_eq!(text.backend, "bm25_text");
-        assert_eq!(vector.candidate_score_source, "raw_vector");
+        assert_eq!(vector.candidate_score_source, "ann_approximate");
         assert_eq!(vector.final_score_source, "raw_vector");
-        assert_eq!(vector.generated_candidate_count, 3);
+        assert_eq!(vector.generated_candidate_count, 2);
         assert_eq!(vector.candidate_scan_rounds, 1);
         assert_eq!(vector.descriptor_pruned_count, 0);
         assert_eq!(vector.scalar_filtered_count, 0);
-        assert_eq!(vector.reranked_candidate_count, 3);
-        assert_eq!(vector.raw_vector_bytes_read, 48);
+        assert_eq!(vector.reranked_candidate_count, 2);
+        assert_eq!(vector.raw_vector_bytes_read, 40);
         assert_eq!(vector.index_covered_document_count, 3);
         assert_eq!(vector.index_candidate_document_count, 3);
         assert!(vector.index_coverage_complete);
@@ -8572,13 +8964,19 @@ mod tests {
         );
         assert_eq!(vector.candidate_set.representation, "ranked_document_ids");
         assert_eq!(vector.candidate_set.cardinality, 2);
-        assert!(vector.candidate_set.exact);
+        assert!(!vector.candidate_set.exact);
         assert_eq!(vector.candidate_set.policy_epoch, None);
         assert_eq!(
             vector.candidate_set.snapshot_source_graph_commit_epoch,
             None
         );
-        assert_eq!(text.candidate_set, vector.candidate_set);
+        assert_eq!(
+            text.candidate_set,
+            SearchRetrieverCandidateSetReport {
+                exact: true,
+                ..vector.candidate_set.clone()
+            }
+        );
         assert_eq!(vector.top_hit_ids[0], "both");
         assert_eq!(vector.top_candidates[0].id, "both");
         assert_eq!(vector.top_candidates[0].rank, 1);
@@ -9793,6 +10191,10 @@ mod tests {
             (
                 SearchFallbackReasonCode::CompressedVectorBudgetExceeded,
                 "compressed_vector_budget_exceeded",
+            ),
+            (
+                SearchFallbackReasonCode::DiskAnnCacheBudgetExceeded,
+                "diskann_cache_budget_exceeded",
             ),
             (
                 SearchFallbackReasonCode::QueryEmbeddingMissing,
@@ -11150,6 +11552,7 @@ mod tests {
         // another parallel fixture whose descriptor budget is exhausted.
         let project_files = {
             let mut index = SearchIndex::open(&path).unwrap();
+            index.set_rabitq_projection_build_options(Default::default());
             index
                 .upsert(doc(
                     "memory:a",
@@ -11378,6 +11781,7 @@ mod tests {
         let path = unique_test_dir("sampled_vector_recall");
         {
             let mut index = SearchIndex::open(&path).unwrap();
+            index.set_rabitq_projection_build_options(Default::default());
             for (id, embedding, space_id) in [
                 (
                     "memory:a",
@@ -11410,13 +11814,17 @@ mod tests {
         }
         let index = SearchIndex::open(&path).unwrap();
 
-        let report = index.validate_sampled_vector_recall(VectorRecallValidationOptions {
-            max_samples: 2,
-            top_k: 1,
-            candidate_limit: 1,
-            minimum_recall_per_million: 1_000_000,
-            metadata_filters: BTreeMap::from([("space_id".to_string(), "selected".to_string())]),
-        });
+        let report =
+            index.validate_sampled_compressed_vector_recall(VectorRecallValidationOptions {
+                max_samples: 2,
+                top_k: 1,
+                candidate_limit: 1,
+                minimum_recall_per_million: 1_000_000,
+                metadata_filters: BTreeMap::from([(
+                    "space_id".to_string(),
+                    "selected".to_string(),
+                )]),
+            });
 
         assert!(report.ready, "{:?}", report.blocker_codes);
         assert_eq!(report.protocol, VECTOR_RECALL_VALIDATION_PROTOCOL);
@@ -11508,13 +11916,14 @@ mod tests {
             ))
             .unwrap();
 
-        let report = index.validate_sampled_vector_recall(VectorRecallValidationOptions {
-            max_samples: 2,
-            top_k: 1,
-            candidate_limit: 1,
-            minimum_recall_per_million: 1_000_000,
-            metadata_filters: BTreeMap::new(),
-        });
+        let report =
+            index.validate_sampled_compressed_vector_recall(VectorRecallValidationOptions {
+                max_samples: 2,
+                top_k: 1,
+                candidate_limit: 1,
+                minimum_recall_per_million: 1_000_000,
+                metadata_filters: BTreeMap::new(),
+            });
 
         assert!(report.ready, "{:?}", report.blocker_codes);
         assert_eq!(report.executed_sample_count, 2);
@@ -11532,6 +11941,7 @@ mod tests {
         let path = unique_test_dir("production_recall_identity");
         {
             let mut index = SearchIndex::open(&path).unwrap();
+            index.set_rabitq_projection_build_options(Default::default());
             index
                 .apply_embedding_manifest(SearchEmbeddingManifest {
                     model: "test-embedding".to_string(),
@@ -11590,7 +12000,7 @@ mod tests {
             canonical_graph_commit_epoch: 42,
             policy_version: crate::PRODUCTION_QUALIFICATION_POLICY_VERSION,
         };
-        let qualification = index.qualify_sampled_vector_recall_for_production(
+        let qualification = index.qualify_sampled_compressed_vector_recall_for_production(
             VectorRecallValidationOptions {
                 max_samples: 2,
                 top_k: 1,
@@ -13027,6 +13437,7 @@ mod tests {
     fn nowledge_search_projection_probe_reports_ready_shape() {
         let path = unique_test_dir("nowledge_search_projection_probe_ready");
         let mut index = SearchIndex::open(&path).unwrap();
+        index.set_rabitq_projection_build_options(Default::default());
         index
             .apply_embedding_manifest(SearchEmbeddingManifest {
                 model: "bge-m3".to_string(),

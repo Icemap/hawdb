@@ -9,6 +9,7 @@ repository = "https://github.com/nowledge-co/hawdb"
 homepage = "https://hawdb.ai"
 readme = "README.md"
 exclude = [
+  "/experiments/bftree-mvcc/**",
   "/tools/mvcc-fuzz/**",
   "/tools/shiro/**",
   "/tests/pg-regress/**",
@@ -152,6 +153,10 @@ test = true
 
 [[example]]
 name = "rabitq_query_profile"
+required-features = ["vector-search"]
+
+[[example]]
+name = "filtered_diskann_qualification"
 required-features = ["vector-search"]
 
 [[bench]]

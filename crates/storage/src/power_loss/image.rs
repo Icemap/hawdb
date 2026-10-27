@@ -166,6 +166,65 @@ impl ImageEngine {
         })
     }
 
+    /// A previous crash has already selected its physical bytes and names.
+    /// Start a new history from that stable image, preserving file aliases.
+    pub(super) fn from_crash_image(image: &CrashImage, limits: ImageLimits) -> io::Result<Self> {
+        let mut engine = Self::new(limits)?;
+        engine.next_inode = image
+            .files
+            .values()
+            .map(|(inode, _)| *inode)
+            .max()
+            .unwrap_or(1)
+            .checked_add(1)
+            .ok_or_else(|| invalid("crash image inode sequence overflow"))?;
+        for (inode, bytes) in image.files.values() {
+            if engine.inodes.contains_key(inode) {
+                if !matches!(engine.inodes.get(inode), Some(Inode::File { current, .. }) if current == bytes)
+                {
+                    return Err(invalid("crash image aliases differ"));
+                }
+                continue;
+            }
+            engine.admit_new_inode()?;
+            engine.admit_operations(0, bytes.len())?;
+            engine.inodes.insert(
+                *inode,
+                Inode::File {
+                    current: Arc::clone(bytes),
+                    durable: Arc::clone(bytes),
+                },
+            );
+        }
+        for path in &image.directories {
+            if path.as_os_str().is_empty() {
+                continue;
+            }
+            let inode = engine.allocate_inode(Inode::Directory {
+                current: BTreeMap::new(),
+                durable: BTreeMap::new(),
+            })?;
+            engine.install_baseline_entry(path, inode)?;
+        }
+        for (path, (inode, _)) in &image.files {
+            engine.install_baseline_entry(path, *inode)?;
+        }
+        engine.completed_file_barriers = image.file_barriers;
+        engine.completed_directory_barriers = image.directory_barriers;
+        Ok(engine)
+    }
+
+    fn install_baseline_entry(&mut self, path: &Path, inode: InodeId) -> io::Result<()> {
+        let (parent, name) = self.parent(path)?;
+        self.require_absent(parent, &name)?;
+        let Some(Inode::Directory { current, durable }) = self.inodes.get_mut(&parent) else {
+            return Err(invalid("crash image parent is not a directory"));
+        };
+        current.insert(name.clone(), inode);
+        durable.insert(name, inode);
+        Ok(())
+    }
+
     pub fn inode(&self, path: &Path) -> io::Result<InodeId> {
         let components = relative_components(path)?;
         let mut inode = 1;
@@ -261,10 +320,27 @@ impl ImageEngine {
 
     pub fn hard_link(&mut self, source: &Path, destination: &Path) -> io::Result<()> {
         let inode = self.inode(source)?;
+        let (parent, name) = self.parent(destination)?;
+        self.link_inode(inode, parent, name)
+    }
+
+    /// Create an exclusive link between captured directory inodes. Neither
+    /// directory's former pathname participates in namespace resolution.
+    pub fn hard_link_at(
+        &mut self,
+        source: InodeId,
+        source_name: &Path,
+        target: InodeId,
+        target_name: &Path,
+    ) -> io::Result<()> {
+        let inode = self.child_inode(source, source_name)?;
+        self.link_inode(inode, target, child_name(target_name)?.to_os_string())
+    }
+
+    fn link_inode(&mut self, inode: InodeId, parent: InodeId, name: OsString) -> io::Result<()> {
         if self.is_directory(inode) {
             return Err(invalid("hard links to directories are not modeled"));
         }
-        let (parent, name) = self.parent(destination)?;
         self.require_absent(parent, &name)?;
         self.admit_operation(0)?;
         self.namespace(vec![EntryChange {
