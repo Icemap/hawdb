@@ -206,7 +206,7 @@ impl<'plan, 'runtime> SortOperator<'plan, 'runtime> {
         if self.runs.is_empty() {
             runtime_checkpoint(self.task_context)?;
             self.record_memory_report(0);
-            self.rows.sort_by(SortRunRow::cmp_key);
+            self.rows.sort_unstable_by(SortRunRow::cmp_key);
             return emit_sorted_output(
                 self.rows.into_iter().map(|row| {
                     let bytes = row.memory_bytes();
@@ -233,6 +233,8 @@ impl<'plan, 'runtime> SortOperator<'plan, 'runtime> {
             )?);
             self.tracker.reset();
         }
+        // Run generation reuses this allocation; merging no longer needs it.
+        self.rows = Vec::new();
         self.runs = compact_sort_runs(
             self.runs,
             self.items,
@@ -466,7 +468,7 @@ impl<'plan, 'runtime> TopNOperator<'plan, 'runtime> {
         }
         self.record_memory_report();
         let mut selected = self.heap.into_vec();
-        selected.sort();
+        selected.sort_unstable();
         emit_sorted_output(
             selected.into_iter().map(|entry| {
                 let bytes = entry.memory_bytes();
@@ -545,7 +547,8 @@ fn spill_sort_run(
     task_context: Option<&RuntimeTaskContext>,
 ) -> Result<spill::SpillRun> {
     runtime_checkpoint(task_context)?;
-    rows.sort_by(SortRunRow::cmp_key);
+    // The ordinal already orders ties, so stable sort's scratch is unnecessary.
+    rows.sort_unstable_by(SortRunRow::cmp_key);
     let (run, mut writer) = spill_budget.create_run("sort")?;
     for row in rows.drain(..) {
         runtime_checkpoint(task_context)?;
@@ -564,7 +567,7 @@ pub fn spill_top_n_run(
 ) -> Result<spill::SpillRun> {
     runtime_checkpoint(task_context)?;
     let mut rows = std::mem::take(heap).into_vec();
-    rows.sort();
+    rows.sort_unstable();
     let (run, mut writer) = spill_budget.create_run("topn")?;
     for row in rows {
         runtime_checkpoint(task_context)?;

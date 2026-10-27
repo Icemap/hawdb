@@ -6,6 +6,17 @@ authoritative; this is a map of test families, not an exhaustive list of every
 Rust test function. Update it when changing a family's scope, build profile,
 execution lane, fixture size, isolation or known failure mode.
 
+The executor `spill::tests` family covers streaming binding encoding with a
+full query-memory account, read/decode admission, exact disk quotas, nesting
+preflight, short writes, I/O errors and scalar/nested/vector round trips.
+`blocking::sort::tests` compares Sort/TopN tie order with and without spilling
+and checks 16-KiB rows through bounded merges. The existing executor unit target
+owns these regressions; replay with `cargo test --locked -p hawdb-executor --lib
+spill::tests` and the `blocking::sort::tests` filter. The existing local-only
+`//crates/executor:hawdb_sort_merge_account_fuzz_tests` campaign also exercises
+the tie-order and wide-row controls. Test lanes, profiles and deadlines stay
+unchanged; allocation microprobes do not establish end-to-end RSS or latency.
+
 The executor `scan::indexed_tests::bounded_index_projection` family covers
 admitted scalar-index projection reads with work budgets, single/multiple keys,
 NodeId-ordered duplicate merging, cross-property union deduplication, missing
