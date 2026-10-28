@@ -292,3 +292,29 @@ Hosts with tight memory budgets must evaluate a smaller typed
 `max_plan_cache_entries` setting (the measured host uses 16); `Some(0)` disables
 admission and loses reuse. No host production-memory acceptance or HawDB
 activation is established here. The broader replacement issue remains open.
+
+### Merged Mem reference-host qualification
+
+[Reference-host receipt](benchmarks/mem_query_resources_2026_10_28/review-mem-reference-host.json)
+records merged Mem 7e3f5ba8d44c648cd9ecac26b978f9f96bb38781 against engine 83d43b0f8e1373a5626b9ae30d6f720a05cc79d7:
+20 passed, 0 failed, 0 ignored, 60 filtered out. The Bazel source override resolves
+to the engine checkout and its template hash matches the measured source.
+The actual Rust reader exercises exact identities/raw Spaces/temporal values,
+complete bounded labels/JSON, structured budgets and HTTP/MCP refusal causes,
+legacy authority, closed dispatch and shadow/dual-read mismatch behavior.
+This is the reference-reader suite, not all 80 integration tests or production
+containing-artifact/activation acceptance. The Mem dependency pin is unchanged.
+
+The first attempt timed out before compilation in isolated Cargo dependency
+fetch. The successful retry reused the existing build cache with
+`CARGO_BAZEL_ISOLATED=false` and `CARGO_NET_OFFLINE=true`, explicitly passed to
+Bazel's repository environment. Dependency pins and runtime configuration were
+unchanged; generated local module-lock metadata was inspected and restored.
+
+The benchmark profiles materialized output while the caller still owns it.
+A positive `query_completion_bytes` therefore includes retained result ownership;
+it must not be interpreted as a leaked streaming lease. The facade's existing
+owned-versus-streamed regression explicitly checks positive owned completion
+and zero streaming completion. All final release samples stay within their
+reported query peak and expose five CASE tables/five lookups per returned row;
+all background cells complete writes (21–584 per measured window).
