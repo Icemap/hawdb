@@ -1063,6 +1063,9 @@ versus cache hits, cold build cost and required target inventory.
   resident as required by materialized views; this is file recovery evidence,
   not out-of-core view support or crash/power-loss qualification.
 - MVCC: `make mvcc-fuzz` defaults to 30 seconds of local transaction histories.
+  `MVCC_FUZZ_ARGS="--mode pessimistic"` instead runs two pessimistic
+  transactions on worker threads and also checks lock waits, deadlock victims,
+  snapshot refresh and serialization aborts for SQL and Cypher writes.
   Generate editable cases, replay failures and shrink them before introducing a
   focused deterministic regression. See [tools/mvcc-fuzz](../tools/mvcc-fuzz/README.md).
 - Local deterministic fuzz verification:
