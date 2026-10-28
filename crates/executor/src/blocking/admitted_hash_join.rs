@@ -426,7 +426,7 @@ impl<'a> AdmittedHashJoin<'a> {
             .map(Some)
     }
 
-    fn can_insert(&self, binding: &Binding) -> bool {
+    fn can_insert(&mut self, binding: &Binding) -> bool {
         let insertion_bytes = self.table.insertion_bytes(binding_memory_bytes(binding));
         !self
             .tracker
@@ -856,7 +856,8 @@ mod tests {
         .unwrap();
         assert_eq!(adapter.matches, [0]);
         target.0.store(0, Ordering::Relaxed);
-        for value in 1..32 {
+        // Include nonmatching probes so feedback refreshes without build growth.
+        for value in 1..96 {
             join.push_probe(
                 AdmittedHashJoinRecord {
                     hash: value as u64,
@@ -865,9 +866,9 @@ mod tests {
                 &mut adapter,
             )
             .unwrap();
-            assert!(join.build_run.is_some());
-            assert_eq!(join.tracker.used_bytes, 0);
         }
+        assert!(join.build_run.is_some());
+        assert_eq!(join.tracker.used_bytes, 0);
         join.finish(&mut adapter).unwrap();
         adapter.matches.sort();
         assert_eq!(adapter.matches, (0..32).collect::<Vec<_>>());

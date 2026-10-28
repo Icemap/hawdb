@@ -965,6 +965,7 @@ fn spilled_json_sort_keys_use_query_working_memory_during_merge_and_compaction()
 fn sort_merge_account_differential_campaign() {
     spilled_merges_adapt_without_exceeding_query_root_admission();
     active_sort_releases_rows_and_capacity_under_host_pressure();
+    top_n_keeps_its_cutoff_under_sustained_pressure();
     encoded_merge_copies_wide_payloads_with_a_key_sized_working_budget();
     adaptive_merge_fan_in_respects_memory_and_descriptor_capacity();
     in_place_sort_preserves_tie_order_with_and_without_spilling();
@@ -1082,7 +1083,10 @@ fn active_sort_releases_rows_and_capacity_under_host_pressure() {
     let retained = sort.tracker.used_bytes;
     let capacity = sort.rows.capacity();
     policy.update(snapshot(16 * 1024 * 1024));
-    sort.push(binding(48)).unwrap();
+    // Feedback is sampled within 64 safe points, before the hard limit.
+    for key in 48..65 {
+        sort.push(binding(key)).unwrap();
+    }
     assert_eq!(sort.runs.len(), 1);
     assert!(sort.tracker.used_bytes < retained / 4);
     assert!(sort.rows.capacity() < capacity);
@@ -1092,7 +1096,7 @@ fn active_sort_releases_rows_and_capacity_under_host_pressure() {
         1024 * 1024
     );
     // The progress floor permits a useful batch even under sustained pressure.
-    for key in 49..56 {
+    for key in 65..72 {
         sort.push(binding(key)).unwrap();
     }
     assert_eq!(sort.runs.len(), 1);
@@ -1102,7 +1106,7 @@ fn active_sort_releases_rows_and_capacity_under_host_pressure() {
         Ok(BatchControl::Continue)
     })
     .unwrap();
-    assert_eq!(actual, (0..56).map(binding).collect::<Vec<_>>());
+    assert_eq!(actual, (0..72).map(binding).collect::<Vec<_>>());
     assert_eq!(ledger.snapshot().used_bytes, 0);
     drop(permit);
     assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
@@ -1254,5 +1258,74 @@ fn adaptive_merge_fan_in_respects_memory_and_descriptor_capacity() {
         assert_eq!(keys, (0..64).map(Value::Int).collect::<Vec<_>>());
         drop(runs);
         assert_eq!(memory.spill_pool_snapshot().unwrap().active_bytes, 0);
+    }
+}
+
+#[test]
+fn top_n_keeps_its_cutoff_under_sustained_pressure() {
+    #[derive(Debug)]
+    struct CriticalPressure;
+    impl hawdb_core::RuntimeMemoryTarget for CriticalPressure {
+        fn target_bytes(&self, hard: u64) -> u64 {
+            hard / 4
+        }
+    }
+    let task =
+        RuntimeTaskContext::default().with_memory_target(std::sync::Arc::new(CriticalPressure));
+    let binding = |key| {
+        Binding::values(BTreeMap::from([
+            ("key".into(), Value::Int(key)),
+            ("body".into(), Value::String("x".repeat(1024))),
+        ]))
+    };
+    // Exercise both rejected candidates and continual replacement of the cutoff.
+    for reverse in [false, true] {
+        let directory = Directory::new();
+        let memory = ExecutionMemoryConfig {
+            blocking_operator_bytes: NonZeroUsize::new(128 * 1024).unwrap(),
+            query_memory_bytes: NonZeroUsize::new(1024 * 1024).unwrap(),
+            max_spill_runs: NonZeroUsize::MIN,
+            max_total_spill_runs: NonZeroUsize::MIN,
+            min_spill_free_bytes: NonZeroU64::MIN,
+            spill_directory: directory.0.clone(),
+            ..ExecutionMemoryConfig::default()
+        };
+        let ledger = QueryMemoryLedger::for_query(&memory, Some(&task)).unwrap();
+        let catalog = Catalog::default();
+        let items = [SortItem {
+            key: SortKey::Column("key".into()),
+            direction: SortDirection::Asc,
+        }];
+        let mut top_n = TopNOperator::new(
+            &items,
+            3,
+            45,
+            BlockingExecutionContext {
+                catalog: &catalog,
+                memory: &memory,
+                memory_ledger: &ledger,
+                task_context: Some(&task),
+                observer: &NoopExecutionObserver,
+            },
+        );
+        for index in 0..4096 {
+            top_n
+                .push(binding(if reverse { 4095 - index } else { index }))
+                .unwrap();
+            assert!(top_n.runs.is_empty());
+            assert!(top_n.heap.len() <= 48);
+            assert!(top_n.tracker.used_bytes <= memory.blocking_operator_bytes.get());
+        }
+        assert!(top_n.tracker.used_bytes > memory.blocking_operator_bytes.get() / 4);
+        let mut actual = Vec::new();
+        top_n
+            .finish(ExecutionLimit::unlimited(), &mut |batch| {
+                actual.extend(batch);
+                Ok(BatchControl::Continue)
+            })
+            .unwrap();
+        assert_eq!(actual, (3..48).map(binding).collect::<Vec<_>>());
+        assert_eq!(ledger.snapshot().used_bytes, 0);
+        assert_eq!(memory.spill_pool_snapshot().unwrap().active_runs, 0);
     }
 }

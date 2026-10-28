@@ -27,12 +27,16 @@ use std::num::NonZeroUsize;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
+const MEMORY_TARGET_SAMPLE_INTERVAL: u8 = 64;
+
 pub struct OperatorMemoryTracker {
     pub budget_bytes: usize,
     pub used_bytes: usize,
     pub peak_bytes: usize,
     lease: Option<QueryMemoryLease>,
     budget_option: &'static str,
+    soft_target_bytes: usize,
+    target_checks_remaining: u8,
 }
 
 impl OperatorMemoryTracker {
@@ -43,6 +47,8 @@ impl OperatorMemoryTracker {
             peak_bytes: 0,
             lease: None,
             budget_option: "OperatorMemoryTracker::new(budget_bytes)",
+            soft_target_bytes: budget_bytes.get(),
+            target_checks_remaining: 0,
         }
     }
 
@@ -57,6 +63,8 @@ impl OperatorMemoryTracker {
                     .expect("zero-byte query memory reservation cannot fail"),
             ),
             budget_option: "OperatorMemoryTracker::with_account(budget_bytes)",
+            soft_target_bytes: budget_bytes.get(),
+            target_checks_remaining: 0,
         }
     }
 
@@ -111,8 +119,10 @@ impl OperatorMemoryTracker {
 
     /// Soft pressure only requests a spill at a caller-owned safe point. Keep
     /// two incoming rows and IO progress room; never spill an empty work area.
+    /// Sample shared host feedback once per 64 checks, including checks without
+    /// growth (join probes). Hard limits still apply to every allocation.
     pub(crate) fn should_spill(
-        &self,
+        &mut self,
         bytes: usize,
         task: Option<&hawdb_core::RuntimeTaskContext>,
     ) -> bool {
@@ -122,12 +132,17 @@ impl OperatorMemoryTracker {
         let Some(task) = task else {
             return false;
         };
-        let target = task.working_memory_target(self.budget_bytes as u64) as usize;
+        if self.target_checks_remaining == 0 {
+            self.soft_target_bytes = task.working_memory_target(self.budget_bytes as u64) as usize;
+            self.target_checks_remaining = MEMORY_TARGET_SAMPLE_INTERVAL;
+        }
+        self.target_checks_remaining -= 1;
         let floor = bytes
             .saturating_mul(2)
             .saturating_add(crate::spill::SPILL_IO_BUFFER_BYTES * 2)
             .min(self.budget_bytes);
-        self.used_bytes > 0 && self.used_bytes.saturating_add(bytes) > target.max(floor)
+        self.used_bytes > 0
+            && self.used_bytes.saturating_add(bytes) > self.soft_target_bytes.max(floor)
     }
 
     fn ensure_charge_fits(&self, bytes: usize, context: &str) -> Result<()> {
@@ -622,6 +637,42 @@ pub fn collect_bounded_operator_bindings_with_account(
 mod tests {
     use super::*;
     use std::collections::BTreeMap;
+
+    #[test]
+    fn soft_target_sampling_bounds_feedback_cost_without_delaying_hard_limits() {
+        #[derive(Debug)]
+        struct Target {
+            polls: AtomicUsize,
+            bytes: AtomicU64,
+        }
+        impl hawdb_core::RuntimeMemoryTarget for Target {
+            fn target_bytes(&self, hard: u64) -> u64 {
+                self.polls.fetch_add(1, Ordering::Relaxed);
+                self.bytes.load(Ordering::Relaxed).min(hard)
+            }
+        }
+        let target = Arc::new(Target {
+            polls: AtomicUsize::new(0),
+            bytes: AtomicU64::new(u64::MAX),
+        });
+        let task = hawdb_core::RuntimeTaskContext::default().with_memory_target(target.clone());
+        let mut tracker = OperatorMemoryTracker::new(NonZeroUsize::new(128 * 1024).unwrap());
+        tracker.try_charge(64 * 1024).unwrap();
+        assert!(!tracker.should_spill(0, Some(&task)));
+        target.bytes.store(0, Ordering::Relaxed);
+        for _ in 1..MEMORY_TARGET_SAMPLE_INTERVAL {
+            assert!(!tracker.should_spill(0, Some(&task)));
+            // Hard refusal must not depend on the cached target or poll cadence.
+            assert!(tracker.should_spill(128 * 1024, Some(&task)));
+        }
+        assert_eq!(target.polls.load(Ordering::Relaxed), 1);
+        assert!(tracker.should_spill(0, Some(&task)));
+        assert_eq!(target.polls.load(Ordering::Relaxed), 2);
+        tracker.reset();
+        assert!(!tracker.should_spill(0, Some(&task)));
+        tracker.try_charge(1024).unwrap();
+        assert!(!tracker.should_spill(1024, Some(&task)));
+    }
 
     fn refusal(error: HawDBError) -> ResourceBudgetError {
         let HawDBError::ResourceBudgetExceeded(cause) = error else {

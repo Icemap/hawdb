@@ -403,11 +403,10 @@ impl<'plan, 'runtime> TopNOperator<'plan, 'runtime> {
         self.input_rows = self.input_rows.saturating_add(1);
         let bytes = candidate.memory_bytes();
         ensure_operator_item_fits("TopNExec", bytes, &self.tracker)?;
-        if self.tracker.should_spill(0, self.task_context) && !self.heap.is_empty() {
-            self.spill_heap()?;
-        }
+        // TopN already bounds its state by retained. Soft-pressure spills would
+        // discard its cutoff and write otherwise rejected input repeatedly.
         if self.heap.len() < self.retained {
-            if self.tracker.should_spill(bytes, self.task_context) {
+            if self.tracker.would_exceed(bytes) {
                 self.spill_heap()?;
             }
             self.tracker.try_charge_from(&mut allocation, bytes)?;

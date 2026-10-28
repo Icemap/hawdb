@@ -65,10 +65,12 @@ impl RuntimeMemoryTarget for GovernorMemoryTarget {
         };
         if let Some(policy) = policy {
             let snapshot = policy.snapshot();
-            shift = shift.max(if snapshot.admission_paused {
-                2
-            } else if !snapshot.sample_is_current {
+            // Admission also pauses for stale/missing samples. Distinguish
+            // unavailable feedback from a current sample reporting pressure.
+            shift = shift.max(if !snapshot.sample_is_current {
                 1
+            } else if snapshot.admission_paused {
+                2
             } else {
                 0
             });
@@ -92,6 +94,58 @@ mod tests {
         assert_eq!(recovery.observe(2, now + RECOVERY_DELAY), 2);
         assert_eq!(recovery.observe(0, now + RECOVERY_DELAY), 2);
         assert_eq!(recovery.observe(0, now + RECOVERY_DELAY * 2), 0);
+    }
+
+    #[test]
+    fn unavailable_process_sample_halves_active_work_areas() {
+        let policy = ProcessMemoryPolicy::new(crate::ProcessMemoryPolicyConfig::new(
+            std::num::NonZeroU64::new(16 * 1024 * 1024).unwrap(),
+        ));
+        policy.update(crate::ProcessMemorySnapshot {
+            capabilities: crate::ProcessMemoryCapabilities {
+                resident_memory: true,
+                ..Default::default()
+            },
+            resident_bytes: 0,
+            peak_resident_bytes: 0,
+            total_page_faults: None,
+            minor_page_faults: None,
+            major_page_faults: None,
+        });
+        let resources = RuntimeResourceSnapshot::from_parts(
+            crate::RuntimeResourceBudget::from_limits(NonZeroUsize::new(4).unwrap(), None, None),
+            crate::RuntimeMemorySnapshot::from_limits(
+                Some(1 << 30),
+                Some(1 << 30),
+                None,
+                None,
+                None,
+            ),
+        );
+        let governor = RuntimeGovernor::new_with_process_memory_policy(
+            RuntimeGovernorConfig::shared_host(),
+            resources,
+            IoConcurrencyBudget::new(4, 1),
+            policy.clone(),
+        );
+        let permit = governor
+            .try_admit(RuntimeWorkRequest::foreground_query(256 * 1024, 0))
+            .unwrap();
+        let task = permit.bind_task_context(RuntimeTaskContext::default());
+        assert_eq!(task.working_memory_target(4096), 4096);
+        policy.clear_sample();
+        assert!(policy.snapshot().admission_paused);
+        assert!(!policy.snapshot().sample_is_current);
+        assert_eq!(task.working_memory_target(4096), 2048);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 256 * 1024);
+        assert!(governor
+            .try_admit(RuntimeWorkRequest::foreground_query(1, 0))
+            .is_err());
+        // Actual critical resource pressure still wins over missing feedback.
+        let mut critical = resources;
+        critical.memory.pressure = RuntimeMemoryPressure::Critical;
+        governor.update_resources(critical);
+        assert_eq!(task.working_memory_target(4096), 1024);
     }
 
     #[test]

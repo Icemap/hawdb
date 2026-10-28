@@ -4,7 +4,7 @@
 //! Manual resource probe. Run identical source on both revisions in release mode.
 //! Heap counters include all worker threads; obtain process peak RSS externally.
 
-use hawdb_core::{Catalog, Result, Value};
+use hawdb_core::{Catalog, Result, RuntimeTaskContext, Value};
 use hawdb_executor::binding::Binding;
 use hawdb_executor::blocking::stream_sort_batches;
 use hawdb_executor::observer::QueryExecutionObserver;
@@ -13,6 +13,11 @@ use hawdb_executor::pipeline::{
 };
 use hawdb_executor::{ExecutionLimit, ExecutionMemoryConfig, QueryMemoryLedger};
 use hawdb_plan_cypher::{PhysicalPlan, SortDirection, SortItem, SortKey};
+use hawdb_qos::{
+    IoConcurrencyBudget, ProcessMemoryCapabilities, ProcessMemoryPolicy, ProcessMemoryPolicyConfig,
+    ProcessMemorySnapshot, RuntimeGovernor, RuntimeGovernorConfig, RuntimeMemorySnapshot,
+    RuntimeResourceBudget, RuntimeResourceSnapshot, RuntimeWorkRequest,
+};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::BTreeMap;
 use std::num::{NonZeroU64, NonZeroUsize};
@@ -113,6 +118,7 @@ fn query(
     width: usize,
     blocking: usize,
     barrier: &Barrier,
+    governor: Option<&RuntimeGovernor>,
 ) -> Result<Measurement> {
     let directory =
         std::env::temp_dir().join(format!("hawdb-spill-probe-{}-{index}", std::process::id()));
@@ -127,7 +133,15 @@ fn query(
         spill_directory: directory.clone(),
         ..ExecutionMemoryConfig::default()
     };
-    let ledger = QueryMemoryLedger::new(memory.query_memory_bytes);
+    let permit = governor.map(|governor| {
+        governor
+            .try_admit(RuntimeWorkRequest::foreground_query(16 * 1024 * 1024, 0))
+            .unwrap()
+    });
+    let task = permit
+        .as_ref()
+        .map(|permit| permit.bind_task_context(RuntimeTaskContext::default()));
+    let ledger = QueryMemoryLedger::for_query(&memory, task.as_ref())?;
     let observer = QueryExecutionObserver::default();
     let catalog = Catalog::default();
     let items = [SortItem {
@@ -147,7 +161,7 @@ fn query(
             catalog: &catalog,
             memory: &memory,
             memory_ledger: &ledger,
-            task_context: None,
+            task_context: task.as_ref(),
             observer: &observer,
         },
         ExecutionLimit::unlimited(),
@@ -195,6 +209,37 @@ fn query(
     Ok(measurement)
 }
 
+fn shared_governor() -> RuntimeGovernor {
+    let policy = ProcessMemoryPolicy::new(
+        ProcessMemoryPolicyConfig::new(NonZeroU64::new(2 * 1024 * 1024 * 1024).unwrap())
+            .with_sample_max_age(std::time::Duration::from_secs(60)),
+    );
+    // A fixed host sample isolates governed execution from an RSS sampler.
+    policy.update(ProcessMemorySnapshot {
+        capabilities: ProcessMemoryCapabilities {
+            resident_memory: true,
+            ..Default::default()
+        },
+        resident_bytes: 128 * 1024 * 1024,
+        peak_resident_bytes: 128 * 1024 * 1024,
+        total_page_faults: None,
+        minor_page_faults: None,
+        major_page_faults: None,
+    });
+    RuntimeGovernor::new_with_process_memory_policy(
+        RuntimeGovernorConfig {
+            memory_budget_bytes: Some(512 * 1024 * 1024),
+            ..RuntimeGovernorConfig::shared_host()
+        },
+        RuntimeResourceSnapshot::from_parts(
+            RuntimeResourceBudget::from_limits(NonZeroUsize::new(16).unwrap(), None, None),
+            RuntimeMemorySnapshot::from_limits(Some(4 << 30), Some(4 << 30), None, None, None),
+        ),
+        IoConcurrencyBudget::new(16, 1),
+        policy,
+    )
+}
+
 fn main() {
     let scenario = std::env::args().nth(1).unwrap_or_else(|| "wide".into());
     let (workers, rows, width, blocking) = match scenario.as_str() {
@@ -204,12 +249,18 @@ fn main() {
         "concurrent" => (4, 2048, 4096, 128 * 1024),
         _ => panic!("use small, wide, many, or concurrent"),
     };
+    let governed = std::env::args().nth(2).is_some_and(|option| {
+        assert_eq!(option, "--governed");
+        true
+    });
+    let governor = governed.then(shared_governor);
     let barrier = Barrier::new(workers + 1);
     std::thread::scope(|scope| {
         let handles: Vec<_> = (0..workers)
             .map(|worker| {
                 let barrier = &barrier;
-                scope.spawn(move || query(worker, rows, width, blocking, barrier))
+                let governor = governor.as_ref();
+                scope.spawn(move || query(worker, rows, width, blocking, barrier, governor))
             })
             .collect();
         barrier.wait();
@@ -223,12 +274,18 @@ fn main() {
             .into_iter()
             .map(|handle| handle.join().unwrap().unwrap())
             .collect();
-        println!("scenario={scenario} workers={workers} rows={} width={width} blocking_bytes={blocking} elapsed_us={} heap_peak_bytes={} heap_growth_bytes={} allocations={} allocated_bytes={} spill_bytes={} spill_runs={} ledger_peak_bytes={} checksum={}",
-            rows * workers, start.elapsed().as_micros(), PEAK.load(Ordering::Relaxed),
+        println!("scenario={scenario} governed={} workers={workers} rows={} width={width} blocking_bytes={blocking} elapsed_us={} heap_peak_bytes={} heap_growth_bytes={} allocations={} allocated_bytes={} spill_bytes={} spill_runs={} ledger_peak_bytes={} checksum={}",
+            usize::from(governed), rows * workers, start.elapsed().as_micros(), PEAK.load(Ordering::Relaxed),
             PEAK.load(Ordering::Relaxed).saturating_sub(baseline_live), ALLOCATIONS.load(Ordering::Relaxed) - allocations,
             ALLOCATED_BYTES.load(Ordering::Relaxed) - allocated_bytes,
             results.iter().map(|result| result.spill_bytes).sum::<u64>(), results.iter().map(|result| result.runs).sum::<usize>(),
             results.iter().map(|result| result.ledger_peak).max().unwrap(), results.iter().map(|result| result.checksum).sum::<u64>(),
         );
     });
+    if let Some(governor) = governor {
+        let snapshot = governor.snapshot();
+        assert_eq!(snapshot.admissions, workers as u64);
+        assert_eq!(snapshot.completions, workers as u64);
+        assert_eq!(snapshot.admitted_memory_bytes, 0);
+    }
 }
