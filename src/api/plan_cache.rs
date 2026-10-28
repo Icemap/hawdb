@@ -34,9 +34,9 @@ use hawdb_optimizer::graph::{
     NODE_INDEX_SMALL_LABEL_SCAN_THRESHOLD,
 };
 use hawdb_plan_cache::{
-    bind_physical_plan_parameters, parameter_scalar_types, parameterize_logical_plan,
-    parameterize_value_list, resolve_plan_template_value, LfuCache, ParameterBindingTemplate,
-    ParameterizedLogicalPlan, PlanParameterCacheKey,
+    bind_physical_plan_parameters, parameter_binding_shape_fingerprint, parameter_scalar_types,
+    parameterize_logical_plan, parameterize_value_list, resolve_plan_template_value, LfuCache,
+    ParameterBindingTemplate, ParameterizedLogicalPlan, PlanParameterCacheKey,
 };
 pub use hawdb_plan_cache::{PlanCacheBypassReason, PlanCacheLookup, PlanCacheStats};
 use hawdb_plan_cypher::{BatchMutationOperation, ProjectionExpression};
@@ -422,7 +422,7 @@ struct StatisticsCacheRefresh {
 
 #[derive(Debug, Clone, Default)]
 pub(super) struct OptimizerPlanningCache {
-    parameter_bindings: Option<LfuCache<String, Arc<ParameterBindingTemplate>>>,
+    parameter_bindings: Option<LfuCache<(String, u64), Arc<ParameterBindingTemplate>>>,
     statistics: Option<Arc<GraphStatistics>>,
     statistics_schema: Option<OptimizerSchemaKey>,
     statistics_source_graph_commit_epoch: Option<u64>,
@@ -540,7 +540,10 @@ impl OptimizerPlanningCache {
         parameters: &BTreeMap<String, Value>,
         max_entries: Option<usize>,
     ) -> Result<(ParameterizedLogicalPlan, bool)> {
-        let key = normalized_query.to_owned();
+        let key = (
+            normalized_query.to_owned(),
+            parameter_binding_shape_fingerprint(parameters),
+        );
         let cached = shared
             .borrow_mut()
             .parameter_binding_cache(max_entries)
@@ -565,7 +568,7 @@ impl OptimizerPlanningCache {
     fn parameter_binding_cache(
         &mut self,
         max_entries: Option<usize>,
-    ) -> &mut LfuCache<String, Arc<ParameterBindingTemplate>> {
+    ) -> &mut LfuCache<(String, u64), Arc<ParameterBindingTemplate>> {
         if self
             .parameter_bindings
             .as_ref()
@@ -1275,6 +1278,125 @@ mod tests {
     use super::*;
     use crate::schema::SchemaObjectState;
     use std::collections::BTreeMap;
+
+    fn binding_parameters(length: usize, nullable: bool) -> BTreeMap<String, Value> {
+        BTreeMap::from([(
+            "ids".into(),
+            Value::List(
+                (0..length)
+                    .map(|index| {
+                        if nullable && index == 0 {
+                            Value::Null
+                        } else {
+                            Value::String(index.to_string())
+                        }
+                    })
+                    .collect(),
+            ),
+        )])
+    }
+
+    #[test]
+    fn parameter_binding_cache_retains_alternating_lengths_and_null_masks() {
+        let query = "MATCH (n:Item) WHERE n.id IN $ids RETURN n.id";
+        let statement = cypher::parse(query).unwrap();
+        let shared = SharedState::new(OptimizerPlanningCache::default());
+        for iteration in 0..24 {
+            for (length, nullable) in [(20, false), (17, false), (20, true)] {
+                let parameters = binding_parameters(length, nullable);
+                let (plan, hit) = OptimizerPlanningCache::parameterized(
+                    &shared,
+                    query,
+                    &statement,
+                    &parameters,
+                    Some(3),
+                )
+                .unwrap();
+                assert_eq!(hit, iteration != 0);
+                assert_eq!(
+                    plan,
+                    parameterize_logical_plan(&statement, &parameters).unwrap()
+                );
+            }
+        }
+        let stats = shared.borrow().parameter_bindings.as_ref().unwrap().stats();
+        assert_eq!(stats.entries, 3);
+        assert_eq!(stats.hits, 69);
+        assert_eq!(stats.misses, 3);
+        assert_eq!(stats.evictions, 0);
+    }
+
+    #[test]
+    fn parameter_binding_cache_evicts_shapes_under_concurrent_churn() {
+        let shared = SharedState::new(OptimizerPlanningCache::default());
+        std::thread::scope(|scope| {
+            for worker in 0..4 {
+                let shared = &shared;
+                scope.spawn(move || {
+                    let query = "MATCH (n:Item) WHERE n.id IN $ids RETURN n.id";
+                    let statement = cypher::parse(query).unwrap();
+                    for iteration in 0..48 {
+                        let parameters = binding_parameters(
+                            1 + (iteration + worker * 7) % 24,
+                            iteration % 2 == 0,
+                        );
+                        let (plan, _) = OptimizerPlanningCache::parameterized(
+                            shared,
+                            query,
+                            &statement,
+                            &parameters,
+                            Some(8),
+                        )
+                        .unwrap();
+                        assert_eq!(
+                            plan,
+                            parameterize_logical_plan(&statement, &parameters).unwrap()
+                        );
+                        assert!(
+                            shared
+                                .borrow()
+                                .parameter_bindings
+                                .as_ref()
+                                .unwrap()
+                                .stats()
+                                .entries
+                                <= 8
+                        );
+                    }
+                });
+            }
+        });
+        let stats = shared.borrow().parameter_bindings.as_ref().unwrap().stats();
+        assert_eq!(stats.entries, 8);
+        assert!(stats.evictions > 0);
+        // An evicted shape must be rebuilt correctly, even if LFU declines
+        // to retain a new cold shape among frequently used incumbents.
+        let query = "MATCH (n:Item) WHERE n.id IN $ids RETURN n.id";
+        let statement = cypher::parse(query).unwrap();
+        let parameters = binding_parameters(512, false);
+        let (plan, hit) =
+            OptimizerPlanningCache::parameterized(&shared, query, &statement, &parameters, Some(8))
+                .unwrap();
+        assert!(!hit);
+        assert_eq!(
+            plan,
+            parameterize_logical_plan(&statement, &parameters).unwrap()
+        );
+        let (repeated, _) =
+            OptimizerPlanningCache::parameterized(&shared, query, &statement, &parameters, Some(8))
+                .unwrap();
+        assert_eq!(plan, repeated);
+        assert_eq!(
+            shared
+                .borrow()
+                .parameter_bindings
+                .as_ref()
+                .unwrap()
+                .stats()
+                .entries,
+            8
+        );
+    }
 
     #[test]
     fn plan_cache_rejects_volatile_values_in_read_expressions() {

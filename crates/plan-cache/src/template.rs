@@ -8,6 +8,8 @@ use hawdb_plan_cypher::{
     ProjectionExpression, RelationshipCountFilter, SortItem, SortKey,
 };
 use std::collections::{BTreeMap, BTreeSet};
+use std::hash::{Hash, Hasher};
+use std::sync::Arc;
 
 const PARAMETER_SLOT_NAME_KEY: &str = "\0skein_parameter_slot";
 const PARAMETER_SLOT_PATH_KEY: &str = "\0skein_parameter_path";
@@ -34,8 +36,10 @@ enum ParameterValueShape {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParameterizedLogicalPlan {
-    logical: LogicalPlan,
-    cache_key: PlanParameterCacheKey,
+    // Immutable proven state is shared by cache admission and readers.
+    // Cloning a handle must not deep-copy the marker tree or exact guards.
+    logical: Arc<LogicalPlan>,
+    cache_key: Arc<PlanParameterCacheKey>,
     slot_count: usize,
 }
 
@@ -67,7 +71,7 @@ impl ParameterBindingTemplate {
             || parameters.values().any(value_contains_any_marker)
             || self.plan.cache_key.values.iter().any(|(name, cached)| {
                 parameters.get(name).is_none_or(|value| match cached {
-                    ParameterCacheValue::Slot(shape) => parameter_value_shape(value) != *shape,
+                    ParameterCacheValue::Slot(shape) => !shape.matches(value),
                     ParameterCacheValue::Exact(expected) => value != expected,
                 })
             })
@@ -76,6 +80,69 @@ impl ParameterBindingTemplate {
         }
         Some(self.plan.clone())
     }
+}
+
+impl ParameterValueShape {
+    fn matches(&self, value: &Value) -> bool {
+        match (self, value) {
+            (Self::Null, Value::Null)
+            | (Self::Bool, Value::Bool(_))
+            | (Self::Int, Value::Int(_))
+            | (Self::Float, Value::Float(_))
+            | (Self::String, Value::String(_))
+            | (Self::Binary, Value::Binary(_))
+            | (Self::Uuid, Value::Uuid(_)) => true,
+            (Self::Vector(dimension), Value::Vector(value)) => *dimension == value.dimension(),
+            (Self::List(shapes), Value::List(values)) => {
+                shapes.len() == values.len()
+                    && shapes
+                        .iter()
+                        .zip(values)
+                        .all(|(shape, value)| shape.matches(value))
+            }
+            (Self::Map(shapes), Value::Map(values)) => {
+                shapes.len() == values.len()
+                    && shapes
+                        .iter()
+                        .zip(values)
+                        .all(|((key, shape), (name, value))| key == name && shape.matches(value))
+            }
+            _ => false,
+        }
+    }
+}
+
+/// Allocation-free cache bucket selector. A collision can only cause a miss:
+/// the template must still validate every shape and exact folded dependency.
+#[doc(hidden)]
+pub fn parameter_binding_shape_fingerprint(parameters: &BTreeMap<String, Value>) -> u64 {
+    fn visit(value: &Value, state: &mut impl Hasher) {
+        std::mem::discriminant(value).hash(state);
+        match value {
+            Value::List(values) => {
+                values.len().hash(state);
+                for value in values {
+                    visit(value, state);
+                }
+            }
+            Value::Map(values) => {
+                values.len().hash(state);
+                for (key, value) in values {
+                    key.hash(state);
+                    visit(value, state);
+                }
+            }
+            Value::Vector(value) => value.dimension().hash(state),
+            _ => {}
+        }
+    }
+    let mut state = std::collections::hash_map::DefaultHasher::new();
+    parameters.len().hash(&mut state);
+    for (name, value) in parameters {
+        name.hash(&mut state);
+        visit(value, &mut state);
+    }
+    state.finish()
 }
 
 impl ParameterizedLogicalPlan {
@@ -134,22 +201,22 @@ pub fn parameterize_logical_plan(
     let actual = plan_parameter_bindings(statement, parameters)?;
     if parameters.values().any(value_contains_any_marker) {
         return Ok(ParameterizedLogicalPlan {
-            logical: actual,
-            cache_key: PlanParameterCacheKey {
+            logical: Arc::new(actual),
+            cache_key: Arc::new(PlanParameterCacheKey {
                 values: parameters
                     .iter()
                     .map(|(name, value)| (name.clone(), ParameterCacheValue::Exact(value.clone())))
                     .collect(),
-            },
+            }),
             slot_count: 0,
         });
     }
     if parameters.is_empty() {
         return Ok(ParameterizedLogicalPlan {
-            logical: actual,
-            cache_key: PlanParameterCacheKey {
+            logical: Arc::new(actual),
+            cache_key: Arc::new(PlanParameterCacheKey {
                 values: BTreeMap::new(),
-            },
+            }),
             slot_count: 0,
         });
     }
@@ -224,10 +291,10 @@ pub fn parameterize_logical_plan(
         }
     };
     Ok(ParameterizedLogicalPlan {
-        logical,
-        cache_key: PlanParameterCacheKey {
+        logical: Arc::new(logical),
+        cache_key: Arc::new(PlanParameterCacheKey {
             values: cache_values,
-        },
+        }),
         slot_count,
     })
 }
@@ -305,8 +372,8 @@ fn parameterize_together(
         return None;
     }
     Some(ParameterizedLogicalPlan {
-        logical,
-        cache_key: PlanParameterCacheKey { values },
+        logical: Arc::new(logical),
+        cache_key: Arc::new(PlanParameterCacheKey { values }),
         slot_count,
     })
 }
@@ -1525,6 +1592,8 @@ mod tests {
         changed.insert("id".into(), Value::String("b".into()));
         super::PARAMETER_PLANNING_CALLS.with(|calls| calls.set(0));
         let reused = template.reuse(&changed).unwrap();
+        assert!(std::sync::Arc::ptr_eq(&first.logical, &reused.logical));
+        assert!(std::sync::Arc::ptr_eq(&first.cache_key, &reused.cache_key));
         assert_eq!(
             super::PARAMETER_PLANNING_CALLS.with(std::cell::Cell::get),
             0
@@ -1949,7 +2018,7 @@ mod tests {
         ));
 
         let root = CascadesOptimizer::default().optimize_root_with_catalog(
-            &LogicalPlanRoot::new(parameterized.logical),
+            &LogicalPlanRoot::new(parameterized.logical().clone()),
             &OptimizerCatalog::default(),
         );
         let (template, _) = root.into_parts();

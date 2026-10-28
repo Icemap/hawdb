@@ -6,7 +6,7 @@
 //! Process RSS includes setup and native heaps; allocator traffic is Rust-only.
 
 #[cfg(feature = "qualification")]
-#[path = "../bindings/benchmarks/native_alloc.rs"]
+#[path = "mem_query_alloc.rs"]
 mod native_profile;
 
 use hawdb::{ConcurrentDatabase, Database, DatabaseConfig, Value};
@@ -26,6 +26,7 @@ struct Job {
     body_bytes: usize,
     repeats: usize,
     background: bool,
+    mixed_shapes: bool,
 }
 
 fn populate(db: &mut Database, job: &Job) -> hawdb::Result<()> {
@@ -190,6 +191,10 @@ fn measure(
     query: &str,
     params: &mut Parameters,
 ) -> hawdb::Result<JsonValue> {
+    #[cfg(feature = "qualification")]
+    let before_cold = native_profile::snapshot();
+    #[cfg(feature = "qualification")]
+    native_profile::reset_window_peak();
     // Warm shared binding/catalog state; each read fork has a private physical
     // cache. Vary values within a shape instead of replaying identical values.
     db.begin_read_transaction()?.query_with_params_bounded(
@@ -197,6 +202,28 @@ fn measure(
         params,
         Some(job.candidates.max(20)),
     )?;
+    #[cfg(feature = "qualification")]
+    let cold = {
+        let after = native_profile::snapshot();
+        let peak = native_profile::window_peak();
+        json!({"live_before": before_cold.live_requested_bytes, "live_after": after.live_requested_bytes, "peak": peak})
+    };
+    #[cfg(feature = "qualification")]
+    native_profile::reset_window_peak();
+    if job.mixed_shapes {
+        let original = params["candidate_ids"].clone();
+        if let Value::List(ids) = params.get_mut("candidate_ids").unwrap() {
+            ids.truncate(job.candidates - 3);
+        }
+        db.begin_read_transaction()?.query_with_params_bounded(
+            query,
+            params,
+            Some(job.candidates),
+        )?;
+        params.insert("candidate_ids".into(), original);
+    }
+    #[cfg(feature = "qualification")]
+    native_profile::reset_window_peak();
     let ready = Barrier::new(if job.background { 2 } else { 1 });
     let stop = AtomicBool::new(false);
     std::thread::scope(|scope| {
@@ -219,7 +246,13 @@ fn measure(
         let preparation_before = hawdb::query_preparation_metrics();
         let (cpu_before, _) = process_usage();
         ready.wait();
+        let full_ids = params.get("candidate_ids").cloned();
         let samples = (0..job.repeats).map(|iteration| {
+            let expected_rows = if job.mixed_shapes { job.candidates - (iteration % 2) * 3 } else { job.candidates };
+            if job.mixed_shapes {
+                let Value::List(ids) = full_ids.as_ref().unwrap() else { unreachable!() };
+                params.insert("candidate_ids".into(), Value::List(ids[..expected_rows].to_vec()));
+            }
             if let Some(value) = params.get_mut("input_0_0") {
                 *value = if matches!(value, Value::Float(_)) { Value::Float(iteration as f64 / 100.0) } else { Value::Int(iteration as i64) };
             }
@@ -233,11 +266,10 @@ fn measure(
             // baseline revision, before dispatch instrumentation existed.
             let metric = |name| match report.get(name) { Some(Value::Int(value)) => *value, _ => 0 };
             let ids = output.output.rows.iter().map(|row| row["id"].clone()).collect::<Vec<_>>();
-            let expected_rows = job.candidates;
             assert_eq!(ids.len(), expected_rows);
             let mut actual_ids = ids.clone();
             actual_ids.sort();
-            let expected_ids = (0..job.candidates).map(|i| Value::String(format!("memory-{i:08}"))).collect::<Vec<_>>();
+            let expected_ids = (0..expected_rows).map(|i| Value::String(format!("memory-{i:08}"))).collect::<Vec<_>>();
             assert_eq!(actual_ids, expected_ids, "benchmark must retain the complete candidate cohort");
             Ok(json!({"elapsed_ns": elapsed_ns, "rows": ids.len(),
                 "query_peak_bytes": memory.query_memory_peak_bytes,
@@ -256,7 +288,8 @@ fn measure(
         #[cfg(feature = "qualification")]
         let instrumentation = {
             let after = native_profile::snapshot();
-            json!({"preparation_before": preparation_before,
+            json!({"cold_query": cold, "warm_peak_requested_bytes": native_profile::window_peak(),
+                "preparation_before": preparation_before,
                 "preparation_after": hawdb::query_preparation_metrics(),
                 "allocation_calls": after.allocation_calls - allocations_before.allocation_calls,
                 "allocated_bytes": after.allocated_bytes - allocations_before.allocated_bytes,
@@ -279,16 +312,51 @@ fn measure(
     })
 }
 
+#[cfg(feature = "qualification")]
+fn template_memory_probe(query: &str, parameters: &Parameters) -> hawdb::Result<JsonValue> {
+    let statement = hawdb_cypher::parse(query)?;
+    let before = native_profile::snapshot();
+    native_profile::reset_window_peak();
+    let plan = hawdb_plan_cache::parameterize_logical_plan(&statement, parameters)?;
+    let planning_peak = native_profile::window_peak();
+    let before_template = native_profile::snapshot();
+    let template = hawdb_plan_cache::ParameterBindingTemplate::new(&plan, parameters)
+        .expect("ranking fixture has complete parameter coverage");
+    let template_additional_bytes =
+        native_profile::snapshot().live_requested_bytes - before_template.live_requested_bytes;
+    let template_bytes = before_template.live_requested_bytes - before.live_requested_bytes
+        + template_additional_bytes;
+    native_profile::reset_window_peak();
+    let rebound = template
+        .reuse(parameters)
+        .expect("same shape must be reusable");
+    let reuse_peak = native_profile::window_peak();
+    drop(rebound);
+    let reuse_live_after = native_profile::snapshot().live_requested_bytes;
+    drop(template);
+    drop(plan);
+    let after_drop = native_profile::snapshot();
+    Ok(
+        json!({"scope": "isolated logical planning, shared template heap payload, and reuse handle; excludes cache keys, LFU containers, Arc headers and physical plans",
+        "planning_peak_above_start": planning_peak.saturating_sub(before.live_requested_bytes),
+        "template_heap_bytes": template_bytes,
+        "template_handle_additional_heap_bytes": template_additional_bytes,
+        "default_128_template_heap_bytes": template_bytes * 128,
+        "reuse_peak_above_retained": reuse_peak.saturating_sub(reuse_live_after),
+        "live_after_drop_delta": after_drop.live_requested_bytes as i128 - before.live_requested_bytes as i128}),
+    )
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = std::env::args().skip(1).collect::<Vec<_>>();
     if !(5..=6).contains(&args.len()) {
         return Err(
-            "expected candidates space_rows body_bytes repeats background(0|1) [ranking|expand|mem-ranking]"
+            "expected candidates space_rows body_bytes repeats background(0|1) [ranking|expand|mem-ranking|mixed-ranking]"
                 .into(),
         );
     }
     let workload = args.get(5).map(String::as_str).unwrap_or("ranking");
-    if !["ranking", "expand", "mem-ranking"].contains(&workload) {
+    if !["ranking", "expand", "mem-ranking", "mixed-ranking"].contains(&workload) {
         return Err("invalid workload".into());
     }
     let job = Job {
@@ -297,6 +365,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         body_bytes: args[2].parse()?,
         repeats: args[3].parse()?,
         background: args[4] == "1",
+        mixed_shapes: workload == "mixed-ranking",
     };
     if ![20, 100, 512].contains(&job.candidates)
         || !(512..=16384).contains(&job.space_rows)
@@ -318,20 +387,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let database = ConcurrentDatabase::new(database);
     let (query, mut params) = if workload == "expand" {
         expand()
-    } else if workload == "mem-ranking" {
+    } else if ["mem-ranking", "mixed-ranking"].contains(&workload) {
         mem_ranking(&job)
     } else {
         ranking(&job)
     };
     let ranking = measure(&database, &job, &query, &mut params)?;
+    #[cfg(feature = "qualification")]
+    let template_memory = if workload == "expand" {
+        JsonValue::Null
+    } else {
+        template_memory_probe(&query, &params)?
+    };
+    #[cfg(not(feature = "qualification"))]
+    let template_memory = JsonValue::Null;
     println!(
         "{}",
         json!({"protocol": "hawdb-mem-query-resources-v2", "workload": workload, "candidates": job.candidates,
         "space_rows": job.space_rows, "body_bytes": job.body_bytes, "repeats": job.repeats, "background": job.background,
         "profile": if cfg!(debug_assertions) {"checked"} else {"release"}, "instrumented": cfg!(feature = "qualification"),
-        "cache": "warm; shape-stable parameter rebinding", "storage": "in-memory; no persistence/durability claim",
+        "cache": if job.mixed_shapes {"warm; alternating list lengths at fixed query text"} else {"warm; shape-stable parameter rebinding"}, "storage": "in-memory; no persistence/durability claim",
         "cpu_scope": "process including background writer", "rss_scope": "process high-water including fixture setup",
-        "result": ranking})
+        "result": ranking, "template_memory": template_memory})
     );
     Ok(())
 }

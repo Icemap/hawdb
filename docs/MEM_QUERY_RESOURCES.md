@@ -161,3 +161,134 @@ nullness remains protected by complete type shapes. Current validation passes
 regressions and all100 focused/local fuzz targets. The frozen canonical harness
 matches the measured source; its old warmup comment is superseded by the cache
 lifetime clarification above.
+
+## Review follow-up: shape churn and memory accounting
+
+The binding cache now selects a bucket by normalized query text and a recursive
+parameter-shape fingerprint. List lengths, element types, NULL positions, map
+keys and vector dimensions participate; scalar payloads do not. A fingerprint
+is only a selector: the template still validates every shape, exact folded
+dependency and reserved-marker boundary before reuse. Hash collisions therefore
+cause conservative replanning rather than accepting an invalid template.
+Different shapes consume the same global LFU entry allowance; there is no
+separate unbounded map per query. Same-shape changes to an exact folded guard
+still conservatively replace that bucket. An explicitly unbounded host cache
+configuration remains unbounded, as with the physical cache.
+
+The fixed-text `IN $ids` regression alternates lengths 20/17 and a NULL mask:
+three admissions/misses followed by 69 hits, without eviction at capacity 3.
+The four-thread churn regression exceeds capacity 8, checks every returned plan
+against fresh parameterization, observes eviction and verifies at most 8 retained
+entries. LFU can immediately evict a new cold entry among frequent incumbents;
+correctness never depends on admission making the next request a hit. Shape
+validation now traverses borrowed values without allocating a comparison tree.
+The proven logical tree and validity key now use shared immutable ownership;
+cache admission and successful reuse clone handles instead of either tree.
+The regression checks shared ownership as well as actual rebound results.
+Request-owned physical planning and binding remain allocation costs.
+
+The `mixed-ranking` manual workload holds the Mem ranking query text and its
+CASE branches fixed while alternating the candidate-ID list between N and N-3.
+It primes both shapes and validates complete returned IDs for every request.
+This models variable candidate filtering independently of the separate fact
+that changing the number of generated CASE branches changes Mem's query text.
+Physical caches are still private to each read fork.
+
+The profiling allocator for this harness has a separate quiescent-reset window
+peak, leaving the original process high-water counter intact. Its first cold
+query, warm measurement window and isolated logical-template probe have distinct
+observations. The probe separately measures marker-planning peak, the heap
+payload retained by one template, and transient allocation from one reuse handle.
+It excludes normalized-query keys, LFU storage, the outer cached-template Arc
+header and physical plans. Shared logical-tree and validity-key Arc allocations
+are included. This is the meaning of the raw probe's abbreviated scope label. Multiplying its
+representative template payload by 128 is an extrapolation for 128 equally sized
+entries, not a universal byte limit: query length and exact parameter payloads
+can be larger. Entry-count boundedness must not be presented as byte boundedness.
+
+For 512 branches across five CASE expressions, the dispatch vectors reserve
+5*512*size_of::<(&str,usize,&ProjectionExpression)>() plus five table descriptors
+(82,160 bytes on this 64-bit target). Keys and result expressions are borrowed.
+This layout accounting is not an allocator ablation. Graph-slot Arc/slot state
+is included in the measured query window but is not isolated from the remaining
+executor allocations. The existing constructor audit establishes zero inherited
+record-payload copies, rather than zero allocation or zero slot overhead.
+
+Mem's actual browse page is 20 rows in both the
+[main Memories tab](https://github.com/nowledge-co/mem/blob/7e3f5ba8d44c648cd9ecac26b978f9f96bb38781/nowledge-graph/src/components/app-shell.tsx#L974)
+and [advanced browser](https://github.com/nowledge-co/mem/blob/7e3f5ba8d44c648cd9ecac26b978f9f96bb38781/nowledge-graph/src/components/advanced-search.tsx#L326).
+The [CLI list default](https://github.com/nowledge-co/mem/blob/7e3f5ba8d44c648cd9ecac26b978f9f96bb38781/nmem-rs/crates/nmem-cli/src/cli.rs#L3787)
+and [CLI search default](https://github.com/nowledge-co/mem/blob/7e3f5ba8d44c648cd9ecac26b978f9f96bb38781/nmem-rs/crates/nmem-cli/src/cli.rs#L3632)
+are 10. The generic useMemories hook defaults to 50, overridden by the main tab.
+Thus 512 is a stress cohort rather than a default UI or CLI page; candidate
+ranking size and final response page size also need not match. The Mem list
+benchmark's 512-row hydration tradeoff must not be extrapolated to its usual
+20-row UI request. Mem PR #8687 is merged as the cited commit; that does not
+upgrade the containing Mem artifact to this unreleased HawDB implementation.
+
+### Final review measurements
+
+The [review manifest](benchmarks/mem_query_resources_2026_10_28/review-manifest.json),
+[CSV](benchmarks/mem_query_resources_2026_10_28/review-matrix.csv), compressed raw
+JSONL, frozen harness/allocator and engine patches preserve both review variants.
+The `deepclone` control already has the multi-shape cache; `shared` additionally
+shares immutable logical/validity state. Its reconstructed control sources
+match the hashes recorded before measurement. Each variant has 30 ordinary
+release cells (24 Mem ranking matrix cells plus 6 alternating-length cells),
+20 requests per cell, and 6 separate instrumented cells with 3 requests each.
+All completed successfully. These are separate shared-host windows; further
+CPU/latency differences between variants are descriptive, not randomized paired
+causal estimates. The earlier matched-main baseline remains historical evidence.
+
+Final shared-template instrumentation, Space512/body64/foreground, bytes:
+
+| Candidates | First cold-query peak | Warm-window peak | Template heap payload | 128 same-sized template payloads | Reuse-handle transient heap |
+|---|---:|---:|---:|---:|---:|
+| 20 | 3,722,465 | 3,725,944 | 226,845 | 29,036,160 | 0 |
+| 100 | 10,220,154 | 10,227,393 | 1,034,445 | 132,408,960 | 0 |
+| 512 | 42,605,708 | 42,632,311 | 5,049,337 | 646,315,136 | 0 |
+
+This corrects a cold-only interpretation of the original 47.7 MB peak: the
+review control's 512-row **warm** peak was 47,676,592 bytes. Sharing eliminates
+5,046,385 bytes of transient template cloning at that size and lowers the warm
+peak to 42,632,311. Warm live bytes before/after collecting three samples are
+7,741,449/7,768,108; the difference includes harness and query/cache activity,
+and is not an isolated leak measurement. The isolated template probe returns
+to its starting live count after both handles are dropped. Its marker-planning
+peak above start is 17,812,060 bytes. Request-owned physical planning/binding and
+executor/harness work remain in the warm peak; their residual is not separately
+attributed to graph slots. The five dispatch tables' 82,160-byte layout alone
+cannot explain the multi-megabyte peak. Shared ownership retains original Vec
+capacities, so the smaller templates can retain slightly more heap than a
+compacting deep clone, despite avoiding its per-request copying.
+
+Final requested allocator bytes/read for 20/100/512 are 2,576,763/12,123,057/
+61,389,910, with 12,635/56,531/271,864 allocation calls/read. These remain distinct
+from process RSS and instrumented query-ledger accounting.
+
+With both candidate-list shapes resident, warm live bytes are 2,448,732/
+4,203,093/12,978,761 and warm peaks are 3,959,140/11,296,477/47,869,623 for
+20/100/512. The deep-clone control's 512-row mixed peak was 52,911,800. The cache
+unit's 69 hits/3 misses establishes alternating-shape reuse; this mixed workload
+supplies complete execution and resource evidence, without relabeling fresh
+physical-cache misses as logical-cache misses or claiming a measured production
+hit rate. The unit churn/concurrency check proves an entry-count bound for its
+fixed request domain, not a universal heap-byte bound.
+
+Final release reference, Space8192/body16384/foreground:
+
+| Candidates | Fixed-shape p95 ms | Fixed-shape CPU ms/read | Fixed-shape RSS MiB | Mixed-length p95 ms | Mixed-length CPU ms/read | Mixed-length RSS MiB |
+|---|---:|---:|---:|---:|---:|---:|
+| 20 | 0.599 | 0.546 | 581.8 | 0.529 | 0.514 | 582.1 |
+| 100 | 2.843 | 2.639 | 584.8 | 2.689 | 2.568 | 587.9 |
+| 512 | 19.163 | 17.979 | 627.5 | 18.356 | 17.890 | 626.4 |
+
+Decision: retain this experimental CPU/allocation optimization with the peak
+and retained-template costs explicitly qualified. It is not a memory-first
+recommendation or a claim that all resource metrics improve. A 128-entry default
+is not a byte budget: 646 MB above is only 128 equally sized measured 512-row
+templates, excludes outer cache storage, and is not an absolute worst case.
+Hosts with tight memory budgets must evaluate a smaller typed
+`max_plan_cache_entries` setting (the measured host uses 16); `Some(0)` disables
+admission and loses reuse. No host production-memory acceptance or HawDB
+activation is established here. The broader replacement issue remains open.
