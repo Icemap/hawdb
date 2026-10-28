@@ -100,6 +100,7 @@ pub mod projection_evidence;
 #[doc(hidden)]
 pub mod projection_evidence_cli;
 mod query_control;
+mod resident_bm25;
 #[cfg(feature = "vector-search")]
 mod resident_diskann;
 mod resident_text_seed;
@@ -3854,12 +3855,13 @@ impl SearchIndex {
         if lexical_snapshot.is_some() {
             lexical_snapshot_test_gate::pause_after_capture();
         }
-        let text_corpus =
+        let mut text_corpus =
             if text_available && mode != SearchMode::Vector && lexical_snapshot.is_none() {
-                Some(TextCorpusStats::from_documents(
+                Some(resident_bm25::Scorer::from_documents(
+                    &query_terms,
                     filtered_documents.iter().copied(),
                     &self.analyzer_lexicon,
-                ))
+                )?)
             } else {
                 None
             };
@@ -3925,18 +3927,9 @@ impl SearchIndex {
         } else {
             (BTreeMap::new(), 0, 0, 0, 0)
         };
-        if lexical_snapshot.is_none() {
+        if let Some(corpus) = &mut text_corpus {
             for document in &filtered_documents {
-                let text_score = if text_available && mode != SearchMode::Vector {
-                    text_corpus
-                        .as_ref()
-                        .map(|corpus| {
-                            bm25_score(&query_terms, document, corpus, &self.analyzer_lexicon)
-                        })
-                        .unwrap_or(0.0)
-                } else {
-                    0.0
-                };
+                let text_score = corpus.score(document, &self.analyzer_lexicon)?;
                 if text_score > 0.0 {
                     text_scores.insert(document.id.clone(), text_score);
                 }
@@ -7160,6 +7153,7 @@ fn normalized_projection_kind(value: &str) -> Option<&'static str> {
     }
 }
 
+#[cfg(test)]
 #[derive(Debug, Clone, PartialEq)]
 struct TextCorpusStats {
     document_count: usize,
@@ -7167,6 +7161,7 @@ struct TextCorpusStats {
     document_frequency: BTreeMap<String, usize>,
 }
 
+#[cfg(test)]
 impl TextCorpusStats {
     fn from_documents<'a>(
         documents: impl Iterator<Item = &'a SearchDocument>,
@@ -7195,6 +7190,7 @@ impl TextCorpusStats {
     }
 }
 
+#[cfg(test)]
 fn bm25_score(
     query_terms: &BTreeSet<String>,
     document: &SearchDocument,
@@ -7385,6 +7381,7 @@ fn document_tokens(
     tokens
 }
 
+#[cfg(test)]
 fn token_frequencies(tokens: impl Iterator<Item = String>) -> BTreeMap<String, usize> {
     let mut frequencies = BTreeMap::new();
     for token in tokens {
