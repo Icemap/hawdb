@@ -74,9 +74,10 @@ fn explicit_foreground_catch_up_progresses_while_background_physical_io_is_full(
     for incremental in [false, true] {
         let governor = governor();
         let (_context, wave) = physical_wave(&governor, RuntimeWorkPriority::Background, 1);
+        // Observe our task refund before any automatic-maintenance owner exists.
+        assert_eq!(governor.snapshot().active_background_tasks, 0);
         let (root, handle) = fixture("catch_up_background_pressure", incremental, &governor);
         let before = governor.snapshot();
-        assert_eq!(before.active_background_tasks, 0);
         assert_eq!(before.active_background_io_slots, 1);
         assert_eq!(before.active_foreground_io_slots, 0);
         let called = Cell::new(false);
@@ -126,7 +127,6 @@ fn explicit_foreground_catch_up_refuses_real_foreground_pressure_then_retries() 
         let governor = governor();
         let (root, handle) = fixture("catch_up_foreground_pressure", incremental, &governor);
         let (_context, wave) = physical_wave(&governor, RuntimeWorkPriority::Foreground, 2);
-        let before = governor.snapshot();
         let called = Cell::new(false);
         let refused = handle
             .catch_up_search_projection_with_priority_and_batch_hydrator(
@@ -146,11 +146,7 @@ fn explicit_foreground_catch_up_refuses_real_foreground_pressure_then_retries() 
         assert!(!called.get(), "foreground refusal precedes hydration");
         let after = governor.snapshot();
         assert_eq!(after.active_foreground_io_slots, 2);
-        assert_eq!(after.admissions, before.admissions);
-        assert_eq!(
-            after.retryable_admission_rejections,
-            before.retryable_admission_rejections + 1,
-        );
+        assert_eq!(after.active_foreground_tasks, 0);
         drop(wave);
         let report = handle
             .catch_up_search_projection_with_priority_and_batch_hydrator(

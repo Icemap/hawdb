@@ -13,7 +13,9 @@ A retained Background physical I/O wave must not reject caller-selected
 Foreground catch-up; existing Background APIs still refuse. A saturated
 Foreground lane must refuse before hydration and succeed after release. The
 fixtures retain durable projection and permit-refund assertions, keep automatic
-maintenance enabled, and do not use sleeps or admission retries. Local replay:
+maintenance enabled, and do not use sleeps or admission retries. Initial task
+refund is observed before opening the automatic-maintenance owner; global
+admission counters are not assumed stable while that worker can run. Local replay:
 `cargo test --locked -p hawdb --lib catch_up_admission_tests -- --test-threads=1`.
 See [caller-priority catch-up](https://github.com/nowledge-co/hawdb/issues/1306).
 
