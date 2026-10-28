@@ -190,8 +190,8 @@ fn measure(
     query: &str,
     params: &mut Parameters,
 ) -> hawdb::Result<JsonValue> {
-    // Warm parser/physical cache before measuring; vary parameter values while
-    // retaining their shapes to exercise binding, not identical-value replay.
+    // Warm shared binding/catalog state; each read fork has a private physical
+    // cache. Vary values within a shape instead of replaying identical values.
     db.begin_read_transaction()?.query_with_params_bounded(
         query,
         params,
