@@ -53,8 +53,35 @@ and checks 16-KiB rows through bounded merges. The existing executor unit target
 owns these regressions; replay with `cargo test --locked -p hawdb-executor --lib
 spill::tests` and the `blocking::sort::tests` filter. The existing local-only
 `//crates/executor:hawdb_sort_merge_account_fuzz_tests` campaign also exercises
-the tie-order and wide-row controls. Test lanes, profiles and deadlines stay
+adaptive buffers below an observed peak while preserving hard root refusal,
+as well as the tie-order and wide-row controls. Test lanes, profiles and deadlines stay
 unchanged; allocation microprobes do not establish end-to-end RSS or latency.
+
+The adaptive execution family extends those existing executor owners with
+encoded non-expression key selection, complete-record validation, 64-KiB nested
+payload forwarding, descriptor/memory-driven 8/4/2-way merges, and live host
+pressure releasing sort capacity. The existing sort differential campaign
+includes the wide-record, fan-in and pressure controls, plus sustained-pressure
+TopN cutoff preservation (4,096 inputs, 48 retained, no spill for ascending or
+descending arrival). Executor kernel tests bound soft-target polling to once
+per 64 safe checks without delaying hard refusal or the progress floor. The admitted hash-join
+unit family covers pressure arriving after build completion without duplicate
+probe output. QoS `runtime::memory_target::tests` owns unchanged grants, child
+propagation, mixed foreground/background tasks, recovery hysteresis and
+unavailable process feedback halving work areas while admission stays closed.
+
+The vector-projection unit owner also covers filtered execution feedback at
+0.1%, 1% and 10% eligible fractions, contiguous/sparse IDs, exhaustive filtered
+ground truth, productive traversal, insufficient work and mid-scan cancellation.
+Its additional manual-only
+`//crates/vector-projection:hawdb_diskann_feedback_fuzz_tests` target runs those
+controls with the existing small-beam recall differential case. Do not add this
+campaign to CI. Existing report-value differential tests cover the new adaptive
+scan counter. The release-only `spill_resource_probe` example measures identical
+small, wide, many-run and four-query workloads; `--governed` binds foreground
+permits to one shared governor and process policy. It is not a CI performance gate.
+See [the implementation and measurement contract](specs/ADAPTIVE_EXECUTION_MEMORY_SPEC.md).
+No existing feature matrix, test deadline or compilation profile is removed.
 
 The executor `scan::indexed_tests::bounded_index_projection` family covers
 admitted scalar-index projection reads with work budgets, single/multiple keys,

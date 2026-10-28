@@ -11,6 +11,7 @@ use hawdb_core::{RuntimeTaskContext, VectorDistance};
 
 mod artifact;
 mod build;
+mod feedback;
 #[cfg(test)]
 mod tests;
 
@@ -111,6 +112,8 @@ pub struct DiskAnnSearchReport {
     pub bridge_nodes: usize,
     pub id_lookup_steps: usize,
     pub seed_steps: usize,
+    /// Traversal switched once to complete evaluation of the pinned allowlist.
+    pub adaptive_exact_scan: bool,
 }
 
 #[derive(Debug)]
@@ -314,7 +317,7 @@ fn traverse(
         expand_rejected: true,
     };
     discover(graph, entry, scratch, options, &mut report, &mut policy)?;
-    walk(graph, scratch, options, report, policy, false)
+    walk(graph, scratch, options, report, policy, None)
 }
 
 fn traverse_filtered(
@@ -362,7 +365,33 @@ fn traverse_filtered(
         .entry_point()
         .ok_or_else(|| corrupt("nonempty DiskANN graph has no entry point"))?;
     discover(graph, entry, scratch, options, &mut report, &mut policy)?;
-    walk(graph, scratch, options, report, policy, !complete_domain)
+    let feedback = (!complete_domain).then(|| {
+        feedback::FilteredFeedback::new(graph.len(), candidates.ids.len(), ordinal_ids, &report)
+    });
+    let mut report = walk(graph, scratch, options, report, policy, feedback)?;
+    if report.adaptive_exact_scan {
+        // No results have escaped. Reuse the admitted workspace and cumulative
+        // work counters; already scored eligible nodes need no second distance.
+        scratch.bridges.clear();
+        let mut exact = VisitPolicy {
+            allowed: |id| Ok(candidates.ids.binary_search(&id).is_ok()),
+            score: |ordinal| graph.distance(query, ordinal, options.task),
+            expand_rejected: false,
+        };
+        for &id in candidates.ids {
+            charge_query_work(options, &report)?;
+            report.seed_steps += 1;
+            let ordinal = if ordinal_ids {
+                (id < graph.len() as u64).then_some(id as u32)
+            } else {
+                find_id(graph, id, options, &mut report)?
+            };
+            if let Some(ordinal) = ordinal {
+                discover(graph, ordinal, scratch, options, &mut report, &mut exact)?;
+            }
+        }
+    }
+    Ok(report)
 }
 
 // One independently mixed entry from each disjoint ID-list bucket. Stratifying
@@ -411,7 +440,7 @@ fn walk(
     options: DiskAnnSearchOptions<'_>,
     mut report: DiskAnnSearchReport,
     mut policy: VisitPolicy<impl FnMut(u64) -> Result<bool>, impl FnMut(u32) -> Result<f64>>,
-    bounded_bridges: bool,
+    feedback: Option<feedback::FilteredFeedback>,
 ) -> Result<DiskAnnSearchReport> {
     loop {
         checkpoint(options.task)?;
@@ -423,7 +452,7 @@ fn walk(
         } else {
             break;
         };
-        policy.expand_rejected = !bounded_bridges || !bridge;
+        policy.expand_rejected = feedback.is_none() || !bridge;
         report.expanded_nodes += 1;
         for (index, neighbor) in graph.neighbors(ordinal)?.enumerate() {
             report.neighbor_reads += 1;
@@ -431,6 +460,13 @@ fn walk(
                 return Err(corrupt("DiskANN degree exceeds the provider bound"));
             }
             discover(graph, neighbor, scratch, options, &mut report, &mut policy)?;
+            if feedback
+                .as_ref()
+                .is_some_and(|feedback| feedback.should_scan(&report, options.max_visited))
+            {
+                report.adaptive_exact_scan = true;
+                return Ok(report);
+            }
         }
     }
     Ok(report)

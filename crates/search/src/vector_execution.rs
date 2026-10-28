@@ -386,6 +386,7 @@ impl SearchVectorSource<'_, '_> {
             filtered_document_count: report.filtered_document_count,
             scanned_block_count: report.scanned_block_count,
             skipped_block_count: report.skipped_block_count,
+            adaptive_exact_scan_count: report.adaptive_exact_scan_count,
             payload_bytes_read: report.payload_bytes_read,
             admitted_working_bytes: report.admitted_working_bytes,
         };
@@ -410,6 +411,9 @@ impl SearchVectorSource<'_, '_> {
             existing.skipped_block_count = existing
                 .skipped_block_count
                 .saturating_add(next.skipped_block_count);
+            existing.adaptive_exact_scan_count = existing
+                .adaptive_exact_scan_count
+                .saturating_add(next.adaptive_exact_scan_count);
             existing.payload_bytes_read = existing
                 .payload_bytes_read
                 .saturating_add(next.payload_bytes_read);

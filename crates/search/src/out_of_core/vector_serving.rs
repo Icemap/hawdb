@@ -239,6 +239,7 @@ pub(super) struct VectorScoreScan {
     pub(super) candidate_scan_filtered_document_count: usize,
     pub(super) candidate_scan_scanned_block_count: usize,
     pub(super) candidate_scan_skipped_block_count: usize,
+    pub(super) candidate_scan_adaptive_exact_scan_count: usize,
     pub(super) candidate_scan_payload_bytes_read: u64,
     pub(super) candidate_scan_admitted_working_bytes: usize,
     pub(super) fallback_reason_codes: Vec<SearchFallbackReasonCode>,
@@ -265,6 +266,7 @@ impl Default for VectorScoreScan {
             candidate_scan_filtered_document_count: 0,
             candidate_scan_scanned_block_count: 0,
             candidate_scan_skipped_block_count: 0,
+            candidate_scan_adaptive_exact_scan_count: 0,
             candidate_scan_payload_bytes_read: 0,
             candidate_scan_admitted_working_bytes: 0,
             fallback_reason_codes: Vec::new(),
@@ -721,6 +723,7 @@ impl SearchOutOfCoreReader {
         let mut candidate_scan_filtered_document_count = 0usize;
         let mut candidate_scan_scanned_block_count = 0usize;
         let mut candidate_scan_skipped_block_count = 0usize;
+        let mut candidate_scan_adaptive_exact_scan_count = 0usize;
         let mut candidate_scan_payload_bytes_read = 0u64;
         let mut candidate_scan_admitted_working_bytes = 0usize;
         let mut candidate_scan_kernel = None;
@@ -839,6 +842,8 @@ impl SearchOutOfCoreReader {
                 .saturating_add(projection_report.scanned_block_count);
             candidate_scan_skipped_block_count = candidate_scan_skipped_block_count
                 .saturating_add(projection_report.skipped_block_count);
+            candidate_scan_adaptive_exact_scan_count = candidate_scan_adaptive_exact_scan_count
+                .saturating_add(projection_report.adaptive_exact_scan_count);
             candidate_scan_payload_bytes_read = candidate_scan_payload_bytes_read
                 .saturating_add(projection_report.payload_bytes_read);
             candidate_scan_admitted_working_bytes = candidate_scan_admitted_working_bytes.max(
@@ -1044,6 +1049,7 @@ impl SearchOutOfCoreReader {
             candidate_scan_filtered_document_count,
             candidate_scan_scanned_block_count,
             candidate_scan_skipped_block_count,
+            candidate_scan_adaptive_exact_scan_count,
             candidate_scan_payload_bytes_read,
             candidate_scan_admitted_working_bytes: candidate_scan_admitted_working_bytes
                 .saturating_add(selected_candidate_bytes),

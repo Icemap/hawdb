@@ -499,6 +499,7 @@ impl ResidentDiskAnn {
                 filtered_document_count: report.bridge_nodes,
                 scanned_block_count: report.expanded_nodes,
                 skipped_block_count: 0,
+                adaptive_exact_scan_count: usize::from(report.adaptive_exact_scan),
                 payload_bytes_read: (report.distance_comparisons as u64)
                     .saturating_mul((projection.graph.dimension() as u64).saturating_mul(4))
                     .saturating_add((report.neighbor_reads as u64).saturating_mul(4))
