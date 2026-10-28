@@ -6,6 +6,17 @@ authoritative; this is a map of test families, not an exhaustive list of every
 Rust test function. Update it when changing a family's scope, build profile,
 execution lane, fixture size, isolation or known failure mode.
 
+`nowledge_mem::tests::catch_up_admission_tests` belongs to the existing root
+`//:hawdb_unit_general_tests` owner. Its two guards each exercise full-residency
+and incremental projection dispatch with one explicitly configured governor.
+A retained Background physical I/O wave must not reject caller-selected
+Foreground catch-up; existing Background APIs still refuse. A saturated
+Foreground lane must refuse before hydration and succeed after release. The
+fixtures retain durable projection and permit-refund assertions, keep automatic
+maintenance enabled, and do not use sleeps or admission retries. Local replay:
+`cargo test --locked -p hawdb --lib catch_up_admission_tests -- --test-threads=1`.
+See [caller-priority catch-up](https://github.com/nowledge-co/hawdb/issues/1306).
+
 The experimental [Windows directory-custody first packet](../scripts/windows-directory-custody-probe.ps1)
 is owned by the narrowly path-filtered, same-repository
 [Directory Custody Primitive Probe](../.github/workflows/directory-custody-probe.yml)

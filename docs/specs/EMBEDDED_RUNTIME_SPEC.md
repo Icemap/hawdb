@@ -434,6 +434,14 @@ requests MAY use the effective CPU budget. Internal background tasks MUST use a
 separate conservative budget and pass QoS admission. Background saturation MUST
 NOT reject an explicit foreground request.
 
+The embedded Search catch-up facade MUST allow an explicit host operation to
+select its runtime priority through a typed library entrypoint. Selection MUST
+preserve the same bounded catch-up, projection publication and task-bound I/O
+context; it MUST NOT bypass the chosen lane's task, CPU, memory or I/O limits.
+Compatibility catch-up methods and scheduled maintenance retain Background
+priority. Holding an automatic checkpoint's Background physical wave is not
+itself a reason to reject caller-selected Foreground catch-up.
+
 `SharedHost` defaults reserve most process memory for the host application.
 Its stable HawDB capacity is one quarter of the effective host or cgroup policy
 ceiling, and its dynamic budget is further bounded by one quarter of sensed
