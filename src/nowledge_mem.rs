@@ -370,6 +370,9 @@ impl NowledgeMemOpenOptions {
 
     /// Overrides resource and storage policy while retaining facade-owned mode
     /// and vector-backend settings.
+    /// An explicit namespace durability anchor also applies to the search
+    /// projection and must contain both paths. The host must already guarantee
+    /// the anchor's namespace durability.
     pub fn with_database_config(mut self, config: DatabaseConfig) -> Self {
         self.database_config = Some(config);
         self
@@ -2574,6 +2577,7 @@ impl NowledgeMemEmbeddedStore {
         options.validate()?;
         let mut report = options.sanitized_report();
         let graph_config = options.effective_database_config();
+        let namespace_anchor = graph_config.namespace_durability_anchor.clone();
         let mut graph = NowledgeMemGraph::open_with_config_and_runtime_governor(
             &options.graph_path,
             graph_config,
@@ -2597,6 +2601,24 @@ impl NowledgeMemEmbeddedStore {
         let Some(path) = options.search_projection_path.as_ref() else {
             return Ok((Self::new(graph, None), report));
         };
+        // A sibling search projection is a separate descriptor domain. Admit
+        // the same explicit host boundary before its internal component opens;
+        // the returned index/reader retains that domain after this guard drops.
+        // Reader modes must not create or synchronize an absent projection.
+        let create_search = matches!(
+            &options.search_projection_open_mode,
+            NowledgeMemSearchProjectionOpenMode::FullResidencyMaintenance
+        );
+        let _search_namespace = namespace_anchor
+            .as_deref()
+            .map(|anchor| {
+                hawdb_storage::file_descriptors::ProjectFileDescriptors::acquire_component_with_namespace_anchor(
+                    path,
+                    create_search,
+                    anchor,
+                )
+            })
+            .transpose()?;
         match &options.search_projection_open_mode {
             NowledgeMemSearchProjectionOpenMode::FullResidencyMaintenance => {
                 let mut projection = NowledgeMemSearchProjection::open(path)?;

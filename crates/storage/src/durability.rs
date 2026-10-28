@@ -302,7 +302,8 @@ fn require_directory(file: &fs::File) -> io::Result<()> {
 /// Existing directories can be leftovers of an interrupted attempt: existence
 /// alone never replaces these barriers. The project root's own ancestry is
 /// synchronized during writable project admission. Detached component scratch
-/// can borrow project accounting; its namespace still needs a full mount walk.
+/// can borrow project accounting. Scratch within the explicit host anchor can
+/// use that boundary; scratch outside it still needs a full mount walk.
 #[doc(hidden)]
 pub fn sync_directory_ancestors(directory: &Path) -> io::Result<()> {
     let context = crate::file_descriptors::context_for_path(directory)?;
@@ -326,6 +327,14 @@ pub(crate) fn sync_directory_tree_with_context(
     let mut current = context
         .canonicalize(directory)
         .map_err(|error| directory_sync_error("resolve", directory, error))?;
+    let stop =
+        if stop == Some(context.project_root()) && !current.starts_with(context.project_root()) {
+            context
+                .namespace_anchor()
+                .filter(|anchor| current.starts_with(anchor))
+        } else {
+            stop
+        };
     loop {
         sync_directory_with_context(&current, context)?;
         if stop.is_some_and(|root| current == root) {

@@ -18,11 +18,15 @@ host guarantee, not inferred from existence or from a denied open. The host must
 keep that namespace stable while project handles are open. HawDB validates canonical ancestry
 before creating project directories, synchronizes all names through the anchor
 inclusive, and refuses a conflicting anchor while the project is open. Internal
-project opens inherit the admitted project's boundary. Detached producer scratch
-may borrow its descriptor budget without inheriting an unrelated namespace
-boundary; that scratch still synchronizes its complete ancestry. `None` preserves
-the mount walk; permissions and failed barriers still fail closed. This does not change
-the WAL policy or persistent format.
+project opens inherit the admitted project's boundary. The embedded Mem facade
+also admits a sibling search projection under that explicit boundary, which
+must contain both graph and search paths. Each standalone component retains its
+finite descriptor domain; nested components keep the containing domain's budget.
+Detached producer scratch may borrow that budget. Scratch within the explicit
+anchor uses its inclusive boundary; scratch outside still synchronizes its
+complete ancestry. `None` preserves the mount walk; permissions and failed
+barriers still fail closed. This does not change the WAL policy or persistent
+format.
 
 For a Windows application storing private databases below the OS-provisioned
 LocalAppData folder, the host can guarantee that folder's existing namespace and

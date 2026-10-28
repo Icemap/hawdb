@@ -324,15 +324,21 @@ Namespace durability anchors use the existing storage descriptor tests,
 `branch_project_open` integration target and root power-loss family. Storage
 cases cover bounded inclusive barriers, unchanged default ancestry, failed
 barrier retry/accounting, pre-effect validation, canonical aliases, symlink
-escape and live-owner configuration conflicts. Detached producer scratch keeps
-the initiating project's descriptor accounting while retaining its complete
-ancestor walk, including failed-barrier propagation. Storage directory-sync
-cases retain failed operation/path/native-source diagnostics and typed descriptor-budget classification through contextual IO
+escape and live-owner configuration conflicts. Related sibling components
+inherit the explicit host anchor while retaining their own finite descriptor
+domains; nested components keep the containing domain's capacity. Detached
+producer scratch keeps the initiating project's descriptor accounting. Scratch
+inside its explicit anchor stops there inclusively; scratch outside retains its
+complete ancestor walk. Both paths propagate failed barriers without leaking
+permits. Storage directory-sync cases retain failed operation/path/native-source
+diagnostics and typed descriptor-budget classification through contextual IO
 errors. These use the existing storage unit/native owners without a new lane.
 The Windows descriptor case uses a fresh thread with a restricted token, removing administrator-group
 authority and privileges without changing machine ACLs. It opens and reopens a
-private project beneath the OS-owned temp directory. The embedded facade case
-round-trips graph and SQL writes. The anchored initial-installation recorder
+private project and sibling component beneath the OS-owned temp directory. The
+embedded facade case round-trips graph and SQL data, opens and reopens the
+sibling search store, checks its live descriptor domain's anchor, and refuses missing incremental projections
+without creating them. The anchored initial-installation recorder
 reuses the complete before/after mkdir, lost-write and committed mixed-transaction
 oracles of the default installation case. These cases add no CI job or profile;
 the native Windows storage descriptor lane discovers the restricted-token case.
