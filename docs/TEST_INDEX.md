@@ -6,6 +6,32 @@ authoritative; this is a map of test families, not an exhaustive list of every
 Rust test function. Update it when changing a family's scope, build profile,
 execution lane, fixture size, isolation or known failure mode.
 
+The experimental [Windows directory-custody first packet](../scripts/windows-directory-custody-probe.ps1)
+is owned by the narrowly path-filtered, same-repository
+[Directory Custody Primitive Probe](../.github/workflows/directory-custody-probe.yml)
+PR job on Windows2025. It is a falsification fixture for
+[the captured-open investigation](https://github.com/nowledge-co/hawdb/issues/1291),
+not a production SDK API or a default storage-qualification gate. Publishing or
+synchronizing its PR executes native code, so exact-source review precedes that
+publication. The packet retains one original GenericRead/shareWRITE|DELETE
+directory owner; checks same/child-process sharing and unobstructed controls;
+records separate original-object ReOpenFile and empty-name NtCreateFile
+write-only open/identity/Flush outcomes; observes attribute-only equal identity;
+and checks duplicate/last-handle lifetime. Its 18 cases permit at most 10 child
+attempts, each 15s plus bounded termination/output collection, within a 10-minute
+job. Setup/C#compile and native runtime costs are not measured yet; the runner
+performs no Rust build. Artifacts keep source hashes, ABI/masks, OS/filesystem,
+per-case progress, child logs and distinct negative/incomplete outcomes.
+Local replay on Windows uses a fresh process and artifact directory:
+`pwsh -NoProfile -File scripts/windows-directory-custody-probe.ps1 -OutputDirectory
+<new-temp-artifact-directory> -ExpectedSourceRevision <exact-git-HEAD>`.
+Exit 0 means a fixed primitive combination was observed with the packet controls;
+exit 2 means both candidates were falsified or unqualified; exit 1 means harness or
+cleanup failure. None qualifies cold-RO ACLs, independent cursors, relative child
+IO, missing/foreign/reparse bindings, ordinary-client coexistence, role admission,
+power-loss durability or full captured-open integration. These remain separate
+required qualification; a candidate refusal is never relabeled SDK success.
+
 The executor `spill::tests` family covers streaming binding encoding with a
 full query-memory account, read/decode admission, exact disk quotas, nesting
 preflight, short writes, I/O errors and scalar/nested/vector round trips.
