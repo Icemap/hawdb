@@ -475,6 +475,15 @@ reservations and live wave-scoped reads independently for each priority class.
 - The host MAY override I/O depth using device-specific knowledge. The library
   MUST NOT infer a precise hardware queue count from CPU count alone.
 
+For known SSD/non-rotational media without a queue-depth hint, `SharedHost`
+defaults to 12 foreground and 3 background slots. This is a bounded concurrency
+policy, not a throughput guarantee. Supplied hints retain the foreground clamp
+of 4..32 and background depth of one quarter, clamped to 1..4. Explicit budgets,
+other media defaults and `MobileEmbedded` are unchanged. An unknown device does
+not receive the SSD default merely because its filesystem commonly runs on SSDs.
+This capacity adjustment does not resolve incorrect priority, permit retention
+or resource-wait behavior.
+
 Device discovery is path-specific and evidence preserving:
 
 - Linux MAY read the database path's block-device `rotational` and
