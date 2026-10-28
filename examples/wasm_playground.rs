@@ -85,6 +85,7 @@ impl QueryBridge {
                     HawDBError::Storage(_) => "storage",
                     HawDBError::ProjectionBusy => "projection_busy",
                     HawDBError::StorageIntegrity(_) => "storage_integrity",
+                    HawDBError::WalRecoveryIo { .. } => "wal_recovery_io",
                     HawDBError::FileDescriptors(_) => "file_descriptors",
                     HawDBError::Execution(_)
                     | HawDBError::TransactionReadDependencyRefused { .. }

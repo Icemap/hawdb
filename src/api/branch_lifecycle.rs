@@ -1136,6 +1136,7 @@ mod tests {
             &path,
             super::super::DatabaseConfig {
                 read_only: true,
+                recovery_mode: crate::RecoveryMode::Strict,
                 ..Default::default()
             },
         )
@@ -2522,6 +2523,7 @@ mod tests {
             &path,
             super::super::DatabaseConfig {
                 read_only: true,
+                recovery_mode: crate::RecoveryMode::Strict,
                 ..Default::default()
             },
         )

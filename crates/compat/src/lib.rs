@@ -426,6 +426,7 @@ impl ExpectedErrorClass {
             HawDBError::UnsupportedStorageFormat(_)
             | HawDBError::Storage(_)
             | HawDBError::StorageIntegrity(_)
+            | HawDBError::WalRecoveryIo { .. }
             | HawDBError::ProjectionBusy
             | HawDBError::AppendSequenceExhausted { .. }
             | HawDBError::BranchBusy { .. }

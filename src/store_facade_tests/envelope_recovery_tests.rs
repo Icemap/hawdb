@@ -87,6 +87,7 @@ fn storage_owned_envelope_preserves_checkpoint_reopen_and_caller_limits() {
             &fixture.0,
             DatabaseConfig {
                 read_only: true,
+                recovery_mode: crate::RecoveryMode::Strict,
                 max_checkpoint_decoded_bytes: Some(length),
                 ..Default::default()
             },

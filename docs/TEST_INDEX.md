@@ -525,6 +525,29 @@ workload does not change default or CI benchmark selection.
 | `crates/fuzz-contracts` | Production readiness contract values only. Its fast unit tests are not the Shiro generator/campaign. |
 | Python DB-API (`bindings/python/tests/test_dbapi.py`) | The PEP 249 layer in `hawdb.dbapi`: module globals and the PEP 249 exception hierarchy, with every engine error and every built-in error from statement parameters raised as its PEP 249 class while keeping its own type, attributes and pickling, or raised unchanged if it cannot be rebuilt as that class; tuple rows in SELECT-list order, a `description` with type codes, also for a key lookup that matches nothing, and identity-hashed type objects; lazily begun connection transactions with commit, rollback, close and context-manager semantics; autocommit set at connect or between transactions, read-only and branch-command routing; `executemany` delegation and the aborted state after a failed batch; parameter containers matching the native rule; and refusal of closed objects and of other threads, including reused thread idents. Owned by `//bindings/python:hawdb_python_tests` and the Python Bindings pip job. Engine transaction semantics run on file and in-memory databases, durability, read-only and branch cases on a file database, and the rest in memory. The engine's column order per query shape belongs to the SQL result column order family. Catalog queries also pin tuple order and empty-result descriptions under both autocommit and transactions; SQL EXPLAIN and EXPLAIN ANALYZE pin their diagnostic column and tuple order. The `pandas.read_sql` smoke skips without pandas; the pip job installs a pinned pandas and selects it with `-k pandas`. Replay: `pytest tests/test_dbapi.py` in `bindings/python` with the wheel installed. |
 
+## Default WAL recovery
+
+The existing storage unit owner includes `store::doctor::recovery_tests::recovery_995_*`:
+bounded suffix evidence, real recorder images with lost/torn/reordered relaxed
+writes, durable-prefix protection, policy changes, grouped synchronization and
+per-persistence-step IO retry and native repair crash images. The existing facade recovery owner includes
+`api::tests::storage_recovery::wal_tail` for typed readiness and subprocess
+append/repair cuts. Both are explicitly selected by the Windows native storage
+shard; no new fuzz CI lane is added. Local replay uses
+`cargo test --locked -p hawdb-storage --lib recovery_995 -- --nocapture` and the
+existing facade recovery target. The local WAL-tail oracle remains
+`bazel run //crates/fuzz:hawdb_storage_fuzz -- --wal-tail --seed 174 --cases 64`.
+See [recovery protocol](STORAGE.md#repair-evidence-and-retry) and
+[qualification limits](BRANCH_POWER_LOSS_QUALIFICATION.md#default-wal-recovery-and-synchronization-fences-995).
+
+The same manual `concurrent_writers` benchmark accepts
+`--after-relaxed-interval` to seed one relaxed append, then measure synchronous
+ungrouped/grouped commits in that generation. It reports the first relaxed
+append separately and preserves all row, epoch and reopen checks. Compare this
+opt-in diagnostic against an identical baseline harness; do not pool it with
+the ordinary post-checkpoint/reopened cohorts or claim that it measures steady
+relaxed throughput. It has no additional CI owner.
+
 ## WAL identity performance qualification
 
 The manual `concurrent_writers` harness retains its post-checkpoint control and

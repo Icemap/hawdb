@@ -89,6 +89,8 @@ case "$shard" in
     rust_case serializable-transactions "$root" facade_all positive 1 ::serializable::
     ;;
   storage)
+    rust_case wal-default-recovery "$storage" storage_all positive 1 recovery_995
+    rust_case wal-tail-facade "$root" facade_all positive 1 api::tests::storage_recovery::wal_tail::
     rust_case descriptor-capacity "$storage" storage_all positive 1 file_descriptors::tests::
     rust_case descriptor-facade "$root" facade_all positive 1 api::tests::descriptor_capacity::
     rust_case consumer-wal-admission "$storage" storage_all positive 1 captured_wal_append_prepays_post_write_descriptor_checks

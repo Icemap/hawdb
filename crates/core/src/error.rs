@@ -97,6 +97,13 @@ pub enum HawDBError {
     Storage(String),
     FileDescriptors(FileDescriptorError),
     StorageIntegrity(String),
+    /// Recovery IO may have completed an effect; reopen to resume its audit.
+    WalRecoveryIo {
+        operation: &'static str,
+        kind: std::io::ErrorKind,
+        os_code: Option<i32>,
+        message: String,
+    },
     UnsupportedStorageFormat(StorageFormatError),
     /// A registered Search target is retained by another native operation.
     ProjectionBusy,
@@ -158,6 +165,7 @@ impl Display for HawDBError {
             HawDBError::Semantic(message) => write!(f, "semantic error: {message}"),
             HawDBError::Storage(message) => write!(f, "storage error: {message}"),
             HawDBError::FileDescriptors(error) => Display::fmt(error, f),
+            HawDBError::WalRecoveryIo { operation, message, .. } => write!(f, "WAL recovery {operation} failed; retain evidence and retry open: {message}"),
             HawDBError::StorageIntegrity(message) => {
                 write!(f, "storage integrity error: {message}")
             }

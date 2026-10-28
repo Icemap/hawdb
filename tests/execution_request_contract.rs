@@ -1,3 +1,6 @@
+// Copyright 2026 Nowledge
+// SPDX-License-Identifier: Apache-2.0
+
 use hawdb::executor::{
     execute_with_request, execute_with_request_consumer, ExecutionMemoryConfig, ExecutionRequest,
     ExecutionResources, NoExternalReadOperator,
@@ -1384,6 +1387,7 @@ fn read_only_sql_sessions_inherit_limits_without_altering_database_configuration
         &path,
         DatabaseConfig {
             read_only: true,
+            recovery_mode: hawdb::RecoveryMode::Strict,
             ..DatabaseConfig::default()
         },
     )

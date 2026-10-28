@@ -754,6 +754,7 @@ fn read_only_admission_and_use_preserve_unpublished_checkpoint_evidence() {
         &project.0,
         DatabaseConfig {
             read_only: true,
+            recovery_mode: hawdb::RecoveryMode::Strict,
             ..Default::default()
         },
     )
@@ -1933,6 +1934,7 @@ fn readonly_pending_open_does_not_recreate_missing_directories_or_repair_receipt
         &project.0,
         DatabaseConfig {
             read_only: true,
+            recovery_mode: hawdb::RecoveryMode::Strict,
             ..Default::default()
         },
     )

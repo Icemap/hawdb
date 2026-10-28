@@ -614,6 +614,7 @@ fn projected_graph_registration_and_admission_include_canonical_edges() {
             let mut config = DatabaseConfig {
                 storage_residency_mode: mode,
                 read_only: true,
+                recovery_mode: crate::RecoveryMode::Strict,
                 ..DatabaseConfig::default()
             };
             config.execution_memory.blocking_operator_bytes =
