@@ -337,3 +337,7 @@ harness = false
 [[bench]]
 name = "mem_query_concurrency"
 harness = false
+
+[[bench]]
+name = "mem_query_resources"
+harness = false

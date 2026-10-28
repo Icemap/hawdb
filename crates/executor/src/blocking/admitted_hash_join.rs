@@ -697,8 +697,8 @@ mod tests {
                         hawdb_core::Value::String("x".repeat(padding)),
                     ),
                 ]),
-                nodes: BTreeMap::new(),
-                relationships: BTreeMap::new(),
+                nodes: BTreeMap::new().into(),
+                relationships: BTreeMap::new().into(),
             }
         }
     }

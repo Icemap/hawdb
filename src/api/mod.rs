@@ -481,7 +481,8 @@ pub struct DatabaseConfig {
     pub max_search_projection_change_log_bytes: Option<usize>,
     pub search_projection_relational_change_limits:
         hawdb_storage::relational::RelationalPrimaryKeyChangeCaptureLimits,
-    /// Maximum entries per graph physical-plan or relational SQL-template cache.
+    /// Maximum entries per graph physical-plan, parameter-binding-template,
+    /// or relational SQL-template cache.
     pub max_plan_cache_entries: Option<usize>,
     /// Commit-epoch lag tolerated before the inline query path recomputes
     /// optimizer statistics. `None` or `Some(0)` refreshes on every committed

@@ -35,7 +35,8 @@ use hawdb_optimizer::graph::{
 };
 use hawdb_plan_cache::{
     bind_physical_plan_parameters, parameter_scalar_types, parameterize_logical_plan,
-    parameterize_value_list, resolve_plan_template_value, LfuCache, PlanParameterCacheKey,
+    parameterize_value_list, resolve_plan_template_value, LfuCache, ParameterBindingTemplate,
+    ParameterizedLogicalPlan, PlanParameterCacheKey,
 };
 pub use hawdb_plan_cache::{PlanCacheBypassReason, PlanCacheLookup, PlanCacheStats};
 use hawdb_plan_cypher::{BatchMutationOperation, ProjectionExpression};
@@ -421,6 +422,7 @@ struct StatisticsCacheRefresh {
 
 #[derive(Debug, Clone, Default)]
 pub(super) struct OptimizerPlanningCache {
+    parameter_bindings: Option<LfuCache<String, Arc<ParameterBindingTemplate>>>,
     statistics: Option<Arc<GraphStatistics>>,
     statistics_schema: Option<OptimizerSchemaKey>,
     statistics_source_graph_commit_epoch: Option<u64>,
@@ -521,6 +523,7 @@ impl OptimizerEnvironmentKey {
 
 impl OptimizerPlanningCache {
     pub(super) fn invalidate(&mut self) {
+        self.parameter_bindings = None;
         self.statistics = None;
         self.statistics_schema = None;
         self.statistics_source_graph_commit_epoch = None;
@@ -528,6 +531,51 @@ impl OptimizerPlanningCache {
         // In-flight snapshots can still publish plans after invalidation. Keep
         // generations monotonic so a refreshed environment cannot reuse their key.
         self.catalog = None;
+    }
+
+    fn parameterized(
+        shared: &SharedState<Self>,
+        normalized_query: &str,
+        statement: &cypher::Statement,
+        parameters: &BTreeMap<String, Value>,
+        max_entries: Option<usize>,
+    ) -> Result<(ParameterizedLogicalPlan, bool)> {
+        let key = normalized_query.to_owned();
+        let cached = shared
+            .borrow_mut()
+            .parameter_binding_cache(max_entries)
+            .get(&key);
+        // Bind/clone outside the shared lock; a large cohort must not serialize
+        // independent readers while it validates or prepares a template.
+        if let Some(template) = cached
+            && let Some(plan) = template.reuse(parameters)
+        {
+            return Ok((plan, true));
+        }
+        let plan = parameterize_logical_plan(statement, parameters)?;
+        if let Some(template) = ParameterBindingTemplate::new(&plan, parameters) {
+            shared
+                .borrow_mut()
+                .parameter_binding_cache(max_entries)
+                .insert(key, Arc::new(template));
+        }
+        Ok((plan, false))
+    }
+
+    fn parameter_binding_cache(
+        &mut self,
+        max_entries: Option<usize>,
+    ) -> &mut LfuCache<String, Arc<ParameterBindingTemplate>> {
+        if self
+            .parameter_bindings
+            .as_ref()
+            .is_none_or(|cache| cache.stats().max_entries != max_entries)
+        {
+            self.parameter_bindings = Some(LfuCache::new(max_entries));
+        }
+        self.parameter_bindings
+            .as_mut()
+            .expect("binding cache initialized above")
     }
 
     pub(super) fn environment_hint<R: hawdb_storage::graph_engine::GraphReadEngine>(
@@ -731,9 +779,22 @@ pub(super) fn optimized_query_plan_for<S: crate::executor::ExecutionStore>(
         hawdb_query::normalize_query_for_plan_cache("cypher", cypher_text);
     let access_control_cache_key = context.access_control.map(AccessControlPlanCacheKey::from);
     let execution_parameters = parameters_with_access_control(parameters, context.access_control);
+    let mut binding_template_hit = false;
     let parameterized = (cache_mode == PlanCacheMode::Use)
-        .then(|| parameterize_logical_plan(statement_body(statement), parameters))
-        .transpose()?;
+        .then(|| {
+            OptimizerPlanningCache::parameterized(
+                context.planning_cache,
+                &normalized_plan_cache_query,
+                statement_body(statement),
+                parameters,
+                context.config.max_plan_cache_entries,
+            )
+        })
+        .transpose()?
+        .map(|(plan, hit)| {
+            binding_template_hit = hit;
+            plan
+        });
     let point_statistics = if trace_mode == PlanTraceMode::Template {
         parameterized
             .as_ref()
@@ -790,6 +851,11 @@ pub(super) fn optimized_query_plan_for<S: crate::executor::ExecutionStore>(
             trace
                 .decisions
                 .push("plan cache hit: parameterized physical plan template".to_string());
+            if binding_template_hit {
+                trace
+                    .decisions
+                    .push("parameter binding cache hit: proven logical template".into());
+            }
             record_access_control_plan_decision(&mut trace, context.access_control);
             return Ok(OptimizedQueryPlan {
                 query_identity: Some(query_identity),
@@ -858,6 +924,11 @@ pub(super) fn optimized_query_plan_for<S: crate::executor::ExecutionStore>(
             ))
         })?;
     let (physical_template, mut trace) = physical_root.into_parts();
+    if binding_template_hit {
+        trace
+            .decisions
+            .push("parameter binding cache hit: proven logical template".into());
+    }
     let physical_template = match context.scoring {
         Some(scoring) => scoring.attach_template(physical_template)?,
         None => physical_template,

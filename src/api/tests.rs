@@ -154,6 +154,7 @@ mod search_projection_delta_facade;
 mod search_projection_graph_delta;
 mod search_projection_rebuild_facade;
 mod set_mutations;
+mod simple_case_dispatch;
 mod skill_lifecycle;
 mod skill_reads;
 mod snapshot_retention;
