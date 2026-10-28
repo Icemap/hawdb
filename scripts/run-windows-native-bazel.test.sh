@@ -86,8 +86,11 @@ done
 # Repeated filtered invocations must retain their own XML before overwrite.
 grep -qx instance-identity-default-views "$fixture/snapshots/testlogs/instance-identity-default-views/test.xml"
 grep -qx instance-identity-minimal-views "$fixture/snapshots/testlogs/instance-identity-minimal-views/test.xml"
-# Preserve every original selection and add five isolated recovery selections.
-[[ "$(wc -l <"$fixture/commands.txt" | tr -d ' ')" == 34 ]]
+# Preserve every original selection, five isolated vector recovery selections,
+# and both default WAL recovery families.
+[[ "$(wc -l <"$fixture/commands.txt" | tr -d ' ')" == 36 ]]
+grep -q -- '--test_arg=recovery_995' "$fixture/commands.txt"
+grep -q -- '--test_arg=api::tests::storage_recovery::wal_tail::' "$fixture/commands.txt"
 grep -q -- '--test_arg=resident_diskann::tests::' "$fixture/commands.txt"
 grep -q -- '--test_arg=vector_index_incremental --test_arg=vector_index_canonical_completion' "$fixture/commands.txt"
 grep -q -- '--test_arg=--skip --test_arg=api::tests::power_loss::consumer_vector_incremental::faults::recovery::' "$fixture/commands.txt"
