@@ -2042,7 +2042,7 @@ mod tests {
                     .join(report.quarantine_file)
             )
             .unwrap(),
-            damaged
+            damaged[prefix.len()..]
         );
         for (before, file) in evidence {
             assert_eq!(std::fs::read(file).unwrap(), before);

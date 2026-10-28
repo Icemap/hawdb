@@ -757,7 +757,7 @@ impl GraphStore {
                 } if entry.lsn != expected_lsn => WalCursorEvent::Corrupt {
                     offset: start_offset,
                     reason: format!(
-                        "LSN sequence mismatch: expected {expected_lsn}, got {}",
+                        "WAL LSN sequence mismatch: expected {expected_lsn}, got {}",
                         entry.lsn
                     ),
                 },

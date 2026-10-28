@@ -475,6 +475,7 @@ fn public_analytics_identity_output_uses_query_budget_above_retained_state_cap()
             &path,
             DatabaseConfig {
                 read_only: true,
+                recovery_mode: hawdb::RecoveryMode::Strict,
                 storage_residency_mode: residency,
                 execution_memory: ExecutionMemoryConfig {
                     query_memory_bytes: NonZeroUsize::new(16 * 1024 * 1024).unwrap(),

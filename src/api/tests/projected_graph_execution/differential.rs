@@ -122,6 +122,7 @@ impl Fixture {
             DatabaseConfig {
                 storage_residency_mode: self.mode,
                 read_only,
+                recovery_mode: hawdb_storage::config::RecoveryMode::Strict,
                 ..DatabaseConfig::default()
             },
         )

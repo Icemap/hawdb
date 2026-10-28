@@ -220,6 +220,11 @@ pub fn nowledge_mem_graph_config_with_search_mode(
 ) -> DatabaseConfig {
     DatabaseConfig {
         read_only: matches!(mode, NowledgeMemGraphMode::ShadowReadOnly),
+        recovery_mode: if matches!(mode, NowledgeMemGraphMode::ShadowReadOnly) {
+            crate::RecoveryMode::Strict
+        } else {
+            crate::RecoveryMode::default()
+        },
         compressed_vector_search_mode,
         ..DatabaseConfig::default()
     }
@@ -416,6 +421,9 @@ impl NowledgeMemOpenOptions {
     fn effective_database_config(&self) -> DatabaseConfig {
         let mut config = self.database_config.clone().unwrap_or_default();
         config.read_only = matches!(self.mode, NowledgeMemGraphMode::ShadowReadOnly);
+        if config.read_only {
+            config.recovery_mode = crate::RecoveryMode::Strict;
+        }
         config.compressed_vector_search_mode = self.effective_compressed_vector_search_mode();
         config.adaptive_vector_backend_policy = self.adaptive_vector_backend_policy;
         config

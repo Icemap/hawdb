@@ -220,7 +220,7 @@ later transactions. It retains the complete transaction prefix before damage:
 
 `Strict` rejects every damaged suffix in this table. A read-only open must
 explicitly select `Strict`; requesting automatic repair remains an error.
-Read-only CLI and binding convenience paths select `Strict` themselves. The
+Read-only CLI, binding and Mem mode convenience paths select `Strict` themselves. The
 legacy `DoctorRepairTornTail` enum value remains invalid for open.
 
 The WAL writer appends bytes; it does not preallocate or extend the file ahead

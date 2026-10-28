@@ -114,6 +114,9 @@ impl DurableStore {
         {
             return Ok(*fence);
         }
+        // Fence discovery belongs to the same internal WAL admission scope.
+        // A cold lookup must not borrow an exhausted foreground FD budget.
+        let _operation = self.file_descriptor_context().internal_operation()?;
         let fence = super::super::wal_fence::WalRecoveryFence::load(
             &self.wal_path,
             self.wal_generation,

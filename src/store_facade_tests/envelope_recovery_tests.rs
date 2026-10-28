@@ -49,6 +49,7 @@ fn assert_rejected_without_writes(root: &Path, limit: Option<u64>, expected: &st
             root,
             DatabaseConfig {
                 read_only,
+                recovery_mode: hawdb_storage::config::RecoveryMode::Strict,
                 max_checkpoint_decoded_bytes: limit,
                 ..Default::default()
             },
