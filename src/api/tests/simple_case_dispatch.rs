@@ -4,6 +4,45 @@
 use super::*;
 
 #[test]
+fn binding_template_replans_folded_guards_that_are_also_projected() {
+    let mut db = Database::new();
+    db.query("CREATE (:Item {id: 0, flag: false})").unwrap();
+    db.query("CREATE (:Item {id: 1, flag: true})").unwrap();
+    let mut read = db.begin_read_transaction().unwrap();
+    for (query, initial, changed) in [
+        (
+            "MATCH (n:Item) WHERE ($gate = 0 OR n.id = $gate) RETURN n.id AS id, CASE n.id WHEN 0 THEN $gate ELSE $gate END AS gate, CASE n.id WHEN 0 THEN $other ELSE $other END AS other, CASE n.id WHEN 0 THEN $score ELSE $score END AS score",
+            Value::Int(1),
+            Value::Int(0),
+        ),
+        (
+            "MATCH (n:Item) WHERE ($gate = true OR n.flag = $gate) RETURN n.id AS id, CASE n.id WHEN 0 THEN $gate ELSE $gate END AS gate, CASE n.id WHEN 0 THEN $other ELSE $other END AS other, CASE n.id WHEN 0 THEN $score ELSE $score END AS score",
+            Value::Bool(false),
+            Value::Bool(true),
+        ),
+    ] {
+        for (gate, expected) in [(initial, vec![Value::Int(1)]), (changed, vec![Value::Int(0), Value::Int(1)])] {
+            let parameters = BTreeMap::from([
+                ("gate".into(), gate),
+                ("other".into(), Value::Int(0)),
+                ("score".into(), Value::Float(0.5)),
+            ]);
+            let mut ids = Vec::new();
+            read.query_with_params_streaming(query, &parameters, QueryStreamOptions { max_rows: Some(2), max_payload_bytes: Some(1024) }, |row| {
+                ids.push(row["id"].clone());
+                Ok(())
+            }).unwrap();
+            ids.sort();
+            if expected.len() == 1 {
+                assert_eq!(ids.len(), 1);
+            } else {
+                assert_eq!(ids, expected, "folded guard must be replanned");
+            }
+        }
+    }
+}
+
+#[test]
 fn simple_case_dispatch_rebinds_values_through_scan_and_projection() {
     for column in [false, true] {
         let mut db = Database::new_with_config(DatabaseConfig {

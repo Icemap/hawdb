@@ -7,7 +7,7 @@ use hawdb_plan_cypher::{
     self as planner, GraphMatchStep, LogicalPlan, PhysicalPlan, Predicate, Projection,
     ProjectionExpression, RelationshipCountFilter, SortItem, SortKey,
 };
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 const PARAMETER_SLOT_NAME_KEY: &str = "\0skein_parameter_slot";
 const PARAMETER_SLOT_PATH_KEY: &str = "\0skein_parameter_path";
@@ -153,7 +153,10 @@ pub fn parameterize_logical_plan(
             slot_count: 0,
         });
     }
-    if let Some(parameterized) = parameterize_together(statement, parameters, &actual) {
+    let folded_parameters = folded_predicate_parameters(statement);
+    if let Some(parameterized) =
+        parameterize_together(statement, parameters, &actual, &folded_parameters)
+    {
         return Ok(parameterized);
     }
     let mut template_parameters = parameters.clone();
@@ -161,6 +164,10 @@ pub fn parameterize_logical_plan(
     let mut slot_count = 0;
 
     for (name, value) in parameters {
+        if folded_parameters.contains(name) {
+            cache_values.insert(name.clone(), ParameterCacheValue::Exact(value.clone()));
+            continue;
+        }
         let marker = parameter_marker(name, value, &[]);
         let mut candidate_parameters = parameters.clone();
         candidate_parameters.insert(name.clone(), marker.clone());
@@ -233,10 +240,20 @@ fn parameterize_together(
     statement: &cypher::Statement,
     parameters: &BTreeMap<String, Value>,
     actual: &LogicalPlan,
+    folded_parameters: &BTreeSet<String>,
 ) -> Option<ParameterizedLogicalPlan> {
     let mut template_parameters = parameters
         .iter()
-        .map(|(name, value)| (name.clone(), parameter_marker(name, value, &[])))
+        .map(|(name, value)| {
+            (
+                name.clone(),
+                if folded_parameters.contains(name) {
+                    value.clone()
+                } else {
+                    parameter_marker(name, value, &[])
+                },
+            )
+        })
         .collect::<BTreeMap<_, _>>();
     let marked = plan_parameter_bindings(statement, &template_parameters).ok()?;
     let mut values = BTreeMap::new();
@@ -251,10 +268,9 @@ fn parameterize_together(
                 );
                 slot_count += 1;
             }
-            MarkerUse::None if matches!(value, Value::Bool(_)) => {
-                // Literal boolean comparisons may fold away every marker.
-                // Removing a referenced binding can invalidate the template;
-                // retain the exact boolean and prove the combined plan below.
+            MarkerUse::None if folded_parameters.contains(name) => {
+                // Predicate binding erased these markers. Preserve the exact
+                // inputs even when other occurrences could remain slots.
                 template_parameters.insert(name.clone(), value.clone());
                 values.insert(name.clone(), ParameterCacheValue::Exact(value.clone()));
                 changed = true;
@@ -293,6 +309,102 @@ fn parameterize_together(
         cache_key: PlanParameterCacheKey { values },
         slot_count,
     })
+}
+
+/// Binding folds these predicate inputs before their markers can reach the
+/// logical plan. Another use (notably simple CASE) may still retain a marker;
+/// logical marker presence therefore cannot prove the input's whole domain.
+fn folded_predicate_parameters(statement: &cypher::Statement) -> BTreeSet<String> {
+    fn collect_value(value: &cypher::ValueExpression, exact: &mut BTreeSet<String>) {
+        match &value.kind {
+            cypher::ValueExpressionKind::Parameter(name) => {
+                exact.insert(name.clone());
+            }
+            cypher::ValueExpressionKind::List(values) => {
+                for item in values {
+                    collect_value(item, exact);
+                }
+            }
+            cypher::ValueExpressionKind::Timestamp(inner) => collect_value(inner, exact),
+            cypher::ValueExpressionKind::Literal(_)
+            | cypher::ValueExpressionKind::BindingProperty { .. }
+            | cypher::ValueExpressionKind::CurrentTimestamp => {}
+        }
+    }
+    fn collect_predicate(predicate: &cypher::PropertyPredicate, exact: &mut BTreeSet<String>) {
+        use cypher::PropertyPredicate as P;
+        match predicate {
+            P::And(items) | P::Or(items) => {
+                for item in items {
+                    collect_predicate(item, exact);
+                }
+            }
+            P::Not(inner) => collect_predicate(inner, exact),
+            P::ParameterEq { left, right } | P::ParameterNotEq { left, right } => {
+                exact.insert(left.clone());
+                collect_value(right, exact);
+            }
+            P::ParameterIsNull { parameter } | P::ParameterIsNotNull { parameter } => {
+                exact.insert(parameter.clone());
+            }
+            P::RelationshipExists { .. }
+            | P::BoundRelationshipExists { .. }
+            | P::IdEq { .. }
+            | P::IdNotEq { .. }
+            | P::IdCompare { .. }
+            | P::IdIn { .. }
+            | P::Eq { .. }
+            | P::NotEq { .. }
+            | P::Compare { .. }
+            | P::ExpressionEq { .. }
+            | P::ExpressionNotEq { .. }
+            | P::ExpressionCompare { .. }
+            | P::ExpressionContains { .. }
+            | P::ExpressionIn { .. }
+            | P::ListContains { .. }
+            | P::ListContainsLower { .. }
+            | P::Contains { .. }
+            | P::StartsWith { .. }
+            | P::EndsWith { .. }
+            | P::RegexMatch { .. }
+            | P::IsNull { .. }
+            | P::IsNotNull { .. }
+            | P::In { .. } => {}
+        }
+    }
+    fn pipeline(query: &cypher::QueryPipeline, exact: &mut BTreeSet<String>) {
+        for clause in &query.clauses {
+            let condition = match &clause.kind {
+                cypher::ClauseKind::Match { predicate, .. } => predicate.as_ref(),
+                cypher::ClauseKind::With(projection) | cypher::ClauseKind::Return(projection) => {
+                    projection.predicate.as_ref()
+                }
+                _ => None,
+            };
+            if let Some(condition) = condition {
+                collect_predicate(&condition.kind, exact);
+            }
+        }
+    }
+    let mut exact = BTreeSet::new();
+    match statement {
+        cypher::Statement::Pipeline(query) | cypher::Statement::UnwindMutation(query) => {
+            pipeline(query, &mut exact)
+        }
+        cypher::Statement::CypherQuery(query) => {
+            return folded_predicate_parameters(&query.statement)
+        }
+        cypher::Statement::Explain(explain) => {
+            return folded_predicate_parameters(&explain.statement)
+        }
+        cypher::Statement::ProjectGraph(query) => {
+            for condition in query.relationship_predicates.values() {
+                collect_predicate(condition, &mut exact);
+            }
+        }
+        _ => {}
+    }
+    exact
 }
 
 /// Creates internal parameter markers for a list whose shape is part of a
@@ -1436,6 +1548,48 @@ mod tests {
         assert!(template.reuse(&changed).is_none());
         let unused = parameterize_logical_plan(&statement, &changed).unwrap();
         assert!(super::ParameterBindingTemplate::new(&unused, &changed).is_none());
+    }
+
+    #[test]
+    fn folded_predicate_parameters_are_exact_even_when_also_projected() {
+        for (predicate, initial, changed) in [
+            ("$gate = 0", Value::Int(1), Value::Int(0)),
+            ("$gate <> 1", Value::Int(2), Value::Int(1)),
+            ("$gate = true", Value::Bool(false), Value::Bool(true)),
+            ("$gate <> false", Value::Bool(true), Value::Bool(false)),
+            ("$other = $gate", Value::Int(1), Value::Int(0)),
+            ("$other <> $gate", Value::Int(1), Value::Int(0)),
+        ] {
+            let statement = cypher::parse(&format!(
+                "MATCH (n:Item) WHERE ({predicate} OR n.id = $gate) \
+                 RETURN n.id AS id, CASE n.id WHEN 'a' THEN $gate ELSE $gate END AS gate, \
+                 CASE n.id WHEN 'a' THEN $other ELSE $other END AS other, \
+                 CASE n.id WHEN 'a' THEN $score ELSE $score END AS score"
+            ))
+            .unwrap();
+            let parameters = BTreeMap::from([
+                ("gate".into(), initial),
+                ("other".into(), Value::Int(0)),
+                ("score".into(), Value::Float(0.5)),
+            ]);
+            let plan = parameterize_logical_plan(&statement, &parameters).unwrap();
+            let template = super::ParameterBindingTemplate::new(&plan, &parameters).unwrap();
+            let mut altered = parameters.clone();
+            altered.insert("gate".into(), changed);
+            assert!(
+                template.reuse(&altered).is_none(),
+                "folded guard {predicate}"
+            );
+            altered = parameters.clone();
+            altered.insert("score".into(), Value::Float(0.75));
+            let reused = template.reuse(&altered).unwrap();
+            let mut rebound = reused.logical().clone();
+            super::bind_logical_plan(&mut rebound, &altered).unwrap();
+            assert_eq!(
+                rebound,
+                hawdb_plan_cypher::plan_with_params(&statement, &altered).unwrap()
+            );
+        }
     }
 
     #[test]
