@@ -631,8 +631,9 @@ fn empty_merge_results_emit_no_batch_and_release_all_resources() {
 }
 
 #[test]
-fn spilled_merges_keep_exact_query_root_admission() {
+fn spilled_merges_adapt_without_exceeding_query_root_admission() {
     let rows = tied_rows(19);
+    let mut adapted_below_observed_peak = false;
     for top_n in [None, Some((2, 12))] {
         let case = Case {
             top_n,
@@ -641,27 +642,38 @@ fn spilled_merges_keep_exact_query_root_admission() {
         let (result, expected, snapshot) = run_case(&rows, case);
         result.unwrap();
         let peak = snapshot.peak_bytes;
-        let (result, output, _) = run_case(
-            &rows,
-            Case {
-                root_bytes: peak,
-                ..case
-            },
-        );
-        result.expect("the observed exact peak must be sufficient");
-        assert_eq!(output, expected);
-        let (result, _, _) = run_case(
-            &rows,
-            Case {
-                root_bytes: peak - 1,
-                ..case
-            },
-        );
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("query_memory_bytes"));
+        for root_bytes in [peak, peak - 1, peak * 3 / 4] {
+            let (result, output, snapshot) = run_case(&rows, Case { root_bytes, ..case });
+            assert!(snapshot.peak_bytes <= root_bytes);
+            match result {
+                Ok(_) => {
+                    assert_eq!(output, expected);
+                    adapted_below_observed_peak |= root_bytes < peak;
+                }
+                Err(HawDBError::ResourceBudgetExceeded(cause)) => {
+                    assert!(root_bytes < peak, "the observed peak must be sufficient");
+                    assert_eq!(cause.scope, hawdb_core::ResourceBudgetScope::Query);
+                    assert_eq!(cause.budget, root_bytes as u64);
+                    assert!(cause.used + cause.requested > cause.budget);
+                }
+                Err(error) => panic!("unexpected merge error: {error}"),
+            }
+        }
+        // Flexible IO buffers cannot make an owned output row fit below its
+        // irreducible allocation. Keep a definite hard-refusal boundary too.
+        let root_bytes = binding_memory_bytes(&rows[0]) - 1;
+        let (result, output, snapshot) = run_case(&rows, Case { root_bytes, ..case });
+        let HawDBError::ResourceBudgetExceeded(cause) = result.unwrap_err() else {
+            panic!("an insufficient query budget must fail explicitly");
+        };
+        assert_eq!(cause.resource, hawdb_core::ResourceBudgetKind::MemoryBytes);
+        assert_eq!(cause.scope, hawdb_core::ResourceBudgetScope::Query);
+        assert_eq!(cause.budget, root_bytes as u64);
+        assert!(cause.used + cause.requested > cause.budget);
+        assert!(snapshot.peak_bytes <= root_bytes);
+        assert!(output.is_empty());
     }
+    assert!(adapted_below_observed_peak);
 }
 
 #[test]
@@ -951,6 +963,7 @@ fn spilled_json_sort_keys_use_query_working_memory_during_merge_and_compaction()
 #[test]
 #[ignore = "deterministic local sort merge differential campaign"]
 fn sort_merge_account_differential_campaign() {
+    spilled_merges_adapt_without_exceeding_query_root_admission();
     active_sort_releases_rows_and_capacity_under_host_pressure();
     encoded_merge_copies_wide_payloads_with_a_key_sized_working_budget();
     adaptive_merge_fan_in_respects_memory_and_descriptor_capacity();

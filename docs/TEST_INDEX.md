@@ -40,7 +40,8 @@ and checks 16-KiB rows through bounded merges. The existing executor unit target
 owns these regressions; replay with `cargo test --locked -p hawdb-executor --lib
 spill::tests` and the `blocking::sort::tests` filter. The existing local-only
 `//crates/executor:hawdb_sort_merge_account_fuzz_tests` campaign also exercises
-the tie-order and wide-row controls. Test lanes, profiles and deadlines stay
+adaptive buffers below an observed peak while preserving hard root refusal,
+as well as the tie-order and wide-row controls. Test lanes, profiles and deadlines stay
 unchanged; allocation microprobes do not establish end-to-end RSS or latency.
 
 The adaptive execution family extends those existing executor owners with
