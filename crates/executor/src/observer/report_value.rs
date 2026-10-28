@@ -458,6 +458,14 @@ pub fn vector_execution_report_value(report: &VectorExecutionReport) -> Value {
                 .unwrap_or(Value::Null),
         ),
         (
+            "candidate_scan_adaptive_exact_scan_count".to_string(),
+            report
+                .candidate_scan_metrics
+                .as_ref()
+                .map(|metrics| usize_value(metrics.adaptive_exact_scan_count))
+                .unwrap_or(Value::Null),
+        ),
+        (
             "candidate_scan_payload_bytes_read".to_string(),
             report
                 .candidate_scan_metrics

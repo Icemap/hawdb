@@ -36,7 +36,7 @@ pub use cancellation::{
     RuntimeCancellationFuture, RuntimeCancellationReason, RuntimeCancellationToken,
     RuntimeIoWaveController, RuntimeIoWaveError, RuntimeIoWavePermit, RuntimeIoWaveTryAcquire,
     RuntimeMemoryController, RuntimeMemoryError, RuntimeMemoryPermit, RuntimeMemoryReservation,
-    RuntimeTaskContext,
+    RuntimeMemoryTarget, RuntimeTaskContext,
 };
 pub use capability::{RuntimeCapabilities, RuntimeCapability};
 pub use error::{

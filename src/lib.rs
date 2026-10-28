@@ -326,7 +326,7 @@ pub use hawdb_core::{
     GraphRagSchemaContextTruncation, RuntimeCancellationReason, RuntimeCancellationToken,
     RuntimeCapabilities, RuntimeCapability, RuntimeIoWaveController, RuntimeIoWaveError,
     RuntimeIoWavePermit, RuntimeIoWaveTryAcquire, RuntimeMemoryController, RuntimeMemoryError,
-    RuntimeMemoryPermit, RuntimeMemoryReservation, RuntimeTaskContext,
+    RuntimeMemoryPermit, RuntimeMemoryReservation, RuntimeMemoryTarget, RuntimeTaskContext,
     DEFAULT_GRAPH_RAG_MAX_COMMON_PATHS, DEFAULT_GRAPH_RAG_MAX_LABELS,
     DEFAULT_GRAPH_RAG_MAX_PROPERTIES_PER_SUBJECT, DEFAULT_GRAPH_RAG_MAX_RELATIONSHIP_TYPES,
     DEFAULT_GRAPH_RAG_MAX_ROUTES, GRAPH_RAG_SCHEMA_CONTEXT_PROTOCOL, MAX_GRAPH_RAG_QUERY_LIMIT,

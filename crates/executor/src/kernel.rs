@@ -109,6 +109,27 @@ impl OperatorMemoryTracker {
             .is_none_or(|total| total > self.budget_bytes)
     }
 
+    /// Soft pressure only requests a spill at a caller-owned safe point. Keep
+    /// two incoming rows and IO progress room; never spill an empty work area.
+    pub(crate) fn should_spill(
+        &self,
+        bytes: usize,
+        task: Option<&hawdb_core::RuntimeTaskContext>,
+    ) -> bool {
+        if self.would_exceed(bytes) {
+            return true;
+        }
+        let Some(task) = task else {
+            return false;
+        };
+        let target = task.working_memory_target(self.budget_bytes as u64) as usize;
+        let floor = bytes
+            .saturating_mul(2)
+            .saturating_add(crate::spill::SPILL_IO_BUFFER_BYTES * 2)
+            .min(self.budget_bytes);
+        self.used_bytes > 0 && self.used_bytes.saturating_add(bytes) > target.max(floor)
+    }
+
     fn ensure_charge_fits(&self, bytes: usize, context: &str) -> Result<()> {
         if !self.would_exceed(bytes) {
             return Ok(());
@@ -338,6 +359,43 @@ impl SpillBudgetTracker {
             .transpose()
     }
 
+    pub(crate) fn merge_io_account(&self) -> Option<QueryMemoryAccount> {
+        self.staging_account.as_ref().map(|account| {
+            // Share this allowance across a whole parallel merge wave. A large
+            // query root must not multiply full-sized buffers by fan-in/workers.
+            let budget = account
+                .budget_bytes()
+                .get()
+                .max(crate::spill::SPILL_IO_BUFFER_BYTES * 2);
+            account.sibling(
+                QueryMemoryClass::SpillStaging,
+                "sort merge IO",
+                NonZeroUsize::new(budget).unwrap(),
+            )
+        })
+    }
+
+    pub(crate) fn reserve_merge_descriptors(
+        &self,
+        count: usize,
+    ) -> Result<(
+        hawdb_storage::file_descriptors::DescriptorReservation,
+        hawdb_storage::file_descriptors::FileOpenContext,
+    )> {
+        let pool = self.pool.get().map_err(|error| self.pool_error(error))?;
+        let descriptors =
+            hawdb_storage::file_descriptors::ProjectFileDescriptors::from_open_context(
+                pool.file_descriptors(),
+            );
+        let reservation = descriptors.reserve(count).map_err(|error| {
+            hawdb_core::error::file_descriptor_error(&error).map_or_else(
+                || HawDBError::Execution(format!("failed to reserve merge descriptors: {error}")),
+                HawDBError::FileDescriptors,
+            )
+        })?;
+        Ok((reservation, descriptors.io_context()))
+    }
+
     pub fn create_run(&self, file_operator: &str) -> Result<(SpillRun, SpillWriter)> {
         self.create_run_with_buffer_bytes(
             file_operator,
@@ -351,7 +409,19 @@ impl SpillBudgetTracker {
         file_operator: &str,
         buffer_bytes: NonZeroUsize,
     ) -> Result<(SpillRun, SpillWriter)> {
-        let pool = self.pool.get().map_err(|error| self.pool_error(error))?;
+        self.create_run_with_context(file_operator, buffer_bytes, None)
+    }
+
+    pub(crate) fn create_run_with_context(
+        &self,
+        file_operator: &str,
+        buffer_bytes: NonZeroUsize,
+        context: Option<&hawdb_storage::file_descriptors::FileOpenContext>,
+    ) -> Result<(SpillRun, SpillWriter)> {
+        let mut pool = self.pool.get().map_err(|error| self.pool_error(error))?;
+        if let Some(context) = context {
+            pool = pool.with_file_descriptors(context.clone());
+        }
         let mut current = self.run_count.load(Ordering::Acquire);
         loop {
             if current >= self.max_runs {

@@ -698,6 +698,7 @@ pub struct SearchRetrieverReport {
     pub candidate_scan_filtered_document_count: usize,
     pub candidate_scan_scanned_block_count: usize,
     pub candidate_scan_skipped_block_count: usize,
+    pub candidate_scan_adaptive_exact_scan_count: usize,
     pub candidate_scan_payload_bytes_read: u64,
     pub candidate_scan_admitted_working_bytes: usize,
     pub posting_bytes_read: u64,
@@ -4046,6 +4047,11 @@ impl SearchIndex {
                     .and_then(|execution| execution.report.candidate_scan_metrics.as_ref())
                     .map(|metrics| metrics.skipped_block_count)
                     .unwrap_or(0),
+                candidate_scan_adaptive_exact_scan_count: vector_execution
+                    .as_ref()
+                    .and_then(|execution| execution.report.candidate_scan_metrics.as_ref())
+                    .map(|metrics| metrics.adaptive_exact_scan_count)
+                    .unwrap_or(0),
                 candidate_scan_payload_bytes_read: vector_execution
                     .as_ref()
                     .and_then(|execution| execution.report.candidate_scan_metrics.as_ref())
@@ -4137,6 +4143,7 @@ impl SearchIndex {
                 candidate_scan_filtered_document_count: 0,
                 candidate_scan_scanned_block_count: 0,
                 candidate_scan_skipped_block_count: 0,
+                candidate_scan_adaptive_exact_scan_count: 0,
                 candidate_scan_payload_bytes_read: 0,
                 candidate_scan_admitted_working_bytes: 0,
                 posting_bytes_read: lexical_bytes_read,

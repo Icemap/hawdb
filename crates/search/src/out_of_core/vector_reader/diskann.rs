@@ -175,6 +175,7 @@ impl<R> GraphProjection<R> {
                 filtered_document_count: report.bridge_nodes,
                 scanned_block_count: report.expanded_nodes,
                 skipped_block_count: 0,
+                adaptive_exact_scan_count: usize::from(report.adaptive_exact_scan),
                 payload_bytes_read,
                 admitted_working_bytes: options.max_working_bytes,
                 candidate_count,

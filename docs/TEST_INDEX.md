@@ -43,6 +43,27 @@ spill::tests` and the `blocking::sort::tests` filter. The existing local-only
 the tie-order and wide-row controls. Test lanes, profiles and deadlines stay
 unchanged; allocation microprobes do not establish end-to-end RSS or latency.
 
+The adaptive execution family extends those existing executor owners with
+encoded non-expression key selection, complete-record validation, 64-KiB nested
+payload forwarding, descriptor/memory-driven 8/4/2-way merges, and live host
+pressure releasing sort capacity. The existing sort differential campaign
+includes the wide-record, fan-in and pressure controls. The admitted hash-join
+unit family covers pressure arriving after build completion without duplicate
+probe output. QoS `runtime::memory_target::tests` owns unchanged grants, child
+propagation, mixed foreground/background tasks and recovery hysteresis.
+
+The vector-projection unit owner also covers filtered execution feedback at
+0.1%, 1% and 10% eligible fractions, contiguous/sparse IDs, exhaustive filtered
+ground truth, productive traversal, insufficient work and mid-scan cancellation.
+Its additional manual-only
+`//crates/vector-projection:hawdb_diskann_feedback_fuzz_tests` target runs those
+controls with the existing small-beam recall differential case. Do not add this
+campaign to CI. Existing report-value differential tests cover the new adaptive
+scan counter. The release-only `spill_resource_probe` example measures identical
+small, wide, many-run and four-query workloads; it is not a CI performance gate.
+See [the implementation and measurement contract](specs/ADAPTIVE_EXECUTION_MEMORY_SPEC.md).
+No existing feature matrix, test deadline or compilation profile is removed.
+
 The executor `scan::indexed_tests::bounded_index_projection` family covers
 admitted scalar-index projection reads with work budgets, single/multiple keys,
 NodeId-ordered duplicate merging, cross-property union deduplication, missing

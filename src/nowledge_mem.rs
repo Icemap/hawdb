@@ -2372,6 +2372,8 @@ impl crate::executor::ExternalReadOperator for SearchProjectionExternalReadOpera
                         filtered_document_count: retriever.candidate_scan_filtered_document_count,
                         scanned_block_count: retriever.candidate_scan_scanned_block_count,
                         skipped_block_count: retriever.candidate_scan_skipped_block_count,
+                        adaptive_exact_scan_count: retriever
+                            .candidate_scan_adaptive_exact_scan_count,
                         payload_bytes_read: retriever.candidate_scan_payload_bytes_read,
                         admitted_working_bytes: retriever.candidate_scan_admitted_working_bytes,
                     }

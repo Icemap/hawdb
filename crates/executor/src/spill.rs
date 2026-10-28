@@ -27,6 +27,7 @@ use std::sync::Arc;
 
 mod compaction;
 mod pool;
+mod sort_keys;
 
 pub(crate) use compaction::{
     compact_runs_serial, compact_runs_with_memory, default_compaction_worker_limit,
@@ -58,6 +59,7 @@ pub struct SpillRun {
 struct RunMemory {
     record: AtomicUsize,
     staging: AtomicUsize,
+    sort_key: AtomicUsize,
 }
 
 impl SpillRun {
@@ -67,6 +69,10 @@ impl SpillRun {
 
     pub(crate) fn staging_bytes(&self) -> usize {
         self.memory.staging.load(Ordering::Relaxed)
+    }
+
+    pub(crate) fn sort_key_bytes(&self) -> usize {
+        self.memory.sort_key.load(Ordering::Relaxed)
     }
 
     pub(crate) fn create_with_buffer_bytes(
@@ -133,9 +139,15 @@ impl SpillRun {
         &self,
         buffer_bytes: NonZeroUsize,
     ) -> Result<SpillReader> {
-        let file = self
-            .lease
-            .file_descriptors()
+        self.reader_with_context(buffer_bytes, self.lease.file_descriptors())
+    }
+
+    pub(crate) fn reader_with_context(
+        &self,
+        buffer_bytes: NonZeroUsize,
+        context: &hawdb_storage::file_descriptors::FileOpenContext,
+    ) -> Result<SpillReader> {
+        let file = context
             .open(OpenOptions::new().read(true), self.lease.path())
             .map_err(|error| spill_io_error("open spill run", self.lease.path(), error))?;
         Ok(SpillReader {
@@ -152,6 +164,10 @@ pub struct SpillWriter {
 }
 
 impl SpillWriter {
+    pub(crate) fn note_sort_key_bytes(&self, bytes: usize) {
+        self.memory.sort_key.fetch_max(bytes, Ordering::Relaxed);
+    }
+
     pub(crate) fn note_merge_record_bytes(&self, bytes: usize) {
         self.memory.record.fetch_max(bytes, Ordering::Relaxed);
     }
