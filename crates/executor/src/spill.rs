@@ -1048,8 +1048,8 @@ mod tests {
                 "payload".to_string(),
                 Value::String("x".repeat(256 * 1024)),
             )]),
-            nodes: BTreeMap::new(),
-            relationships: BTreeMap::new(),
+            nodes: BTreeMap::new().into(),
+            relationships: BTreeMap::new().into(),
         };
         let binding_bytes = binding_memory_bytes(&binding);
         memory.query_memory_bytes = NonZeroUsize::new(binding_bytes).unwrap();
