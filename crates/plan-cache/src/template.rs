@@ -344,9 +344,6 @@ fn folded_predicate_parameters(statement: &cypher::Statement) -> BTreeSet<String
                 exact.insert(left.clone());
                 collect_value(right, exact);
             }
-            P::ParameterIsNull { parameter } | P::ParameterIsNotNull { parameter } => {
-                exact.insert(parameter.clone());
-            }
             P::RelationshipExists { .. }
             | P::BoundRelationshipExists { .. }
             | P::IdEq { .. }
@@ -367,6 +364,9 @@ fn folded_predicate_parameters(statement: &cypher::Statement) -> BTreeSet<String
             | P::StartsWith { .. }
             | P::EndsWith { .. }
             | P::RegexMatch { .. }
+            // Nullness is already fixed by the complete parameter shape.
+            | P::ParameterIsNull { .. }
+            | P::ParameterIsNotNull { .. }
             | P::IsNull { .. }
             | P::IsNotNull { .. }
             | P::In { .. } => {}
@@ -1548,6 +1548,36 @@ mod tests {
         assert!(template.reuse(&changed).is_none());
         let unused = parameterize_logical_plan(&statement, &changed).unwrap();
         assert!(super::ParameterBindingTemplate::new(&unused, &changed).is_none());
+    }
+
+    #[test]
+    fn folded_null_guards_keep_shape_valid_rebinding() {
+        for predicate in ["$gate IS NULL", "$gate IS NOT NULL"] {
+            let statement = cypher::parse(&format!(
+                "MATCH (n:Item) WHERE ({predicate} OR n.id = $gate) \
+                 RETURN CASE n.id WHEN 'a' THEN $gate ELSE $gate END AS gate"
+            ))
+            .unwrap();
+            let parameters = BTreeMap::from([("gate".into(), Value::Int(1))]);
+            let plan = parameterize_logical_plan(&statement, &parameters).unwrap();
+            let template = super::ParameterBindingTemplate::new(&plan, &parameters).unwrap();
+            let changed = BTreeMap::from([("gate".into(), Value::Int(2))]);
+            super::PARAMETER_PLANNING_CALLS.with(|calls| calls.set(0));
+            let reused = template.reuse(&changed).unwrap();
+            assert_eq!(
+                super::PARAMETER_PLANNING_CALLS.with(std::cell::Cell::get),
+                0
+            );
+            let mut rebound = reused.logical().clone();
+            super::bind_logical_plan(&mut rebound, &changed).unwrap();
+            assert_eq!(
+                rebound,
+                hawdb_plan_cypher::plan_with_params(&statement, &changed).unwrap()
+            );
+            assert!(template
+                .reuse(&BTreeMap::from([("gate".into(), Value::Null)]))
+                .is_none());
+        }
     }
 
     #[test]
