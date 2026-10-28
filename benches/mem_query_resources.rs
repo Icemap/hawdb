@@ -313,6 +313,34 @@ fn measure(
 }
 
 #[cfg(feature = "qualification")]
+fn weighted_cache_memory_probe() -> JsonValue {
+    let before = native_profile::snapshot().live_requested_bytes;
+    let budget = 64 * 1024;
+    let mut cache = hawdb_plan_cache::LfuCache::with_byte_limit(Some(128), Some(budget));
+    let mut maximum_retained = 0;
+    let mut maximum_charge = 0;
+    for index in 0..4096 {
+        let key = format!("retention-probe-{index:08}");
+        let value = vec![index as u8; 512];
+        let charge = key.capacity() + value.capacity();
+        cache.insert_weighted(key, value, charge);
+        let retained = native_profile::snapshot()
+            .live_requested_bytes
+            .saturating_sub(before);
+        let charged = cache.charged_bytes().expect("bounded cache charge");
+        assert!(retained <= charged as u64);
+        assert!(charged <= budget);
+        maximum_retained = maximum_retained.max(retained);
+        maximum_charge = maximum_charge.max(charged);
+    }
+    let evictions = cache.stats().evictions;
+    assert!(evictions > 0);
+    drop(cache);
+    json!({"insertions":4096,"budget":budget,"maximum_retained_requested_bytes":maximum_retained,
+        "maximum_charged_bytes":maximum_charge,"evictions":evictions})
+}
+
+#[cfg(feature = "qualification")]
 fn template_memory_probe(query: &str, parameters: &Parameters) -> hawdb::Result<JsonValue> {
     let statement = hawdb_cypher::parse(query)?;
     let before = native_profile::snapshot();
@@ -326,6 +354,10 @@ fn template_memory_probe(query: &str, parameters: &Parameters) -> hawdb::Result<
         native_profile::snapshot().live_requested_bytes - before_template.live_requested_bytes;
     let template_bytes = before_template.live_requested_bytes - before.live_requested_bytes
         + template_additional_bytes;
+    let charged_template_bytes = template
+        .retained_heap_bytes()
+        .expect("Mem ranking template has a conservative retention charge");
+    assert!(charged_template_bytes as u64 >= template_bytes);
     native_profile::reset_window_peak();
     let rebound = template
         .reuse(parameters)
@@ -336,12 +368,16 @@ fn template_memory_probe(query: &str, parameters: &Parameters) -> hawdb::Result<
     drop(template);
     drop(plan);
     let after_drop = native_profile::snapshot();
+    let weighted_cache_probe = weighted_cache_memory_probe();
     Ok(
-        json!({"scope": "isolated logical planning, shared template heap payload, and reuse handle; excludes cache keys, LFU containers, Arc headers and physical plans",
+        json!({"scope": "isolated logical planning and reuse; template_heap_bytes includes logical/key Arc allocations, excludes caller AST/parameters, outer template Arc, LFU key/table and physical plans; charged_template_heap_bytes also bounds the outer template Arc; weighted_cache_probe is separate",
         "planning_peak_above_start": planning_peak.saturating_sub(before.live_requested_bytes),
         "template_heap_bytes": template_bytes,
+        "charged_template_heap_bytes": charged_template_bytes,
         "template_handle_additional_heap_bytes": template_additional_bytes,
-        "default_128_template_heap_bytes": template_bytes * 128,
+        "hypothetical_128_template_heap_bytes_without_byte_cap": template_bytes * 128,
+        "default_binding_cache_byte_cap": DatabaseConfig::default().max_parameter_binding_cache_bytes,
+        "weighted_cache_probe": weighted_cache_probe,
         "reuse_peak_above_retained": reuse_peak.saturating_sub(reuse_live_after),
         "live_after_drop_delta": after_drop.live_requested_bytes as i128 - before.live_requested_bytes as i128}),
     )

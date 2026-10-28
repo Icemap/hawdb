@@ -14,10 +14,38 @@ use std::sync::Arc;
 const PARAMETER_SLOT_NAME_KEY: &str = "\0skein_parameter_slot";
 const PARAMETER_SLOT_PATH_KEY: &str = "\0skein_parameter_path";
 
+mod retained;
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 enum ParameterCacheValue {
     Slot(ParameterValueShape),
+    CaseSlot(ParameterValueShape),
     Exact(Value),
+}
+
+impl ParameterCacheValue {
+    fn validate_slot_use(&mut self, marker_use: MarkerUse) -> bool {
+        if matches!(self, Self::Exact(_)) {
+            return true;
+        }
+        if !marker_use.is_safe() {
+            return false;
+        }
+        // Reclassify after all exact guards have been restored. A planner
+        // rewrite may move a slot into or out of CASE without changing its
+        // validity domain; its physical retention policy must follow that move.
+        *self = match std::mem::replace(self, Self::Exact(Value::Null)) {
+            Self::Slot(shape) | Self::CaseSlot(shape) => {
+                if marker_use == MarkerUse::SafeCase {
+                    Self::CaseSlot(shape)
+                } else {
+                    Self::Slot(shape)
+                }
+            }
+            exact @ Self::Exact(_) => exact,
+        };
+        true
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -57,6 +85,13 @@ pub struct ParameterBindingTemplate {
 }
 
 impl ParameterBindingTemplate {
+    /// Conservative requested heap retained by this template, including Arc
+    /// allocations even when shared with another owner. Unknown plan shapes or
+    /// arithmetic overflow decline admission instead of undercharging.
+    pub fn retained_heap_bytes(&self) -> Option<usize> {
+        retained::template_bytes(self)
+    }
+
     pub fn new(
         plan: &ParameterizedLogicalPlan,
         parameters: &BTreeMap<String, Value>,
@@ -71,7 +106,9 @@ impl ParameterBindingTemplate {
             || parameters.values().any(value_contains_any_marker)
             || self.plan.cache_key.values.iter().any(|(name, cached)| {
                 parameters.get(name).is_none_or(|value| match cached {
-                    ParameterCacheValue::Slot(shape) => !shape.matches(value),
+                    ParameterCacheValue::Slot(shape) | ParameterCacheValue::CaseSlot(shape) => {
+                        !shape.matches(value)
+                    }
                     ParameterCacheValue::Exact(expected) => value != expected,
                 })
             })
@@ -146,6 +183,15 @@ pub fn parameter_binding_shape_fingerprint(parameters: &BTreeMap<String, Value>)
 }
 
 impl ParameterizedLogicalPlan {
+    /// CASE marker trees stay in the byte-budgeted logical cache. Physical
+    /// copies remain request-owned until the physical cache has a byte budget.
+    pub fn has_case_parameter_slots(&self) -> bool {
+        self.cache_key
+            .values
+            .values()
+            .any(|value| matches!(value, ParameterCacheValue::CaseSlot(_)))
+    }
+
     pub fn logical(&self) -> &LogicalPlan {
         &self.logical
     }
@@ -167,6 +213,7 @@ impl ParameterizedLogicalPlan {
 enum MarkerUse {
     None,
     Safe,
+    SafeCase,
     Unsafe,
 }
 
@@ -185,9 +232,22 @@ fn plan_parameter_bindings(
 }
 
 impl MarkerUse {
+    fn is_safe(self) -> bool {
+        matches!(self, Self::Safe | Self::SafeCase)
+    }
+
+    fn cache_value(self, value: &Value) -> ParameterCacheValue {
+        match self {
+            Self::SafeCase => ParameterCacheValue::CaseSlot(parameter_value_shape(value)),
+            Self::Safe => ParameterCacheValue::Slot(parameter_value_shape(value)),
+            Self::None | Self::Unsafe => ParameterCacheValue::Exact(value.clone()),
+        }
+    }
+
     fn combine(self, other: Self) -> Self {
         match (self, other) {
             (Self::Unsafe, _) | (_, Self::Unsafe) => Self::Unsafe,
+            (Self::SafeCase, _) | (_, Self::SafeCase) => Self::SafeCase,
             (Self::Safe, _) | (_, Self::Safe) => Self::Safe,
             (Self::None, Self::None) => Self::None,
         }
@@ -247,17 +307,20 @@ pub fn parameterize_logical_plan(
             template_parameters.remove(name);
             continue;
         }
-        let is_safe = candidate.is_some_and(|mut candidate| {
-            marker_use_in_logical_plan(&candidate, name) == MarkerUse::Safe
+        let marker_use = candidate.map_or(MarkerUse::Unsafe, |mut candidate| {
+            let marker_use = marker_use_in_logical_plan(&candidate, name);
+            if marker_use.is_safe()
                 && bind_logical_plan(&mut candidate, parameters).is_ok()
                 && candidate == actual
+            {
+                marker_use
+            } else {
+                MarkerUse::Unsafe
+            }
         });
-        if is_safe {
+        if marker_use.is_safe() {
             template_parameters.insert(name.clone(), marker);
-            cache_values.insert(
-                name.clone(),
-                ParameterCacheValue::Slot(parameter_value_shape(value)),
-            );
+            cache_values.insert(name.clone(), marker_use.cache_value(value));
             slot_count += 1;
         } else {
             cache_values.insert(name.clone(), ParameterCacheValue::Exact(value.clone()));
@@ -270,9 +333,9 @@ pub fn parameterize_logical_plan(
         let candidate = plan_parameter_bindings(statement, &template_parameters)
             .ok()
             .filter(|candidate| {
-                let all_slots_are_safe = cache_values.iter().all(|(name, cached)| {
-                    !matches!(cached, ParameterCacheValue::Slot(_))
-                        || marker_use_in_logical_plan(candidate, name) == MarkerUse::Safe
+                let all_slots_are_safe = cache_values.iter_mut().all(|(name, cached)| {
+                    matches!(cached, ParameterCacheValue::Exact(_))
+                        || cached.validate_slot_use(marker_use_in_logical_plan(candidate, name))
                 });
                 let mut rebound = candidate.clone();
                 all_slots_are_safe
@@ -328,11 +391,8 @@ fn parameterize_together(
     let mut changed = false;
     for (name, value) in parameters {
         match marker_use_in_logical_plan(&marked, name) {
-            MarkerUse::Safe => {
-                values.insert(
-                    name.clone(),
-                    ParameterCacheValue::Slot(parameter_value_shape(value)),
-                );
+            marker_use @ (MarkerUse::Safe | MarkerUse::SafeCase) => {
+                values.insert(name.clone(), marker_use.cache_value(value));
                 slot_count += 1;
             }
             MarkerUse::None if folded_parameters.contains(name) => {
@@ -360,9 +420,9 @@ fn parameterize_together(
     };
     // Restoring exact inputs must not turn a previously safe marker into a
     // value-dependent specialized expression.
-    if values.iter().any(|(name, value)| {
-        matches!(value, ParameterCacheValue::Slot(_))
-            && marker_use_in_logical_plan(&logical, name) != MarkerUse::Safe
+    if !values.iter_mut().all(|(name, value)| {
+        matches!(value, ParameterCacheValue::Exact(_))
+            || value.validate_slot_use(marker_use_in_logical_plan(&logical, name))
     }) {
         return None;
     }
@@ -755,7 +815,7 @@ fn marker_use_in_logical_plan(plan: &LogicalPlan, name: &str) -> MarkerUse {
             ..
         } => {
             let mut marker_use = values_marker_use([source_id, target_id], name);
-            if marker_use == MarkerUse::Safe {
+            if marker_use.is_safe() {
                 marker_use = MarkerUse::Unsafe;
             }
             for predicate in [source_visibility_predicate, target_visibility_predicate]
@@ -893,7 +953,7 @@ fn marker_use_in_projection_expression(
     {
         // Simple CASE with literal branches has no value-driven planner
         // specialization. Binding changes values, never its branch structure.
-        return values_marker_use(
+        let marker_use = values_marker_use(
             branches
                 .iter()
                 .flat_map(|(condition, result)| [condition, result])
@@ -904,6 +964,11 @@ fn marker_use_in_projection_expression(
                 }),
             name,
         );
+        return if marker_use == MarkerUse::Safe {
+            MarkerUse::SafeCase
+        } else {
+            marker_use
+        };
     }
     let marker_use = match expression {
         ProjectionExpression::Case { .. }
@@ -988,7 +1053,7 @@ fn marker_use_in_projection_expression(
         ),
         _ => MarkerUse::None,
     };
-    if !safe && marker_use == MarkerUse::Safe {
+    if !safe && marker_use.is_safe() {
         MarkerUse::Unsafe
     } else {
         marker_use
@@ -1774,6 +1839,7 @@ mod tests {
                 "{count} candidates required {calls} logical plans"
             );
             assert_eq!(plan.slot_count(), parameters.len());
+            assert!(plan.has_case_parameter_slots());
             let mut changed = parameters.clone();
             changed.insert("score_0".into(), Value::Float(-3.0));
             assert_eq!(
@@ -1788,6 +1854,30 @@ mod tests {
                 rebound,
                 hawdb_plan_cypher::plan_with_params(&statement, &changed).unwrap()
             );
+        }
+    }
+
+    #[test]
+    fn case_retention_classification_preserves_non_case_slots_and_fallback() {
+        for (query, parameters, case_slots) in [
+            (
+                "MATCH (n:Item) WHERE n.id = $id RETURN CASE n.id WHEN 'a' THEN 1 ELSE 0 END AS rank",
+                BTreeMap::from([("id".into(), Value::String("a".into()))]),
+                false,
+            ),
+            (
+                "MATCH (n:Item) RETURN CASE n.id WHEN 'a' THEN $score ELSE 0 END AS rank LIMIT $take",
+                BTreeMap::from([("score".into(), Value::Int(1)), ("take".into(), Value::Int(2))]),
+                true,
+            ),
+        ] {
+            let statement = cypher::parse(query).unwrap();
+            let plan = parameterize_logical_plan(&statement, &parameters).unwrap();
+            assert!(plan.slot_count() > 0);
+            assert_eq!(plan.has_case_parameter_slots(), case_slots, "{query}");
+            let mut rebound = plan.logical().clone();
+            super::bind_logical_plan(&mut rebound, &parameters).unwrap();
+            assert_eq!(rebound, hawdb_plan_cypher::plan_with_params(&statement, &parameters).unwrap());
         }
     }
 

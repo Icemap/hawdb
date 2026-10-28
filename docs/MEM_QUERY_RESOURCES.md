@@ -1,7 +1,10 @@
 # Mem query resource qualification
 
 This manual benchmark accompanies #1287. It covers the embedded query phases
-used by Mem candidate ranking and graph expansion. It does not measure a whole
+used by Mem candidate ranking and graph expansion. The byte-budget follow-up
+below supersedes the earlier entry-only logical-template retention policy.
+Historical measurements retain their original source and executable identities.
+It does not measure a whole
 Mem endpoint, embedding provider, durable storage, or a production cutover.
 
 ## Reproduce a cell
@@ -283,7 +286,8 @@ Final release reference, Space8192/body16384/foreground:
 | 100 | 2.843 | 2.639 | 584.8 | 2.689 | 2.568 | 587.9 |
 | 512 | 19.163 | 17.979 | 627.5 | 18.356 | 17.890 | 626.4 |
 
-Decision: retain this experimental CPU/allocation optimization with the peak
+Historical decision at `83d43b0f8e` (superseded for logical-template retention
+by the byte-budget follow-up below): retain the CPU/allocation optimization with the peak
 and retained-template costs explicitly qualified. It is not a memory-first
 recommendation or a claim that all resource metrics improve. A 128-entry default
 is not a byte budget: 646 MB above is only 128 equally sized measured 512-row
@@ -318,3 +322,129 @@ owned-versus-streamed regression explicitly checks positive owned completion
 and zero streaming completion. All final release samples stay within their
 reported query peak and expose five CASE tables/five lookups per returned row;
 all background cells complete writes (21–584 per measured window).
+
+
+## Byte-bounded logical-template retention
+
+`DatabaseConfig::max_parameter_binding_cache_bytes` defaults to 16 MiB; zero
+suppresses logical-template admission. The existing entry bound still applies.
+The logical cache uses weighted LFU admission with a conservative requested-heap
+charge for both Arc-owned plan/key trees, the outer template Arc, strings and
+list capacities, B-tree nodes, exact parameter payloads, normalized-query keys
+and spare hash-table storage. Shared state is charged independently per cache
+entry. Unknown plan/expression representations or arithmetic overflow decline
+cache admission and preserve normal planning/execution semantics.
+
+Hash-table storage uses a conservative capacity high-water bound because
+removal tombstones may reduce `HashMap::capacity()` without releasing the
+underlying buffer. Equal-key replacement retains the incoming key covered by
+its charge. Empty-cache eviction releases the bucket allocation. These native
+layout bounds depend on the pinned toolchain and need requalification when it
+changes. Count-only LFU users do not supply key/value heap charges; the new
+logical-template budget always uses weighted admission.
+
+This bounds quiescent logical-cache retention, not total process memory.
+Allocator rounding, fixed cache metadata, request-owned plans and clones held
+by in-flight readers are outside the cap. Existing physical-plan and relational
+cache retention also remain separate. New parameterized CASE physical trees
+specifically bypass that count-only physical cache and remain request-owned.
+The report exposes `parameterized_case_template` as the physical bypass reason;
+`parameter binding cache hit: proven logical template` still reports logical
+reuse. Ordinary cacheable statements keep their existing physical-cache policy.
+Persistent handles re-optimize these CASE physical plans for each request.
+The Mem benchmark already uses fresh private physical caches; it does not
+qualify the cost for long-lived physical-cache hits. CASE slot classification
+is revalidated after restoring all exact guards, for
+both grouped and individual-parameter fallback proofs. Mem read forks share the
+bounded logical cache and retain their private physical-cache ownership. No production-memory, released-dependency
+or activation acceptance follows from this cap.
+
+Regressions exercise zero/tiny caps, oversized/overflowing admissions, changing
+key capacities, concurrent 512+ element shapes, and eight distinct 512-candidate
+five-CASE templates against the default cap. The manual allocation harness
+checks each template's charge against its measured retained requested heap. A
+separate 4096-insertion weighted-cache probe checks, after every admission, that
+actual retained requested bytes are no larger than the charge and the charge
+is no larger than 64 KiB. These retention checks exclude transient admission and
+query-preparation peaks; those remain separately recorded.
+
+
+An independent allocator regression,
+`//crates/plan-cache:hawdb_template_retention_tests`, checks real retained
+requested bytes for 20/100/512 five-CASE templates, a large exact map/list/binary/
+vector payload, and 4096 weighted-cache admissions. Allocations are counted on
+the test thread independently of the cache estimator; each owner drop must
+release the full tracked payload. It passes with the repository Rust 1.97.1 and
+the Mem host Rust 1.98.1. This bounded test joins the existing crate test surface without adding a CI job.
+
+Two production controls protect the retention boundaries: disabling byte
+pressure must fail the burst's original byte-cap assertion; permitting CASE
+physical admission must fail the property/column query test's zero-retained-
+physical-entries assertion. Both controls restore byte-identical production
+source and rerun the same assertion GREEN. The physical ownership regression
+also checks the complete output, dispatch tables/lookups, logical reuse trace,
+and explicit physical-bypass reason.
+
+
+### Final cap and ownership qualification
+
+The [final manifest](benchmarks/mem_query_resources_2026_10_29/manifest.json)
+retains 30 ordinary release cells, 6 instrumented cells and 48 interleaved
+release comparisons against the already-optimized `83d43b0f8e` binary. Frozen
+source, binary hashes, a reversible source patch, raw samples, both production
+controls and the merged-Mem reference-host receipt accompany the results.
+Earlier measurements above retain their historical source identities.
+
+| Candidates | Actual template heap bytes | Conservative template charge bytes |
+|---|---:|---:|
+| 20 | 226,845 | 253,141 |
+| 100 | 1,034,445 | 1,166,437 |
+| 512 | 5,049,337 | 5,718,017 |
+
+The separate 4096-insertion probe observes at most 58,312 retained requested
+bytes and 65,384 charged bytes under its 65,536-byte cap. Exact large map/list/
+binary/vector payloads also pass the independent allocator oracle. Each owner
+drop releases all tracked heap. The default 16 MiB logical cap includes keys and
+LFU storage as well as these template charges; three representative 512-row
+templates cannot fit, while the two measured mixed-length shapes do fit.
+
+The final 30-cell matrix covers the full fixed-shape grid and the large-Space /
+large-body mixed-length foreground/background grid. In the fixed 512-row,
+8192-row Space, 16 KiB-body foreground cell, p95 is 17.264 ms, CPU 17.163 ms/read,
+and process peak RSS 628.0 MiB. Its instrumented counterpart allocates 60,747,571
+bytes and 268,172 calls/read, versus 61,389,910 bytes and 271,864 calls at 83.
+Warm requested-heap peak is 42,019,874 versus 42,632,311 bytes. This does not
+eliminate the larger transient peak relative to the original pre-optimization
+main baseline.
+
+To check shared-host timing variation, four alternating-order fresh-process
+pairs run per candidate count/workload at 8192 rows per Space / 16 KiB bodies /
+foreground. The table pools all 80 latency samples per variant, averages CPU
+over those 80 requests, and takes the median of four process RSS high-water
+observations. This comparison isolates the retention follow-up against 83;
+it is separate from the historical pre-optimization main comparison.
+
+| Candidates / shape | 83 p95 ms | Final p95 ms | 83 CPU ms/read | Final CPU ms/read | 83 RSS MiB | Final RSS MiB |
+|---|---:|---:|---:|---:|---:|---:|
+| 20 / fixed | 0.645 | 0.611 | 0.556 | 0.543 | 581.0 | 577.5 |
+| 20 / mixed | 0.581 | 0.585 | 0.535 | 0.528 | 581.2 | 577.9 |
+| 100 / fixed | 2.670 | 2.574 | 2.555 | 2.458 | 584.7 | 583.1 |
+| 100 / mixed | 2.719 | 2.588 | 2.566 | 2.463 | 585.2 | 586.3 |
+| 512 / fixed | 18.905 | 18.569 | 17.492 | 17.117 | 624.4 | 621.1 |
+| 512 / mixed | 18.852 | 18.129 | 17.596 | 16.959 | 630.0 | 624.0 |
+
+All raw windows are retained. The small mixed 20 p95 and mixed 100 RSS do not
+improve; these shared-workstation results do not establish a universal latency
+or RSS reduction. The retention guarantee concerns the named logical-cache
+requested-heap budget and the absence of cached CASE marker physical trees.
+
+Final local verification: 39 plan-cache unit tests, 58 root cache tests, 3 ordinary
+scoring-cache tests, 2 CASE property/column facade tests, allocator coverage on
+Rust 1.97.1 and 1.98.1, 100 native Bazel fuzz/focused targets, and strict native /
+minimal WASM Clippy all pass. Staged license/format/Clippy hooks pass.
+`prek run --all-files` still stops at 626 unchanged baseline license headers;
+workspace format and strict Clippy pass independently. The current merged Mem
+`044a0c2f3ed6c8dbd76142a234558e1c81bdf602` reference host executes 20 tests,
+0 failures, 0 ignored, 60 filtered out with the exact source override. This is a
+development library qualification; a published Mem dependency pin, release,
+production-memory acceptance and activation remain separate gates.

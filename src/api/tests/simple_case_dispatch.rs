@@ -92,7 +92,22 @@ fn simple_case_dispatch_rebinds_values_through_scan_and_projection() {
             assert_eq!(memory.simple_case_dispatch_lookups, 20);
             assert_eq!(memory.query_memory_completion_bytes, 0);
         }
-        assert_eq!(read_test_plan_cache_metric(&read, "misses"), 1);
-        assert_eq!(read_test_plan_cache_metric(&read, "hits"), 2);
+        // CASE marker trees must not escape the logical cache's byte budget
+        // through a separate count-only physical cache.
+        let stats = read.plan_cache_stats();
+        assert_eq!(stats.entries, 0);
+        assert_eq!(stats.bypasses, 3);
+        assert_eq!(stats.hits, 0);
+        assert_eq!(stats.misses, 0);
+        let explain = read.explain_query_with_params(&query, &parameters).unwrap();
+        assert_eq!(
+            explain.plan_cache_lookup,
+            hawdb_plan_cache::PlanCacheLookup::Bypass(
+                hawdb_plan_cache::PlanCacheBypassReason::ParameterizedCaseTemplate
+            )
+        );
+        assert!(explain.trace.decisions.iter().any(|decision| {
+            decision == "parameter binding cache hit: proven logical template"
+        }));
     }
 }

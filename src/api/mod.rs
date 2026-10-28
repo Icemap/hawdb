@@ -484,6 +484,11 @@ pub struct DatabaseConfig {
     /// Maximum entries per graph physical-plan, parameter-binding-template,
     /// or relational SQL-template cache.
     pub max_plan_cache_entries: Option<usize>,
+    /// Requested-heap budget for the shared logical parameter-binding cache,
+    /// including its keys and table capacity. Defaults to 16 MiB; zero disables
+    /// admission. In-flight plans, physical-plan caches, allocator rounding and
+    /// fixed cache metadata are outside this retention bound.
+    pub max_parameter_binding_cache_bytes: usize,
     /// Commit-epoch lag tolerated before the inline query path recomputes
     /// optimizer statistics. `None` or `Some(0)` refreshes on every committed
     /// data change (freshest plans). Larger values amortize statistics
@@ -751,6 +756,7 @@ impl Default for DatabaseConfig {
             ),
             search_projection_relational_change_limits: Default::default(),
             max_plan_cache_entries: Some(DEFAULT_PLAN_CACHE_MAX_ENTRIES),
+            max_parameter_binding_cache_bytes: 16 * 1024 * 1024,
             optimizer_statistics_inline_commit_lag: None,
             slow_query_log_capacity: system_sql::DEFAULT_SLOW_QUERY_LOG_CAPACITY,
             slow_query_log_threshold_micros: system_sql::DEFAULT_SLOW_QUERY_LOG_THRESHOLD_MICROS,
