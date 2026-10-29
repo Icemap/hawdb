@@ -3041,8 +3041,15 @@ fn pessimistic_snapshot_retry_cause_survives_subsequent_query_and_commit() {
             stale
                 .query_sql("SELECT id FROM retry_rows WHERE id = 1 FOR SHARE")
                 .unwrap();
-            db.query_sql("INSERT INTO retry_rows (id) VALUES (2)")
+            // Autocommit takes a database-wide lock; this writer must stay
+            // disjoint from the reader's point lock while advancing the epoch.
+            let mut writer = db
+                .begin_transaction(ConcurrentTransactionOptions::pessimistic(Duration::ZERO))
                 .unwrap();
+            writer
+                .query_sql("INSERT INTO retry_rows (id) VALUES (2)")
+                .unwrap();
+            writer.commit().unwrap();
             "SELECT id FROM retry_rows WHERE id = 2 FOR SHARE"
         };
         let first = if graph {
