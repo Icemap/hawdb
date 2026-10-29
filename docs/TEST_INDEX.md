@@ -955,7 +955,12 @@ before native creation, cancellation (including the exact post-mkdir,
 pre-return boundary in `spool::stage::tests`), zero-slot refusal, idle token release,
 Task/Wave depth-one partition builds, same-governor streamed source/output
 handoff, and nonflushing Drop/deferred cleanup with
-fresh admitted retry. Existing prepared/FD cleanup fixtures explicitly declare
+fresh admitted retry. The mutation phase cases also cover occupied-slot
+refusal before term-file creation, target hydration and unordered run creation;
+cancellation retains the selected generation and refunds memory after cleanup.
+They verify nonflushing unordered run Drop, fresh cleanup retry, and complete
+owned/streamed/unordered updates under both one-slot Task and Wave reservations.
+Existing prepared/FD cleanup fixtures explicitly declare
 I/O capacity while preserving memory/FD limits and assertions. Replay with
 `cargo test --locked -p hawdb-search --lib generation_writer` and
 `--no-default-features`; the vector Consumer positive control also runs in the
