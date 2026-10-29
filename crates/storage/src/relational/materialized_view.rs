@@ -973,9 +973,8 @@ mod tests {
         budget.ensure_rows(120_000).unwrap();
         budget.charge(60_000, 0).unwrap();
         budget.charge(60_000, 0).unwrap();
-        let remaining = budget.limits.max_rows.get() - budget.rows;
-        budget.ensure_rows(remaining).unwrap();
-        budget.charge(remaining, 0).unwrap();
+        budget.ensure_rows(130_000).unwrap();
+        budget.charge(130_000, 0).unwrap();
         assert!(matches!(
             budget.ensure_rows(1),
             Err(RelationalError::Admission(_))
@@ -989,10 +988,9 @@ mod tests {
     #[test]
     fn default_payload_budget_admits_cumulative_copies_and_still_bounds_total_work() {
         let mut budget = budget();
-        budget.charge(0, 48 * 1024 * 1024).unwrap();
-        budget.charge(0, 48 * 1024 * 1024).unwrap();
-        let remaining = budget.limits.max_payload_bytes.get() - budget.bytes;
-        budget.charge(0, remaining).unwrap();
+        budget.charge(0, 24 * 1024 * 1024).unwrap();
+        budget.charge(0, 24 * 1024 * 1024).unwrap();
+        budget.charge(0, 16 * 1024 * 1024).unwrap();
         assert!(matches!(
             budget.charge(0, 1),
             Err(RelationalError::Admission(_))

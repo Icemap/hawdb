@@ -91,16 +91,26 @@ large or skewed groups can exhaust admission even for a one-row source update.
 
 Maintenance shares one row/payload work budget across all affected views,
 derived from `RelationalMutationLimits` (the SQL facade uses the default
-1,000,000 row work units and 256 MiB estimated payload limit). These defaults
+250,000 row work units and the unchanged 64 MiB estimated payload limit).
+This admits the motivating 60,000-row projection backfill's 120,000 work units
+without widening every embedded host's foreground payload allowance. These defaults
 also govern ordinary relational mutations and schema rewrites using the same
-type. Explicit caller-supplied smaller limits remain effective. The payload
+type. The SQL facade and embedded profiles currently use these defaults;
+`DatabaseConfig` has no relational-work override. Explicit storage-kernel and
+staging limits remain effective for their callers, but do not provide a
+host-facing SQL option. The foreground maintenance path does not reserve this
+logical payload against the process memory governor. The payload
 counter is cumulative logical work, not live allocation or process RSS; larger
 defaults admit more synchronous CPU/memory work and can increase commit latency.
 Independent WAL record/value bounds, capture limits and read-result limits
 remain effective and can refuse work below these ceilings.
-The WAL decoder row allowance follows the default mutation row allowance;
-older binaries with the former ceiling may refuse newly admitted larger
-batches. The byte encoding and codec version are unchanged.
+The WAL decoder retains a separate 1,000,000-row allowance, and compatibility
+tests require it to cover foreground defaults without shrinking when foreground
+policy is tightened. Older binaries with the former 100,000-row ceiling may
+refuse newly admitted larger row batches. A downgrade can also refuse replay of a small view-DDL WAL
+record whose backfill exceeds the older maintenance-work allowance. The byte
+encoding and codec version are unchanged; successful writing here does not
+guarantee that an older binary can reopen the database.
 Reads, output changes, hydration, and aggregate working state are bounded.
 Exceeding admission or aggregate limits
 rejects the whole transaction before WAL append; results are never truncated.

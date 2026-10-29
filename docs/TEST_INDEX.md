@@ -118,8 +118,8 @@ and limits are documented in [the implementation guide](MATERIALIZED_VIEWS.md).
 The existing storage unit lane also covers admission-aware view recovery, WAL
 decode parity, indexed MIN/MAX schema copying, and reservation release through
 `cargo test --locked -p hawdb-storage --lib controlled_materialized_view_recovery`.
-Storage's `relational::materialized_view::tests` checks the larger default
-shared work allowance and exact row/payload refusal boundaries through counter
+Storage's `relational::materialized_view::tests` checks the 250,000-row default,
+the unchanged 64 MiB payload ceiling and exact refusal boundaries through counter
 charges, without allocating large backfills. The existing storage unit target
 checks that explicit maintenance limits also set hydration row, compressed-byte,
 decompressed-byte and working-memory bounds. Its decoder matrix checks that WAL
@@ -134,6 +134,15 @@ fixtures and injected one-entry bounds. Replay:
 The existing recovery preparation/discard case additionally lowers foreground
 payload admission to one byte; recovery still stages and retries without
 changing live state until installation. No CI lane, feature or timeout changes.
+
+The manual [IMV work-limit diagnostic](benchmarks/imv_work_limits_2026_10_30/README.md)
+measures process peak RSS at the row-work ceiling and near the unchanged payload
+ceiling through the public SQL facade. It is an unpublished temporary Cargo host
+over the retained Rust source, outside library archives and all CI/test suites.
+Large fixtures belong only to this explicit resource measurement; ordinary
+admission UTs remain counter-based or use two-row fixtures. The guide records
+the exact default-feature checked profile, source/binary fingerprints, replay
+commands and the limits of cumulative process high-water measurements.
 
 The `api::query_request::tests` unit family covers compact request collection
 through the ordinary read-transaction API. The 2,048-row collection regression

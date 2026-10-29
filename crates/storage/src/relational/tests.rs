@@ -2854,6 +2854,10 @@ fn default_decode_limits_cover_mutation_rows_and_recoverable_wal_shapes() {
     let wal = RelationalDecodeLimits::wal();
     let checkpoint = RelationalDecodeLimits::checkpoint();
     assert!(
+        wal.max_rows >= 1_000_000,
+        "foreground policy changes must not narrow the established WAL row allowance"
+    );
+    assert!(
         wal.max_rows >= mutation.max_rows.get(),
         "default row writes must be replayable"
     );

@@ -168,7 +168,9 @@ impl RelationalDecodeLimits {
             max_record_bytes: DEFAULT_MAX_WAL_RECORD_BYTES,
             max_tables: 1_024,
             max_writes: 100_000,
-            max_rows: super::DEFAULT_MAX_RELATIONAL_MUTATION_ROWS,
+            // Tightening foreground work admission must not shrink durable
+            // replay's decode allowance. Keep compatibility checked in tests.
+            max_rows: 1_000_000,
             max_values: 2_000_000,
             max_value_bytes: 64 * 1024 * 1024,
             max_overflow_segments: 0,
