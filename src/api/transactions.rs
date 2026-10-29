@@ -386,7 +386,9 @@ pub(super) fn execute_graph_transaction_plan(
                 runtime.config.mutation_limits,
             )?;
             let rows = returned_rows.unwrap_or_default();
-            let output = QueryOutput { rows: rows.into() };
+            let output = QueryOutput {
+                rows: optimized.collect_named_rows(rows)?,
+            };
             hawdb_executor::result_delivery::OutputLimits {
                 max_rows: restrictive_query_limit(
                     runtime.read_result_row_limit(),
@@ -425,6 +427,7 @@ pub(super) fn execute_graph_transaction_plan(
                 parameters,
                 &runtime.config.execution_memory,
             )
+            .with_output_columns(optimized.output_columns.as_deref())
             .with_output_limits(
                 restrictive_query_limit(
                     runtime.read_result_row_limit(),
@@ -1788,6 +1791,7 @@ impl DatabaseSession<'_> {
                     parameters,
                     &self.db.config.execution_memory,
                 )
+                .with_output_columns(optimized.output_columns.as_deref())
                 .with_output_limits(row_limit, self.db.config.max_read_result_payload_bytes),
                 executor::ExecutionResources::new(
                     &mut branch_runtime.catalog,
@@ -1806,10 +1810,11 @@ impl DatabaseSession<'_> {
                 &profiled.profile,
             );
             drop(profiled.rows);
-            return explain::admit_explain_output(row, &self.db.config, options);
+            return explain::admit_explain_output(row, true, &self.db.config, options);
         }
         explain::admit_explain_output(
             explain_output_row(&optimized, work_request, inner_statement_kind),
+            false,
             &self.db.config,
             options,
         )

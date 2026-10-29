@@ -554,3 +554,83 @@ fn compact_owned_results_charge_incoming_column_key_capacity() {
     drop(output);
     assert_eq!(ledger.snapshot().used_bytes, 0);
 }
+
+#[test]
+fn declared_owned_schema_preserves_empty_rows_and_reorders_named_values() {
+    let memory = ExecutionMemoryConfig::default();
+    for populated in [false, true] {
+        let ledger = QueryMemoryLedger::new(memory.query_memory_bytes);
+        let mut output = QueryOutputAccumulator::new_owned(
+            OutputLimits::default(),
+            memory.query_memory_bytes,
+            &ledger,
+        )
+        .unwrap();
+        output.bind_output_schema(["z", "a"].into_iter()).unwrap();
+        if populated {
+            output
+                .emit(Binding::values(Row::from([
+                    ("a".into(), Value::String("first alphabetically".into())),
+                    ("z".into(), Value::Int(7)),
+                ])))
+                .unwrap();
+        }
+        let rows = output.take_owned_rows().unwrap();
+        assert_eq!(rows.schema().columns(), ["z", "a"]);
+        assert_eq!(rows.len(), usize::from(populated));
+        if populated {
+            assert_eq!(rows.value(0, 0), Some(hawdb_core::ValueRef::Int(7)));
+            assert_eq!(
+                rows.value(0, 1),
+                Some(hawdb_core::ValueRef::String("first alphabetically"))
+            );
+        }
+        assert!(ledger.snapshot().used_bytes > 0);
+        drop(output);
+        assert_eq!(ledger.snapshot().used_bytes, 0);
+    }
+}
+
+#[test]
+fn empty_result_schema_is_admitted_before_allocating_and_releases_on_refusal() {
+    let memory = ExecutionMemoryConfig::default();
+    let ledger = QueryMemoryLedger::new(memory.query_memory_bytes);
+    let mut output = QueryOutputAccumulator::new_owned(
+        OutputLimits::default(),
+        NonZeroUsize::new(1024).unwrap(),
+        &ledger,
+    )
+    .unwrap();
+    let name = "column".repeat(1024);
+    let error = output
+        .bind_output_schema(std::iter::once(name.as_str()))
+        .unwrap_err();
+    assert!(
+        matches!(error, HawDBError::ResourceBudgetExceeded(_)),
+        "{error}"
+    );
+    assert_eq!(output.metrics().rows, 0);
+    drop(output);
+    assert_eq!(ledger.snapshot().used_bytes, 0);
+}
+
+#[test]
+fn declared_borrowed_schema_reorders_values_and_rejects_schema_drift_atomically() {
+    let memory = ExecutionMemoryConfig::default();
+    let ledger = QueryMemoryLedger::new(memory.query_memory_bytes);
+    let mut output = QueryOutputAccumulator::new_owned(
+        OutputLimits::default(),
+        memory.query_memory_bytes,
+        &ledger,
+    )
+    .unwrap();
+    output.bind_output_schema(["z", "a"].into_iter()).unwrap();
+    let row = Row::from([("a".into(), Value::Int(1)), ("z".into(), Value::Int(2))]);
+    output.emit_borrowed(RowRef::Map(&row)).unwrap();
+    let wrong = Row::from([("a".into(), Value::Int(3)), ("other".into(), Value::Int(4))]);
+    assert!(output.emit_borrowed(RowRef::Map(&wrong)).is_err());
+    assert_eq!(output.metrics().rows, 1);
+    let rows = output.take_owned_rows().unwrap();
+    assert_eq!(rows.value(0, 0), Some(hawdb_core::ValueRef::Int(2)));
+    assert_eq!(rows.value(0, 1), Some(hawdb_core::ValueRef::Int(1)));
+}

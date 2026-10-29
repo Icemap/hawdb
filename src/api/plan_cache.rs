@@ -13,6 +13,7 @@
 // limitations under the License.
 
 pub(super) mod determinism;
+mod output_schema;
 
 use super::query_request::{BoundScoringRequest, ScoringPlanCacheKey};
 use super::{
@@ -76,11 +77,27 @@ pub(super) struct OptimizedQueryPlan {
     // takes this after planning so cache hits preserve the current text hash.
     pub(super) query_identity: Option<hawdb_query::QueryIdentity>,
     pub(super) physical_plan: PhysicalPlan,
+    pub(super) output_columns: Option<Vec<String>>,
     pub(super) trace: OptimizerTrace,
     pub(super) plan_cache_lookup: PlanCacheLookup,
     pub(super) optimizer_environment: OptimizerEnvironmentKey,
     pub(super) configured_max_optimizer_groups: Option<usize>,
     pub(super) effective_max_optimizer_groups: usize,
+}
+
+impl OptimizedQueryPlan {
+    pub(super) fn collect_named_rows(
+        &self,
+        rows: Vec<crate::executor::Row>,
+    ) -> Result<hawdb_executor::QueryRows> {
+        match &self.output_columns {
+            Some(columns) => hawdb_executor::QueryRows::try_from_named_rows(
+                hawdb_executor::QuerySchema::try_new(columns.iter().cloned())?,
+                rows,
+            ),
+            None => Ok(rows.into()),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -881,6 +898,12 @@ pub(super) fn optimized_query_plan_for<S: crate::executor::ExecutionStore>(
             record_access_control_plan_decision(&mut trace, context.access_control);
             return Ok(OptimizedQueryPlan {
                 query_identity: Some(query_identity),
+                output_columns: output_schema::logical_output_columns(
+                    parameterized
+                        .as_ref()
+                        .expect("cached plans have a logical template")
+                        .logical(),
+                )?,
                 physical_plan,
                 trace,
                 plan_cache_lookup: PlanCacheLookup::Hit,
@@ -895,6 +918,7 @@ pub(super) fn optimized_query_plan_for<S: crate::executor::ExecutionStore>(
     } else {
         planner::plan_with_params(statement_body(statement), parameters)?
     };
+    let output_columns = output_schema::logical_output_columns(&logical)?;
     if let Some(access_control) = context.access_control {
         logical = apply_access_control_to_logical_plan(
             logical,
@@ -1012,6 +1036,7 @@ pub(super) fn optimized_query_plan_for<S: crate::executor::ExecutionStore>(
             .push("plan cache miss: optimized parameterized physical plan template".to_string());
         return Ok(OptimizedQueryPlan {
             query_identity: Some(query_identity),
+            output_columns,
             physical_plan,
             trace,
             plan_cache_lookup: PlanCacheLookup::Miss,
@@ -1026,6 +1051,7 @@ pub(super) fn optimized_query_plan_for<S: crate::executor::ExecutionStore>(
             .push(format!("plan cache bypass: {}", reason.as_str()));
         return Ok(OptimizedQueryPlan {
             query_identity: Some(query_identity),
+            output_columns,
             physical_plan,
             trace,
             plan_cache_lookup: PlanCacheLookup::Bypass(reason),

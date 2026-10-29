@@ -417,6 +417,11 @@ operator info, memory, disk`. `pandas.read_sql` works, with a
 warning that pandas only tests SQLAlchemy and sqlite3 connections.
 `help(hawdb.dbapi)` gives the full contract.
 
+Cypher results from Python's database execution API retain RETURN-list order,
+including empty matches and LIMIT 0.
+Cypher EXPLAIN keeps its structured diagnostic row, with mode, statement kind
+and plan first; EXPLAIN ANALYZE appends execution diagnostics.
+
 ## Pydantic rows (optional)
 
 The `pydantic` extra types the rows a statement returned and the parameters a

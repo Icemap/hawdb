@@ -29,7 +29,7 @@ impl QueryRowsBuilder {
 
     pub(crate) fn push_budgeted_named_row(
         &mut self,
-        row: Row,
+        mut row: Row,
         account: &QueryMemoryAccount,
         retained: &mut QueryMemoryLease,
     ) -> Result<()> {
@@ -56,7 +56,15 @@ impl QueryRowsBuilder {
             account,
             retained,
         )?;
-        self.values.extend(row.into_values());
+        let schema = self.schema.as_ref().expect("result schema is bound");
+        if row.keys().eq(schema.columns().iter()) {
+            self.values.extend(row.into_values());
+        } else {
+            self.values.extend(schema.columns().iter().map(|name| {
+                row.remove(name)
+                    .expect("row keys were validated before transfer")
+            }));
+        }
         self.row_count = next_count;
         drop(transient);
         Ok(())
@@ -80,9 +88,53 @@ impl QueryRowsBuilder {
         )?;
         // Source buffers stay producer-owned. Only values that outlive this
         // call are copied, after their complete retained footprint is admitted.
-        self.values
-            .extend(row.iter().map(|(_, value)| value.to_owned_value()));
+        let schema = self.schema.as_ref().expect("result schema is bound");
+        if row
+            .iter()
+            .map(|(name, _)| name)
+            .eq(schema.columns().iter().map(String::as_str))
+        {
+            self.values
+                .extend(row.iter().map(|(_, value)| value.to_owned_value()));
+        } else {
+            self.values.extend(schema.columns().iter().map(|name| {
+                row.get(name)
+                    .expect("row keys were validated before transfer")
+                    .to_owned_value()
+            }));
+        }
         self.row_count = next_count;
+        Ok(())
+    }
+
+    pub(crate) fn bind_budgeted_schema<'name>(
+        &mut self,
+        names: impl Iterator<Item = &'name str> + Clone,
+        account: &QueryMemoryAccount,
+        retained: &mut QueryMemoryLease,
+    ) -> Result<()> {
+        if self.schema.is_some() {
+            return Ok(());
+        }
+        // Validate before allocating, including when execution produces no rows.
+        for (index, name) in names.clone().enumerate() {
+            if names.clone().take(index).any(|previous| previous == name) {
+                return Err(HawDBError::Semantic(format!(
+                    "query result schema contains duplicate column {name}"
+                )));
+            }
+        }
+        let slots = checked_result_mul(names.clone().count(), std::mem::size_of::<String>())?;
+        let name_bytes = names
+            .clone()
+            .try_fold(0usize, |total, name| checked_result_add(total, name.len()))?;
+        // Admit both the retained Arc and the overlapping conversion buffer.
+        let staging = account.reserve(slots)?;
+        retained.grow(checked_result_add(slots, name_bytes)?)?;
+        self.schema = Some(QuerySchema {
+            columns: Arc::from(names.map(str::to_owned).collect::<Vec<_>>()),
+        });
+        drop(staging);
         Ok(())
     }
 
@@ -94,45 +146,25 @@ impl QueryRowsBuilder {
         account: &QueryMemoryAccount,
         retained: &mut QueryMemoryLease,
     ) -> Result<usize> {
-        if let Some(schema) = &self.schema {
-            if width != schema.len()
-                || !names
-                    .clone()
-                    .eq(schema.columns().iter().map(String::as_str))
-            {
-                return Err(HawDBError::Execution(
-                    "query result row does not match its bound schema".into(),
-                ));
-            }
-        } else {
-            // Columnar slot schemas need not have unique names. Reject aliases
-            // that cannot be represented by a result schema without allocating
-            // an unaccounted temporary set.
-            for (index, name) in names.clone().enumerate() {
-                if names.clone().take(index).any(|previous| previous == name) {
-                    return Err(HawDBError::Execution(format!(
-                        "query result schema contains duplicate column {name}"
-                    )));
-                }
-            }
+        self.bind_budgeted_schema(names.clone(), account, retained)?;
+        let schema = self.schema.as_ref().expect("result schema is bound");
+        if width != schema.len()
+            || (!names
+                .clone()
+                .eq(schema.columns().iter().map(String::as_str))
+                && schema
+                    .columns()
+                    .iter()
+                    .any(|name| names.clone().filter(|candidate| *candidate == name).count() != 1))
+        {
+            return Err(HawDBError::Execution(
+                "query result row does not match its bound schema".into(),
+            ));
         }
         let next_count = self
             .row_count
             .checked_add(1)
             .ok_or_else(result_capacity_overflow)?;
-        if self.schema.is_none() {
-            let slots = checked_result_mul(width, std::mem::size_of::<String>())?;
-            let name_bytes = names
-                .clone()
-                .try_fold(0usize, |total, name| checked_result_add(total, name.len()))?;
-            // The schema Arc header is pre-admitted with the result owner.
-            let staging = account.reserve(slots)?;
-            retained.grow(checked_result_add(slots, name_bytes)?)?;
-            self.schema = Some(QuerySchema {
-                columns: Arc::from(names.map(str::to_owned).collect::<Vec<_>>()),
-            });
-            drop(staging);
-        }
         let rows_in_segment = self.row_count % OWNED_RESULT_SEGMENT_ROWS;
         let starts_segment = width != 0 && rows_in_segment == 0 && self.row_count != 0;
         let mut next_segment = Vec::new();
