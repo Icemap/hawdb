@@ -24,13 +24,22 @@ jobs:
     outputs:
       version: ${{ steps.release.outputs.version }}
       sha: ${{ steps.release.outputs.sha }}
+      lock_hash: ${{ steps.archive.outputs.lock_hash }}
+    defaults:
+      run:
+        working-directory: release-source
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.event.release.tag_name || inputs.tag }}
+          path: release-source
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: "3.11"
       - name: Validate the release tag and source
@@ -61,12 +70,21 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.97.1
       - name: Install packaging tools
         run: python -m pip install "maturin==1.15.0" "twine==6.2.0"
-      - name: Resolve one dependency graph and build the source distribution
+      - name: Validate the reviewed dependency graph and build the source distribution
+        id: archive
         run: |
-          cargo generate-lockfile --manifest-path bindings/python/Cargo.toml
+          if [[ ! -f bindings/python/Cargo.lock ]]; then
+            cp Cargo.lock bindings/python/Cargo.lock
+            cargo metadata --manifest-path bindings/python/Cargo.toml --format-version 1 > /dev/null
+          fi
+          cargo metadata --locked --manifest-path bindings/python/Cargo.toml --format-version 1 > /dev/null
+          python ../bindings/python/check_lock.py
+          cp bindings/python/Cargo.lock "$RUNNER_TEMP/python-reviewed.lock"
           maturin sdist --manifest-path bindings/python/Cargo.toml --out dist
           python -m twine check --strict dist/*
           python - <<'PY'
+          import hashlib
+          import os
           import tarfile
           from pathlib import Path
 
@@ -74,15 +92,24 @@ jobs:
           assert len(archives) == 1, archives
           with tarfile.open(archives[0]) as archive:
               names = [name.partition("/")[2] for name in archive.getnames()]
+              lock_path = f"{archive.getnames()[0].split('/')[0]}/bindings/python/Cargo.lock"
+              assert lock_path in archive.getnames(), lock_path
+              archived_lock = archive.extractfile(lock_path).read()
+          lock_hash = hashlib.sha256(Path("bindings/python/Cargo.lock").read_bytes()).hexdigest()
+          reviewed_lock = Path(os.environ["RUNNER_TEMP"]) / "python-reviewed.lock"
+          assert hashlib.sha256(reviewed_lock.read_bytes()).hexdigest() == lock_hash
+          assert hashlib.sha256(archived_lock).hexdigest() == lock_hash
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write(f"lock_hash={lock_hash}\n")
           for required in [".cargo/config.toml", "bindings/python/Cargo.lock", "LICENSE"]:
               assert required in names, required
           excluded = ["tools/shiro/", "tools/mvcc-fuzz/", "tests/pg-regress/", "experiments/bftree-mvcc/"]
           assert not any(name.startswith(prefix) for name in names for prefix in excluded)
           PY
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: python-sdist
-          path: dist/*.tar.gz
+          path: release-source/dist/*.tar.gz
           if-no-files-found: error
 
   wheels:
@@ -112,14 +139,14 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ needs.sdist.outputs.sha }}
           persist-credentials: false
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: "3.11"
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: python-sdist
           path: artifacts
@@ -188,7 +215,7 @@ jobs:
         run: |
           python -m pip install "pydantic>=2,<3"
           python -m pytest bindings/python/tests/test_pydantic*.py
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: python-wheel-${{ matrix.target }}
           path: ${{ steps.source.outputs.directory }}/dist/*.whl
@@ -204,10 +231,10 @@ jobs:
     permissions:
       id-token: write
     steps:
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: "3.11"
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           pattern: python-*
           merge-multiple: true
@@ -215,6 +242,7 @@ jobs:
       - name: Verify the complete artifact set and any earlier uploads
         env:
           RELEASE_VERSION: ${{ needs.sdist.outputs.version }}
+          RELEASE_LOCK_HASH: ${{ needs.sdist.outputs.lock_hash }}
         run: |
           python -m pip install "twine==6.2.0"
           python -m twine check --strict dist/*
@@ -232,6 +260,7 @@ jobs:
           assert sum(path.suffix == ".whl" for path in files) == 5
           assert sum(path.name.endswith(".tar.gz") for path in files) == 1
           expected = {path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in files}
+          print(f"Binding lock SHA-256: {os.environ['RELEASE_LOCK_HASH']}")
           for name, digest in sorted(expected.items()):
               print(f"{digest}  {name}")
           version = str(Version(os.environ["RELEASE_VERSION"]))
@@ -285,7 +314,15 @@ jobs:
         env:
           RELEASE_VERSION: ${{ needs.sdist.outputs.version }}
         run: |
-          python -m pip install --only-binary=:all: --no-deps "hawdb==$RELEASE_VERSION"
+          for attempt in {1..6}; do
+            if python -m pip install --only-binary=:all: --no-deps "hawdb==$RELEASE_VERSION"; then
+              break
+            fi
+            if [[ "$attempt" == 6 ]]; then
+              exit 1
+            fi
+            sleep 10
+          done
           python - <<'PY'
           import hawdb
 
