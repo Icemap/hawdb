@@ -77,7 +77,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install maturin and pytest
-        run: pip install "maturin>=1.8,<2.0" "pytest>=8.0"
+        run: pip install "maturin==1.15.0" "pytest>=8.0"
 
       - name: Build the extension wheel
         run: maturin build --release --out dist
