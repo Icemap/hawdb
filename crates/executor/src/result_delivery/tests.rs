@@ -634,3 +634,65 @@ fn declared_borrowed_schema_reorders_values_and_rejects_schema_drift_atomically(
     assert_eq!(rows.value(0, 0), Some(hawdb_core::ValueRef::Int(2)));
     assert_eq!(rows.value(0, 1), Some(hawdb_core::ValueRef::Int(1)));
 }
+
+#[test]
+fn declared_schema_accepts_changing_input_orders_across_segments() {
+    use crate::{QueryRowsBuilder, QuerySchema};
+    let memory = ExecutionMemoryConfig::default();
+    let ledger = QueryMemoryLedger::new(memory.query_memory_bytes);
+    let mut output = QueryOutputAccumulator::new_owned(
+        OutputLimits::default(),
+        memory.query_memory_bytes,
+        &ledger,
+    )
+    .unwrap();
+    output
+        .bind_output_schema(["z", "a", "m"].into_iter())
+        .unwrap();
+    for index in 0..513 {
+        let source = Row::from([
+            ("a".into(), Value::Int(index)),
+            ("m".into(), Value::Int(index + 1)),
+            ("z".into(), Value::Int(index + 2)),
+        ]);
+        match index % 4 {
+            0 => output.emit(Binding::values(source)).unwrap(),
+            1 => output.emit_borrowed(RowRef::Map(&source)).unwrap(),
+            _ => {
+                let columns = if index % 4 == 2 {
+                    ["m", "z", "a"]
+                } else {
+                    ["z", "a", "m"]
+                };
+                let mut row = QueryRowsBuilder::with_schema(
+                    QuerySchema::try_new(columns.map(str::to_owned)).unwrap(),
+                    1,
+                );
+                row.push_values(columns.map(|name| source[name].clone()))
+                    .unwrap();
+                let rows = row.finish();
+                output
+                    .emit_borrowed(RowRef::Compact(rows.row(0).unwrap()))
+                    .unwrap();
+            }
+        }
+    }
+    let rows = output.take_owned_rows().unwrap();
+    assert_eq!(rows.len(), 513);
+    for index in 0..513 {
+        assert_eq!(
+            rows.value(index, 0),
+            Some(hawdb_core::ValueRef::Int(index as i64 + 2))
+        );
+        assert_eq!(
+            rows.value(index, 1),
+            Some(hawdb_core::ValueRef::Int(index as i64))
+        );
+        assert_eq!(
+            rows.value(index, 2),
+            Some(hawdb_core::ValueRef::Int(index as i64 + 1))
+        );
+    }
+    drop(output);
+    assert_eq!(ledger.snapshot().used_bytes, 0);
+}

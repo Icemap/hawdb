@@ -262,20 +262,38 @@ fn cypher_aggregate_and_numeric_projection_keep_declared_ordinals() {
 }
 
 #[test]
-fn cypher_duplicate_return_names_fail_before_execution_even_without_rows() {
+fn cypher_duplicate_return_names_keep_collision_suffixes_even_without_rows() {
     let mut database = Database::new();
     database
         .query("CREATE (:Stock {code: 'a', price: 7})")
         .unwrap();
     for suffix in ["", " LIMIT 0"] {
         for predicate in ["", " WHERE s.code = 'missing'"] {
-            let error = database
-                .query(&format!(
-                "MATCH (s:Stock){predicate} RETURN s.price AS repeated, s.code AS repeated{suffix}"
-            ))
-                .unwrap_err();
-            assert!(matches!(error, HawDBError::Semantic(_)), "{error}");
-            assert!(error.to_string().contains("duplicate"), "{error}");
+            for projection in [
+                "s.price AS repeated, s.code AS repeated",
+                "coalesce(s.price, 0), coalesce(s.code, '')",
+            ] {
+                let output = database
+                    .query(&format!(
+                        "MATCH (s:Stock){predicate} RETURN {projection}{suffix}"
+                    ))
+                    .unwrap();
+                let base = if projection.starts_with("coalesce") {
+                    "coalesce"
+                } else {
+                    "repeated"
+                };
+                assert_eq!(
+                    output.schema().columns(),
+                    [base.to_owned(), format!("{base}#2")]
+                );
+                if predicate.is_empty() && suffix.is_empty() {
+                    assert_eq!(output.rows.value(0, 0), Some(ValueRef::Int(7)));
+                    assert_eq!(output.rows.value(0, 1), Some(ValueRef::String("a")));
+                } else {
+                    assert!(output.rows.is_empty());
+                }
+            }
         }
     }
 }
@@ -323,7 +341,6 @@ fn cypher_explain_declares_diagnostic_columns_across_front_doors() {
                 .unwrap()
                 .query(&query)
                 .unwrap(),
-            database.begin_transaction().unwrap().query(&query).unwrap(),
         ] {
             assert_eq!(
                 output

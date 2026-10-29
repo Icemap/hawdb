@@ -418,7 +418,8 @@ warning that pandas only tests SQLAlchemy and sqlite3 connections.
 `help(hawdb.dbapi)` gives the full contract.
 
 Cypher results from Python's database execution API retain RETURN-list order,
-including empty matches and LIMIT 0.
+including empty matches and LIMIT 0. Repeated names retain the existing
+collision suffixes (for example, coalesce, coalesce#2, coalesce#3).
 Cypher EXPLAIN keeps its structured diagnostic row, with mode, statement kind
 and plan first; EXPLAIN ANALYZE appends execution diagnostics.
 

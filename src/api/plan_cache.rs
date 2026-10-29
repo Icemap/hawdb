@@ -903,7 +903,8 @@ pub(super) fn optimized_query_plan_for<S: crate::executor::ExecutionStore>(
                         .as_ref()
                         .expect("cached plans have a logical template")
                         .logical(),
-                )?,
+                    context.scoring,
+                ),
                 physical_plan,
                 trace,
                 plan_cache_lookup: PlanCacheLookup::Hit,
@@ -918,7 +919,7 @@ pub(super) fn optimized_query_plan_for<S: crate::executor::ExecutionStore>(
     } else {
         planner::plan_with_params(statement_body(statement), parameters)?
     };
-    let output_columns = output_schema::logical_output_columns(&logical)?;
+    let output_columns = output_schema::logical_output_columns(&logical, context.scoring);
     if let Some(access_control) = context.access_control {
         logical = apply_access_control_to_logical_plan(
             logical,

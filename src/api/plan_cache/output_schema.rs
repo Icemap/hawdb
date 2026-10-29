@@ -17,7 +17,10 @@
 use super::*;
 use hawdb_plan_cypher::{GraphAlgorithmIdentity, GraphAlgorithmKind, SetNodePropertiesReturnMode};
 
-pub(super) fn logical_output_columns(mut plan: &LogicalPlan) -> Result<Option<Vec<String>>> {
+pub(super) fn logical_output_columns(
+    mut plan: &LogicalPlan,
+    scoring: Option<BoundScoringRequest<'_>>,
+) -> Option<Vec<String>> {
     let columns = loop {
         match plan {
             LogicalPlan::Project { items, .. } => {
@@ -79,31 +82,29 @@ pub(super) fn logical_output_columns(mut plan: &LogicalPlan) -> Result<Option<Ve
                 break vec!["id".into(), "score".into()];
             }
             LogicalPlan::ThreadRepairStats { .. } => {
-                break [
-                    "t.id",
-                    "t.thread_id",
-                    "CASE WHEN t.space_id IS NULL OR t.space_id = '' THEN 'default' ELSE t.space_id END",
-                    "COALESCE(t.message_count, 0)",
-                    "identity_refs",
-                    "legacy_messages",
-                    "COUNT(m)",
-                ].into_iter().map(str::to_owned).collect();
+                break hawdb_plan_cypher::THREAD_REPAIR_STATS_COLUMNS
+                    .into_iter()
+                    .map(str::to_owned)
+                    .collect();
             }
             LogicalPlan::Filter { input, .. }
             | LogicalPlan::Distinct { input }
             | LogicalPlan::Sort { input, .. }
             | LogicalPlan::Limit { input, .. } => plan = input,
-            _ => return Ok(None),
+            _ => return None,
         }
     };
-    for (index, name) in columns.iter().enumerate() {
-        if columns[..index].contains(name) {
-            return Err(HawDBError::Semantic(format!(
-                "query result schema contains duplicate column {name}"
-            )));
-        }
+    // Match the existing executor suffix rule, including unaliased repeated
+    // function calls. Declaring the schema must not change accepted queries.
+    let mut columns = hawdb_plan_cypher::unique_projection_names(columns);
+    if scoring.is_some()
+        && !columns
+            .iter()
+            .any(|name| name == hawdb_plan_cypher::SCORING_RERANK_SCORE_COLUMN)
+    {
+        columns.push(hawdb_plan_cypher::SCORING_RERANK_SCORE_COLUMN.into());
     }
-    Ok(Some(columns))
+    Some(columns)
 }
 
 fn graph_algorithm_columns(
@@ -118,4 +119,53 @@ fn graph_algorithm_columns(
     }
     columns.push(score_column.to_owned());
     columns
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn public_procedure_projections_always_declare_output_columns() {
+        let parameters = BTreeMap::from([
+            (
+                "embedding".into(),
+                Value::List(vec![Value::Float(1.0), Value::Float(0.0)]),
+            ),
+            (
+                "vector".into(),
+                Value::Vector(hawdb_core::Vector::new(&[1.0, 0.0]).unwrap()),
+            ),
+            ("text".into(), Value::String("memory".into())),
+        ]);
+        let cases: &[(&str, &[&str])] = &[
+            ("CALL vector_search($embedding) RETURN id, score", &["id", "score"]),
+            ("CALL vector_search($embedding) YIELD id AS hit, score AS rank MATCH (n:Memory) RETURN rank, hit, n.id", &["rank", "hit", "n.id"]),
+            ("CALL text_search($text) RETURN id, score", &["id", "score"]),
+            ("CALL text_search($text) YIELD id AS hit, score AS rank MATCH (n:Memory) RETURN rank, hit, n.id", &["rank", "hit", "n.id"]),
+            ("CALL graph_seed_search($text, label := 'Memory') YIELD node, score RETURN score, node.id", &["score", "node.id"]),
+            ("CALL vector_index_search('docs', $vector, candidates := 8, topK := 2) YIELD node, distance RETURN distance, node.id", &["distance", "node.id"]),
+            ("CALL page_rank('graph') RETURN node, pagerank_score", &["node", "pagerank_score"]),
+            ("CALL louvain('graph') RETURN node, level, louvain_id", &["node", "level", "louvain_id"]),
+        ];
+        for &(query, expected) in cases {
+            for suffix in ["", " LIMIT 0"] {
+                let query = format!("{query}{suffix}");
+                let statement = cypher::parse(&query).unwrap();
+                let plan = planner::plan_with_params(statement_body(&statement), &parameters)
+                    .unwrap_or_else(|error| panic!("{query}: {error}"));
+                assert_eq!(
+                    logical_output_columns(&plan, None).as_deref(),
+                    Some(
+                        expected
+                            .iter()
+                            .map(|name| (*name).to_owned())
+                            .collect::<Vec<_>>()
+                            .as_slice()
+                    ),
+                    "{query}: {plan:?}",
+                );
+            }
+        }
+    }
 }

@@ -399,7 +399,14 @@ pub(super) fn execute_graph_transaction_plan(
                     execution.output_limits.max_payload_bytes,
                 ),
             }
-            .validate(output.rows.len(), output.rows.payload_bytes())?;
+            .validate(
+                output.rows.len(),
+                if output.rows.is_empty() {
+                    0
+                } else {
+                    output.rows.payload_bytes()
+                },
+            )?;
             Ok((
                 output,
                 transaction.lock_footprint_since(&statement_savepoint)?,

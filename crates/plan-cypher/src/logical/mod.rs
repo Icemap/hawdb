@@ -39,6 +39,7 @@ mod visibility;
 pub use graph_match::*;
 pub use pipeline::{
     plan_normalized_pipeline_query, plan_parsed_pipeline_query, plan_pipeline_query,
+    unique_projection_names,
 };
 pub use visibility::apply_node_visibility_predicates;
 mod binding;
@@ -52,6 +53,17 @@ use projection::*;
 pub use statement::{plan, plan_with_params};
 
 const MAX_RETRIEVER_SEEDED_GRAPH_HOPS: usize = 2;
+
+/// Public projection of the specialized thread-repair summary operator.
+pub const THREAD_REPAIR_STATS_COLUMNS: [&str; 7] = [
+    "t.id",
+    "t.thread_id",
+    "CASE WHEN t.space_id IS NULL OR t.space_id = '' THEN 'default' ELSE t.space_id END",
+    "COALESCE(t.message_count, 0)",
+    "identity_refs",
+    "legacy_messages",
+    "COUNT(m)",
+];
 
 /// Shared logical/physical parameters for explicit schema-bound index access.
 /// The attached read domain resolves the index and supplies canonical nodes.
