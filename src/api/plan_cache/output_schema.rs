@@ -149,11 +149,19 @@ mod tests {
             ("CALL louvain('graph') RETURN node, level, louvain_id", &["node", "level", "louvain_id"]),
         ];
         for &(query, expected) in cases {
-            for suffix in ["", " LIMIT 0"] {
-                let query = format!("{query}{suffix}");
-                let statement = cypher::parse(&query).unwrap();
-                let plan = planner::plan_with_params(statement_body(&statement), &parameters)
-                    .unwrap_or_else(|error| panic!("{query}: {error}"));
+            let statement = cypher::parse(query).unwrap_or_else(|error| panic!("{query}: {error}"));
+            let plan = planner::plan_with_params(statement_body(&statement), &parameters)
+                .unwrap_or_else(|error| panic!("{query}: {error}"));
+            // Legacy CALL syntax does not accept LIMIT. Exercise the schema
+            // wrapper directly without broadening those parser contracts.
+            for plan in [
+                plan.clone(),
+                LogicalPlan::Limit {
+                    offset: 0,
+                    limit: Some(0),
+                    input: Box::new(plan),
+                },
+            ] {
                 assert_eq!(
                     logical_output_columns(&plan, None).as_deref(),
                     Some(
