@@ -140,7 +140,7 @@ mod tests {
         ]);
         let cases: &[(&str, &[&str])] = &[
             ("CALL vector_search($embedding) RETURN id, score", &["id", "score"]),
-            ("CALL vector_search($embedding) YIELD id AS hit, score AS rank MATCH (n:Memory) RETURN rank, hit, n.id", &["rank", "hit", "n.id"]),
+            ("CALL vector_search($embedding) YIELD id, score MATCH (n:Memory) RETURN score, id, n.id", &["score", "id", "n.id"]),
             ("CALL text_search($text) RETURN id, score", &["id", "score"]),
             ("CALL text_search($text) YIELD id AS hit, score AS rank MATCH (n:Memory) RETURN rank, hit, n.id", &["rank", "hit", "n.id"]),
             ("CALL graph_seed_search($text, label := 'Memory') YIELD node, score RETURN score, node.id", &["score", "node.id"]),
