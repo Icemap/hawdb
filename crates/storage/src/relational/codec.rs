@@ -168,7 +168,7 @@ impl RelationalDecodeLimits {
             max_record_bytes: DEFAULT_MAX_WAL_RECORD_BYTES,
             max_tables: 1_024,
             max_writes: 100_000,
-            max_rows: 100_000,
+            max_rows: super::DEFAULT_MAX_RELATIONAL_MUTATION_ROWS,
             max_values: 2_000_000,
             max_value_bytes: 64 * 1024 * 1024,
             max_overflow_segments: 0,
@@ -223,7 +223,13 @@ pub fn encode_relational_wal_batch(
     epoch: u64,
     transaction: &RelationalTransaction,
 ) -> Result<Vec<u8>, RelationalError> {
-    encode_relational_wal_batch_inner(epoch, transaction, None, None)
+    encode_relational_wal_batch_inner(
+        epoch,
+        transaction,
+        None,
+        None,
+        RelationalDecodeLimits::wal(),
+    )
 }
 
 pub fn encode_relational_wal_batch_with_replay_access(
@@ -231,7 +237,13 @@ pub fn encode_relational_wal_batch_with_replay_access(
     transaction: &RelationalTransaction,
     replay_access: Option<&RelationalReplayAccessSet>,
 ) -> Result<Vec<u8>, RelationalError> {
-    encode_relational_wal_batch_inner(epoch, transaction, replay_access, None)
+    encode_relational_wal_batch_inner(
+        epoch,
+        transaction,
+        replay_access,
+        None,
+        RelationalDecodeLimits::wal(),
+    )
 }
 
 pub fn encode_relational_wal_batch_with_captures(
@@ -245,6 +257,7 @@ pub fn encode_relational_wal_batch_with_captures(
         transaction,
         replay_access,
         Some(primary_key_changes),
+        RelationalDecodeLimits::wal(),
     ) {
         Ok(record) => Ok(EncodedRelationalWalBatch {
             record,
@@ -264,6 +277,7 @@ pub fn encode_relational_wal_batch_with_captures(
                 transaction,
                 replay_access,
                 Some(&fallback),
+                RelationalDecodeLimits::wal(),
             ) {
                 Ok(record) => Ok(EncodedRelationalWalBatch {
                     record,
@@ -276,18 +290,25 @@ pub fn encode_relational_wal_batch_with_captures(
     }
 }
 
-fn encode_relational_wal_batch_inner(
+pub(super) fn encode_relational_wal_batch_inner(
     epoch: u64,
     transaction: &RelationalTransaction,
     replay_access: Option<&RelationalReplayAccessSet>,
     primary_key_changes: Option<&RelationalPrimaryKeyChangeCapture>,
+    limits: RelationalDecodeLimits,
 ) -> Result<Vec<u8>, RelationalError> {
-    let limits = RelationalDecodeLimits::wal();
     if transaction.writes.len() > limits.max_writes {
         return Err(RelationalError::Admission(format!(
             "WAL contains {} writes, exceeding decoder limit {}",
             transaction.writes.len(),
             limits.max_writes
+        )));
+    }
+    let rows = transaction.estimated_mutation_rows();
+    if rows > limits.max_rows {
+        return Err(RelationalError::Admission(format!(
+            "WAL contains {rows} rows, exceeding decoder limit {} before WAL append",
+            limits.max_rows
         )));
     }
     if replay_access.is_some_and(|access| access.entries().len() > limits.max_rows) {

@@ -118,6 +118,22 @@ and limits are documented in [the implementation guide](MATERIALIZED_VIEWS.md).
 The existing storage unit lane also covers admission-aware view recovery, WAL
 decode parity, indexed MIN/MAX schema copying, and reservation release through
 `cargo test --locked -p hawdb-storage --lib controlled_materialized_view_recovery`.
+Storage's `relational::materialized_view::tests` checks the larger default
+shared work allowance and exact row/payload refusal boundaries through counter
+charges, without allocating large backfills. The existing storage unit target
+checks that explicit maintenance limits also set hydration row, compressed-byte,
+decompressed-byte and working-memory bounds. Its decoder matrix checks that WAL
+row admission covers default mutations and checkpoint decoding covers WAL row,
+value, schema and record shapes; independent logical/encoded byte limits are
+not required to be equal. The same target
+also owns `wal_recovery_ignores_foreground_work_limits_and_preserves_view_maintenance`
+(two source rows and one COUNT view), decoder/default row-bound compatibility,
+and both row and replay-access encoder/decoder admission parity with two-entry
+fixtures and injected one-entry bounds. Replay:
+`cargo test --locked -p hawdb-storage --lib wal_`.
+The existing recovery preparation/discard case additionally lowers foreground
+payload admission to one byte; recovery still stages and retries without
+changing live state until installation. No CI lane, feature or timeout changes.
 
 The `api::query_request::tests` unit family covers compact request collection
 through the ordinary read-transaction API. The 2,048-row collection regression
