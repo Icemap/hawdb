@@ -88,6 +88,18 @@ root `api::tests::aggregates`. Replay with `cargo test --locked -p
 hawdb-executor --lib aggregate` and `cargo test --locked -p hawdb --lib --
 api::tests::aggregates`. No lane, profile or deadline changes.
 
+General `shortestPath` / `allShortestPaths` coverage is owned by existing
+targets: executor `traversal::shortest_path_bfs::tests` (directions,
+deterministic single/all selection, parallel relationships, equal endpoints,
+bounded and capped hops, excluded relationships, operator-budget refusal,
+cancellation during discovery and enumeration), `hawdb-cypher` parser tests,
+`logical::pipeline::tests` binder/normalization tests and root
+`api::tests::shortest_paths` (IC13 OPTIONAL MATCH, WITH/ORDER BY/LIMIT,
+exact-parameter plan caching, hop cap and blocking-budget failures). Replay with
+`cargo test --locked -p hawdb-executor --lib shortest_path_bfs` and
+`cargo test --locked -p hawdb --lib api::tests::shortest_paths`. No lane,
+profile or deadline changes. See [contract](SHORTEST_PATH_EXECUTION.md).
+
 The adaptive execution family extends those existing executor owners with
 encoded non-expression key selection, complete-record validation, 64-KiB nested
 payload forwarding, descriptor/memory-driven 8/4/2-way merges, and live host
