@@ -1101,8 +1101,6 @@ fn validate_bounded_relationship(relationship: &RelationshipPattern) -> Result<(
         Some("relationship property patterns")
     } else if relationship.rel_type.is_empty() {
         Some("untyped relationship patterns")
-    } else if relationship.direction != RelationshipDirection::Outgoing {
-        Some("non-outgoing relationship patterns")
     } else if relationship.variable.is_some() {
         Some("relationship variables")
     } else {
