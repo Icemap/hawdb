@@ -27,8 +27,8 @@ use hawdb_cypher::{
 pub use hawdb_ddl::{SchemaObjectState, SchemaPropertyType, SchemaTableKind};
 pub use hawdb_expression::{
     CaseColumnSearchRankProjection, CaseEntitySearchRankProjection,
-    CoalesceDifferenceProjectionTerm, ComparisonOp, DatePart, Predicate, ProjectionExpression,
-    ScalarBinaryOp, SortDirection, SortItem, SortKey,
+    CoalesceDifferenceProjectionTerm, ComparisonOp, DatePart, ListComprehensionProjection,
+    Predicate, ProjectionExpression, ScalarBinaryOp, SortDirection, SortItem, SortKey,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -44,6 +44,8 @@ pub use pipeline::{
 pub use visibility::apply_node_visibility_predicates;
 mod binding;
 mod case;
+#[cfg(test)]
+mod list_tests;
 mod projection;
 mod statement;
 

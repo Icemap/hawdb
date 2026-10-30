@@ -164,6 +164,15 @@ impl Parser<'_> {
         loop {
             self.skip_ws();
             let expression_start = self.checkpoint();
+            if self.peek_char() == Some('[') {
+                let expression = OrderExpression::Value(self.parse_scalar_expression()?);
+                items.push(self.parse_order_direction(expression, expression_start.pos));
+                self.skip_ws();
+                if !self.consume_char(',') {
+                    break;
+                }
+                continue;
+            }
             let first = self.parse_ident()?;
             let expression = if first.eq_ignore_ascii_case("count") && self.consume_char('(') {
                 let distinct = self.consume_keyword("DISTINCT");
@@ -194,32 +203,33 @@ impl Parser<'_> {
                 self.expect_char(')')?;
                 OrderExpression::Id { variable }
             } else if first.eq_ignore_ascii_case("case")
-                || (matches_ignore_ascii_case(&first, &["coalesce", "left", "lower", "json_value"])
+                || ((matches_ignore_ascii_case(
+                    &first,
+                    &["coalesce", "left", "lower", "json_value"],
+                ) || hawdb_core::ListFunction::from_function_name(&first).is_some())
                     && self.peek_char() == Some('('))
             {
                 self.restore(expression_start);
                 OrderExpression::Value(self.parse_scalar_expression()?)
             } else if self.consume_char('.') {
-                OrderExpression::Property {
-                    variable: first,
-                    property: self.parse_ident()?,
+                let property = self.parse_ident()?;
+                self.skip_ws();
+                if self.peek_char() == Some('[') {
+                    self.restore(expression_start);
+                    OrderExpression::Value(self.parse_scalar_expression()?)
+                } else {
+                    OrderExpression::Property {
+                        variable: first,
+                        property,
+                    }
                 }
+            } else if self.peek_char() == Some('[') {
+                self.restore(expression_start);
+                OrderExpression::Value(self.parse_scalar_expression()?)
             } else {
                 OrderExpression::Column(first)
             };
-            let direction = if self.consume_keyword("DESC") {
-                OrderDirection::Desc
-            } else {
-                let _ = self.consume_keyword("ASC");
-                OrderDirection::Asc
-            };
-            items.push(self.source_node(
-                OrderItemKind {
-                    expression,
-                    direction,
-                },
-                expression_start.pos,
-            ));
+            items.push(self.parse_order_direction(expression, expression_start.pos));
             self.skip_ws();
             if !self.consume_char(',') {
                 break;
@@ -228,15 +238,169 @@ impl Parser<'_> {
         Ok(items)
     }
 
+    fn parse_order_direction(&mut self, expression: OrderExpression, start: usize) -> OrderItem {
+        let direction = if self.consume_keyword("DESC") {
+            OrderDirection::Desc
+        } else {
+            let _ = self.consume_keyword("ASC");
+            OrderDirection::Asc
+        };
+        self.source_node(
+            OrderItemKind {
+                expression,
+                direction,
+            },
+            start,
+        )
+    }
+
     pub(super) fn parse_scalar_expression(&mut self) -> Result<ScalarExpression> {
         self.skip_ws();
         let start = self.pos;
         let kind = self.with_recursion(|parser| parser.parse_scalar_expression_inner())?;
-        Ok(self.source_node(kind, start))
+        let mut expression = self.source_node(kind, start);
+        // Postfix `[index]` and `[start..end]` bind tighter than any operator.
+        // Each one nests the AST, so it counts against the recursion budget.
+        let base_depth = self.recursion_depth;
+        let result = (|| {
+            while self.consume_char('[') {
+                if self.recursion_depth >= super::MAX_CYPHER_PARSER_DEPTH {
+                    return Err(self.error(&format!(
+                        "Cypher parser nesting exceeds limit of {}",
+                        super::MAX_CYPHER_PARSER_DEPTH
+                    )));
+                }
+                self.recursion_depth += 1;
+                let kind = self.parse_list_postfix(expression)?;
+                expression = self.source_node(kind, start);
+            }
+            Ok(expression)
+        })();
+        self.recursion_depth = base_depth;
+        result
+    }
+
+    /// Parses the remainder of `list[index]` or `list[start..end]` after `[`.
+    fn parse_list_postfix(&mut self, list: ScalarExpression) -> Result<ScalarExpressionKind> {
+        let list = Box::new(list);
+        if self.consume_token("..") {
+            let end = if self.consume_char(']') {
+                None
+            } else {
+                let end = self.parse_case_scalar()?;
+                self.expect_char(']')?;
+                Some(Box::new(end))
+            };
+            return Ok(ScalarExpressionKind::ListSlice {
+                list,
+                start: None,
+                end,
+            });
+        }
+        let first = Box::new(self.parse_case_scalar()?);
+        if self.consume_token("..") {
+            let end = if self.consume_char(']') {
+                None
+            } else {
+                let end = self.parse_case_scalar()?;
+                self.expect_char(']')?;
+                Some(Box::new(end))
+            };
+            return Ok(ScalarExpressionKind::ListSlice {
+                list,
+                start: Some(first),
+                end,
+            });
+        }
+        self.expect_char(']')?;
+        Ok(ScalarExpressionKind::ListIndex { list, index: first })
+    }
+
+    /// Returns true when the cursor is at `[identifier IN`.
+    pub(super) fn next_is_list_comprehension(&mut self) -> bool {
+        let checkpoint = self.checkpoint();
+        let result = self.consume_char('[')
+            && self.parse_ident().is_ok_and(|variable| {
+                !["true", "false", "null"]
+                    .iter()
+                    .any(|keyword| variable.eq_ignore_ascii_case(keyword))
+            })
+            && self.consume_keyword("IN");
+        self.restore(checkpoint);
+        result
+    }
+
+    fn parse_list_comprehension(&mut self) -> Result<ScalarExpressionKind> {
+        self.expect_char('[')?;
+        let variable = self.parse_ident()?;
+        self.expect_keyword("IN")?;
+        let list = Box::new(self.parse_case_scalar()?);
+        let predicate = if self.consume_keyword("WHERE") {
+            Some(Box::new(self.parse_case_or()?))
+        } else {
+            None
+        };
+        let projection = if self.consume_char('|') {
+            Some(Box::new(self.parse_case_scalar()?))
+        } else {
+            None
+        };
+        self.expect_char(']')?;
+        Ok(ScalarExpressionKind::ListComprehension {
+            variable,
+            list,
+            predicate,
+            projection,
+        })
+    }
+
+    /// Parses the arguments of a list function after its opening parenthesis.
+    fn parse_list_function_arguments(
+        &mut self,
+        function: hawdb_core::ListFunction,
+    ) -> Result<ScalarExpressionKind> {
+        let mut arguments = Vec::new();
+        if !self.consume_char(')') {
+            loop {
+                arguments.push(self.parse_case_scalar()?);
+                if self.consume_char(')') {
+                    break;
+                }
+                self.expect_char(',')?;
+            }
+        }
+        self.check_list_function_arity(function, arguments.len())?;
+        Ok(ScalarExpressionKind::ListFunction {
+            function,
+            arguments,
+        })
+    }
+
+    pub(super) fn check_list_function_arity(
+        &self,
+        function: hawdb_core::ListFunction,
+        count: usize,
+    ) -> Result<()> {
+        let (min, max) = function.arity();
+        if (min..=max).contains(&count) {
+            return Ok(());
+        }
+        let expected = if min == max {
+            format!("{min}")
+        } else {
+            format!("{min} or {max}")
+        };
+        Err(self.error(&format!(
+            "{}() expects {expected} argument(s), got {count}",
+            function.function_name()
+        )))
     }
 
     fn parse_scalar_expression_inner(&mut self) -> Result<ScalarExpressionKind> {
         self.skip_ws();
+        if self.next_is_list_comprehension() {
+            return self.parse_list_comprehension();
+        }
         if matches!(
             self.peek_char(),
             Some('$' | '[' | '\'' | '"' | '-' | '0'..='9')
@@ -252,6 +416,11 @@ impl Parser<'_> {
             let variable = self.parse_ident()?;
             self.expect_char(')')?;
             return Ok(ScalarExpressionKind::Id(variable));
+        }
+        if let Some(function) = hawdb_core::ListFunction::from_function_name(&variable)
+            && self.consume_char('(')
+        {
+            return self.parse_list_function_arguments(function);
         }
         if (variable.eq_ignore_ascii_case("label") || variable.eq_ignore_ascii_case("type"))
             && self.consume_char('(')

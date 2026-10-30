@@ -793,7 +793,9 @@ comparison predicates. Nowledge-used case-insensitive grep predicates such as
 `LOWER(COALESCE(m.content, '')) CONTAINS LOWER($needle)` and
 `LOWER(e.name) = LOWER($mention)` are supported through the same limited scalar
 expression evaluator; broader predicate function composition remains separate
-follow-up work.
+follow-up work. openCypher list functions (`size`, `head`, `last`, `tail`,
+`reverse`, `range`), list comprehensions, list indexing/slicing and generic
+`IN` are described in [Cypher list functions](CYPHER_LIST_FUNCTIONS.md).
 Parenthesized predicate groups preserve explicit `AND`/`OR` precedence. String
 literals support escaped quotes, backslashes, and common control escapes. Graph algorithm procedure options such
 as `dampingFactor`, `maxIterations`, and `maxLevels` accept bound parameters and

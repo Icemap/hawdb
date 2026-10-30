@@ -84,6 +84,9 @@ pub(super) fn contains_aggregate(expression: &ReturnExpression) -> bool {
         ReturnExpressionKind::Arithmetic { first, rest } => {
             contains_aggregate(first) || rest.iter().any(|(_, child)| contains_aggregate(child))
         }
+        ReturnExpressionKind::ListFunction { arguments, .. } => {
+            arguments.iter().any(contains_aggregate)
+        }
         ReturnExpressionKind::Value(_) | ReturnExpressionKind::Path(_) => false,
     }
 }
@@ -122,6 +125,25 @@ impl ComposedReturnBinder<'_> {
                     name = format!("({name} {symbol} {right_name})");
                 }
                 Ok((bound, name))
+            }
+            ReturnExpressionKind::ListFunction {
+                function,
+                arguments,
+            } => {
+                let mut bound = Vec::with_capacity(arguments.len());
+                let mut names = Vec::with_capacity(arguments.len());
+                for argument in arguments {
+                    let (argument, name) = self.bind(argument)?;
+                    bound.push(argument);
+                    names.push(name);
+                }
+                Ok((
+                    ProjectionExpression::ListFunction {
+                        function: *function,
+                        arguments: bound,
+                    },
+                    format!("{}({})", function.function_name(), names.join(", ")),
+                ))
             }
             ReturnExpressionKind::Aggregate(_) => {
                 let item = AstNode::synthetic(ReturnItemKind {
@@ -192,9 +214,26 @@ pub(super) fn scalar_expression_is_scoped(
         | ScalarExpressionKind::VectorDistance { .. }
         | ScalarExpressionKind::Binary { .. }
         | ScalarExpressionKind::Not(_)
-        | ScalarExpressionKind::IsNull { .. } => expression
+        | ScalarExpressionKind::IsNull { .. }
+        | ScalarExpressionKind::ListFunction { .. }
+        | ScalarExpressionKind::ListIndex { .. }
+        | ScalarExpressionKind::ListSlice { .. } => expression
             .kind
             .all_children(|child| scalar_expression_is_scoped(child, scope, column_names)),
+        ScalarExpressionKind::ListComprehension {
+            variable,
+            list,
+            predicate,
+            projection,
+        } => {
+            let mut body_columns = column_names.clone();
+            body_columns.insert(variable.clone());
+            scalar_expression_is_scoped(list, scope, column_names)
+                && predicate
+                    .iter()
+                    .chain(projection.iter())
+                    .all(|child| scalar_expression_is_scoped(child, scope, &body_columns))
+        }
         ScalarExpressionKind::Value(_) => true,
         ScalarExpressionKind::Coalesce(expressions) => expressions
             .iter()

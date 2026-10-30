@@ -989,7 +989,11 @@ fn marker_use_in_projection_expression(
         | ProjectionExpression::VectorDistance { .. }
         | ProjectionExpression::Binary { .. }
         | ProjectionExpression::Not(_)
-        | ProjectionExpression::IsNull { .. } => {
+        | ProjectionExpression::IsNull { .. }
+        | ProjectionExpression::ListFunction { .. }
+        | ProjectionExpression::ListComprehension(_)
+        | ProjectionExpression::ListIndex { .. }
+        | ProjectionExpression::ListSlice { .. } => {
             let mut result = MarkerUse::None;
             expression.all_children(|child| {
                 result = result.combine(marker_use_in_projection_expression(child, name, safe));
@@ -1523,7 +1527,11 @@ fn bind_projection_expression(
         | ProjectionExpression::VectorDistance { .. }
         | ProjectionExpression::Binary { .. }
         | ProjectionExpression::Not(_)
-        | ProjectionExpression::IsNull { .. } => expression
+        | ProjectionExpression::IsNull { .. }
+        | ProjectionExpression::ListFunction { .. }
+        | ProjectionExpression::ListComprehension(_)
+        | ProjectionExpression::ListIndex { .. }
+        | ProjectionExpression::ListSlice { .. } => expression
             .try_for_each_child_mut(|child| bind_projection_expression(child, parameters))?,
 
         ProjectionExpression::Literal(value) => bind_value(value, parameters)?,
@@ -2075,6 +2083,73 @@ mod tests {
         let text = format!("{rebound:?}");
         assert!(text.contains("SECOND") && text.contains("new"), "{text}");
         assert!(!text.contains("hawdb_parameter_slot"), "{text}");
+    }
+
+    #[test]
+    fn list_expression_parameters_are_detected_keyed_and_rebound() {
+        let statement = cypher::parse(
+            "MATCH (n:Item) WITH n, n.tags AS tags WHERE size(tags) > $min_size AND $needle IN tags \
+             RETURN [x IN range($start, $end) WHERE x > $floor | coalesce(tags[x], $missing)] AS picked, \
+             n.tags[$index..] AS rest ORDER BY head(tags[..$prefix]) DESC",
+        )
+        .unwrap();
+        let names = [
+            "min_size", "needle", "start", "end", "floor", "missing", "index", "prefix",
+        ];
+        let parameters = names
+            .iter()
+            .enumerate()
+            .map(|(index, name)| {
+                let value = if *name == "needle" || *name == "missing" {
+                    Value::String(format!("old-{index}"))
+                } else {
+                    Value::Int(index as i64)
+                };
+                (name.to_string(), value)
+            })
+            .collect::<BTreeMap<_, _>>();
+        let parameterized = parameterize_logical_plan(&statement, &parameters).unwrap();
+        // Every parameter is seen; list expressions keep the conservative
+        // exact-key policy of other scalar expressions, so no value is dropped.
+        assert_eq!(parameterized.slot_count, 0);
+        for name in names {
+            assert!(
+                matches!(
+                    parameterized.cache_key.values.get(name),
+                    Some(ParameterCacheValue::Exact(_))
+                ),
+                "{name}: {:?}",
+                parameterized.cache_key
+            );
+        }
+        let markers = parameters
+            .iter()
+            .map(|(name, value)| (name.clone(), parameter_marker(name, value, &[])))
+            .collect::<BTreeMap<_, _>>();
+        let logical = hawdb_plan_cypher::plan_with_params(&statement, &markers).unwrap();
+        for name in names {
+            assert_ne!(
+                marker_use_in_logical_plan(&logical, name),
+                MarkerUse::None,
+                "{name}"
+            );
+        }
+        let root = CascadesOptimizer::default().optimize_root_with_catalog(
+            &LogicalPlanRoot::new(logical),
+            &OptimizerCatalog::default(),
+        );
+        let (template, _) = root.into_parts();
+        let rebound_parameters = names
+            .iter()
+            .map(|name| (name.to_string(), Value::String(format!("rebound-{name}"))))
+            .collect::<BTreeMap<_, _>>();
+        let rebound = bind_physical_plan_parameters(&template, &rebound_parameters, true).unwrap();
+        let text = format!("{rebound:?}");
+        for name in names {
+            assert!(text.contains(&format!("rebound-{name}")), "{name}: {text}");
+        }
+        assert!(!text.contains("hawdb_parameter_slot"), "{text}");
+        assert!(!text.contains("skein_parameter_slot"), "{text}");
     }
 
     #[test]

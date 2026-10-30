@@ -1753,8 +1753,14 @@ fn collect_projection_properties(
         | ProjectionExpression::VectorDistance { .. }
         | ProjectionExpression::Binary { .. }
         | ProjectionExpression::Not(_)
-        | ProjectionExpression::IsNull { .. } => expression
+        | ProjectionExpression::IsNull { .. }
+        | ProjectionExpression::ListFunction { .. }
+        | ProjectionExpression::ListComprehension(_)
+        | ProjectionExpression::ListIndex { .. }
+        | ProjectionExpression::ListSlice { .. } => expression
             .all_children(|child| collect_projection_properties(child, variable, required)),
+        // Comprehension elements are values, never graph bindings.
+        ProjectionExpression::LocalVariable { .. } => true,
         ProjectionExpression::Variable { .. }
         | ProjectionExpression::RelationshipType { .. }
         | ProjectionExpression::Column(_)

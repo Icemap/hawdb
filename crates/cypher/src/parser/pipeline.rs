@@ -360,11 +360,53 @@ impl Parser<'_> {
                 let path_variable = parser.parse_ident()?;
                 parser.expect_char(')')?;
                 ReturnExpressionKind::Path(ShortestPathReturnExpression::Length { path_variable })
+            } else if let Some(kind) = parser.parse_aggregate_list_function()? {
+                kind
             } else {
                 parser.parse_return_atom()?
             };
             Ok(parser.source_node(kind, start))
         })
+    }
+
+    /// Parses `size(collect(x))`-style calls whose argument contains an
+    /// aggregate. Calls over plain scalars are left to the scalar grammar.
+    fn parse_aggregate_list_function(&mut self) -> Result<Option<ReturnExpressionKind>> {
+        let checkpoint = self.checkpoint();
+        let Ok(name) = self.parse_ident() else {
+            self.restore(checkpoint);
+            return Ok(None);
+        };
+        let Some(function) = hawdb_core::ListFunction::from_function_name(&name) else {
+            self.restore(checkpoint);
+            return Ok(None);
+        };
+        if !self.consume_char('(') {
+            self.restore(checkpoint);
+            return Ok(None);
+        }
+        let mut arguments = Vec::new();
+        let parsed = (|| -> Result<()> {
+            if self.consume_char(')') {
+                return Ok(());
+            }
+            loop {
+                arguments.push(self.parse_pipeline_arithmetic(false)?);
+                if self.consume_char(')') {
+                    return Ok(());
+                }
+                self.expect_char(',')?;
+            }
+        })();
+        if parsed.is_err() || !arguments.iter().any(return_contains_aggregate) {
+            self.restore(checkpoint);
+            return Ok(None);
+        }
+        self.check_list_function_arity(function, arguments.len())?;
+        Ok(Some(ReturnExpressionKind::ListFunction {
+            function,
+            arguments,
+        }))
     }
 
     fn consume_pipeline_function(&mut self, name: &str) -> bool {
@@ -471,7 +513,26 @@ fn arithmetic_depth(expression: &ReturnExpression) -> usize {
             .fold(arithmetic_depth(first), |depth, (_, right)| {
                 depth.max(arithmetic_depth(right)) + 1
             }),
+        ReturnExpressionKind::ListFunction { arguments, .. } => {
+            arguments.iter().map(arithmetic_depth).max().unwrap_or(0) + 1
+        }
         _ => 1,
+    }
+}
+
+fn return_contains_aggregate(expression: &ReturnExpression) -> bool {
+    match &expression.kind {
+        ReturnExpressionKind::Aggregate(_) => true,
+        ReturnExpressionKind::Arithmetic { first, rest } => {
+            return_contains_aggregate(first)
+                || rest
+                    .iter()
+                    .any(|(_, child)| return_contains_aggregate(child))
+        }
+        ReturnExpressionKind::ListFunction { arguments, .. } => {
+            arguments.iter().any(return_contains_aggregate)
+        }
+        ReturnExpressionKind::Value(_) | ReturnExpressionKind::Path(_) => false,
     }
 }
 
