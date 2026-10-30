@@ -4,8 +4,8 @@
 use hawdb_core::{HawDBError, Result, Value};
 use hawdb_cypher as cypher;
 use hawdb_plan_cypher::{
-    self as planner, GraphMatchStep, LogicalPlan, PhysicalPlan, Predicate, Projection,
-    ProjectionExpression, RelationshipCountFilter, SortItem, SortKey,
+    self as planner, AggregateTarget, Aggregation, GraphMatchStep, LogicalPlan, PhysicalPlan,
+    Predicate, Projection, ProjectionExpression, RelationshipCountFilter, SortItem, SortKey,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::hash::{Hash, Hasher};
@@ -798,8 +798,11 @@ fn marker_use_in_logical_plan(plan: &LogicalPlan, name: &str) -> MarkerUse {
         LogicalPlan::Project { items, input } => marker_use_in_projections(items, name, false)
             .combine(marker_use_in_logical_plan(input, name)),
         LogicalPlan::Aggregate {
-            group_keys, input, ..
+            group_keys,
+            items,
+            input,
         } => marker_use_in_projections(group_keys, name, false)
+            .combine(marker_use_in_aggregations(items, name))
             .combine(marker_use_in_logical_plan(input, name)),
         LogicalPlan::Sort { items, input } => {
             let marker_use = items.iter().fold(MarkerUse::None, |marker_use, item| {
@@ -918,6 +921,17 @@ fn marker_use_in_projections(projections: &[Projection], name: &str, safe: bool)
                 safe,
             ))
         })
+}
+
+fn marker_use_in_aggregations(items: &[Aggregation], name: &str) -> MarkerUse {
+    items.iter().fold(MarkerUse::None, |marker_use, item| {
+        marker_use.combine(match &item.target {
+            AggregateTarget::Expression(expression) => {
+                marker_use_in_projection_expression(expression, name, false)
+            }
+            _ => MarkerUse::None,
+        })
+    })
 }
 
 fn marker_use_in_sort_item(item: &SortItem, name: &str) -> MarkerUse {
@@ -1202,9 +1216,12 @@ fn bind_physical_plan(plan: &mut PhysicalPlan, parameters: &BTreeMap<String, Val
             bind_physical_plan(input, parameters)?;
         }
         PhysicalPlan::AggregateExec {
-            group_keys, input, ..
+            group_keys,
+            items,
+            input,
         } => {
             bind_projections(group_keys, parameters)?;
+            bind_aggregations(items, parameters)?;
             bind_physical_plan(input, parameters)?;
         }
         PhysicalPlan::SortExec { items, input } | PhysicalPlan::TopNExec { items, input, .. } => {
@@ -1400,9 +1417,12 @@ fn bind_logical_plan(plan: &mut LogicalPlan, parameters: &BTreeMap<String, Value
             bind_logical_plan(input, parameters)?;
         }
         LogicalPlan::Aggregate {
-            group_keys, input, ..
+            group_keys,
+            items,
+            input,
         } => {
             bind_projections(group_keys, parameters)?;
+            bind_aggregations(items, parameters)?;
             bind_logical_plan(input, parameters)?;
         }
         LogicalPlan::Sort { items, input } => {
@@ -1469,6 +1489,18 @@ fn bind_projections(
 ) -> Result<()> {
     for projection in projections {
         bind_projection_expression(&mut projection.expression, parameters)?;
+    }
+    Ok(())
+}
+
+fn bind_aggregations(
+    items: &mut [Aggregation],
+    parameters: &BTreeMap<String, Value>,
+) -> Result<()> {
+    for item in items {
+        if let AggregateTarget::Expression(expression) = &mut item.target {
+            bind_projection_expression(expression, parameters)?;
+        }
     }
     Ok(())
 }

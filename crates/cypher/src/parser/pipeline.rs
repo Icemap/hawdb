@@ -259,7 +259,7 @@ impl Parser<'_> {
         Ok(items)
     }
 
-    fn parse_pipeline_arithmetic(&mut self, product: bool) -> Result<ReturnExpression> {
+    pub(super) fn parse_pipeline_arithmetic(&mut self, product: bool) -> Result<ReturnExpression> {
         self.skip_ws();
         let start = self.pos;
         let mut first = if product {
@@ -309,6 +309,29 @@ impl Parser<'_> {
                 let expression = parser.parse_pipeline_arithmetic(false)?;
                 parser.expect_char(')')?;
                 return Ok(parser.source_node(expression.kind, start));
+            }
+            if parser.peek_char() == Some('-')
+                && !parser.input[parser.pos + 1..].starts_with(|ch: char| ch.is_ascii_digit())
+            {
+                // Unary minus over a non-literal operand: `-x` is `-1 * x`,
+                // which preserves the operand's numeric type and NULL.
+                parser.pos += 1;
+                let operand = parser.parse_pipeline_return_atom()?;
+                let minus_one = parser.source_node(
+                    ReturnExpressionKind::Value(AstNode::synthetic(ScalarExpressionKind::Value(
+                        AstNode::synthetic(ValueExpressionKind::Literal(hawdb_core::Value::Int(
+                            -1,
+                        ))),
+                    ))),
+                    start,
+                );
+                return Ok(parser.source_node(
+                    ReturnExpressionKind::Arithmetic {
+                        first: Box::new(minus_one),
+                        rest: vec![(ArithmeticOp::Multiply, operand)],
+                    },
+                    start,
+                ));
             }
             let kind = if parser.consume_pipeline_function("PROPERTIES") {
                 parser.expect_keyword("NODES")?;

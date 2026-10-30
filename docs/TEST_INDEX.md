@@ -68,6 +68,16 @@ adaptive buffers below an observed peak while preserving hard root refusal,
 as well as the tie-order and wide-row controls. Test lanes, profiles and deadlines stay
 unchanged; allocation microprobes do not establish end-to-end RSS or latency.
 
+Cypher `sum()` and expression-argument aggregates are owned by existing
+targets: `blocking::aggregate::tests` (Sum numeric/NULL/empty/overflow/
+non-numeric/DISTINCT accumulator and partial-merge rules),
+`blocking::hash_oracle` (`sum_and_expression_aggregates_match_oracle_with_and_without_spill`
+and the overflow check through partial and buffered paths), the
+`hawdb-cypher` parser tests, `logical::pipeline::tests` planner targets, and
+root `api::tests::aggregates`. Replay with `cargo test --locked -p
+hawdb-executor --lib aggregate` and `cargo test --locked -p hawdb --lib --
+api::tests::aggregates`. No lane, profile or deadline changes.
+
 The adaptive execution family extends those existing executor owners with
 encoded non-expression key selection, complete-record validation, 64-KiB nested
 payload forwarding, descriptor/memory-driven 8/4/2-way merges, and live host
