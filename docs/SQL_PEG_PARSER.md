@@ -109,8 +109,13 @@ native consumed/scanned token ranges. Native terminals are atomic bounded
 operations: their token-range charge is checked after they return; the lexer
 input/token caps and their own nesting checks also apply. These are logical
 bounds, not a byte-precise allocator admission guarantee or a wall-clock limit.
-The existing lexer limits remain 16 MiB input, 1,000,000 tokens and 64 nested
-block comments; native expression and graph nesting limits remain 128.
+The existing full lexer limits remain 16 MiB input, 1,000,000 tokens and 64 nested
+block comments; native expression and graph nesting limits remain 128. The
+first-token dispatch helper reads only the prefix and does not enforce the
+whole-input byte cap. Complete owned SELECT/EXPLAIN and SQL/PGQ syntax parsing
+still enforce that cap; legacy-routed DML/DDL bodies retain their existing
+admission behavior. Numeric underscores must be surrounded by digits; malformed
+separators fail lexically in both the relational and PGQ syntax entries.
 
 `ParserLimitExceeded` identifies PEG work/storage/depth refusal. Native resource
 errors retain their existing error codes. Resource failures are fatal across

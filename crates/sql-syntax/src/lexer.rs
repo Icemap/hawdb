@@ -36,7 +36,8 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, SyntaxError> {
 }
 
 /// Reads only the first non-comment token for explicit statement-family dispatch.
-/// The rest of the input is validated by the selected parser.
+/// The rest of the input is validated by the selected parser. The full-input
+/// byte limit applies to complete tokenization, not to statement dispatch.
 pub fn first_token(input: &str) -> Result<Token, SyntaxError> {
     Ok(tokenize_inner(input, LexerConfig::default(), true)?[0])
 }
@@ -50,7 +51,9 @@ fn tokenize_inner(
     config: LexerConfig,
     first_only: bool,
 ) -> Result<Vec<Token>, SyntaxError> {
-    if input.len() > config.max_input_bytes {
+    // Dispatch only reads a prefix. Applying full-input admission here would
+    // also restrict legacy-routed DDL/DML before their parser is selected.
+    if !first_only && input.len() > config.max_input_bytes {
         return Err(SyntaxError::new(
             SyntaxErrorCode::InputTooLarge,
             Span::new(0, input.len()),
@@ -211,6 +214,24 @@ fn tokenize_inner(
                 }
             }
         };
+
+        if kind == TokenKind::Number {
+            for position in start..position {
+                if bytes[position] == b'_'
+                    && (!position
+                        .checked_sub(1)
+                        .is_some_and(|previous| bytes[previous].is_ascii_digit())
+                        || !bytes.get(position + 1).is_some_and(u8::is_ascii_digit))
+                {
+                    return Err(SyntaxError::new(
+                        SyntaxErrorCode::InvalidCharacter,
+                        Span::new(position, position + 1),
+                    )
+                    .expected("a digit on each side of a numeric separator")
+                    .found("_"));
+                }
+            }
+        }
 
         push_token(
             &mut tokens,

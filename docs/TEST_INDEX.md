@@ -2016,7 +2016,13 @@ corpus and PGQ binder/lowering tests. It must preserve the recorded acceptance
 and rejection codes, including the explicitly reviewed SELECT-family promotion
 changes. The default SELECT/EXPLAIN PEG path is compared with the legacy parser
 for complete accepted relational IRs (including source positions) and rejected
-inputs across the frozen corpus. Existing root relational SQL tests own embedded
+inputs across the frozen corpus. Error classes must match outside the 11
+explicit frozen Semantic-to-Parse exceptions; the generated vector `:=` refusal
+has its own explicit exception. Keep those exceptions exercised. Oversized
+INSERT/DDL regression inputs verify that prefix dispatch does not impose the
+owned full-input cap on legacy bodies, while oversized SELECT/EXPLAIN still
+fail closed. Malformed numeric separator cases cover both SQL frontends and
+PGQ syntax refusal before creation binding. Existing root relational SQL tests own embedded
 query results, plans, parameters, caching, joins, aggregates and vector execution.
 DDL/DML retain upstream routing pending separate qualification.
 Local Shiro parser campaigns and

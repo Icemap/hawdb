@@ -547,6 +547,39 @@ impl<'a> Lowerer<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeSet;
+
+    const REVIEWED_ERROR_CLASS_TRANSITIONS: &[&str] = &[
+        "case-0091",
+        "case-0092",
+        "case-0093",
+        "case-0094",
+        "case-0924",
+        "case-0986",
+        "case-0987",
+        "case-0988",
+        "case-0989",
+        "case-0990",
+        "case-1006",
+    ];
+
+    fn assert_rejection_class(
+        expected: HawDBError,
+        actual: HawDBError,
+        reviewed_semantic_to_parse: bool,
+        input: &str,
+    ) {
+        if reviewed_semantic_to_parse {
+            assert!(matches!((&expected, &actual), (HawDBError::Semantic(_), HawDBError::Parse(_))),
+                "reviewed Semantic-to-Parse transition changed: {input}\nlegacy {expected:?}\nPEG {actual:?}");
+        } else {
+            assert_eq!(
+                std::mem::discriminant(&actual),
+                std::mem::discriminant(&expected),
+                "unreviewed error-class transition: {input}\nlegacy {expected:?}\nPEG {actual:?}"
+            );
+        }
+    }
 
     fn reference(input: &str) -> Result<SqlStatement> {
         let statements = Parser::parse_sql(&PostgreSqlDialect {}, input)
@@ -561,6 +594,7 @@ mod tests {
     fn frozen_corpus_preserves_complete_accepted_ir_and_rejection_boundaries() {
         let mut accepted = 0;
         let mut rejected = 0;
+        let mut reviewed = BTreeSet::new();
         for line in include_str!("../../fixtures/frontend_corpus_v1.jsonl").lines() {
             let case: serde_json::Value = serde_json::from_str(line).unwrap();
             let input = case["sql"].as_str().unwrap();
@@ -577,7 +611,15 @@ mod tests {
                     assert_eq!(actual, expected, "{}: {input}", case["id"]);
                     accepted += 1;
                 }
-                (Err(_), Err(_)) => rejected += 1,
+                (Err(expected), Err(actual)) => {
+                    let id = case["id"].as_str().unwrap();
+                    let transition = REVIEWED_ERROR_CLASS_TRANSITIONS.contains(&id);
+                    if transition {
+                        reviewed.insert(id.to_owned());
+                    }
+                    assert_rejection_class(expected, actual, transition, input);
+                    rejected += 1;
+                }
                 (expected, actual) => panic!(
                     "{}: {input}\nreference {expected:?}\nPEG {actual:?}",
                     case["id"]
@@ -585,6 +627,14 @@ mod tests {
             }
         }
         assert_eq!(accepted, 66, "frozen accepted statement inventory");
+        assert_eq!(
+            reviewed,
+            REVIEWED_ERROR_CLASS_TRANSITIONS
+                .iter()
+                .map(|id| (*id).to_owned())
+                .collect(),
+            "every reviewed transition must still be exercised"
+        );
         assert!(
             rejected >= 500,
             "must compare negative cases, got {rejected}"
@@ -601,6 +651,9 @@ mod tests {
             ".5",
             "1.",
             "1_000",
+            "1_",
+            "1__0",
+            "1._5",
             "1.0_0",
             "1.0e1_0",
             "U&'d\\0061t'",
@@ -639,16 +692,58 @@ mod tests {
             inputs.push(input.into());
         }
         for input in inputs {
+            // This previously reviewed generated negative uses unsupported
+            // assignment syntax; the owned grammar rejects it before lowering.
+            let transition = input
+                == "SELECT * FROM vector_index_search('items', $1, top_k := 1, candidates := 8)";
             for prefix in ["", "-- lead\n", "/* 知識 /* inner */ */\n"] {
                 let input = format!("{prefix}{input}");
                 match (reference(&input), parse_postgres_sql(&input)) {
                     (Ok(expected), Ok(actual)) => assert_eq!(actual, expected, "{input}"),
-                    (Err(_), Err(_)) => (),
+                    (Err(expected), Err(actual)) => {
+                        assert_rejection_class(expected, actual, transition, &input)
+                    }
                     (expected, actual) => panic!("{input}\nreference {expected:?}\nPEG {actual:?}"),
                 }
             }
         }
     }
+    #[test]
+    fn malformed_numeric_separators_are_rejected_by_both_frontends() {
+        for number in ["1_", "1__0", "1._5"] {
+            let input = format!("SELECT {number} FROM items");
+            assert!(reference(&input).is_err(), "legacy accepted {input}");
+            assert!(parse_postgres_sql(&input).is_err(), "PEG accepted {input}");
+        }
+    }
+
+    #[test]
+    fn legacy_statement_bodies_do_not_inherit_owned_input_limit() {
+        let payload = "x".repeat(syntax::LexerConfig::default().max_input_bytes + 1);
+        {
+            let input = format!("-- dispatch only\nINSERT INTO items (id) VALUES ('{payload}')");
+            let SqlStatement::Insert(insert) = parse_postgres_sql(&input).unwrap() else {
+                panic!("large INSERT must stay on the legacy parser path");
+            };
+            assert_eq!(insert.rows.len(), 1);
+            assert!(
+                matches!(&insert.rows[0][0], SqlValue::Literal(Value::String(value)) if value == &payload)
+            );
+        }
+        let ddl = format!("CREATE TABLE items (id BIGINT) /* {payload} */");
+        assert!(matches!(
+            parse_postgres_sql(&ddl).unwrap(),
+            SqlStatement::CreateTable(_)
+        ));
+        for prefix in ["SELECT", "EXPLAIN SELECT"] {
+            let input = format!("{prefix} '{payload}'");
+            let HawDBError::Parse(error) = parse_postgres_sql(&input).unwrap_err() else {
+                panic!("owned parser must retain its full-input byte limit");
+            };
+            assert!(error.contains("InputTooLarge"), "{error}");
+        }
+    }
+
     #[test]
     fn default_select_errors_retain_peg_limits_and_do_not_poison_next_parse() {
         let expression = format!("{}id{}", "(".repeat(129), ")".repeat(129));
