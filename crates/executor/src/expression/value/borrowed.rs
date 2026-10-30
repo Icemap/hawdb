@@ -7,7 +7,7 @@
 use super::*;
 use crate::binding::map_memory_bytes;
 use crate::{QueryMemoryAccount, QueryMemoryLease};
-use hawdb_core::MAX_LIST_EXPRESSION_WORK;
+use hawdb_core::{MAX_LIST_EXPRESSION_WORK, MAX_UNACCOUNTED_LIST_BYTES};
 use std::borrow::Cow;
 
 mod list;
@@ -151,24 +151,44 @@ pub(crate) fn evaluate_projection_borrowed<'a>(
     )
 }
 
-/// Elements generated or visited by list expressions in one evaluation,
-/// bounded by [`MAX_LIST_EXPRESSION_WORK`].
+/// Work and unaccounted memory spent by list expressions in one evaluation,
+/// bounded by [`MAX_LIST_EXPRESSION_WORK`] and [`MAX_UNACCOUNTED_LIST_BYTES`].
 #[derive(Default)]
-pub(super) struct ListWork(std::cell::Cell<usize>);
+pub(super) struct ListWork {
+    units: std::cell::Cell<usize>,
+    unaccounted_bytes: std::cell::Cell<usize>,
+}
 
 impl ListWork {
-    pub(super) fn charge(&self, elements: usize) -> Result<()> {
+    pub(super) fn charge(&self, units: usize) -> Result<()> {
         let total = self
-            .0
+            .units
             .get()
-            .checked_add(elements)
+            .checked_add(units)
             .filter(|total| *total <= MAX_LIST_EXPRESSION_WORK)
             .ok_or_else(|| {
                 HawDBError::Execution(format!(
-                    "list expressions exceed the work limit of {MAX_LIST_EXPRESSION_WORK} elements"
+                    "list expressions exceed the work limit of {MAX_LIST_EXPRESSION_WORK} units"
                 ))
             })?;
-        self.0.set(total);
+        self.units.set(total);
+        Ok(())
+    }
+
+    /// Charges bytes materialized without a query memory account. The total
+    /// is cumulative for the evaluation, so it bounds peak usage as well.
+    pub(super) fn charge_unaccounted(&self, bytes: usize) -> Result<()> {
+        let total = self
+            .unaccounted_bytes
+            .get()
+            .checked_add(bytes)
+            .filter(|total| *total <= MAX_UNACCOUNTED_LIST_BYTES)
+            .ok_or_else(|| {
+                HawDBError::Execution(format!(
+                    "list expressions exceed {MAX_UNACCOUNTED_LIST_BYTES} bytes without a query memory account"
+                ))
+            })?;
+        self.unaccounted_bytes.set(total);
         Ok(())
     }
 }
@@ -234,7 +254,7 @@ fn evaluate_scoped<'a>(
                 .map(|value| value.unwrap_or_else(|| ProjectedValue::scalar(Value::Null)))
         }
         ProjectionExpression::Binary { left, op, right } => {
-            binary(left, *op, right, evaluate, account)
+            binary(left, *op, right, evaluate, account, work)
         }
         ProjectionExpression::ListFunction {
             function,
@@ -252,7 +272,7 @@ fn evaluate_scoped<'a>(
                     )))
                 }
             };
-            let mut output = list::ListBuilder::new(account, values.len())?;
+            let mut output = list::ListBuilder::new(account, work, values.len())?;
             for value in values {
                 work.charge(1)?;
                 let frame = ListLocals {
@@ -324,6 +344,7 @@ fn evaluate_scoped<'a>(
                 start.as_ref().map(AsRef::as_ref),
                 end.as_ref().map(AsRef::as_ref),
                 account,
+                work,
             )
         }
         ProjectionExpression::Not(child) => Ok(ProjectedValue::scalar(truth_value(
@@ -770,6 +791,7 @@ fn binary<'a>(
     right: &'a ProjectionExpression,
     evaluate: impl Fn(&'a ProjectionExpression) -> Result<ProjectedValue<'a>>,
     account: Option<&QueryMemoryAccount>,
+    work: &ListWork,
 ) -> Result<ProjectedValue<'a>> {
     let left = evaluate(left)?;
     if matches!(op, ScalarBinaryOp::And | ScalarBinaryOp::Or) {
@@ -791,7 +813,8 @@ fn binary<'a>(
     }
     let right = evaluate(right)?;
     if op == ScalarBinaryOp::In {
-        return list::contains(left.as_ref(), right.as_ref(), account).map(ProjectedValue::scalar);
+        return list::contains(left.as_ref(), right.as_ref(), account, work)
+            .map(ProjectedValue::scalar);
     }
     if matches!(
         op,

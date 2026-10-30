@@ -447,3 +447,55 @@ fn list_expressions_compose_with_expression_aggregates() {
     assert_eq!(row.get("widest"), Some(&Value::Int(3)));
     assert_eq!(sorted(row.get("heads").unwrap()), strings(&["a", "x"]));
 }
+
+#[test]
+fn list_expressions_without_a_memory_account_fail_closed() {
+    let mut db = items();
+    // Aggregate arguments evaluate without a query memory account: 100,000
+    // nested 50-element lists stay under the work limit but exceed the
+    // unaccounted-bytes limit.
+    let error = db
+        .query("MATCH (n:Item) RETURN sum(size([x IN range(1, 100000) | range(1, 50)])) AS s")
+        .unwrap_err();
+    assert!(
+        error.to_string().contains("without a query memory account"),
+        "{error}"
+    );
+    // Small aggregate arguments still work.
+    let row = single_row(
+        &mut db,
+        "MATCH (n:Item {id: 1}) RETURN sum(size([x IN range(1, 10) | range(1, 3)])) AS s",
+    );
+    assert_eq!(row.get("s"), Some(&Value::Int(10)));
+}
+
+#[test]
+fn work_inside_comprehension_bodies_is_charged() {
+    let mut db = items();
+    let ids = Value::List((0..100_000).map(Value::Int).collect());
+    let error = db
+        .query_with_params(
+            "MATCH (n:Item {id: 1}) RETURN size([x IN range(1, 1000000) WHERE x IN $ids]) AS hits",
+            &BTreeMap::from([("ids".to_string(), ids)]),
+        )
+        .unwrap_err();
+    assert!(error.to_string().contains("work limit"), "{error}");
+    let big = Value::String("x".repeat(10_000));
+    let error = db
+        .query_with_params(
+            "MATCH (n:Item {id: 1}) RETURN size([x IN range(1, 100000) WHERE size(reverse($big)) > 0]) AS n",
+            &BTreeMap::from([("big".to_string(), big)]),
+        )
+        .unwrap_err();
+    assert!(error.to_string().contains("work limit"), "{error}");
+    let error = db
+        .query_with_params(
+            "MATCH (n:Item {id: 1}) RETURN size([x IN range(1, 100000) WHERE size(tail($ids)) > 0]) AS n",
+            &BTreeMap::from([(
+                "ids".to_string(),
+                Value::List((0..1_000).map(Value::Int).collect()),
+            )]),
+        )
+        .unwrap_err();
+    assert!(error.to_string().contains("work limit"), "{error}");
+}

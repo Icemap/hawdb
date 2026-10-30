@@ -24,36 +24,55 @@ use crate::binding::value_memory_bytes;
 use hawdb_core::{ListFunction, MAX_RANGE_LENGTH};
 use std::mem::size_of;
 
-/// Builds a list under the evaluator's working-memory account.
-pub(super) struct ListBuilder {
+/// Builds a list under the evaluator's working-memory account, or under the
+/// evaluation's unaccounted-bytes limit when there is no account.
+pub(super) struct ListBuilder<'w> {
     values: Vec<Value>,
     allocation: Option<QueryMemoryLease>,
+    work: &'w super::ListWork,
 }
 
-impl ListBuilder {
+impl<'w> ListBuilder<'w> {
     /// `capacity` is an allocation hint; slots are charged as they are filled.
-    pub(super) fn new(account: Option<&QueryMemoryAccount>, capacity: usize) -> Result<Self> {
-        let allocation = account
-            .map(|account| account.reserve(size_of::<Value>() + size_of::<Vec<Value>>()))
-            .transpose()?;
+    pub(super) fn new(
+        account: Option<&QueryMemoryAccount>,
+        work: &'w super::ListWork,
+        capacity: usize,
+    ) -> Result<Self> {
+        let header = size_of::<Value>() + size_of::<Vec<Value>>();
+        let allocation = match account {
+            Some(account) => Some(account.reserve(header)?),
+            None => {
+                work.charge_unaccounted(header)?;
+                None
+            }
+        };
         Ok(Self {
             // Cap the uncharged up-front hint; larger lists grow as their
             // charged slots are filled.
             values: Vec::with_capacity(capacity.min(1024)),
             allocation,
+            work,
         })
     }
 
-    pub(super) fn push_cloned(&mut self, value: &Value) -> Result<()> {
-        if let Some(allocation) = &mut self.allocation {
-            allocation.grow(value_memory_bytes(value))?;
+    fn reserve(&mut self, bytes: usize) -> Result<()> {
+        match &mut self.allocation {
+            Some(allocation) => allocation.grow(bytes),
+            None => self.work.charge_unaccounted(bytes),
         }
+    }
+
+    pub(super) fn push_cloned(&mut self, value: &Value) -> Result<()> {
+        self.reserve(value_memory_bytes(value))?;
         self.values.push(value.clone());
         Ok(())
     }
 
     pub(super) fn push_projected(&mut self, value: ProjectedValue<'_>) -> Result<()> {
         let Some(allocation) = &mut self.allocation else {
+            self.work
+                .charge_unaccounted(value_memory_bytes(value.as_ref()))?;
             self.values.push(value.into_owned());
             return Ok(());
         };
@@ -100,8 +119,15 @@ pub(super) fn function<'a>(
 ) -> Result<ProjectedValue<'a>> {
     let (min, max) = function.arity();
     if !(min..=max).contains(&arguments.len()) {
+        // Unreachable from parsed queries (the parser checks arity first);
+        // kept as a defensive check with the parser's wording.
+        let expected = if min == max {
+            format!("{min}")
+        } else {
+            format!("{min} or {max}")
+        };
         return Err(HawDBError::Execution(format!(
-            "{}() received {} arguments",
+            "{}() expects {expected} argument(s), got {}",
             function.function_name(),
             arguments.len()
         )));
@@ -129,9 +155,12 @@ pub(super) fn function<'a>(
         (ListFunction::Size, Value::List(values)) => Ok(ProjectedValue::scalar(Value::Int(
             i64::try_from(values.len()).unwrap_or(i64::MAX),
         ))),
-        (ListFunction::Size, Value::String(value)) => Ok(ProjectedValue::scalar(Value::Int(
-            i64::try_from(value.chars().count()).unwrap_or(i64::MAX),
-        ))),
+        (ListFunction::Size, Value::String(value)) => {
+            work.charge(value.len())?;
+            Ok(ProjectedValue::scalar(Value::Int(
+                i64::try_from(value.chars().count()).unwrap_or(i64::MAX),
+            )))
+        }
         (ListFunction::Head, Value::List(values)) => {
             if values.is_empty() {
                 Ok(ProjectedValue::scalar(Value::Null))
@@ -145,17 +174,22 @@ pub(super) fn function<'a>(
         },
         (ListFunction::Tail, Value::List(values)) => {
             let len = values.len();
-            sublist(input, 1.min(len)..len, false, account)
+            sublist(input, 1.min(len)..len, false, account, work)
         }
         (ListFunction::Reverse, Value::List(values)) => {
             let len = values.len();
-            sublist(input, 0..len, true, account)
+            sublist(input, 0..len, true, account, work)
         }
-        (ListFunction::Reverse, Value::String(value)) => allocated(
-            size_of::<Value>().saturating_add(value.len()),
-            account,
-            || Value::String(value.chars().rev().collect()),
-        ),
+        (ListFunction::Reverse, Value::String(value)) => {
+            let bytes = size_of::<Value>().saturating_add(value.len());
+            work.charge(value.len())?;
+            if account.is_none() {
+                work.charge_unaccounted(bytes)?;
+            }
+            allocated(bytes, account, || {
+                Value::String(value.chars().rev().collect())
+            })
+        }
         (function, value) => Err(HawDBError::Execution(format!(
             "{}() requires {}, got {:?}",
             function.function_name(),
@@ -194,10 +228,8 @@ fn range<'a>(
     }
     let len = len as usize;
     work.charge(len)?;
-    let mut output = ListBuilder::new(account, 0)?;
-    if let Some(allocation) = &mut output.allocation {
-        allocation.grow(len.saturating_mul(size_of::<Value>()))?;
-    }
+    let mut output = ListBuilder::new(account, work, 0)?;
+    output.reserve(len.saturating_mul(size_of::<Value>()))?;
     output.values.reserve_exact(len);
     // Every produced value lies between start and end, so it fits in i64.
     output
@@ -226,12 +258,14 @@ fn sublist<'a>(
     range: std::ops::Range<usize>,
     reverse: bool,
     account: Option<&QueryMemoryAccount>,
+    work: &super::ListWork,
 ) -> Result<ProjectedValue<'a>> {
+    work.charge(range.len())?;
     let ProjectedValue { value, _allocation } = list;
     match value {
         Cow::Borrowed(Value::List(values)) => {
             let selected = &values[range];
-            let mut output = ListBuilder::new(account, selected.len())?;
+            let mut output = ListBuilder::new(account, work, selected.len())?;
             if reverse {
                 for value in selected.iter().rev() {
                     output.push_cloned(value)?;
@@ -311,6 +345,7 @@ pub(super) fn slice<'a>(
     start: Option<&Value>,
     end: Option<&Value>,
     account: Option<&QueryMemoryAccount>,
+    work: &super::ListWork,
 ) -> Result<ProjectedValue<'a>> {
     let len = match list.as_ref() {
         Value::Null => return Ok(ProjectedValue::scalar(Value::Null)),
@@ -336,22 +371,24 @@ pub(super) fn slice<'a>(
     };
     let start = bound(start, 0)?;
     let end = bound(end, len)?;
-    sublist(list, start..end.max(start), false, account)
+    sublist(list, start..end.max(start), false, account, work)
 }
 
 /// Three-valued openCypher equality used by `IN`: comparisons involving
 /// `NULL`, including inside nested lists, are unknown.
-fn equals(left: &Value, right: &Value) -> Option<bool> {
-    match (left, right) {
+/// Nested list elements are charged to `work` as they are compared.
+fn equals(left: &Value, right: &Value, work: &super::ListWork) -> Result<Option<bool>> {
+    Ok(match (left, right) {
         (Value::Null, _) | (_, Value::Null) => None,
         (Value::List(left), Value::List(right)) => {
             if left.len() != right.len() {
-                return Some(false);
+                return Ok(Some(false));
             }
+            work.charge(left.len())?;
             let mut unknown = false;
             for (left, right) in left.iter().zip(right) {
-                match equals(left, right) {
-                    Some(false) => return Some(false),
+                match equals(left, right, work)? {
+                    Some(false) => return Ok(Some(false)),
                     None => unknown = true,
                     Some(true) => {}
                 }
@@ -359,7 +396,7 @@ fn equals(left: &Value, right: &Value) -> Option<bool> {
             (!unknown).then_some(true)
         }
         (left, right) => Some(left == right),
-    }
+    })
 }
 
 /// `element IN list`: `NULL` for a `NULL` list or when no element matches and
@@ -368,6 +405,7 @@ pub(super) fn contains(
     element: &Value,
     list: &Value,
     account: Option<&QueryMemoryAccount>,
+    work: &super::ListWork,
 ) -> Result<Value> {
     let values = match list {
         Value::Null => return Ok(Value::Null),
@@ -379,9 +417,10 @@ pub(super) fn contains(
             )))
         }
     };
+    work.charge(values.len())?;
     let mut unknown = false;
     for value in values {
-        match equals(element, value) {
+        match equals(element, value, work)? {
             Some(true) => return Ok(Value::Bool(true)),
             Some(false) => {}
             None => unknown = true,
@@ -444,7 +483,9 @@ mod tests {
 
     #[test]
     fn in_uses_three_valued_equality() {
-        let check = |element: Value, list: Value| contains(&element, &list, None).unwrap();
+        let check = |element: Value, list: Value| {
+            contains(&element, &list, None, &super::ListWork::default()).unwrap()
+        };
         assert_eq!(check(Value::Int(1), ints(&[1, 2])), Value::Bool(true));
         assert_eq!(check(Value::Int(3), ints(&[1, 2])), Value::Bool(false));
         assert_eq!(check(Value::Null, ints(&[])), Value::Bool(false));
@@ -469,7 +510,13 @@ mod tests {
             check(ints(&[1, 2]), Value::List(vec![ints(&[1, 2])])),
             Value::Bool(true)
         );
-        assert!(contains(&Value::Int(1), &Value::Int(1), None).is_err());
+        assert!(contains(
+            &Value::Int(1),
+            &Value::Int(1),
+            None,
+            &super::ListWork::default()
+        )
+        .is_err());
     }
 
     mod evaluation {

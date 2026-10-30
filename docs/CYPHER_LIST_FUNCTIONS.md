@@ -36,11 +36,18 @@ may be negative for a descending range. A range whose direction does not reach
 1,000,000 elements (`hawdb_core::MAX_RANGE_LENGTH`); larger ranges fail before
 any allocation. The query memory budget applies in addition.
 
-Within one evaluated row, the elements produced by `range()` calls and the
-elements visited by list comprehensions together may not exceed 10,000,000
-(`hawdb_core::MAX_LIST_EXPRESSION_WORK`). Nested comprehensions can filter
+Within one evaluated row, list expressions may spend at most 10,000,000 work
+units (`hawdb_core::MAX_LIST_EXPRESSION_WORK`): elements produced by `range()`,
+list comprehension iterations, elements copied by `tail`, `reverse` and slices,
+elements compared by `IN` (including elements of nested lists), and bytes
+scanned by string `size` and `reverse`. Nested comprehensions can filter
 everything they visit without retaining memory, so this work limit, not the
 memory budget, bounds them; exceeding it fails the query.
+
+Lists are charged to the query memory account. Where an evaluation has no
+account (aggregate arguments, mutation preflight), the bytes list expressions
+materialize in one evaluation may not exceed 64 MiB
+(`hawdb_core::MAX_UNACCOUNTED_LIST_BYTES`); exceeding it fails the query.
 
 ## List comprehensions
 
