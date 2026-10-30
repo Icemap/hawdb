@@ -71,6 +71,12 @@ pub(in crate::api) fn value_is_deterministic(value: &cypher::ValueExpression) ->
         cypher::ValueExpressionKind::CurrentTimestamp => false,
         cypher::ValueExpressionKind::List(values) => values.iter().all(value_is_deterministic),
         cypher::ValueExpressionKind::Timestamp(value) => value_is_deterministic(value),
+        // `date()`, `datetime()`, ... read the statement clock.
+        cypher::ValueExpressionKind::Temporal {
+            function,
+            arguments,
+        } => !function.reads_clock(arguments.len()) && arguments.iter().all(value_is_deterministic),
+        cypher::ValueExpressionKind::Map(entries) => entries.values().all(value_is_deterministic),
         cypher::ValueExpressionKind::Literal(_)
         | cypher::ValueExpressionKind::Parameter(_)
         | cypher::ValueExpressionKind::Binding(_)
@@ -124,7 +130,21 @@ fn scalar_is_deterministic(expression: &cypher::ScalarExpression) -> bool {
         | Scalar::List(_)
         | Scalar::ListIndex { .. }
         | Scalar::ListSlice { .. }
-        | Scalar::Path(_) => true,
+        | Scalar::Path(_)
+        | Scalar::PropertyAccess { .. }
+        | Scalar::MapLiteral(_) => true,
+        // A clock read (`date()`) differs between executions; a map
+        // argument with only `timezone` reads the clock at run time.
+        Scalar::TemporalFunction {
+            function,
+            arguments,
+        } => {
+            !function.reads_clock(arguments.len())
+                && !arguments.iter().any(|argument| {
+                    matches!(&argument.kind, Scalar::MapLiteral(entries)
+                        if entries.iter().all(|(key, _)| key.eq_ignore_ascii_case("timezone")))
+                })
+        }
     };
     values_are_deterministic && expression.kind.all_children(scalar_is_deterministic)
 }

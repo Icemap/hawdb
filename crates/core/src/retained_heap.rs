@@ -211,7 +211,17 @@ impl RetainedHeapBytes for Value {
             Self::Vector(value) => value.retained_heap_bytes(),
             Self::List(value) => value.retained_heap_bytes(),
             Self::Map(value) => value.retained_heap_bytes(),
-            Self::Null | Self::Bool(_) | Self::Int(_) | Self::Float(_) | Self::Uuid(_) => Some(0),
+            Self::Null
+            | Self::Bool(_)
+            | Self::Int(_)
+            | Self::Float(_)
+            | Self::Uuid(_)
+            | Self::Date(_)
+            | Self::LocalTime(_)
+            | Self::LocalDateTime(_)
+            | Self::DateTime(_) => Some(0),
+            // The duration is boxed to keep `Value` at 32 bytes.
+            Self::Duration(_) => Some(size_of::<crate::temporal::Duration>()),
         }
     }
 }

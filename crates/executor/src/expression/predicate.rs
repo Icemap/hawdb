@@ -301,6 +301,9 @@ fn evaluate_predicate_truth(
         } => {
             let actual = evaluate(expression)?;
             let expected = evaluate(value)?;
+            if hawdb_core::temporal::ordering_is_null(actual.as_ref(), expected.as_ref()) {
+                return Ok(PredicateTruth::Unknown);
+            }
             predicate_comparison_truth(
                 Some(actual.as_ref()),
                 expected.as_ref(),
