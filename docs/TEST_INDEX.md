@@ -6,6 +6,17 @@ authoritative; this is a map of test families, not an exhaustive list of every
 Rust test function. Update it when changing a family's scope, build profile,
 execution lane, fixture size, isolation or known failure mode.
 
+`//:storage_tla_evidence_script_test` belongs to the required root
+`//:hawdb_unit_tests` aggregate. It validates the actual checked-in TLA model
+inventory through `scripts/check-storage-tla.sh --manifest-json` before running
+the synthetic evidence/negative fixtures. Its runfiles include every root-level
+model and config plus the manifest, so unsorted/duplicate entries, undeclared
+models and missing pairs fail before merge. This inventory step neither downloads
+tools nor runs TLC; the existing postsubmit TLA lane retains model checking,
+mutant rejection and retained-evidence verification. The existing moderate script
+timeout is unchanged. Replay with `bazel test //:storage_tla_evidence_script_test`
+or `bash scripts/check-storage-tla.test.sh`.
+
 `nowledge_mem::tests::catch_up_admission_tests` belongs to the existing root
 `//:hawdb_unit_general_tests` owner. Its two guards each exercise full-residency
 and incremental projection dispatch with one explicitly configured governor.
