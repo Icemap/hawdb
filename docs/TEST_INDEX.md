@@ -2013,9 +2013,21 @@ checked profile and existing SQL syntax CI lanes.
 
 `//crates/sql:hawdb_sql_tests` retains the frozen production/owned frontend
 corpus and PGQ binder/lowering tests. It must preserve the recorded acceptance
-and rejection codes; production relational SQL still uses `sqlparser`.
+and rejection codes, including the explicitly reviewed SELECT-family promotion
+changes. The default SELECT/EXPLAIN PEG path is compared with the legacy parser
+for complete accepted relational IRs (including source positions) and rejected
+inputs across the frozen corpus. Existing root relational SQL tests own embedded
+query results, plans, parameters, caching, joins, aggregates and vector execution.
+DDL/DML retain upstream routing pending separate qualification.
 Local Shiro parser campaigns and
 `//crates/sql-syntax:hawdb_sql_alias_boundary_fuzz_tests` remain manual/local.
+The ignored `parser::owned::tests::parser_timing_diagnostic` is a manual
+production SELECT parser comparison, run with `cargo test --locked --release
+-p hawdb-sql parser::owned::tests::parser_timing_diagnostic -- --exact --ignored
+--nocapture`. It compares the legacy reference and default PEG in one binary,
+checks complete successful IRs first, alternates order, and emits nine samples
+per shape (discard the first). It covers short queries, vector calls, rejection,
+and 500-column ASCII/UTF-8 projections; it is not a CI timing gate.
 `cargo bench --locked -p hawdb-sql-syntax --bench frontend` is a manual parser-only
 release benchmark; `-- --shapes` adds wide projections, many joins and rejected
 inputs. It emits nine samples after grammar warmup and is not a CI timing gate.
