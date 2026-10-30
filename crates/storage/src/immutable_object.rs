@@ -31,6 +31,7 @@ const OBJECTS_DIRECTORY: &str = "objects";
 const STAGING_DIRECTORY: &str = ".staging";
 const IDENTITY_DOMAIN: &[u8] = b"HAWDB-IMMUTABLE-OBJECT-V1\0";
 const DEFAULT_MAX_OBJECT_BYTES: u64 = 128 * 1024 * 1024;
+const STREAM_BUFFER_BYTES: usize = 64 * 1024;
 
 static STAGING_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
@@ -740,7 +741,60 @@ impl ImmutableObjectStore {
             return Err(ImmutableObjectError::PublisherPoisoned);
         }
         validate_reference(reference, payload, self.max_object_bytes)?;
+        let destination = self.prepare_kind_directory(reference)?;
+        if destination.exists() {
+            return self.validate_existing(reference, Some(payload), &destination);
+        }
 
+        let staging = self.stage_payload(payload)?;
+        let install_result = self.install_staged(reference, Some(payload), &staging, &destination);
+        if install_result.is_err() {
+            let _ = fs::remove_file(&staging);
+        }
+        install_result
+    }
+
+    /// Publishes a file-backed payload without buffering it. The source is
+    /// streamed into staging while its identity is recomputed, and both the
+    /// staged read-back and reuse of an existing object are authenticated by
+    /// streaming identity checks, so memory stays bounded by one I/O buffer
+    /// regardless of the object size.
+    pub fn publish_file(
+        &mut self,
+        reference: ObjectReference,
+        source: &Path,
+    ) -> Result<PublishOutcome, ImmutableObjectError> {
+        if self.poisoned {
+            return Err(ImmutableObjectError::PublisherPoisoned);
+        }
+        if reference.format_version == 0 {
+            return Err(ImmutableObjectError::InvalidFormatVersion);
+        }
+        if reference.byte_length > self.max_object_bytes {
+            return Err(ImmutableObjectError::ObjectTooLarge {
+                length: reference.byte_length,
+                limit: self.max_object_bytes,
+            });
+        }
+        let destination = self.prepare_kind_directory(reference)?;
+        if destination.exists() {
+            return self.validate_existing(reference, None, &destination);
+        }
+
+        let staging = self.stage_file(reference, source)?;
+        let install_result = self.install_staged(reference, None, &staging, &destination);
+        if install_result.is_err() {
+            let _ = fs::remove_file(&staging);
+        }
+        install_result
+    }
+
+    /// Establishes the object namespace and kind directory name barriers and
+    /// returns the content-addressed destination path.
+    fn prepare_kind_directory(
+        &mut self,
+        reference: ObjectReference,
+    ) -> Result<PathBuf, ImmutableObjectError> {
         if !self.namespace_synchronized {
             // Opening a reader is not a publication boundary. Establish all
             // directory names before the first acknowledged publication, and
@@ -772,17 +826,7 @@ impl ImmutableObjectStore {
             // bytes and final entry still get their own publication barriers.
             self.synchronized_kinds.insert(reference.kind);
         }
-
-        if destination.exists() {
-            return self.validate_existing(reference, payload, &destination);
-        }
-
-        let staging = self.stage_payload(payload)?;
-        let install_result = self.install_staged(reference, payload, &staging, &destination);
-        if install_result.is_err() {
-            let _ = fs::remove_file(&staging);
-        }
-        install_result
+        Ok(destination)
     }
 
     fn stage_payload(&self, payload: &[u8]) -> Result<PathBuf, ImmutableObjectError> {
@@ -803,10 +847,58 @@ impl ImmutableObjectStore {
         Ok(path)
     }
 
+    fn stage_file(
+        &self,
+        reference: ObjectReference,
+        source: &Path,
+    ) -> Result<PathBuf, ImmutableObjectError> {
+        let mut input = map_io("open immutable object source", File::open(source))?;
+        let staging_directory = self.root.join(OBJECTS_DIRECTORY).join(STAGING_DIRECTORY);
+        let sequence = STAGING_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+        let path = staging_directory.join(format!("{}-{sequence}.stage", std::process::id()));
+        let mut file = map_io(
+            "create immutable object staging file",
+            OpenOptions::new().write(true).create_new(true).open(&path),
+        )?;
+        let copied = (|| -> Result<(), ImmutableObjectError> {
+            let mut identity = ObjectReferenceWriter::new(
+                reference.kind,
+                reference.format_version,
+                reference.byte_length,
+            )?;
+            let mut buffer = vec![0; STREAM_BUFFER_BYTES];
+            loop {
+                let length = map_io("read immutable object source", input.read(&mut buffer))?;
+                if length == 0 {
+                    break;
+                }
+                // A source longer than its reference fails here instead of
+                // growing the staged object past the admitted length.
+                identity
+                    .write_all(&buffer[..length])
+                    .map_err(|_| ImmutableObjectError::ReferenceMismatch)?;
+                map_io(
+                    "write immutable object staging file",
+                    file.write_all(&buffer[..length]),
+                )?;
+            }
+            if identity.finish()? != reference {
+                return Err(ImmutableObjectError::ReferenceMismatch);
+            }
+            map_io("sync immutable object staging file", file.sync_all())
+        })();
+        if let Err(error) = copied {
+            drop(file);
+            let _ = fs::remove_file(&path);
+            return Err(error);
+        }
+        Ok(path)
+    }
+
     fn install_staged(
         &mut self,
         reference: ObjectReference,
-        payload: &[u8],
+        payload: Option<&[u8]>,
         staging: &Path,
         destination: &Path,
     ) -> Result<PublishOutcome, ImmutableObjectError> {
@@ -836,7 +928,7 @@ impl ImmutableObjectStore {
     fn validate_existing(
         &mut self,
         reference: ObjectReference,
-        payload: &[u8],
+        payload: Option<&[u8]>,
         path: &Path,
     ) -> Result<PublishOutcome, ImmutableObjectError> {
         let metadata = map_io("read immutable object metadata", fs::symlink_metadata(path))?;
@@ -966,36 +1058,48 @@ fn validate_reference(
     Ok(())
 }
 
+/// Streams a stored object once, checking its length and identity and, when
+/// the publisher still holds the payload, its exact bytes.
 fn validate_file(
     path: &Path,
     reference: ObjectReference,
-    expected: &[u8],
+    expected: Option<&[u8]>,
     max_object_bytes: u64,
 ) -> Result<(), ImmutableObjectError> {
+    let corrupt = || ImmutableObjectError::ExistingObjectCorrupt {
+        path: path.to_path_buf(),
+    };
     let metadata = map_io("read immutable object length", fs::metadata(path))?;
-    if metadata.len() != reference.byte_length || metadata.len() > max_object_bytes {
-        return Err(ImmutableObjectError::ExistingObjectCorrupt {
-            path: path.to_path_buf(),
-        });
-    }
-    let capacity = usize::try_from(metadata.len()).map_err(|_| {
-        ImmutableObjectError::ExistingObjectCorrupt {
-            path: path.to_path_buf(),
-        }
-    })?;
-    let mut bytes = Vec::with_capacity(capacity);
-    let mut file = map_io("read immutable object", File::open(path))?;
-    file.read_to_end(&mut bytes)
-        .map_err(|error| ImmutableObjectError::Io {
-            operation: "read immutable object",
-            source: error,
-        })?;
-    if bytes != expected
-        || identity_digest(reference.kind, reference.format_version, &bytes) != reference.sha256
+    if metadata.len() != reference.byte_length
+        || metadata.len() > max_object_bytes
+        || expected.is_some_and(|expected| expected.len() as u64 != reference.byte_length)
     {
-        return Err(ImmutableObjectError::ExistingObjectCorrupt {
-            path: path.to_path_buf(),
-        });
+        return Err(corrupt());
+    }
+    let mut file = map_io("read immutable object", File::open(path))?;
+    let mut hasher = identity_hasher(
+        reference.kind,
+        reference.format_version,
+        reference.byte_length,
+    );
+    let mut buffer = vec![0; STREAM_BUFFER_BYTES];
+    let mut offset = 0_usize;
+    loop {
+        let length = map_io("read immutable object", file.read(&mut buffer))?;
+        if length == 0 {
+            break;
+        }
+        let end = offset.checked_add(length).ok_or_else(corrupt)?;
+        if end as u64 > reference.byte_length
+            || expected.is_some_and(|expected| expected[offset..end] != buffer[..length])
+        {
+            return Err(corrupt());
+        }
+        hasher.update(&buffer[..length]);
+        offset = end;
+    }
+    if offset as u64 != reference.byte_length || hasher.finish().sha256 != reference.sha256 {
+        return Err(corrupt());
     }
     Ok(())
 }
@@ -1122,6 +1226,12 @@ mod tests {
         ObjectReference::for_bytes(ObjectKind::Checkpoint, 1, payload)
     }
 
+    fn staging_entries(root: &Path) -> usize {
+        fs::read_dir(root.join(OBJECTS_DIRECTORY).join(STAGING_DIRECTORY))
+            .unwrap()
+            .count()
+    }
+
     #[test]
     fn identity_is_domain_separated_by_kind_and_version() {
         let payload = b"same bytes";
@@ -1156,6 +1266,70 @@ mod tests {
             reopened.publish(reference, payload).unwrap(),
             PublishOutcome::Reused
         );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn publish_file_streams_across_buffers_and_matches_byte_publication() {
+        let root = test_root("publish-file");
+        let source = root.join("source.bin");
+        fs::create_dir_all(&root).unwrap();
+        // Spans several stream buffers and ends mid-buffer.
+        let payload = (0..(3 * STREAM_BUFFER_BYTES + 17))
+            .map(|index| (index % 251) as u8)
+            .collect::<Vec<_>>();
+        fs::write(&source, &payload).unwrap();
+        let reference = ObjectReference::for_bytes(ObjectKind::CheckpointArtifact, 1, &payload);
+        let mut store = ImmutableObjectStore::open(&root).unwrap();
+        assert_eq!(
+            store.publish_file(reference, &source).unwrap(),
+            PublishOutcome::Published
+        );
+        assert_eq!(fs::read(store.object_path(reference)).unwrap(), payload);
+        assert_eq!(
+            store.publish_file(reference, &source).unwrap(),
+            PublishOutcome::Reused
+        );
+        assert_eq!(
+            store.publish(reference, &payload).unwrap(),
+            PublishOutcome::Reused
+        );
+        assert_eq!(staging_entries(&root), 0);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn publish_file_rejects_changed_sources_and_limits_without_staging_residue() {
+        let root = test_root("publish-file-reject");
+        fs::create_dir_all(&root).unwrap();
+        let source = root.join("source.bin");
+        fs::write(&source, b"payload").unwrap();
+        let mut store = ImmutableObjectStore::open_with_limit(&root, 16).unwrap();
+        let expected = reference(b"PAYLOAD");
+        assert!(matches!(
+            store.publish_file(expected, &source),
+            Err(ImmutableObjectError::ReferenceMismatch)
+        ));
+        let mut shorter = reference(b"payload");
+        shorter.byte_length = 3;
+        assert!(matches!(
+            store.publish_file(shorter, &source),
+            Err(ImmutableObjectError::ReferenceMismatch)
+        ));
+        fs::write(&source, b"this payload is too long").unwrap();
+        assert!(matches!(
+            store.publish_file(reference(b"this payload is too long"), &source),
+            Err(ImmutableObjectError::ObjectTooLarge { .. })
+        ));
+        assert!(matches!(
+            store.publish_file(reference(b"missing"), &root.join("missing.bin")),
+            Err(ImmutableObjectError::Io {
+                operation: "open immutable object source",
+                ..
+            })
+        ));
+        assert!(!store.object_path(expected).exists());
+        assert_eq!(staging_entries(&root), 0);
         fs::remove_dir_all(root).unwrap();
     }
 
