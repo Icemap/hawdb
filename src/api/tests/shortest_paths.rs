@@ -378,3 +378,39 @@ fn list_expressions_read_shortest_path_nodes() {
     assert_eq!(column(&output, "ids"), vec![ints(&[1, 5, 4, 7])]);
     assert_eq!(column(&output, "hops"), vec![int(4)]);
 }
+
+#[test]
+fn path_predicates_in_the_search_clause_are_rejected() {
+    let mut db = Database::new();
+    social(&mut db);
+    let error = db
+        .query(
+            "MATCH (a:Person {id: 1}), (b:Person {id: 4}) \
+             MATCH p = shortestPath((a)-[:KNOWS*]-(b)) WHERE length(p) > 2 RETURN p",
+        )
+        .unwrap_err();
+    assert!(error.to_string().contains("WITH p WHERE"), "{error}");
+    // The explicit post-filter form keeps working.
+    let output = db
+        .query(
+            "MATCH (a:Person {id: 1}), (b:Person {id: 4}) \
+             MATCH p = shortestPath((a)-[:KNOWS*]-(b)) WITH p WHERE length(p) > 1 RETURN length(p) AS hops",
+        )
+        .unwrap();
+    assert_eq!(column(&output, "hops"), vec![int(2)]);
+}
+
+#[test]
+fn untyped_shortest_path_patterns_search_every_relationship_type() {
+    let mut db = Database::new();
+    social(&mut db);
+    db.query("MATCH (a:Person {id: 1}), (b:Person {id: 6}) CREATE (a)-[:FOLLOWS]->(b)")
+        .unwrap();
+    let result = db.query(
+        "MATCH (a:Person {id: 1}), (b:Person {id: 6}) MATCH p = shortestPath((a)-[*]-(b)) RETURN length(p) AS hops",
+    );
+    match result {
+        Ok(output) => assert_eq!(column(&output, "hops"), vec![int(1)]),
+        Err(error) => assert!(error.to_string().contains("type"), "{error}"),
+    }
+}

@@ -234,6 +234,7 @@ fn bind_pipeline(
     ) {
         return procedure::bind_procedure_pipeline(query, parameters);
     }
+    path::reject_shortest_path_predicates(&query.clauses)?;
     // The original endpoint-id `ALL SHORTEST` MATCH ... RETURN shape keeps its
     // dedicated operator and results. Every other shortest-path pattern is
     // bound as a correlated MATCH step. When neither binder accepts the query,

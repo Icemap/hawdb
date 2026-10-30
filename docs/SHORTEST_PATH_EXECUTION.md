@@ -116,7 +116,16 @@ RETURN CASE path IS NULL WHEN true THEN -1 ELSE length(path) END AS len
   earlier MATCH or WITH bound it, if the same clause binds it through another
   pattern, or if it has an inline property map or appears in the clause's
   WHERE predicate. Anonymous or otherwise unconstrained endpoints are a
-  semantic error.
+  semantic error. The check is syntactic: a weak predicate such as
+  `a.age > 0` still admits every matching node, and the search then runs once
+  per endpoint pair, each bounded separately by `blocking_operator_bytes`. The
+  total cost is roughly (endpoint pairs) x (reachable subgraph per search), so
+  constrain endpoints as tightly as possible.
+- WHERE conjuncts of the same clause that read a shortest-path variable are a
+  semantic error. Neo4j applies them during the search (it returns the
+  shortest path that satisfies them); evaluating them after selection would
+  silently differ. Filter explicitly after the search with
+  `WITH p WHERE ...`.
 - The clause may be `MATCH` or `OPTIONAL MATCH` anywhere in a pipeline, with
   WITH, ORDER BY, SKIP and LIMIT before or after it. In OPTIONAL MATCH,
   missing paths keep the row and bind the path and any new endpoints to NULL.
@@ -187,8 +196,12 @@ step.
 - Unbounded patterns are capped at 256 hops, and reaching the cap is an error.
 - Minimums above 1 are only accepted by the original `ALL SHORTEST` endpoint-id
   shape. Predicates over the path inside the search (`all(r IN
-  relationships(p) WHERE ...)`) and list comprehensions are not supported.
-  Path-reading WHERE conjuncts filter after the search.
+  relationships(p) WHERE ...)`) are not supported; WHERE conjuncts that read
+  the path in the same clause are rejected rather than applied after the
+  search (use `WITH p WHERE ...`).
+- Because paths are maps `{length, nodes, relationships}`, path functions
+  accept any map-valued column with those keys (for example a path carried
+  through `WITH` or `collect`/`UNWIND`); other values fail at run time.
 - Endpoints must be constrained as described above. Neo4j would also run the
   search for every pair of label-scanned endpoints.
 

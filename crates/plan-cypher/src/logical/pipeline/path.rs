@@ -224,6 +224,39 @@ pub(super) struct ShortestPathMatch<'a> {
     pub(super) predicate: Option<&'a hawdb_cypher::PredicateExpression>,
 }
 
+/// Refuses WHERE conjuncts that read a shortest-path variable of the same
+/// MATCH clause, before either shortest-path binder runs, so the refusal is
+/// reported for every syntax form. Neo4j applies such predicates during the
+/// search; evaluating them after selection would silently differ.
+pub(super) fn reject_shortest_path_predicates(clauses: &[hawdb_cypher::Clause]) -> Result<()> {
+    for clause in clauses {
+        let hawdb_cypher::ClauseKind::Match {
+            patterns,
+            predicate: Some(predicate),
+            ..
+        } = &clause.kind
+        else {
+            continue;
+        };
+        let paths = patterns
+            .iter()
+            .filter(|pattern| is_shortest_path_pattern(pattern))
+            .filter_map(|pattern| pattern.variable.clone())
+            .collect::<BTreeSet<_>>();
+        if paths.is_empty() {
+            continue;
+        }
+        let mut variables = BTreeSet::new();
+        collect_predicate_variables(&predicate.kind, &mut variables);
+        if let Some(path) = variables.intersection(&paths).next() {
+            return Err(HawDBError::Semantic(format!(
+                "WHERE predicates on shortest-path variable '{path}' are not supported in the same MATCH clause; filter after the search with `WITH {path} WHERE ...`"
+            )));
+        }
+    }
+    Ok(())
+}
+
 pub(super) fn is_shortest_path_pattern(pattern: &hawdb_cypher::MatchPattern) -> bool {
     pattern
         .steps
@@ -382,8 +415,17 @@ pub(super) fn bind_shortest_path_match(
         for conjunct in conjuncts {
             let mut variables = BTreeSet::new();
             collect_predicate_variables(conjunct, &mut variables);
+            // Neo4j applies WHERE predicates on a shortest-path variable while
+            // searching (the shortest path that satisfies them). Evaluating
+            // them after selection would silently differ, so require the
+            // explicit post-filter form instead.
+            if let Some(path) = variables.intersection(&path_names).next() {
+                return Err(HawDBError::Semantic(format!(
+                    "WHERE predicates on shortest-path variable '{path}' are not supported in the same MATCH clause; filter after the search with `WITH {path} WHERE ...`"
+                )));
+            }
             let bound = bind_predicate(conjunct, scope, parameters)?;
-            if !split || !variables.is_disjoint(&path_names) {
+            if !split {
                 path_conjuncts.push(bound);
             } else {
                 endpoint_conjuncts.push(bound);

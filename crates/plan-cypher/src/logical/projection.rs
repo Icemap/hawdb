@@ -1568,7 +1568,7 @@ pub(super) fn plan_path_function(
     let column = path.path_variable();
     if !column_scope.contains(column) {
         return Err(HawDBError::Semantic(format!(
-            "path function requires a path bound by shortestPath or allShortestPaths, got '{column}'"
+            "path function requires a path value (bound by shortestPath or allShortestPaths, or carried through WITH), got unknown variable '{column}'"
         )));
     }
     let function = match path {

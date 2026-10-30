@@ -171,7 +171,7 @@ fn shortest_path_functions_bind_correlated_steps() {
 #[test]
 fn required_shortest_path_clauses_bind_endpoints_before_searching() {
     let plan = plan_pipeline_query(
-        "MATCH p = shortestPath((a:Item)-[:LINK*]->(b:Item)) WHERE a.id = 1 AND b.id = 2 AND length(p) > 1 RETURN length(p) AS hops",
+        "MATCH p = shortestPath((a:Item)-[:LINK*]->(b:Item)) WHERE a.id = 1 AND b.id = 2 RETURN length(p) AS hops",
         &BTreeMap::new(),
     )
     .unwrap();
@@ -185,9 +185,9 @@ fn required_shortest_path_clauses_bind_endpoints_before_searching() {
     else {
         panic!("expected path program: {input:?}");
     };
-    // The search program reads only path predicates; endpoint conjuncts filter first.
+    // Endpoint conjuncts filter before the search; the search has no predicate.
     assert_eq!(program.introduced, vec!["p".to_string()]);
-    assert!(format!("{:?}", program.predicate).contains("Length"));
+    assert!(program.predicate.is_none(), "{:?}", program.predicate);
     let LogicalPlan::GraphMatch { program, .. } = endpoints.as_ref() else {
         panic!("expected endpoint program: {endpoints:?}");
     };
@@ -209,6 +209,14 @@ fn shortest_path_binding_rejects_unsupported_shapes() {
         (
             "MATCH (a:Item {id: 1}), (b:Item {id: 2}) MATCH p = shortestPath((a)-[:LINK*2..3]->(b)) RETURN length(p)",
             "minimum of 0 or 1",
+        ),
+        (
+            "MATCH (a:Item {id: 1}), (b:Item {id: 2}) MATCH p = shortestPath((a)-[:LINK*]->(b)) WHERE length(p) > 1 RETURN p",
+            "filter after the search with `WITH p WHERE ...`",
+        ),
+        (
+            "MATCH (a:Item {id: 1}), (b:Item {id: 2}) OPTIONAL MATCH p = allShortestPaths((a)-[:LINK*]-(b)) WHERE a.id = 1 AND length(p) > 1 RETURN p",
+            "shortest-path variable 'p'",
         ),
         (
             "MATCH (a:Item {id: 1}), (b:Item {id: 2}) MATCH p = shortestPath((a)-[:LINK*1..257]->(b)) RETURN length(p)",
