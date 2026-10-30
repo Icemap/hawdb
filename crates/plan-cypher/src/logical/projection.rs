@@ -330,7 +330,7 @@ pub(super) fn plan_return_items_with_columns(
     if items.iter().any(|item| {
         matches!(
             item.expression.kind,
-            ReturnExpressionKind::Arithmetic { .. }
+            ReturnExpressionKind::Arithmetic { .. } | ReturnExpressionKind::ListFunction { .. }
         )
     }) {
         return super::arithmetic::plan_composed_returns(scope, column_scope, items, parameters);
@@ -351,7 +351,8 @@ pub(super) fn plan_return_items_with_columns(
             match &item.expression.kind {
                 ReturnExpressionKind::Value(_)
                 | ReturnExpressionKind::Path(_)
-                | ReturnExpressionKind::Arithmetic { .. } => {
+                | ReturnExpressionKind::Arithmetic { .. }
+                | ReturnExpressionKind::ListFunction { .. } => {
                     group_keys.push(plan_projection_with_columns(
                         scope,
                         column_scope,
@@ -705,6 +706,22 @@ pub(super) fn plan_projection_with_columns(
         | ScalarExpressionKind::IsNull { .. } => (
             plan_case_scalar(scope, column_scope, value, parameters, true)?,
             "case".to_string(),
+        ),
+        ScalarExpressionKind::ListFunction { function, .. } => (
+            plan_scalar_expression_with_columns(scope, column_scope, value, parameters)?,
+            function.function_name().to_string(),
+        ),
+        ScalarExpressionKind::ListComprehension { .. } => (
+            plan_scalar_expression_with_columns(scope, column_scope, value, parameters)?,
+            "list_comprehension".to_string(),
+        ),
+        ScalarExpressionKind::ListIndex { .. } => (
+            plan_scalar_expression_with_columns(scope, column_scope, value, parameters)?,
+            "list_index".to_string(),
+        ),
+        ScalarExpressionKind::ListSlice { .. } => (
+            plan_scalar_expression_with_columns(scope, column_scope, value, parameters)?,
+            "list_slice".to_string(),
         ),
     };
     Ok(Projection {
@@ -1394,7 +1411,141 @@ pub(super) fn plan_scalar_expression_with_columns(
         | ScalarExpressionKind::IsNull { .. } => {
             plan_case_scalar(scope, column_scope, expression, parameters, false)
         }
+        ScalarExpressionKind::ListFunction {
+            function,
+            arguments,
+        } => Ok(ProjectionExpression::ListFunction {
+            function: *function,
+            arguments: arguments
+                .iter()
+                .map(|argument| {
+                    plan_scalar_expression_with_columns(scope, column_scope, argument, parameters)
+                })
+                .collect::<Result<Vec<_>>>()?,
+        }),
+        ScalarExpressionKind::ListComprehension {
+            variable,
+            list,
+            predicate,
+            projection,
+        } => plan_list_comprehension(
+            scope,
+            column_scope,
+            ListComprehensionParts {
+                variable,
+                list,
+                predicate: predicate.as_deref(),
+                projection: projection.as_deref(),
+            },
+            parameters,
+        ),
+        ScalarExpressionKind::ListIndex { list, index } => Ok(ProjectionExpression::ListIndex {
+            list: Box::new(plan_scalar_expression_with_columns(
+                scope,
+                column_scope,
+                list,
+                parameters,
+            )?),
+            index: Box::new(plan_scalar_expression_with_columns(
+                scope,
+                column_scope,
+                index,
+                parameters,
+            )?),
+        }),
+        ScalarExpressionKind::ListSlice { list, start, end } => {
+            let bind = |expression: &ScalarExpression| {
+                plan_scalar_expression_with_columns(scope, column_scope, expression, parameters)
+                    .map(Box::new)
+            };
+            Ok(ProjectionExpression::ListSlice {
+                list: bind(list)?,
+                start: start.as_deref().map(bind).transpose()?,
+                end: end.as_deref().map(bind).transpose()?,
+            })
+        }
     }
+}
+
+struct ListComprehensionParts<'a> {
+    variable: &'a str,
+    list: &'a ScalarExpression,
+    predicate: Option<&'a ScalarExpression>,
+    projection: Option<&'a ScalarExpression>,
+}
+
+/// Plans `[variable IN list WHERE predicate | projection]`.
+///
+/// The element variable must not shadow a graph variable or a column that is
+/// already visible; reusing a name would make `x` mean different values inside
+/// and outside the brackets. Inside the body the element is planned as a
+/// column and then rebound to [`ProjectionExpression::LocalVariable`], so no
+/// row-column analysis ever sees it.
+fn plan_list_comprehension(
+    scope: &BTreeSet<String>,
+    column_scope: &BTreeSet<String>,
+    parts: ListComprehensionParts<'_>,
+    parameters: &BTreeMap<String, Value>,
+) -> Result<ProjectionExpression> {
+    let variable = parts.variable;
+    if scope.contains(variable) || column_scope.contains(variable) {
+        return Err(HawDBError::Semantic(format!(
+            "list comprehension variable '{variable}' shadows a variable that is already in scope; use a different name"
+        )));
+    }
+    let list = plan_scalar_expression_with_columns(scope, column_scope, parts.list, parameters)?;
+    let mut body_columns = column_scope.clone();
+    body_columns.insert(variable.to_string());
+    let bind_body = |expression: &ScalarExpression| {
+        let mut planned =
+            plan_scalar_expression_with_columns(scope, &body_columns, expression, parameters)?;
+        bind_list_local(&mut planned, variable)?;
+        Ok::<_, HawDBError>(planned)
+    };
+    Ok(ProjectionExpression::ListComprehension(Box::new(
+        ListComprehensionProjection {
+            variable: variable.to_string(),
+            list,
+            predicate: parts.predicate.map(bind_body).transpose()?,
+            projection: parts.projection.map(bind_body).transpose()?,
+        },
+    )))
+}
+
+fn bind_list_local(expression: &mut ProjectionExpression, variable: &str) -> Result<()> {
+    match expression {
+        ProjectionExpression::Column(column) if column == variable => {
+            *expression = ProjectionExpression::LocalVariable {
+                name: variable.to_string(),
+                property: None,
+            };
+            Ok(())
+        }
+        ProjectionExpression::ColumnProperty { column, property } if column == variable => {
+            *expression = ProjectionExpression::LocalVariable {
+                name: variable.to_string(),
+                property: Some(property.clone()),
+            };
+            Ok(())
+        }
+        ProjectionExpression::ColumnDefaultIfNullOrEq { column, .. }
+        | ProjectionExpression::ColumnValueDefaultIfNull { column, .. }
+        | ProjectionExpression::ColumnValueCasePropertyNotNullOrEq { column, .. }
+            if column == variable =>
+        {
+            Err(unsupported_list_local(variable))
+        }
+        ProjectionExpression::CaseColumnSearchRank(rank) if rank.column == variable => {
+            Err(unsupported_list_local(variable))
+        }
+        _ => expression.try_for_each_child_mut(|child| bind_list_local(child, variable)),
+    }
+}
+
+fn unsupported_list_local(variable: &str) -> HawDBError {
+    HawDBError::Semantic(format!(
+        "this CASE form is not supported over list comprehension variable '{variable}'; use a generic CASE WHEN expression"
+    ))
 }
 
 pub(super) fn bind_coalesce_difference_terms(

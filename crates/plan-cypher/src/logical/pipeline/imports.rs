@@ -170,7 +170,12 @@ fn native_projection_self(expression: &ProjectionExpression, needed: &mut BTreeS
         | ProjectionExpression::ColumnValueDefaultIfNull { .. }
         | ProjectionExpression::ColumnValueCasePropertyNotNullOrEq { .. }
         | ProjectionExpression::Column(_)
-        | ProjectionExpression::ColumnProperty { .. } => {}
+        | ProjectionExpression::ColumnProperty { .. }
+        | ProjectionExpression::ListFunction { .. }
+        | ProjectionExpression::ListComprehension(_)
+        | ProjectionExpression::LocalVariable { .. }
+        | ProjectionExpression::ListIndex { .. }
+        | ProjectionExpression::ListSlice { .. } => {}
     }
 }
 

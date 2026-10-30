@@ -20,6 +20,7 @@ pub mod error;
 pub mod graph;
 pub mod graph_rag;
 pub mod ids;
+pub mod list_function;
 pub mod logical_type;
 pub mod projection;
 pub mod regex;
@@ -56,6 +57,7 @@ pub use graph_rag::{
     DEFAULT_GRAPH_RAG_MAX_PROPERTIES_PER_SUBJECT, DEFAULT_GRAPH_RAG_MAX_RELATIONSHIP_TYPES,
     DEFAULT_GRAPH_RAG_MAX_ROUTES, GRAPH_RAG_SCHEMA_CONTEXT_PROTOCOL, MAX_GRAPH_RAG_QUERY_LIMIT,
 };
+pub use list_function::{ListFunction, MAX_LIST_EXPRESSION_WORK, MAX_RANGE_LENGTH};
 pub use logical_type::{LogicalType, VectorDimension};
 pub use regex::ValidatedRegex;
 pub use schema::{

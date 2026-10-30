@@ -88,6 +88,9 @@ fn contains_ranked_evidence(expression: &ReturnExpression) -> bool {
                     .iter()
                     .any(|(_, child)| contains_ranked_evidence(child))
         }
+        ReturnExpressionKind::ListFunction { arguments, .. } => {
+            arguments.iter().any(contains_ranked_evidence)
+        }
         _ => false,
     }
 }
