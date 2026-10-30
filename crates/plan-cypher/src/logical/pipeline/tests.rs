@@ -467,8 +467,6 @@ fn bounded_match_rejects_unrepresentable_relationship_shapes_before_normalizatio
             format!("(a:Node)-[r:LINK*{range}]->(b:Node)"),
             format!("(a:Node)-[:LINK*{range} {{weight: 1}}]->(b:Node)"),
             format!("(a:Node)-[*{range}]->(b:Node)"),
-            format!("(a:Node)<-[:LINK*{range}]-(b:Node)"),
-            format!("(a:Node)-[:LINK*{range}]-(b:Node)"),
         ] {
             for prefix in ["MATCH", "OPTIONAL MATCH"] {
                 let query = format!("{prefix} {pattern} RETURN b.id");
@@ -494,6 +492,9 @@ fn bounded_match_rejects_unrepresentable_relationship_shapes_before_normalizatio
         "(a:Node)-[:LINK]-(b:Node)",
         "(a:Node)-[:LINK*0..1]->(b:Node)",
         "(a:Node)-[:LINK*1..2]->(b:Node {id: 2})",
+        "(a:Node)<-[:LINK*1..2]-(b:Node)",
+        "(a:Node)-[:LINK*2..2]-(b:Node)",
+        "(a:Node)<-[:LINK*0..1]-(b:Node)",
     ] {
         let query = format!("MATCH {pattern} RETURN b.id");
         plan_pipeline_query(&query, &BTreeMap::new()).unwrap();

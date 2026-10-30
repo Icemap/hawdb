@@ -1973,9 +1973,8 @@ adjacency reports using the existing storage directions directly.
 
 The final navigation fixtures use scalar CASE comparisons for parameterized hop
 bounds. Bare WHERE parameter predicates support equality/null checks, not ordered
-comparisons. Bidirectional one/two-hop checks use fixed one-hop edges per pattern;
-the frontend intentionally rejects non-outgoing variable-length patterns even
-for missing endpoints or unknown relationship types. These syntax repairs retain
+comparisons. Bidirectional one/two-hop checks use fixed one-hop edges per pattern.
+These syntax repairs retain
 all exact-result, missing-endpoint, zero-hop and exhausted-budget assertions.
 
 ### Query-first concurrency review regressions
