@@ -482,10 +482,16 @@ fn aggregate_input(
             AggregateFunction::Collect => binding_value(binding, catalog, variable)
                 .filter(|value| value != &Value::Null)
                 .map_or(AggregateInput::Missing, AggregateInput::Value),
-            AggregateFunction::Sum
+            // The binder only produces variable targets for COUNT and COLLECT;
+            // refuse other functions instead of silently aggregating nothing.
+            function @ (AggregateFunction::Sum
             | AggregateFunction::Min
             | AggregateFunction::Max
-            | AggregateFunction::Avg => AggregateInput::Missing,
+            | AggregateFunction::Avg) => {
+                return Err(HawDBError::Execution(format!(
+                    "{function:?} aggregation requires a scalar argument, not variable '{variable}'"
+                )));
+            }
         },
         AggregateTarget::Property { .. } => aggregate_property_value(&item.target, binding)
             .map_or(AggregateInput::Missing, AggregateInput::Value),

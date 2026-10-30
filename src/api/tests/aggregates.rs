@@ -1082,3 +1082,20 @@ fn sum_rejects_overflow_non_numeric_and_nested_aggregates() {
         "{error}"
     );
 }
+
+#[test]
+fn unary_minus_binds_tighter_than_arithmetic_in_projections() {
+    let mut db = sum_expression_fixture();
+    let output = db
+        .query(
+            "MATCH (n:Num {x: 2}) RETURN -n.x * 2 AS a, n.x - -1 AS b, - 1 AS c, -(n.x) AS d, -n.x + 3 AS e",
+        )
+        .unwrap();
+    let row = &output.rows[0];
+    assert_eq!(row.get("a"), Some(&Value::Int(-4)));
+    assert_eq!(row.get("b"), Some(&Value::Int(3)));
+    assert_eq!(row.get("c"), Some(&Value::Int(-1)));
+    assert_eq!(row.get("d"), Some(&Value::Int(-2)));
+    assert_eq!(row.get("e"), Some(&Value::Int(1)));
+    assert!(db.query("MATCH (n:Num {x: 2}) RETURN -'a' AS f").is_err());
+}
