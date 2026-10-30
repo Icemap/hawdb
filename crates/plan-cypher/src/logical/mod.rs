@@ -14,7 +14,7 @@
 
 use hawdb_core::{HawDBError, Result, ValidatedRegex, Value};
 use hawdb_cypher::{
-    AggregateExpression, ComparisonOp as CypherComparisonOp,
+    AggregateExpression, AggregateFunctionName, ComparisonOp as CypherComparisonOp,
     GraphAlgorithmKind as CypherGraphAlgorithmKind,
     GraphAlgorithmOptions as CypherGraphAlgorithmOptions, OrderDirection as CypherOrderDirection,
     OrderExpression, OrderItem, PropertyPredicate, RelationshipDirection, ReturnExpression,
@@ -635,6 +635,7 @@ pub struct Aggregation {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AggregateFunction {
     Count,
+    Sum,
     Min,
     Max,
     Avg,
@@ -659,4 +660,19 @@ pub enum AggregateTarget {
         variable: String,
         property: String,
     },
+    /// A general aggregate-free argument evaluated against each input row.
+    Expression(ProjectionExpression),
+}
+
+impl AggregateFunction {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Count => "count",
+            Self::Sum => "sum",
+            Self::Min => "min",
+            Self::Max => "max",
+            Self::Avg => "avg",
+            Self::Collect => "collect",
+        }
+    }
 }

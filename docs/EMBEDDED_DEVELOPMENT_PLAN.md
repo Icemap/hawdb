@@ -805,7 +805,17 @@ alias-based ordering, `ORDER BY COUNT(variable)` over the projected aggregate
 column, and pagination. Nowledge-used `MIN(variable.property)` is
 implemented for schema verification reads such as `min(r.weight)`, and
 Nowledge-used `AVG(variable.property)` is implemented for health aggregate reads
-such as `avg(m.decay_score_cached)`. One-hop
+such as `avg(m.decay_score_cached)`. openCypher `SUM` is implemented: it ignores
+NULL, returns an integer for all-integer input (failing on `i64` overflow), a
+float once any float is summed, `0` for empty or all-NULL input, and fails on
+non-numeric input. `COUNT`, `SUM`, `MIN`, `MAX`, `AVG`, and `COLLECT` accept
+any aggregate-free projection expression as their argument, each with optional
+`DISTINCT` over the argument value, for example
+`sum(CASE WHEN n.x > 1 THEN 1 ELSE 0 END)`, `count(DISTINCT n.x % 2)`,
+`avg(n.x * 2)`, `max(-n.x)`, or `sum(x * 2)` over a `WITH` column. The fixed
+`variable[.property]` shapes keep their previous logical plans; other arguments
+are evaluated per input row by the aggregate operator. Aggregates nested inside
+an aggregate argument are rejected. One-hop
 relationship variables can be returned, filtered, sorted, and counted through relationship properties, for example
 `RETURN r.weight`, `WHERE r.weight > 1`, `ORDER BY r.weight`, `COUNT(r)`, and
 `COUNT(r.weight)`. Stable logical identities can be projected, filtered, and
