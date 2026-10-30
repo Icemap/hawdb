@@ -16,11 +16,20 @@ use super::*;
 
 const NODES: i64 = 128;
 
-fn fixture() -> (std::path::PathBuf, GraphStore, Vec<NodeId>) {
+/// Removes the store directory even when an assertion fails.
+struct Fixture(std::path::PathBuf);
+impl Drop for Fixture {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+fn fixture() -> (Fixture, GraphStore, Vec<NodeId>) {
     let path = std::env::temp_dir().join(format!(
         "hawdb-endpoint-validation-{}",
         hawdb_core::generate_uuidv7().unwrap()
     ));
+    let directory = Fixture(path.clone());
     let mut catalog = Catalog::default();
     let mut store = GraphStore::open_with_durability_and_replay_config(
         &path,
@@ -64,12 +73,12 @@ fn fixture() -> (std::path::PathBuf, GraphStore, Vec<NodeId>) {
     assert!(store.is_out_of_core());
     assert!(store.nodes.is_empty());
     assert!(store.relationships.is_empty());
-    (path, store, nodes)
+    (directory, store, nodes)
 }
 
 #[test]
 fn out_of_core_endpoint_validation_does_not_point_read_each_endpoint() {
-    let (path, store, _) = fixture();
+    let (_directory, store, _) = fixture();
     let relationships = (NODES * 4) as u64;
     let before = store.segment_cache_snapshot().unwrap();
     store.validate_relationship_endpoints().unwrap();
@@ -79,13 +88,11 @@ fn out_of_core_endpoint_validation_does_not_point_read_each_endpoint() {
         lookups < relationships,
         "endpoint validation must scan, not point-read each endpoint: {lookups} segment lookups for {relationships} relationships"
     );
-    drop(store);
-    std::fs::remove_dir_all(path).unwrap();
 }
 
 #[test]
 fn out_of_core_endpoint_validation_rejects_missing_endpoint() {
-    let (path, mut store, nodes) = fixture();
+    let (_directory, mut store, nodes) = fixture();
     let missing = nodes[7];
     store.node_tombstones.insert(missing);
     let error = store
@@ -96,6 +103,4 @@ fn out_of_core_endpoint_validation_rejects_missing_endpoint() {
         error.contains(&format!("node {}", missing.0)) && error.contains("references missing"),
         "unexpected error: {error}"
     );
-    drop(store);
-    std::fs::remove_dir_all(path).unwrap();
 }

@@ -1286,19 +1286,20 @@ impl GraphStore {
         if self.canonical_base_out_of_core {
             // Existence only: collect visible node ids once with an
             // IDs-only scan instead of decoding a full node per endpoint.
-            let mut node_ids = Vec::new();
+            // Ids come from the monotonic allocator, so the compressed
+            // bitmap stays a few bits per node rather than 8 bytes.
+            let mut node_ids = roaring::RoaringTreemap::new();
             self.visit_projected_nodes_owned(None, &BTreeSet::new(), |node| {
-                node_ids.push(node.id.0);
+                node_ids.insert(node.id.0);
                 GraphScanControl::Continue
             })?;
-            node_ids.sort_unstable();
             let mut validation_error = None;
             self.visit_relationships_owned(None, |relationship| {
                 for (kind, node_id) in [
                     ("source", relationship.source),
                     ("target", relationship.target),
                 ] {
-                    if node_ids.binary_search(&node_id.0).is_err() {
+                    if !node_ids.contains(node_id.0) {
                         validation_error = Some(HawDBError::Storage(format!(
                             "relationship {} references missing {kind} node {}",
                             relationship.id.0, node_id.0
