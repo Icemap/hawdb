@@ -31,6 +31,10 @@ const OBJECTS_DIRECTORY: &str = "objects";
 const STAGING_DIRECTORY: &str = ".staging";
 const IDENTITY_DOMAIN: &[u8] = b"HAWDB-IMMUTABLE-OBJECT-V1\0";
 const DEFAULT_MAX_OBJECT_BYTES: u64 = 128 * 1024 * 1024;
+/// Checkpoint data and artifacts are only ever streamed (published, verified
+/// and mounted in bounded buffers), so their size is bounded by the
+/// checkpoint encoding limit rather than by the in-memory object bound.
+const DEFAULT_MAX_STREAMED_OBJECT_BYTES: u64 = crate::config::DEFAULT_MAX_CHECKPOINT_ENCODED_BYTES;
 const STREAM_BUFFER_BYTES: usize = 64 * 1024;
 
 static STAGING_SEQUENCE: AtomicU64 = AtomicU64::new(0);
@@ -286,7 +290,10 @@ pub(crate) struct ImmutableObjectInventory {
 #[derive(Debug)]
 pub struct ImmutableObjectStore {
     root: PathBuf,
+    /// Bound for objects that may be read whole into memory.
     max_object_bytes: u64,
+    /// Bound for checkpoint objects, which are only streamed.
+    max_streamed_object_bytes: u64,
     poisoned: bool,
     synchronized_kinds: BTreeSet<ObjectKind>,
     namespace_synchronized: bool,
@@ -297,6 +304,7 @@ impl ImmutableObjectStore {
         Self {
             root,
             max_object_bytes,
+            max_streamed_object_bytes: max_object_bytes.max(DEFAULT_MAX_STREAMED_OBJECT_BYTES),
             poisoned: false,
             synchronized_kinds: BTreeSet::new(),
             namespace_synchronized: false,
@@ -304,14 +312,29 @@ impl ImmutableObjectStore {
     }
 
     pub fn open(root: impl Into<PathBuf>) -> Result<Self, ImmutableObjectError> {
-        Self::open_with_limit(root, DEFAULT_MAX_OBJECT_BYTES)
+        Self::open_with_limits(
+            root,
+            DEFAULT_MAX_OBJECT_BYTES,
+            DEFAULT_MAX_STREAMED_OBJECT_BYTES,
+        )
     }
 
+    /// Opens with one bound for every object kind.
     pub fn open_with_limit(
         root: impl Into<PathBuf>,
         max_object_bytes: u64,
     ) -> Result<Self, ImmutableObjectError> {
-        if max_object_bytes == 0 {
+        Self::open_with_limits(root, max_object_bytes, max_object_bytes)
+    }
+
+    /// Opens with separate bounds for objects that may be read into memory
+    /// and for checkpoint objects, which are only streamed.
+    pub fn open_with_limits(
+        root: impl Into<PathBuf>,
+        max_object_bytes: u64,
+        max_streamed_object_bytes: u64,
+    ) -> Result<Self, ImmutableObjectError> {
+        if max_object_bytes == 0 || max_streamed_object_bytes == 0 {
             return Err(ImmutableObjectError::ObjectTooLarge {
                 length: 1,
                 limit: max_object_bytes,
@@ -330,10 +353,39 @@ impl ImmutableObjectStore {
         Ok(Self {
             root,
             max_object_bytes,
+            max_streamed_object_bytes,
             poisoned: false,
             synchronized_kinds: BTreeSet::new(),
             namespace_synchronized: false,
         })
+    }
+
+    /// The size bound for an object of `kind` handled through streaming
+    /// paths. Buffered APIs (`publish`, `read`) always use the in-memory bound.
+    fn streamed_limit(&self, kind: ObjectKind) -> u64 {
+        match kind {
+            ObjectKind::Checkpoint | ObjectKind::CheckpointArtifact => {
+                self.max_streamed_object_bytes
+            }
+            ObjectKind::SealedWal | ObjectKind::SealedRoot | ObjectKind::DurableManifest => {
+                self.max_object_bytes
+            }
+        }
+    }
+
+    /// Buffered payloads keep the in-memory bound; file-backed (streamed)
+    /// publication uses the per-kind streamed bound.
+    fn payload_limit(&self, reference: ObjectReference, payload: Option<&[u8]>) -> u64 {
+        match payload {
+            Some(_) => self.max_object_bytes,
+            None => self.streamed_limit(reference.kind),
+        }
+    }
+
+    /// Verifies a stored object by streaming its identity, without reading it
+    /// into memory.
+    pub fn verify_stored(&self, reference: ObjectReference) -> Result<(), ImmutableObjectError> {
+        self.verify(reference)
     }
 
     pub fn object_path(&self, reference: ObjectReference) -> PathBuf {
@@ -475,7 +527,7 @@ impl ImmutableObjectStore {
         )?;
         if !metadata.is_file()
             || metadata.len() != reference.byte_length
-            || metadata.len() > self.max_object_bytes
+            || metadata.len() > self.streamed_limit(reference.kind)
             || reference.format_version == 0
         {
             return Err(ImmutableObjectError::ExistingObjectCorrupt { path });
@@ -770,10 +822,10 @@ impl ImmutableObjectStore {
         if reference.format_version == 0 {
             return Err(ImmutableObjectError::InvalidFormatVersion);
         }
-        if reference.byte_length > self.max_object_bytes {
+        if reference.byte_length > self.streamed_limit(reference.kind) {
             return Err(ImmutableObjectError::ObjectTooLarge {
                 length: reference.byte_length,
-                limit: self.max_object_bytes,
+                limit: self.streamed_limit(reference.kind),
             });
         }
         let destination = self.prepare_kind_directory(reference)?;
@@ -902,7 +954,12 @@ impl ImmutableObjectStore {
         staging: &Path,
         destination: &Path,
     ) -> Result<PublishOutcome, ImmutableObjectError> {
-        validate_file(staging, reference, payload, self.max_object_bytes)?;
+        validate_file(
+            staging,
+            reference,
+            payload,
+            self.payload_limit(reference, payload),
+        )?;
         match fs::hard_link(staging, destination) {
             Ok(()) => {
                 if let Err(error) = fs::remove_file(staging) {
@@ -937,7 +994,12 @@ impl ImmutableObjectStore {
                 path: path.to_path_buf(),
             });
         }
-        validate_file(path, reference, payload, self.max_object_bytes)?;
+        validate_file(
+            path,
+            reference,
+            payload,
+            self.payload_limit(reference, payload),
+        )?;
         // A previous publisher may have installed complete bytes but failed its
         // final namespace barrier. Acknowledging reuse must close that window.
         if let Err(source) = sync_publication_directories(path, None) {
@@ -1329,6 +1391,54 @@ mod tests {
             })
         ));
         assert!(!store.object_path(expected).exists());
+        assert_eq!(staging_entries(&root), 0);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn streamed_checkpoint_objects_use_the_streamed_bound_only() {
+        let root = test_root("streamed-bound");
+        fs::create_dir_all(&root).unwrap();
+        let source = root.join("artifact.bin");
+        let payload = vec![7u8; 64];
+        fs::write(&source, &payload).unwrap();
+        // 16 bytes may be read into memory; checkpoint objects may stream 1 KiB.
+        let mut store = ImmutableObjectStore::open_with_limits(&root, 16, 1024).unwrap();
+        for kind in [ObjectKind::Checkpoint, ObjectKind::CheckpointArtifact] {
+            let reference = ObjectReference::for_bytes(kind, 1, &payload);
+            assert_eq!(
+                store.publish_file(reference, &source).unwrap(),
+                PublishOutcome::Published
+            );
+            store.verify_stored(reference).unwrap();
+            // Buffered APIs keep the in-memory bound.
+            assert!(matches!(
+                store.publish(reference, &payload),
+                Err(ImmutableObjectError::ObjectTooLarge { .. })
+            ));
+            assert!(store.read(reference).is_err());
+        }
+        // Kinds that are read whole into memory keep the in-memory bound even
+        // when published from a file.
+        for kind in [
+            ObjectKind::SealedWal,
+            ObjectKind::SealedRoot,
+            ObjectKind::DurableManifest,
+        ] {
+            let reference = ObjectReference::for_bytes(kind, 1, &payload);
+            assert!(matches!(
+                store.publish_file(reference, &source),
+                Err(ImmutableObjectError::ObjectTooLarge { limit: 16, .. })
+            ));
+        }
+        // The streamed bound still applies.
+        let large = vec![1u8; 2048];
+        fs::write(&source, &large).unwrap();
+        let reference = ObjectReference::for_bytes(ObjectKind::CheckpointArtifact, 1, &large);
+        assert!(matches!(
+            store.publish_file(reference, &source),
+            Err(ImmutableObjectError::ObjectTooLarge { limit: 1024, .. })
+        ));
         assert_eq!(staging_entries(&root), 0);
         fs::remove_dir_all(root).unwrap();
     }
