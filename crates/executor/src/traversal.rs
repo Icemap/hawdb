@@ -37,7 +37,7 @@ use hawdb_core::{
 };
 use hawdb_plan_cypher::{
     RelationshipCountFilter, RelationshipCountLeg, ShortestPathProjection,
-    ShortestPathProjectionExpression,
+    ShortestPathProjectionExpression, THREAD_REPAIR_STATS_COLUMNS,
 };
 use hawdb_storage::read_view::{AdmittedNodeRead, AdmittedNodeRecord};
 use hawdb_storage::{
@@ -1110,22 +1110,19 @@ pub fn thread_repair_stats_rows(
             None => 0,
         };
         let binding = Binding {
-            values: BTreeMap::from([
-                    ("t.id".to_string(), thread.id),
-                    ("t.thread_id".to_string(), thread.thread_id),
-                    (
-                        "CASE WHEN t.space_id IS NULL OR t.space_id = '' THEN 'default' ELSE t.space_id END"
-                            .to_string(),
-                        thread.space_id,
-                    ),
-                    ("COALESCE(t.message_count, 0)".to_string(), thread.message_count),
-                    ("identity_refs".to_string(), Value::Int(identity_refs as i64)),
-                    (
-                        "legacy_messages".to_string(),
-                        Value::Int(legacy_messages as i64),
-                    ),
-                    ("COUNT(m)".to_string(), Value::Int(compacted_memories as i64)),
-                ]),
+            values: THREAD_REPAIR_STATS_COLUMNS
+                .into_iter()
+                .map(str::to_owned)
+                .zip([
+                    thread.id,
+                    thread.thread_id,
+                    thread.space_id,
+                    thread.message_count,
+                    Value::Int(identity_refs as i64),
+                    Value::Int(legacy_messages as i64),
+                    Value::Int(compacted_memories as i64),
+                ])
+                .collect(),
             nodes: BTreeMap::new().into(),
             relationships: BTreeMap::new().into(),
         };
