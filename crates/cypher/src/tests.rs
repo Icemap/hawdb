@@ -179,6 +179,7 @@ mod list_functions;
 mod list_literals;
 mod migration_corpus;
 mod source_spans;
+mod temporal;
 
 const EXCESSIVE_CYPHER_NESTING: usize = 100_000;
 

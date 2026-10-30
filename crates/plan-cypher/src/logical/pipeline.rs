@@ -1498,10 +1498,9 @@ fn bind_predicate(
         PropertyPredicate::Not(child) => {
             Predicate::Not(Box::new(bind_predicate(child, scope, parameters)?))
         }
-        PropertyPredicate::ExpressionEq { expression, value } => Predicate::ExpressionEq {
-            expression: bind(expression)?,
-            value: bind(value)?,
-        },
+        PropertyPredicate::ExpressionEq { expression, value } => {
+            super::temporal::eq_predicate(bind(expression)?, bind(value)?)
+        }
         PropertyPredicate::ExpressionNotEq { expression, value } => Predicate::ExpressionNotEq {
             expression: bind(expression)?,
             value: bind(value)?,
@@ -1510,11 +1509,11 @@ fn bind_predicate(
             expression,
             op,
             value,
-        } => Predicate::ExpressionCompare {
-            expression: bind(expression)?,
-            op: plan_comparison_op(*op),
-            value: bind(value)?,
-        },
+        } => super::temporal::compare_predicate(
+            bind(expression)?,
+            plan_comparison_op(*op),
+            bind(value)?,
+        ),
         PropertyPredicate::ExpressionContains { expression, value } => {
             Predicate::ExpressionContains {
                 expression: bind(expression)?,

@@ -173,6 +173,15 @@ impl Parser<'_> {
                 }
                 continue;
             }
+            if self.at_temporal_call() {
+                let expression = OrderExpression::Value(self.parse_scalar_expression()?);
+                items.push(self.parse_order_direction(expression, expression_start.pos));
+                self.skip_ws();
+                if !self.consume_char(',') {
+                    break;
+                }
+                continue;
+            }
             let first = self.parse_ident()?;
             let expression = if first.eq_ignore_ascii_case("count") && self.consume_char('(') {
                 let distinct = self.consume_keyword("DISTINCT");
@@ -222,7 +231,7 @@ impl Parser<'_> {
             } else if self.consume_char('.') {
                 let property = self.parse_ident()?;
                 self.skip_ws();
-                if self.peek_char() == Some('[') {
+                if self.peek_char() == Some('[') || self.at_property_postfix() {
                     self.restore(expression_start);
                     OrderExpression::Value(self.parse_scalar_expression()?)
                 } else {
@@ -267,11 +276,16 @@ impl Parser<'_> {
         let start = self.pos;
         let kind = self.with_recursion(|parser| parser.parse_scalar_expression_inner())?;
         let mut expression = self.source_node(kind, start);
-        // Postfix `[index]` and `[start..end]` bind tighter than any operator.
-        // Each one nests the AST, so it counts against the recursion budget.
+        // Postfix `[index]`, `[start..end]` and `.key` bind tighter than any
+        // operator. Each one nests the AST, so it counts against the
+        // recursion budget.
         let base_depth = self.recursion_depth;
         let result = (|| {
-            while self.consume_char('[') {
+            loop {
+                let property = self.at_property_postfix();
+                if !property && !self.consume_char('[') {
+                    break;
+                }
                 if self.recursion_depth >= super::MAX_CYPHER_PARSER_DEPTH {
                     return Err(self.error(&format!(
                         "Cypher parser nesting exceeds limit of {}",
@@ -279,7 +293,15 @@ impl Parser<'_> {
                     )));
                 }
                 self.recursion_depth += 1;
-                let kind = self.parse_list_postfix(expression)?;
+                let kind = if property {
+                    self.pos += 1;
+                    ScalarExpressionKind::PropertyAccess {
+                        expression: Box::new(expression),
+                        key: self.parse_ident()?,
+                    }
+                } else {
+                    self.parse_list_postfix(expression)?
+                };
                 expression = self.source_node(kind, start);
             }
             Ok(expression)
@@ -438,6 +460,16 @@ impl Parser<'_> {
         if self.peek_char() == Some('[') {
             return self.parse_list_literal();
         }
+        if self.consume_char('(') {
+            let expression = self.parse_case_or()?;
+            self.expect_char(')')?;
+            return Ok(expression.kind);
+        }
+        if self.peek_char() == Some('{') {
+            return self
+                .parse_map_entries(|parser| parser.parse_case_scalar())
+                .map(ScalarExpressionKind::MapLiteral);
+        }
         if matches!(
             self.peek_char(),
             Some('$' | '[' | '\'' | '"' | '-' | '0'..='9')
@@ -448,6 +480,11 @@ impl Parser<'_> {
             return self.parse_value().map(ScalarExpressionKind::Value);
         }
 
+        let identifier_start = self.checkpoint();
+        let variable = self.parse_ident()?;
+        if let Some(call) = self.parse_scalar_temporal_call(&variable, identifier_start)? {
+            return Ok(call);
+        }
         let variable = self.parse_ident()?;
         if variable.eq_ignore_ascii_case("id") && self.consume_char('(') {
             let variable = self.parse_ident()?;

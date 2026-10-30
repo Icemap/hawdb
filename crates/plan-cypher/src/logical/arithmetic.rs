@@ -222,7 +222,10 @@ pub(super) fn scalar_expression_is_scoped(
         | ScalarExpressionKind::ListFunction { .. }
         | ScalarExpressionKind::List(_)
         | ScalarExpressionKind::ListIndex { .. }
-        | ScalarExpressionKind::ListSlice { .. } => expression
+        | ScalarExpressionKind::ListSlice { .. }
+        | ScalarExpressionKind::TemporalFunction { .. }
+        | ScalarExpressionKind::PropertyAccess { .. }
+        | ScalarExpressionKind::MapLiteral(_) => expression
             .kind
             .all_children(|child| scalar_expression_is_scoped(child, scope, column_names)),
         ScalarExpressionKind::ListComprehension {
