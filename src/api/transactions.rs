@@ -323,7 +323,7 @@ pub(super) fn execute_graph_transaction_plan(
             mutation_limits.max_result_rows = mutation_limits.max_result_rows.min(limit);
         }
         let statement_savepoint = transaction.savepoint();
-        let execution = (|| {
+        let execute = || {
             let summary = match &optimized.physical_plan {
                 PhysicalPlan::UnwindMutation {
                     rows,
@@ -411,7 +411,10 @@ pub(super) fn execute_graph_transaction_plan(
                 output,
                 transaction.lock_footprint_since(&statement_savepoint)?,
             ))
-        })();
+        };
+        // Row-evaluated clock reads observe the instant planning observed.
+        let execution =
+            hawdb_core::temporal::with_statement_clock(optimized.statement_clock, execute);
         return match execution {
             Ok((output, lock_footprint)) => Ok(GraphTransactionStatementOutcome {
                 output,
@@ -434,6 +437,7 @@ pub(super) fn execute_graph_transaction_plan(
                 parameters,
                 &runtime.config.execution_memory,
             )
+            .with_statement_clock(optimized.statement_clock)
             .with_output_columns(optimized.output_columns.as_deref())
             .with_output_limits(
                 restrictive_query_limit(
@@ -1798,6 +1802,7 @@ impl DatabaseSession<'_> {
                     parameters,
                     &self.db.config.execution_memory,
                 )
+                .with_statement_clock(optimized.statement_clock)
                 .with_output_columns(optimized.output_columns.as_deref())
                 .with_output_limits(row_limit, self.db.config.max_read_result_payload_bytes),
                 executor::ExecutionResources::new(

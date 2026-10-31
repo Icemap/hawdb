@@ -154,6 +154,13 @@ fn add_duration(instant: &Value, duration: &Duration) -> TemporalResult<Value> {
     result.ok_or_else(overflow)
 }
 
+/// `duration * number` and `duration / number`.
+///
+/// Multiplying by an integer is exact. Dividing by an integer is exact when
+/// it divides every component (`duration({hours: 10000}) / 2`). Otherwise
+/// the components are scaled in `f64` and fractions cascade into smaller
+/// units, which is approximate: an exact time part beyond 2^53 nanoseconds
+/// (about 104 days) loses nanosecond precision.
 fn scale(duration: &Duration, factor: &Value, divide: bool) -> TemporalResult<Value> {
     if let (Value::Int(factor), false) = (factor, divide) {
         let factor = *factor;
@@ -165,6 +172,26 @@ fn scale(duration: &Duration, factor: &Value, divide: bool) -> TemporalResult<Va
             .and_then(|((months, days), nanos)| Duration::from_parts(months, days, nanos))
             .map(Value::duration)
             .ok_or_else(overflow);
+    }
+    if let (Value::Int(divisor), true) = (factor, divide) {
+        let divisor = *divisor;
+        if divisor == 0 {
+            return Err(TemporalError::new("division by zero"));
+        }
+        let nanos = duration.time_nanos();
+        if duration.months.checked_rem(divisor) == Some(0)
+            && duration.days.checked_rem(divisor) == Some(0)
+            && nanos.checked_rem(i128::from(divisor)) == Some(0)
+        {
+            return duration
+                .months
+                .checked_div(divisor)
+                .zip(duration.days.checked_div(divisor))
+                .zip(nanos.checked_div(i128::from(divisor)))
+                .and_then(|((months, days), nanos)| Duration::from_parts(months, days, nanos))
+                .map(Value::duration)
+                .ok_or_else(overflow);
+        }
     }
     let factor = match factor {
         Value::Int(value) => *value as f64,

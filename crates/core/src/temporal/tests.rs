@@ -435,6 +435,26 @@ fn arithmetic_applies_months_days_then_time() {
         .unwrap(),
         duration("PT12H")
     );
+    // Integer divisors that divide every component are exact beyond 2^53 ns,
+    // where the f64 path would round to a multiple of 4 ns.
+    let divide = |left: &Value, divisor: i64| {
+        arithmetic(left, TemporalArithmeticOp::Divide, &Value::Int(divisor))
+            .unwrap()
+            .unwrap()
+    };
+    assert_eq!(divide(&duration("PT10000H"), 2), duration("PT5000H"));
+    assert_eq!(
+        divide(&duration("PT10000H0.000000002S"), 2),
+        duration("PT5000H0.000000001S")
+    );
+    assert_eq!(
+        divide(&duration("P2M4DT-10000H0.000000003S"), -1),
+        duration("P-2M-4DT10000H-0.000000003S")
+    );
+    assert_eq!(
+        multiply(&duration("PT5000H0.000000001S"), &Value::Int(2)),
+        duration("PT10000H0.000000002S")
+    );
     assert!(arithmetic(&Value::Int(1), TemporalArithmeticOp::Add, &Value::Int(2)).is_none());
     for (left, op, right) in [
         (
@@ -647,6 +667,17 @@ fn statement_clock_is_pinned_and_restored() {
         assert_eq!(statement_now(), first);
     });
     assert_ne!(statement_now(), pinned);
+    assert_eq!(pinned_statement_clock(), None);
+    with_statement_clock(pinned, || {
+        let carried = pinned_statement_clock();
+        assert_eq!(carried, Some(pinned));
+        // A worker thread re-pins the carried instant.
+        let observed =
+            std::thread::spawn(move || with_optional_statement_clock(carried, statement_now))
+                .join()
+                .unwrap();
+        assert_eq!(observed, pinned);
+    });
 }
 
 #[test]

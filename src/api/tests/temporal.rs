@@ -741,3 +741,199 @@ fn temporal_values_are_refused_by_relational_sql_parameters() {
         )
         .is_err());
 }
+
+fn ids(db: &mut Database, query: &str, parameters: &BTreeMap<String, Value>) -> Vec<Value> {
+    let output = db.query_with_params(query, parameters).unwrap();
+    let mut ids = column(&output, "id");
+    ids.sort();
+    ids
+}
+
+#[test]
+fn duration_ordering_is_null_whether_or_not_the_operand_folds() {
+    let mut db = database();
+    for (id, span) in [(1, "P1D"), (2, "P3D")] {
+        db.query_with_params(
+            "CREATE (:Span {id: $id, d: $d, x: 2})",
+            &params(&[("id", Value::Int(id)), ("d", duration(span))]),
+        )
+        .unwrap();
+    }
+    db.query("CREATE (:Span {id: 3, x: 2})").unwrap();
+    let parameters = params(&[("limit", duration("P2D")), ("days", Value::Int(2))]);
+
+    // A duration parameter is a native property comparison; a folded
+    // duration literal stays an expression comparison against a literal (the
+    // planner keeps unordered kinds out of `PropertyCompare`); and
+    // `duration({days: n.x})` stays a per-row temporal call.
+    let plan = |db: &mut Database, query: &str| {
+        format!(
+            "{:?}",
+            db.explain_query_with_params(query, &parameters)
+                .unwrap()
+                .physical_plan
+        )
+    };
+    for operand in ["$limit", "duration({days: $days})", "duration('P2D')"] {
+        for negation in ["", "NOT "] {
+            let query = format!("MATCH (n:Span) WHERE {negation}n.d < {operand} RETURN n.id AS id");
+            let explained = plan(&mut db, &query);
+            if operand == "$limit" {
+                assert!(
+                    explained.contains("PropertyCompare"),
+                    "{query}: {explained}"
+                );
+            }
+            assert!(
+                !explained.contains("TemporalFunction"),
+                "{query}: {explained}"
+            );
+        }
+    }
+    let unfolded = "MATCH (n:Span) WHERE NOT n.d < duration({days: n.x}) RETURN n.id AS id";
+    assert!(plan(&mut db, unfolded).contains("TemporalFunction"));
+
+    // `d < limit` is NULL for two durations, so neither it nor its negation
+    // selects a row, in every operand form (Neo4j: `NOT null` is null).
+    for operand in [
+        "$limit",
+        "duration({days: $days})",
+        "duration('P2D')",
+        "duration({days: n.x})",
+    ] {
+        for condition in [
+            format!("n.d < {operand}"),
+            format!("NOT n.d < {operand}"),
+            format!("NOT n.d >= {operand}"),
+            format!("NOT (n.d <= {operand} OR n.id = 99)"),
+        ] {
+            let query = format!("MATCH (n:Span) WHERE {condition} RETURN n.id AS id");
+            assert_eq!(
+                ids(&mut db, &query, &parameters),
+                Vec::<Value>::new(),
+                "{query}"
+            );
+        }
+        // Kleene logic: NULL AND false is false, so NOT selects ids 2 and 3.
+        let query =
+            format!("MATCH (n:Span) WHERE NOT (n.d > {operand} AND n.id = 1) RETURN n.id AS id");
+        assert_eq!(
+            ids(&mut db, &query, &parameters),
+            vec![Value::Int(2), Value::Int(3)],
+            "{query}"
+        );
+        // Equality between durations is defined.
+        let query = format!("MATCH (n:Span) WHERE NOT n.d = {operand} RETURN n.id AS id");
+        assert_eq!(
+            ids(&mut db, &query, &parameters),
+            vec![Value::Int(1), Value::Int(2)],
+            "{query}"
+        );
+    }
+
+    // A filtered mutation agrees with the read.
+    db.query_with_params(
+        "MATCH (n:Span) WHERE NOT n.d < $limit SET n.flagged = true",
+        &parameters,
+    )
+    .unwrap();
+    assert_eq!(
+        ids(
+            &mut db,
+            "MATCH (n:Span) WHERE n.flagged = true RETURN n.id AS id",
+            &parameters
+        ),
+        Vec::<Value>::new()
+    );
+}
+
+#[test]
+fn clock_reads_evaluated_per_row_observe_the_planning_instant() {
+    let mut db = database();
+    let rows = (0..2_000)
+        .map(|id| {
+            Value::Map(BTreeMap::from([
+                ("id".to_string(), Value::Int(id)),
+                ("tz".to_string(), Value::String("+01:00".into())),
+            ]))
+        })
+        .collect();
+    db.query_with_params(
+        "UNWIND $rows AS r CREATE (:Tick {id: r.id, tz: r.tz})",
+        &params(&[("rows", Value::List(rows))]),
+    )
+    .unwrap();
+    let query = "MATCH (t:Tick) RETURN datetime({timezone: t.tz}) AS row_clock, \
+                 datetime({timezone: '+01:00'}) AS map_clock, datetime() AS planned";
+    let instants = |output: &QueryOutput| {
+        output
+            .rows
+            .iter()
+            .flat_map(|row| {
+                [
+                    row["row_clock"].clone(),
+                    row["map_clock"].clone(),
+                    row["planned"].clone(),
+                ]
+            })
+            .map(|value| match value {
+                Value::DateTime(value) => value.naive_utc(),
+                other => panic!("expected a zoned datetime, got {other:?}"),
+            })
+            .collect::<BTreeSet<_>>()
+    };
+    // Unpinned: `datetime()` is bound while planning and the per-row reads
+    // run later, yet all 6,000 reads observe one instant.
+    let output = db.query(query).unwrap();
+    assert_eq!(output.rows.len(), 2_000);
+    assert_eq!(instants(&output).len(), 1, "one statement, one instant");
+    assert_eq!(
+        output.rows[0]["row_clock"], output.rows[0]["map_clock"],
+        "both in +01:00"
+    );
+    // Pinned, and not replayed from the plan cache by the next statement.
+    for seconds in [1_793_361_600, 1_793_448_000] {
+        let pinned = temporal::DateTime::from_timestamp(seconds, 7).unwrap();
+        let output = temporal::with_statement_clock(pinned, || db.query(query).unwrap());
+        assert_eq!(
+            instants(&output),
+            BTreeSet::from([pinned.naive_utc()]),
+            "{pinned}"
+        );
+    }
+}
+
+#[test]
+fn clock_reading_timezone_maps_are_not_replayed_from_the_plan_cache() {
+    let mut db = database();
+    db.query("CREATE (:Event {id: 1, at: datetime('2026-10-30T13:00:00Z')})")
+        .unwrap();
+    let before = temporal::DateTime::from_timestamp(1_793_361_600, 0).unwrap(); // 12:00Z
+    let after = temporal::DateTime::from_timestamp(1_793_448_000, 0).unwrap(); // next day
+    let tz = params(&[(
+        "tz",
+        Value::Map(BTreeMap::from([(
+            "timezone".to_string(),
+            Value::String("+01:00".into()),
+        )])),
+    )]);
+    for query in [
+        "MATCH (e:Event) WHERE e.at < datetime($tz) RETURN e.id AS id",
+        "MATCH (e:Event) WHERE e.at < datetime({timezone: '+01:00'}) RETURN e.id AS id",
+        "MATCH (e:Event) WHERE e.at < datetime({timezone: '+01:00'}) + duration('PT0S') \
+         RETURN e.id AS id",
+    ] {
+        for (instant, expected) in [
+            (before, vec![]),
+            (after, vec![Value::Int(1)]),
+            (before, vec![]),
+        ] {
+            let found = temporal::with_statement_clock(instant, || ids(&mut db, query, &tz));
+            assert_eq!(found, expected, "{query} at {instant}");
+        }
+    }
+    let row = temporal::with_statement_clock(after, || {
+        single_row_with(&mut db, "RETURN datetime($tz) AS dt", &tz)
+    });
+    assert_eq!(row["dt"], datetime("2026-10-31T13:00:00+01:00"));
+}
