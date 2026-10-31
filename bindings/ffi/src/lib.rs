@@ -58,9 +58,9 @@ pub use retained::*;
 #[cfg(test)]
 mod error_tests;
 #[cfg(test)]
-mod vector_tests;
-#[cfg(test)]
 mod temporal_tests;
+#[cfg(test)]
+mod vector_tests;
 
 /// Developer profiling build only. This observation is not an admission ledger
 /// or an allocator-capacity bound. NULL output is a no-op; no buffer is allocated.

@@ -29,7 +29,10 @@ payload codec).
   `Hash` agree. `<`/`>` therefore order two such values by offset.
 * Durations have a total internal order `(months, days, time)` for sorting,
   grouping, `DISTINCT` and indexes. Cypher `<`, `<=`, `>`, `>=` between two
-  durations return `NULL`; `=` compares components (`P1D <> PT24H`).
+  durations return `NULL`; `=` compares components (`P1D <> PT24H`). This
+  holds for every operand form (property, parameter, folded literal or
+  general expression) and in storage filters, so `NOT n.d < $limit` is
+  `NULL` too and selects no rows.
 * Comparing different temporal kinds, or a temporal value with a string or
   number, is never true (HawDB's existing mixed-type rule; openCypher returns
   `NULL`).
@@ -80,7 +83,11 @@ Unknown components are errors. On maps, `.key` reads the entry.
 then the exact time. Dates ignore the sub-day remainder of the time part;
 local times ignore months and days and wrap at midnight. `duration ± duration`
 is component-wise; `duration * number`, `number * duration` and
-`duration / number` scale components (fractions cascade). `instant - instant`
+`duration / number` scale components (fractions cascade). Multiplying by an
+integer is exact, and so is dividing by an integer that divides months, days
+and the exact time part (`duration({hours: 10000}) / 2`). Other factors and
+divisors scale in `f64`, which is approximate: an exact time part beyond 2^53
+nanoseconds (about 104 days) loses nanosecond precision. `instant - instant`
 is not supported (use `duration.between`). Scalar `+ - * / %` (with unary minus)
 are now available in `WHERE` operands and `CASE`, not only in `RETURN`.
 
@@ -88,9 +95,14 @@ are now available in `WHERE` operands and `CASE`, not only in `RETURN`.
 
 All clock reads in one statement (`date()`, `datetime()`,
 `CURRENT_TIMESTAMP()`, …) observe one instant: planning pins the clock with
-`hawdb::temporal::with_stable_statement_clock`. Hosts and tests may pin it
-explicitly with `hawdb::temporal::with_statement_clock`. Statements that read
-the clock are non-deterministic and bypass the plan cache.
+`hawdb::temporal::with_stable_statement_clock`, and execution pins the same
+instant again (also on parallel workers), so clock reads evaluated per row,
+such as `datetime({timezone: n.tz})`, agree with clock reads bound during
+planning. Hosts and tests may pin it explicitly with
+`hawdb::temporal::with_statement_clock`. Statements that read the clock while
+planning are non-deterministic and bypass the plan cache: zero-argument calls,
+constructors whose map argument has only `timezone`, and statements whose
+parameters include such a map (`datetime($tz)` with `$tz = {timezone: …}`).
 `CURRENT_TIMESTAMP()`, `timestamp()`, `CAST(x AS TIMESTAMP)` and `date_part`
 keep their integer epoch-nanosecond results.
 
@@ -102,7 +114,10 @@ parameters is folded during planning, e.g.
 `m.creationDate < datetime($start) + duration({days: $d})` becomes a native
 `PropertyCompare` that storage filters, `CREATE RANGE INDEX` range seeks and
 persistent range projections use. Such folded plans are cached per exact
-parameter value. Range projections index dates, local times, local datetimes
+parameter value: each distinct `$start` plans again and takes a new cache
+entry. For a hot query, bind the temporal value itself as the parameter
+(`m.creationDate < $end` with a `{"$datetime": …}` or native datetime
+parameter); that plan is cached by parameter shape and rebound per execution. Range projections index dates, local times, local datetimes
 and zoned datetimes (not durations). Zone maps never prune temporal values.
 
 ## Persistence and format compatibility
@@ -150,7 +165,6 @@ integer `DATE`/`TIMESTAMP` behaviour and refuses temporal parameters.
 * `datetime.transaction()/statement()/realtime()`, `*.truncate` with an
   override map, and the `P2012-02-02T14:37:21` duration form are not supported.
 * Mixed-kind comparisons are `false`, not `NULL` (duration ordering is `NULL`).
-* A map with only `timezone` reads the clock at execution time in projections.
 * `epochMillis`/`epochSeconds` exist only on zoned datetimes; UNWIND mutations
   store temporal values from parameters (`row.created`), not `datetime(row.x)`.
 * `RETURN` items still cannot be bare comparisons (`RETURN a < b`); use `CASE`.

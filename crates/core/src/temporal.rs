@@ -399,6 +399,14 @@ pub fn comparable_ordering(left: &Value, right: &Value) -> Option<Ordering> {
     }
 }
 
+/// Whether `value`, as the argument of a temporal constructor, reads the
+/// statement clock: a map without keys other than `timezone`
+/// (`datetime({timezone: '+01:00'})`).
+pub fn is_clock_reading_map(value: &Value) -> bool {
+    matches!(value, Value::Map(map)
+        if map.keys().all(|key| key.eq_ignore_ascii_case("timezone")))
+}
+
 /// Whether `<`, `<=`, `>` and `>=` are undefined (NULL) for this pair:
 /// openCypher durations have no order because months and days have no
 /// fixed length. Other incomparable pairs keep HawDB's `false` result.
@@ -492,6 +500,25 @@ pub fn with_stable_statement_clock<R>(f: impl FnOnce() -> R) -> R {
         return f();
     }
     with_statement_clock(system_now(), f)
+}
+
+/// The statement clock pinned on this thread, if any. Work handed to another
+/// thread re-pins it there with [`with_optional_statement_clock`], so that
+/// parallel workers observe the statement's instant too.
+pub fn pinned_statement_clock() -> Option<DateTime<Utc>> {
+    STATEMENT_CLOCK.with(Cell::get)
+}
+
+/// Runs `f` with the statement clock pinned to `instant` when it is `Some`,
+/// and with this thread's current clock otherwise.
+pub fn with_optional_statement_clock<R>(
+    instant: Option<DateTime<Utc>>,
+    f: impl FnOnce() -> R,
+) -> R {
+    match instant {
+        Some(instant) => with_statement_clock(instant, f),
+        None => f(),
+    }
 }
 
 #[cfg(test)]
