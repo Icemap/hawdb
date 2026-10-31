@@ -117,6 +117,7 @@ mod knowledge_retrieval_pipeline;
 mod knowledge_retrieval_ranking;
 mod label_lifecycle;
 mod list_functions;
+mod list_literals;
 mod materialized_views;
 mod memory_lifecycle;
 mod merge_nodes;

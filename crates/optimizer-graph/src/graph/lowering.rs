@@ -1801,6 +1801,7 @@ fn collect_projection_properties(
         | ProjectionExpression::IsNull { .. }
         | ProjectionExpression::ListFunction { .. }
         | ProjectionExpression::ListComprehension(_)
+        | ProjectionExpression::List(_)
         | ProjectionExpression::ListIndex { .. }
         | ProjectionExpression::ListSlice { .. } => expression
             .all_children(|child| collect_projection_properties(child, variable, required)),
