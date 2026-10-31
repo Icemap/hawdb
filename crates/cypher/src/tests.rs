@@ -173,6 +173,7 @@ fn assert_grouped_count(
 }
 
 mod backtracking;
+mod comparison_chains;
 mod default_pipeline;
 mod list_functions;
 mod migration_corpus;
