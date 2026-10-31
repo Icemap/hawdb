@@ -210,8 +210,12 @@ fn py_to_temporal(object: &Bound<'_, PyAny>, path: &ParamPath<'_>) -> PyResult<O
     let int = |field: &str| object.getattr(field)?.extract::<i64>();
     let invalid = |kind: &str| PyValueError::new_err(format!("{path}: invalid {kind} value"));
     let date = || -> PyResult<NaiveDate> {
-        NaiveDate::from_ymd_opt(int("year")? as i32, int("month")? as u32, int("day")? as u32)
-            .ok_or_else(|| invalid("date"))
+        NaiveDate::from_ymd_opt(
+            int("year")? as i32,
+            int("month")? as u32,
+            int("day")? as u32,
+        )
+        .ok_or_else(|| invalid("date"))
     };
     let time = || -> PyResult<NaiveTime> {
         NaiveTime::from_hms_micro_opt(
