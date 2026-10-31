@@ -51,7 +51,7 @@ The plan-cache retention family uses
 limits, zero budgets, overflow, replacement and spare table-capacity accounting.
 `//crates/plan-cache:hawdb_template_retention_tests` is its independent native
 requested-allocation oracle: logical and physical CASE templates at 20/100/512
-candidates, nested values, source-only regex templates and byte-driven churn must retain no more requested
+candidates, nested values, source-only regex templates, temporal projections with a boxed duration parameter and byte-driven churn must retain no more requested
 heap than their conservative charges. The observer is thread-local and runs as
 one test; requalify its standard-library layout assumptions on toolchain
 changes. Replay with `cargo test --locked -p hawdb-plan-cache --test
