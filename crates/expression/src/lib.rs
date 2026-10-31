@@ -969,6 +969,20 @@ impl hawdb_core::RetainedHeapBytes for ProjectionExpression {
                 hawdb_core::RetainedHeapBytes::retained_heap_bytes(function),
                 hawdb_core::RetainedHeapBytes::retained_heap_bytes(column),
             ]),
+            Self::TemporalFunction {
+                function,
+                arguments,
+            } => hawdb_core::checked_retained_heap_sum([
+                hawdb_core::RetainedHeapBytes::retained_heap_bytes(function),
+                hawdb_core::RetainedHeapBytes::retained_heap_bytes(arguments),
+            ]),
+            Self::PropertyAccess { expression, key } => hawdb_core::checked_retained_heap_sum([
+                hawdb_core::RetainedHeapBytes::retained_heap_bytes(expression),
+                hawdb_core::RetainedHeapBytes::retained_heap_bytes(key),
+            ]),
+            Self::MapLiteral(value0) => hawdb_core::checked_retained_heap_sum([
+                hawdb_core::RetainedHeapBytes::retained_heap_bytes(value0),
+            ]),
         }
     }
 }

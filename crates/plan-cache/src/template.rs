@@ -2738,6 +2738,11 @@ impl hawdb_core::RetainedHeapBytes for ParameterValueShape {
                 hawdb_core::RetainedHeapBytes::retained_heap_bytes(value0),
             ]),
             Self::Uuid => hawdb_core::checked_retained_heap_sum([]),
+            Self::Date => hawdb_core::checked_retained_heap_sum([]),
+            Self::LocalTime => hawdb_core::checked_retained_heap_sum([]),
+            Self::LocalDateTime => hawdb_core::checked_retained_heap_sum([]),
+            Self::DateTime => hawdb_core::checked_retained_heap_sum([]),
+            Self::Duration => hawdb_core::checked_retained_heap_sum([]),
             Self::List(value0) => hawdb_core::checked_retained_heap_sum([
                 hawdb_core::RetainedHeapBytes::retained_heap_bytes(value0),
             ]),
