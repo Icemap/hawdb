@@ -33,6 +33,7 @@ pub(super) fn operators() -> Vec<(PhysicalPlan, bool)> {
                     introduced: Vec::new(),
                     steps: Vec::new(),
                     predicate: None,
+                    predicate_steps: Vec::new(),
                     optional: false,
                 },
                 input: None,

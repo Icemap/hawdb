@@ -324,6 +324,20 @@ pub(super) fn estimate_operator_cost<'a>(
     }
 }
 
+/// The step indexes before which `GraphMatchExec` evaluates WHERE conjuncts;
+/// `steps.len()` stands for the end of the match.
+fn graph_match_filter_points(
+    program: &hawdb_plan_cypher::GraphMatchProgram,
+) -> std::collections::BTreeSet<usize> {
+    if program.predicate.is_none() {
+        return std::collections::BTreeSet::new();
+    }
+    if program.predicate_steps.is_empty() {
+        return std::collections::BTreeSet::from([program.steps.len()]);
+    }
+    program.predicate_steps.iter().copied().collect()
+}
+
 fn estimate_local_operator_cost(
     plan: &PhysicalPlan,
     catalog: &OptimizerCatalog,
@@ -445,7 +459,19 @@ fn estimate_local_operator_cost(
             let mut rows = base.estimated_rows;
             let mut work = rows;
             let mut bound = std::collections::BTreeSet::new();
-            for step in &program.steps {
+            // Each group of WHERE conjuncts keeps a default fraction of the
+            // rows at the point it runs, so later steps expand fewer rows.
+            let filter_points = graph_match_filter_points(program);
+            let filter = |index: usize, rows: u64| {
+                if filter_points.contains(&index) {
+                    rows.div_ceil(crate::cardinality_defaults::FILTER_SELECTIVITY_DIVISOR)
+                        .max(1)
+                } else {
+                    rows
+                }
+            };
+            for (index, step) in program.steps.iter().enumerate() {
+                rows = filter(index, rows);
                 let (node, expanding) = match step {
                     hawdb_plan_cypher::GraphMatchStep::Node(node) => (node, false),
                     hawdb_plan_cypher::GraphMatchStep::Expand { target, .. } => (target, true),
@@ -465,6 +491,7 @@ fn estimate_local_operator_cost(
                 }
                 work = work.saturating_add(rows);
             }
+            let rows = filter(program.steps.len(), rows);
             base.with_random_io(rows, work, 0)
         }
         PhysicalPlan::NodeColumnLookupExec { label, .. } => {

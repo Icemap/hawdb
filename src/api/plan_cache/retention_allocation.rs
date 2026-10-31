@@ -292,6 +292,7 @@ fn actual_physical_cache_requested_heap_stays_within_charges_and_limits() {
                 })),
             ],
             predicate: None,
+            predicate_steps: Vec::new(),
             optional: true,
         };
         let items = [

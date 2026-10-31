@@ -2398,6 +2398,7 @@ fn run_point_read_admission(persisted: bool, case: PointReadCase) {
             introduced: Vec::new(),
             steps: Vec::new(),
             predicate: None,
+            predicate_steps: Vec::new(),
             optional: false,
         },
         input: Some(Box::new(PhysicalPlan::ProjectExec {

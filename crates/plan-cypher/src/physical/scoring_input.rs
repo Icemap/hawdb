@@ -717,6 +717,7 @@ mod tests {
                     properties: Default::default(),
                 })],
                 predicate: Some(predicate),
+                predicate_steps: Vec::new(),
                 optional: false,
             },
             input: Some(Box::new(lookup(vec![known_id()]))),

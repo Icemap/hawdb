@@ -111,6 +111,7 @@ fn plan(parent: Parent, window: usize) -> PhysicalPlan {
                 imports: vec![],
                 introduced: vec!["target".into()],
                 predicate: None,
+                predicate_steps: Vec::new(),
                 optional: false,
                 steps: vec![GraphMatchStep::Expand {
                     source: "seed".into(),

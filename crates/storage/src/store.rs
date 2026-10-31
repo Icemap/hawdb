@@ -123,8 +123,8 @@ mod graph_mutation;
 mod graph_read;
 #[doc(hidden)]
 pub use graph_read::{
-    MaterializedNodePointRead, MaterializedNodePointSource, MaterializedNodeReadSource,
-    MaterializedReadHealth,
+    adjacency_visits_for_test, MaterializedNodePointRead, MaterializedNodePointSource,
+    MaterializedNodeReadSource, MaterializedReadHealth,
 };
 #[path = "store/read_dependencies.rs"]
 mod read_dependencies;

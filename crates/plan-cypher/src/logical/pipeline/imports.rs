@@ -17,6 +17,7 @@ pub(super) fn restore(input: LogicalPlan, scope: &Scope, needed: &BTreeSet<Strin
             introduced: Vec::new(),
             steps: Vec::new(),
             predicate: None,
+            predicate_steps: Vec::new(),
             optional: false,
         },
         input: Some(Box::new(input)),
