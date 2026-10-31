@@ -203,7 +203,7 @@ impl Parser<'_> {
         if variable.eq_ignore_ascii_case("id") && self.consume_char('(') {
             let variable = self.parse_ident()?;
             self.expect_char(')')?;
-            return self.parse_id_predicate(variable);
+            return self.parse_id_predicate(variable, expression_start.pos);
         }
         self.skip_ws();
         if allow_columns && self.peek_char() == Some('[') {
@@ -651,18 +651,17 @@ impl Parser<'_> {
         })
     }
 
-    /// Parses the right side of `IN`. Literal lists and parameters keep the
-    /// value-list predicate forms; any other scalar list uses the generic
-    /// three-valued `IN` operator.
+    /// Parses the right side of `IN`. Constant lists and parameters keep the
+    /// value-list predicate forms; any other scalar list, including a list
+    /// literal with row-bound elements, uses the generic three-valued `IN`
+    /// operator.
     fn parse_in_right(&mut self) -> Result<InRight> {
         self.skip_ws();
         let checkpoint = self.checkpoint();
         if matches!(self.peek_char(), Some('$' | '[')) && !self.next_is_list_comprehension() {
             if let Ok(value) = self.parse_value() {
                 self.skip_ws();
-                if self.peek_char() != Some('[')
-                    && !matches!(value.kind, ValueExpressionKind::BindingProperty { .. })
-                {
+                if self.peek_char() != Some('[') && !value.kind.reads_row_binding() {
                     return Ok(InRight::Value(value));
                 }
             }
@@ -695,12 +694,17 @@ impl Parser<'_> {
         }
     }
 
-    fn parse_id_predicate(&mut self, variable: String) -> Result<PropertyPredicate> {
+    fn parse_id_predicate(&mut self, variable: String, start: usize) -> Result<PropertyPredicate> {
+        let id_span = self.source_span(start);
         self.skip_ws();
         if self.consume_keyword("IN") {
-            return Ok(PropertyPredicate::IdIn {
-                variable,
-                values: self.parse_value()?,
+            return Ok(match self.parse_in_right()? {
+                InRight::Value(values) => PropertyPredicate::IdIn { variable, values },
+                InRight::Expression(list) => self.boolean_expression_predicate(
+                    AstNode::from_source(ScalarExpressionKind::Id(variable), id_span),
+                    list,
+                    start,
+                ),
             });
         }
         if self.consume_char('<') {

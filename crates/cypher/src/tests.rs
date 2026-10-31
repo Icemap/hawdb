@@ -175,6 +175,7 @@ fn assert_grouped_count(
 mod backtracking;
 mod default_pipeline;
 mod list_functions;
+mod list_literals;
 mod migration_corpus;
 mod source_spans;
 
