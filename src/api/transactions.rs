@@ -24,7 +24,11 @@ impl DatabaseTransactionRuntime {
             instance_identity: db.instance_identity()?,
             session_config,
             optimizer: runtime.optimizer.clone(),
-            plan_cache: SharedState::new(PlanCache::new(db.config.max_plan_cache_entries)),
+            plan_cache: SharedState::new(PlanCache::with_byte_limits(
+                db.config.max_plan_cache_entries,
+                Some(db.config.max_physical_plan_cache_bytes),
+                Some(db.config.max_physical_plan_cache_entry_bytes),
+            )),
             relational_plan_template_cache: Arc::clone(&runtime.relational_plan_template_cache),
             optimizer_planning_cache: SharedState::new(
                 runtime.optimizer_planning_cache.borrow().clone(),
@@ -301,10 +305,8 @@ pub(super) fn execute_graph_transaction_plan(
     }
     if executor::is_mutation_plan(&optimized.physical_plan)? {
         runtime.ensure_writable(transaction.store())?;
-        let is_mutation_return = matches!(
-            optimized.physical_plan,
-            PhysicalPlan::SetNodePropertiesReturn { .. }
-        );
+        let is_mutation_return =
+            hawdb_executor::mutation::mutation_returns_rows(&optimized.physical_plan);
         let mut mutation_limits = match &optimized.physical_plan {
             PhysicalPlan::SetNodePropertiesReturn {
                 returns: crate::planner::SetNodePropertiesReturnMode::Count { .. },
@@ -329,16 +331,25 @@ pub(super) fn execute_graph_transaction_plan(
                     rows,
                     variable,
                     operation,
-                } => transaction.stage_mutations_with_limits(
-                    executor::materialize_unwind_mutations(
+                } => {
+                    let mut mutations = executor::materialize_unwind_mutations(
                         rows,
                         variable,
                         operation,
                         mutation_limits,
                         task_context,
-                    )?,
-                    mutation_limits,
-                )?,
+                    )?;
+                    let _endpoint_charge =
+                        hawdb_executor::mutation::resolve_relationship_merge_endpoints(
+                            &mut mutations,
+                            transaction.catalog(),
+                            transaction.store(),
+                            mutation_limits,
+                            &runtime.config.execution_memory,
+                            task_context,
+                        )?;
+                    transaction.stage_mutations_with_limits(mutations, mutation_limits)?
+                }
                 _ => {
                     let command = if is_mutation_return {
                         hawdb_executor::mutation::materialize_node_mutation(
@@ -564,10 +575,7 @@ impl<'a> PreparedGraphTransactionRequest<'a> {
     }
 
     pub(super) fn returns_statement_rows(&self) -> bool {
-        matches!(
-            self.optimized.physical_plan,
-            PhysicalPlan::SetNodePropertiesReturn { .. }
-        )
+        hawdb_executor::mutation::mutation_returns_rows(&self.optimized.physical_plan)
     }
 
     pub(super) fn into_trace(self, capture_trace: bool) -> QueryExecutionTrace {

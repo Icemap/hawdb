@@ -50,25 +50,7 @@ fn arc<T>(value: &T, heap: impl Fn(&T) -> Option<usize>) -> Option<usize> {
 }
 
 fn value_bytes(value: &Value) -> Option<usize> {
-    match value {
-        Value::String(value) => Some(value.capacity()),
-        Value::Binary(value) => Some(value.capacity()),
-        Value::Vector(value) => Some(value.retained_capacity()),
-        Value::List(values) => vector(values, value_bytes),
-        Value::Map(values) => map(values, |key, value| {
-            key.capacity().checked_add(value_bytes(value)?)
-        }),
-        Value::Null
-        | Value::Bool(_)
-        | Value::Int(_)
-        | Value::Float(_)
-        | Value::Uuid(_)
-        | Value::Date(_)
-        | Value::LocalTime(_)
-        | Value::LocalDateTime(_)
-        | Value::DateTime(_) => Some(0),
-        Value::Duration(_) => Some(size_of::<hawdb_core::temporal::Duration>()),
-    }
+    hawdb_core::RetainedHeapBytes::retained_heap_bytes(value)
 }
 
 fn shape_bytes(shape: &ParameterValueShape) -> Option<usize> {
