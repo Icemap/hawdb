@@ -1363,11 +1363,24 @@ fn bind_projection(
         };
         output_scope.0.insert(name.clone(), kind);
     }
-    let projected_names = names.iter().cloned().collect();
+    let projected_names: BTreeSet<String> = names.iter().cloned().collect();
     let projected_graph = output_scope.graph_names();
     let mut sort_items = Vec::new();
     let mut hidden_order_keys = false;
     for (index, item) in projection.order_by.iter().enumerate() {
+        if let OrderExpression::Projection(expression) = &item.expression
+            && super::arithmetic::contains_aggregate(expression)
+        {
+            sort_items.push(plan_aggregate_sort_item(
+                &graph,
+                &columns,
+                (&projection.items, &projected_names),
+                item,
+                expression,
+                parameters,
+            )?);
+            continue;
+        }
         match plan_sort_items(
             &projected_graph,
             &projected_names,
