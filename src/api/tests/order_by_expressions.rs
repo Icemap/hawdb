@@ -187,8 +187,7 @@ fn parameterized_order_keys_rebind_through_the_plan_cache() {
     };
 
     // A simple CASE with literal branches is a logical template slot: one
-    // proven template rebinds to each value (CASE templates keep physical
-    // plans request-owned).
+    // proven template rebinds to each value, and the bound plan is cached.
     let query = "MATCH (n:Person) RETURN n.name AS name \
                  ORDER BY CASE n.lastName WHEN $first THEN 0 ELSE 1 END, name";
     let first = |name: &str| parameter("first", Value::String(name.to_string()));
@@ -202,10 +201,7 @@ fn parameterized_order_keys_rebind_through_the_plan_cache() {
     let explain = db
         .explain_query_with_params(query, &first("Nobody"))
         .unwrap();
-    assert_eq!(
-        explain.plan_cache_lookup,
-        PlanCacheLookup::Bypass(PlanCacheBypassReason::ParameterizedCaseTemplate)
-    );
+    assert_eq!(explain.plan_cache_lookup, PlanCacheLookup::Hit);
     assert!(
         explain
             .trace
@@ -375,6 +371,90 @@ fn aggregate_order_keys_resolve_to_projected_aggregates() {
         let error = db.query(query).unwrap_err().to_string();
         assert!(error.contains("must also be projected"), "{query}: {error}");
     }
+}
+
+#[test]
+fn aggregating_projections_reject_expression_keys_over_unprojected_variables() {
+    let mut db = people();
+    // Only projected names are in scope after an aggregation. Grouping by the
+    // key instead would split `people` per age, so these must fail.
+    for query in [
+        "MATCH (n:Person) RETURN n.lastName AS last, count(*) AS people ORDER BY n.age * 2 DESC",
+        "MATCH (n:Person) RETURN n.lastName AS last, count(*) AS people ORDER BY size(n.tags)",
+        "MATCH (n:Person) WITH n.lastName AS last, count(*) AS people \
+         ORDER BY -n.age RETURN last, people",
+    ] {
+        let error = db.query(query).unwrap_err();
+        assert!(
+            matches!(error, hawdb_core::HawDBError::Semantic(_)),
+            "{query}: {error:?}"
+        );
+    }
+    // Keys built only from grouped values are fine: a grouping key itself,
+    // or a property of a grouped variable.
+    let output = db
+        .query(
+            "MATCH (n:Person) RETURN n.lastName AS last, count(*) AS people \
+             ORDER BY CASE WHEN n.lastName = 'Brown' THEN 0 ELSE 1 END, last",
+        )
+        .unwrap();
+    assert_eq!(
+        column(&output, "last"),
+        strings(&["Brown", "Jones", "Smith"])
+    );
+    let output = db
+        .query(
+            "MATCH (n:Person) WITH n, count(*) AS people \
+             ORDER BY n.age * -1, n.name RETURN n.name AS name, people",
+        )
+        .unwrap();
+    assert_eq!(
+        column(&output, "name"),
+        strings(&["carol", "alice", "bob", "erin", "dave"])
+    );
+    // A key equal to a projected grouping expression, or built from one, is
+    // also grouped.
+    let output = db
+        .query(
+            "MATCH (n:Person) RETURN n.age * 2 AS doubled, count(*) AS people \
+             ORDER BY n.age * 2 DESC",
+        )
+        .unwrap();
+    assert_eq!(
+        column(&output, "doubled"),
+        vec![
+            Value::Int(82),
+            Value::Int(68),
+            Value::Int(54),
+            Value::Int(38)
+        ]
+    );
+    assert_eq!(column(&output, "people")[2], Value::Int(2));
+    let output = db
+        .query(
+            "MATCH (n:Person) RETURN n.lastName AS last, count(*) AS people \
+             ORDER BY lower(n.lastName) DESC",
+        )
+        .unwrap();
+    assert_eq!(
+        column(&output, "last"),
+        strings(&["Smith", "Jones", "Brown"])
+    );
+    // Keys over projected names still work, and the groups are intact.
+    let output = db
+        .query(
+            "MATCH (n:Person) RETURN n.lastName AS last, count(*) AS people \
+             ORDER BY people * -1, lower(last)",
+        )
+        .unwrap();
+    assert_eq!(
+        column(&output, "last"),
+        strings(&["Jones", "Smith", "Brown"])
+    );
+    assert_eq!(
+        column(&output, "people"),
+        vec![Value::Int(2), Value::Int(2), Value::Int(1)]
+    );
 }
 
 #[test]

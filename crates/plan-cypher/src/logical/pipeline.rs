@@ -1389,10 +1389,27 @@ fn bind_projection(
         ) {
             Ok(mut items) => sort_items.append(&mut items),
             Err(error) if projection.distinct => return Err(error),
-            Err(_) => {
+            Err(error) => {
                 let mut items =
                     plan_sort_items(&graph, &columns, std::slice::from_ref(item), parameters)?;
-                let item = items.pop().expect("one ORDER BY expression");
+                let planned_item = items.pop().expect("one ORDER BY expression");
+                // After an aggregating projection only grouped values are in
+                // scope. An expression key that reads anything else would
+                // become a hidden grouping key and silently split the
+                // groups, so it fails instead. Plain property, column and id
+                // keys keep their earlier hidden-key behaviour (#1408).
+                if let SortKey::Expression(expression) = &planned_item.key
+                    && matches!(
+                        item.expression,
+                        OrderExpression::Projection(_) | OrderExpression::Value(_)
+                    )
+                    && planned
+                        .group_keys()
+                        .is_some_and(|keys| !reads_only_group_keys(expression, keys))
+                {
+                    return Err(error);
+                }
+                let item = planned_item;
                 let expression = match item.key {
                     SortKey::Column(column) => ProjectionExpression::Column(column),
                     SortKey::Property { variable, property } => {
@@ -1491,6 +1508,90 @@ pub fn unique_projection_names(names: Vec<String>) -> Vec<String> {
             candidate
         })
         .collect()
+}
+
+/// Whether `expression` reads only values an aggregating projection groups
+/// by: a grouping key itself, a grouped property or column, any property or
+/// id of a grouped variable, or expressions composed of those and literals.
+fn reads_only_group_keys(expression: &ProjectionExpression, keys: &[Projection]) -> bool {
+    let grouped_variable = |variable: &str| {
+        keys.iter().any(|key| {
+            matches!(&key.expression, ProjectionExpression::Variable { variable: grouped }
+                if grouped == variable)
+        })
+    };
+    let grouped_property = |variable: &str, property: &str| {
+        grouped_variable(variable)
+            || keys.iter().any(|key| {
+                matches!(&key.expression, ProjectionExpression::Property {
+                    variable: grouped_variable,
+                    property: grouped_property,
+                } if grouped_variable == variable && grouped_property == property)
+            })
+    };
+    let grouped_column = |column: &str| {
+        keys.iter().any(|key| match &key.expression {
+            ProjectionExpression::Column(grouped)
+            | ProjectionExpression::Variable { variable: grouped } => grouped == column,
+            _ => false,
+        })
+    };
+    if keys.iter().any(|key| &key.expression == expression) {
+        return true;
+    }
+    match expression {
+        ProjectionExpression::Literal(_) | ProjectionExpression::LocalVariable { .. } => true,
+        ProjectionExpression::Property { variable, .. }
+        | ProjectionExpression::Id { variable }
+        | ProjectionExpression::RelationshipType { variable }
+        | ProjectionExpression::CaseCoalesceDifferenceFloorZero { variable, .. } => {
+            grouped_variable(variable)
+        }
+        // Specialised single-property forms, such as a lowered
+        // `CASE WHEN n.p = … THEN … END`.
+        ProjectionExpression::DatePart {
+            variable, property, ..
+        }
+        | ProjectionExpression::DefaultIfNullOrEq {
+            variable, property, ..
+        }
+        | ProjectionExpression::DefaultIfNull {
+            variable, property, ..
+        }
+        | ProjectionExpression::CasePropertyNotNullOrEq {
+            variable, property, ..
+        }
+        | ProjectionExpression::CasePropertyEqualsRank {
+            variable, property, ..
+        }
+        | ProjectionExpression::CaseLowerPropertyDefault {
+            variable, property, ..
+        } => grouped_property(variable, property),
+        ProjectionExpression::Column(column)
+        | ProjectionExpression::ColumnProperty { column, .. }
+        | ProjectionExpression::ColumnDefaultIfNullOrEq { column, .. }
+        | ProjectionExpression::ColumnValueDefaultIfNull { column, .. }
+        | ProjectionExpression::ColumnValueCasePropertyNotNullOrEq { column, .. } => {
+            grouped_column(column)
+        }
+        ProjectionExpression::Case { .. }
+        | ProjectionExpression::Binary { .. }
+        | ProjectionExpression::VectorDistance { .. }
+        | ProjectionExpression::Not(_)
+        | ProjectionExpression::IsNull { .. }
+        | ProjectionExpression::Lower(_)
+        | ProjectionExpression::Left { .. }
+        | ProjectionExpression::JsonValue { .. }
+        | ProjectionExpression::Coalesce(_)
+        | ProjectionExpression::List(_)
+        | ProjectionExpression::ListFunction { .. }
+        | ProjectionExpression::ListComprehension(_)
+        | ProjectionExpression::ListIndex { .. }
+        | ProjectionExpression::ListSlice { .. } => {
+            expression.all_children(|child| reads_only_group_keys(child, keys))
+        }
+        _ => false,
+    }
 }
 
 fn append_order_projection(planned: &mut PlannedReturns, projection: Projection) {

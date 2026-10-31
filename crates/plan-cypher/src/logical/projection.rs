@@ -66,6 +66,8 @@ pub(super) fn plan_sort_items(
                     plan_order_value_expression(scope, projection_names, expression, parameters)?,
                 ),
                 OrderExpression::Projection(expression) => {
+                    // `bind_projection` resolves aggregate keys before it gets
+                    // here; this guards any other caller.
                     if super::arithmetic::contains_aggregate(expression) {
                         return Err(HawDBError::Semantic(
                             "aggregate ORDER BY keys require a RETURN or WITH projection"
@@ -281,6 +283,17 @@ pub(super) enum PlannedReturns {
         items: Vec<Aggregation>,
         projections: Vec<Projection>,
     },
+}
+
+impl PlannedReturns {
+    /// The grouping keys of an aggregating projection.
+    pub(super) fn group_keys(&self) -> Option<&[Projection]> {
+        match self {
+            Self::Projections(_) => None,
+            Self::Aggregations { group_keys, .. }
+            | Self::AggregateProjection { group_keys, .. } => Some(group_keys),
+        }
+    }
 }
 
 impl PlannedReturns {
