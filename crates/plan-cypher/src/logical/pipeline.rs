@@ -51,10 +51,11 @@ pub fn plan_parsed_pipeline_query(
     parameters: &BTreeMap<String, Value>,
 ) -> Result<LogicalPlan> {
     let plan = bind_pipeline(query, parameters)?;
-    // Multi-WITH statements already had a public generic-plan contract before
-    // default MATCH routing. Keep their EXPLAIN shape and exact-parameter cache
-    // variants. Ranked evidence normalizes its input at the aggregate boundary;
-    // retain its outer aliases so final ORDER BY/LIMIT can select bounded TopN.
+    // Every read shape, including statements with several WITH clauses, uses
+    // the same structural normalization; parameters it moves into seeks and
+    // expands remain template slots or exact cache guards (#1425). Ranked
+    // evidence normalizes its input at the aggregate boundary; retain its outer
+    // aliases so final ORDER BY/LIMIT can select bounded TopN.
     let ranked_evidence = query.clauses.iter().any(|clause| match &clause.kind {
         ClauseKind::With(projection) | ClauseKind::Return(projection) => projection
             .items
@@ -62,14 +63,7 @@ pub fn plan_parsed_pipeline_query(
             .any(|item| contains_ranked_evidence(&item.expression)),
         _ => false,
     });
-    if ranked_evidence
-        || query
-            .clauses
-            .iter()
-            .filter(|clause| matches!(clause.kind, ClauseKind::With(_)))
-            .nth(1)
-            .is_some()
-    {
+    if ranked_evidence {
         Ok(plan)
     } else {
         Ok(normalize::normalize(plan))
