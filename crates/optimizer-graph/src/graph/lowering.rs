@@ -1200,6 +1200,11 @@ fn select_node_count_fast_path(
     let LogicalPlan::NodeScan { variable, label } = input.as_ref() else {
         return None;
     };
+    // A repeated-label pattern such as `:Post:Comment` matches any of its
+    // labels; the per-label count cannot answer it, so scan instead.
+    if label.contains(':') {
+        return None;
+    }
     let exact_node_count = group_keys.is_empty()
         && item.function == AggregateFunction::Count
         && match &item.target {
