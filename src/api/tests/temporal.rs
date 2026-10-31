@@ -730,6 +730,35 @@ fn temporal_parameters_are_cached_by_shape_and_rebound() {
 }
 
 #[test]
+fn temporal_case_order_keys_rebind_hidden_inputs_and_cached_parameters() {
+    let mut db = Database::new();
+    for statement in [
+        "CREATE (:TemporalOrder {id: 1, raw: '2026-11-02', enabled: true})",
+        "CREATE (:TemporalOrder {id: 2, raw: '2026-11-01', enabled: true})",
+        "CREATE (:TemporalOrder {id: 3, raw: '2026-11-03', enabled: false})",
+    ] {
+        db.query(statement).unwrap();
+    }
+    let query = "MATCH (n:TemporalOrder) RETURN n.id AS id \
+                 ORDER BY CASE WHEN n.enabled = true \
+                   THEN date(n.raw).day + $shift ELSE 0 END DESC, id LIMIT 2";
+    for (shift, expected) in [(0, [1, 2]), (-3, [3, 1]), (0, [1, 2]), (-3, [3, 1])] {
+        let parameters = params(&[("shift", Value::Int(shift))]);
+        let output = db.query_with_params(query, &parameters).unwrap();
+        assert_eq!(output.rows.schema().columns(), &["id"]);
+        assert_eq!(column(&output, "id"), expected.map(Value::Int));
+    }
+    for shift in [0, -3] {
+        assert_eq!(
+            db.explain_query_with_params(query, &params(&[("shift", Value::Int(shift))]))
+                .unwrap()
+                .plan_cache_lookup,
+            PlanCacheLookup::Hit
+        );
+    }
+}
+
+#[test]
 fn temporal_values_are_refused_by_relational_sql_parameters() {
     let mut db = database();
     db.query_sql("CREATE TABLE t (id BIGINT PRIMARY KEY, at BIGINT)")
