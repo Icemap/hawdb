@@ -1719,7 +1719,7 @@ fn needs_headroom(state: &State) -> bool {
     .into_iter()
     .any(|(bytes, limit)| {
         limit.is_some_and(|limit| near_limit(bytes, limit, reserve.unwrap_or(limit)))
-    }) || live_overlay_needs_capacity(debt)
+    }) || live_overlay_needs_capacity(debt.relational_live.pairs())
 }
 
 fn preparation_needs_capacity(state: &State) -> bool {
@@ -1736,7 +1736,7 @@ fn preparation_needs_capacity(state: &State) -> bool {
         // Keep a tenth of the configured capacity before its existing defer
         // threshold; near exhaustion, generation progress must free capacity.
         limit.is_some_and(|limit| near_limit(bytes, limit, limit / 10))
-    }) || live_overlay_needs_capacity(debt)
+    }) || live_overlay_needs_capacity(debt.relational_live.admission_pairs())
 }
 
 /// Relational live row/index overlays grow by whole commit captures, and only a
@@ -1744,9 +1744,14 @@ fn preparation_needs_capacity(state: &State) -> bool {
 /// envelope rejects a commit before WAL append, so the frontend keeps the same
 /// tenth-of-capacity reserve below the defer threshold as preparation capacity:
 /// writers wait for the running drain instead of reaching that hard rejection.
-fn live_overlay_needs_capacity(debt: CheckpointDebtSnapshot) -> bool {
-    debt.relational_live
-        .pairs()
+///
+/// Headroom (which fences writers until an idle owner starts its drain) uses
+/// the base-relative capture debt, including the recovery delta. Capacity
+/// waits during a running drain use the live overlay alone: that drain's
+/// capture already includes the delta, and commits made meanwhile become the
+/// next drain's delta while counting against the live admission envelope.
+fn live_overlay_needs_capacity(pairs: [(u64, Option<u64>); 4]) -> bool {
+    pairs
         .into_iter()
         .any(|(retained, limit)| limit.is_some_and(|limit| near_limit(retained, limit, limit / 10)))
 }

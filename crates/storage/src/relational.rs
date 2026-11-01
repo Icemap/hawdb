@@ -1726,6 +1726,13 @@ impl RelationalRow {
         Self::from_checkpoint_values(values)
     }
 
+    /// Whether another live owner, such as a live-overlay batch or resident
+    /// canonical state, retains these values. Cloning such a row allocates
+    /// nothing, so resource accounting must not charge its values again.
+    pub(crate) fn shares_values(&self) -> bool {
+        Arc::strong_count(&self.values) > 1
+    }
+
     fn from_checkpoint_values(values: Vec<RelationalValue>) -> Self {
         // Share the owned vector without an Arc-slice allocation and complete
         // value-array copy. The vector's actual retained capacity still needs

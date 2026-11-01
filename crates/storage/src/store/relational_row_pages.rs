@@ -955,7 +955,9 @@ impl GraphStore {
                     );
                     return;
                 };
-                match self.open_relational_row_delta_view(self.commit_epoch, recovery_source) {
+                // No builder recorded this published delta; its debt is unknown.
+                match self.open_relational_row_delta_view(self.commit_epoch, recovery_source, None)
+                {
                     Ok((view, delta)) => {
                         let manifest = delta.manifest();
                         if self.relational_state.canonical_row_metadata_only()
@@ -1020,7 +1022,11 @@ impl GraphStore {
             &self.relational_state,
         ) {
             Ok(report) => {
-                match self.open_relational_row_delta_view(self.commit_epoch, recovery_source) {
+                match self.open_relational_row_delta_view(
+                    self.commit_epoch,
+                    recovery_source,
+                    Some(report.recorded_resident_bytes),
+                ) {
                     Ok((view, _delta)) => {
                         self.relational_row_pages.read_view = Some(view);
                         self.relational_row_pages.recovery_status =
@@ -1052,6 +1058,7 @@ impl GraphStore {
         &self,
         expected_visible_commit_epoch: u64,
         expected_recovery_source: RelationalRecoverySourceIdentity,
+        recorded_resident_bytes: Option<usize>,
     ) -> Result<
         (
             Arc<RelationalRowPageReadView>,
@@ -1065,6 +1072,7 @@ impl GraphStore {
             None,
             None,
             None,
+            recorded_resident_bytes,
         )
     }
 
@@ -1075,6 +1083,7 @@ impl GraphStore {
         generation: Option<crate::relational::RelationalRowDeltaGeneration>,
         prefix: Option<&std::path::Path>,
         work: Option<&crate::background::CheckpointWorkContext>,
+        recorded_resident_bytes: Option<usize>,
     ) -> Result<
         (
             Arc<RelationalRowPageReadView>,
@@ -1137,10 +1146,11 @@ impl GraphStore {
             })?,
         };
         let delta = Arc::new(delta);
-        let view = Arc::new(RelationalRowPageReadView::from_recovery_delta(
-            base,
-            Arc::clone(&delta),
-        )?);
+        let view = RelationalRowPageReadView::from_recovery_delta(base, Arc::clone(&delta))?;
+        let view = Arc::new(match recorded_resident_bytes {
+            Some(bytes) => view.with_recovery_delta_resident_bytes(bytes),
+            None => view,
+        });
         Ok((view, delta))
     }
 
@@ -1186,6 +1196,7 @@ impl GraphStore {
                 None,
                 Some(&immutable),
                 Some(work),
+                Some(report.recorded_resident_bytes),
             )
             .map_err(|error| {
                 super::HawDBError::Storage(format!("pin private row recovery: {error}"))

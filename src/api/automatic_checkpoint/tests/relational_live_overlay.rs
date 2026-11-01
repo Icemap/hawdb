@@ -232,6 +232,29 @@ fn live_overlay_pressure_uses_the_shared_soft_and_capacity_boundaries() {
         assert!(!soft_pressure(unbounded.debt.unwrap()));
         assert!(!needs_headroom(&unbounded) && !preparation_needs_capacity(&unbounded));
     }
+    // The recovery delta that the next drain captures with the live overlay
+    // counts toward both row pairs (#1464).
+    for pair in 0..2 {
+        let split = |delta: u64| {
+            let mut state = with(pair, soft / 2, Some(LIMIT));
+            let live = &mut state.debt.as_mut().unwrap().relational_live;
+            if pair == 0 {
+                live.row_recovery_delta_entries = delta;
+            } else {
+                live.row_recovery_delta_resident_bytes = delta;
+            }
+            state
+        };
+        assert!(!soft_pressure(split(soft - soft / 2 - 1).debt.unwrap()));
+        assert!(soft_pressure(split(soft - soft / 2).debt.unwrap()));
+        // Writers fence for an idle owner to start that drain. A running drain
+        // already captured the delta, so its capacity wait counts live rows.
+        let at = split(capacity - soft / 2);
+        assert!(
+            needs_headroom(&at) && !preparation_needs_capacity(&at),
+            "pair {pair}"
+        );
+    }
 }
 
 #[test]
@@ -353,4 +376,195 @@ fn crash_during_pressure_triggered_drain_recovers_whole_acknowledged_rounds() {
             next + 159,
         );
     }
+}
+
+const ORDER_LINES_PER_COMMIT: i64 = 2_500;
+
+fn create_order_line(db: &mut Database) {
+    db.query_sql(
+        "CREATE TABLE order_line (ol_o_id BIGINT NOT NULL, ol_d_id BIGINT NOT NULL, \
+         ol_w_id BIGINT NOT NULL, ol_number BIGINT NOT NULL, ol_i_id BIGINT, \
+         ol_supply_w_id BIGINT, ol_delivery_d TEXT, ol_quantity BIGINT, \
+         ol_amount DOUBLE PRECISION, ol_dist_info TEXT, \
+         PRIMARY KEY (ol_w_id, ol_d_id, ol_o_id, ol_number))",
+    )
+    .unwrap();
+    db.query_sql("CREATE INDEX idx_order_line_order ON order_line (ol_w_id, ol_d_id, ol_o_id)")
+        .unwrap();
+}
+
+/// TPC-C ORDER_LINE-shaped row `line` (about 120 encoded bytes): ten lines
+/// per order, 3,000 orders per district.
+fn order_line(line: i64) -> String {
+    let (order, number) = (line / 10, line % 10);
+    format!(
+        "({}, {}, 1, {number}, {}, 1, '2026-11-01 00:00:00', 5, 12.5, '{}')",
+        order % 3_000,
+        order / 3_000 + 1,
+        line * 7_919 % 100_000,
+        "x".repeat(24),
+    )
+}
+
+fn insert_order_lines(db: &mut Database, commit: i64) -> Result<()> {
+    let lines = (commit * ORDER_LINES_PER_COMMIT..(commit + 1) * ORDER_LINES_PER_COMMIT)
+        .map(order_line)
+        .collect::<Vec<_>>()
+        .join(", ");
+    let mut transaction = db.begin_transaction()?;
+    transaction.query_sql(&format!(
+        "INSERT INTO order_line (ol_o_id, ol_d_id, ol_w_id, ol_number, ol_i_id, \
+         ol_supply_w_id, ol_delivery_d, ol_quantity, ol_amount, ol_dist_info) VALUES {lines}"
+    ))?;
+    transaction.commit().map(|_| ())
+}
+
+/// Exact totals by full scan. Call it on a folded base: one full scan merges
+/// at most the row snapshot's per-scan overlay-entry bound.
+fn assert_order_line_totals(db: &mut Database, lines: i64) {
+    let rows = db
+        .query_sql(
+            "SELECT COUNT(*) AS n, SUM(ol_i_id) AS items, MAX(ol_d_id) AS districts \
+             FROM order_line",
+        )
+        .unwrap()
+        .rows
+        .into_rows();
+    assert_eq!(rows[0].get("n"), Some(&Value::Int(lines)));
+    assert_eq!(
+        rows[0].get("items"),
+        Some(&Value::Int(
+            (0..lines).map(|line| line * 7_919 % 100_000).sum::<i64>()
+        ))
+    );
+    assert_eq!(
+        rows[0].get("districts"),
+        Some(&Value::Int((lines - 1) / 10 / 3_000 + 1))
+    );
+}
+
+/// Point and secondary-index reads through the serving overlay.
+fn assert_order_lines(db: &mut Database, lines: i64) {
+    for line in [0, lines / 2, lines - 1] {
+        let (order, number) = (line / 10, line % 10);
+        let (district, order) = (order / 3_000 + 1, order % 3_000);
+        let point = db
+            .query_sql(&format!(
+                "SELECT ol_i_id FROM order_line WHERE ol_w_id = 1 AND ol_d_id = {district} \
+                 AND ol_o_id = {order} AND ol_number = {number}"
+            ))
+            .unwrap()
+            .rows
+            .into_rows();
+        assert_eq!(point.len(), 1, "line {line}");
+        assert_eq!(
+            point[0].get("ol_i_id"),
+            Some(&Value::Int(line * 7_919 % 100_000))
+        );
+        let order_lines = db
+            .query_sql(&format!(
+                "SELECT ol_number FROM order_line WHERE ol_w_id = 1 AND ol_d_id = {district} \
+                 AND ol_o_id = {order}"
+            ))
+            .unwrap()
+            .rows
+            .into_rows();
+        assert_eq!(order_lines.len(), 10, "order of line {line}");
+    }
+}
+
+#[test]
+fn steady_inserts_into_a_growing_table_keep_draining_the_live_overlay() {
+    let fixture = Fixture::new();
+    let mut db = Database::open_with_config(&fixture.0, config()).unwrap();
+    create_order_line(&mut db);
+    let initial = db
+        .automatic_checkpoint_report()
+        .unwrap()
+        .unwrap()
+        .completed_checkpoints;
+    let mut commits = 0;
+    let mut peak_live = (0usize, 0usize);
+    let mut peak_live_debt = [0u64; 4];
+    let mut max_delta_entries = 0;
+    let mut busy_retries = 0;
+    // Each drain folds about 47,000 lines (70% of the resident-byte envelope).
+    // On c8d767cd the second drain's capture of the recovery delta plus the
+    // live overlay is rejected three times, which stops automatic retries;
+    // commit 48 (epoch 52) then fails with the #1464 admission error.
+    while db
+        .automatic_checkpoint_report()
+        .unwrap()
+        .unwrap()
+        .completed_checkpoints
+        < initial + 5
+    {
+        assert!(commits < 240, "live-overlay pressure must drain five times");
+        match insert_order_lines(&mut db, commits) {
+            Ok(()) => commits += 1,
+            // Near the envelope a writer waits for the running drain. When
+            // that drain makes no builder progress for the bounded wait (an
+            // unoptimized build can take that long between work units), the
+            // commit is rejected before WAL append with nothing applied, and
+            // the writer retries it. A live-overlay admission error never is.
+            Err(HawDBError::BranchBusy {
+                resource: "automatic checkpoint capacity",
+            }) if busy_retries < 100 => busy_retries += 1,
+            Err(error) => panic!(
+                "commit {commits} failed after {busy_retries} busy retries: {error}; {:?}; {:?}",
+                debt(&db).relational_live,
+                db.automatic_checkpoint_report()
+            ),
+        }
+        let live = live_rows(&db);
+        peak_live = (peak_live.0.max(live.0), peak_live.1.max(live.1));
+        let overlay = debt(&db).relational_live;
+        // The previous drain's catch-up suffix is base-relative debt for the
+        // next one, charged at the live-overlay rate of 997 bytes per line.
+        assert_eq!(
+            overlay.row_recovery_delta_resident_bytes,
+            overlay.row_recovery_delta_entries * 997
+        );
+        max_delta_entries = max_delta_entries.max(overlay.row_recovery_delta_entries);
+        // Live occupancy never reaches the admission envelope. While a drain
+        // runs, the delta it folds still counts in `pairs()`; that drain's
+        // capture was admitted when it started (no failed attempt below).
+        for (peak, (retained, limit)) in peak_live_debt.iter_mut().zip(overlay.admission_pairs()) {
+            *peak = (*peak).max(retained);
+            assert!(
+                limit.is_none_or(|limit| retained < limit),
+                "{retained} {limit:?}"
+            );
+        }
+    }
+    let report = db.automatic_checkpoint_report().unwrap().unwrap();
+    assert!(max_delta_entries > 0, "drains must overlap later commits");
+    // Every rejected attempt left no trace: the table holds exactly the
+    // acknowledged commits (checked below and after reopen).
+    assert_eq!(report.failed_attempts, 0, "{report:?}");
+    assert!(!report.operation_retry_exhausted, "{report:?}");
+    assert!(
+        peak_live.0 <= DEFAULT_MAX_RELATIONAL_ROW_CHANGES,
+        "{peak_live:?}"
+    );
+    assert!(
+        peak_live.1 <= DEFAULT_MAX_RELATIONAL_ROW_CHANGE_BYTES,
+        "{peak_live:?}"
+    );
+    let lines = commits * ORDER_LINES_PER_COMMIT;
+    assert!(
+        lines as usize > 2 * DEFAULT_MAX_RELATIONAL_ROW_CHANGES,
+        "the table must outgrow the live envelope several times: {lines}, {peak_live_debt:?}"
+    );
+    assert_order_lines(&mut db, lines);
+    drop(db);
+    let mut reopened = Database::open_with_config(&fixture.0, config()).unwrap();
+    assert_order_lines(&mut reopened, lines);
+    // The reopened handle keeps admitting inserts; folding everything into
+    // one base then gives exact totals.
+    insert_order_lines(&mut reopened, commits).unwrap();
+    let lines = lines + ORDER_LINES_PER_COMMIT;
+    assert_order_lines(&mut reopened, lines);
+    reopened.checkpoint().unwrap();
+    assert_order_line_totals(&mut reopened, lines);
 }
