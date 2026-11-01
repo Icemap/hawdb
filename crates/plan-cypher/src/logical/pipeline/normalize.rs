@@ -616,10 +616,15 @@ fn initial_match(program: &GraphMatchProgram) -> Option<LogicalPlan> {
     // constraints that conventional Expand operators cannot express. Fixed,
     // distinct relationship types cannot alias the same relationship, so that
     // subset can retain the conventional chain shape safely.
-    if tail.len() > 1 && !has_distinct_fixed_relationship_types(tail) {
+    let expansions = tail
+        .iter()
+        .filter(|step| matches!(step, GraphMatchStep::Expand { .. }))
+        .count();
+    if expansions > 1 && !has_distinct_fixed_relationship_types(tail) {
         return None;
     }
     let mut introduced = BTreeSet::from([first.variable.as_str()]);
+    let mut node_labels = BTreeMap::from([(first.variable.as_str(), first.label.as_str())]);
     let mut predicates = node_predicates(first);
     let mut input = LogicalPlan::NodeScan {
         variable: first.variable.clone(),
@@ -627,7 +632,28 @@ fn initial_match(program: &GraphMatchProgram) -> Option<LogicalPlan> {
     };
     let mut source_variable = first.variable.clone();
     let mut source_label = first.label.clone();
-    for step in tail {
+    for (index, step) in tail.iter().enumerate() {
+        // A later comma pattern that starts from a node this clause already
+        // bound, as in `(a)-[:R]->(b), (b)-[:S]->(c)`, continues from that
+        // binding. The repeated node must not narrow the label; its property
+        // map becomes an ordinary conjunct like any other pattern property.
+        // Only a repeated node that starts the next expansion is accepted.
+        if let GraphMatchStep::Node(node) = step {
+            if !matches!(
+                tail.get(index + 1),
+                Some(GraphMatchStep::Expand { source, .. }) if source == &node.variable
+            ) {
+                return None;
+            }
+            let label = node_labels.get(node.variable.as_str())?;
+            if !node.label.is_empty() && node.label != *label {
+                return None;
+            }
+            predicates.extend(node_predicates(node));
+            source_variable = node.variable.clone();
+            source_label = label.to_string();
+            continue;
+        }
         let GraphMatchStep::Expand {
             source,
             relationship,
@@ -649,6 +675,7 @@ fn initial_match(program: &GraphMatchProgram) -> Option<LogicalPlan> {
         {
             return None;
         }
+        node_labels.insert(target.variable.as_str(), target.label.as_str());
         predicates.extend(node_predicates(target));
         input = LogicalPlan::Expand {
             source_variable: source_variable.clone(),
@@ -685,11 +712,12 @@ fn initial_match(program: &GraphMatchProgram) -> Option<LogicalPlan> {
 
 fn has_distinct_fixed_relationship_types(steps: &[GraphMatchStep]) -> bool {
     let mut relationship_types = BTreeSet::new();
-    steps.iter().all(|step| {
-        let GraphMatchStep::Expand { rel_type, .. } = step else {
-            return false;
-        };
-        !rel_type.is_empty() && relationship_types.insert(rel_type)
+    steps.iter().all(|step| match step {
+        GraphMatchStep::Expand { rel_type, .. } => {
+            !rel_type.is_empty() && relationship_types.insert(rel_type)
+        }
+        GraphMatchStep::Node(_) => true,
+        GraphMatchStep::ShortestPath(_) => false,
     })
 }
 
