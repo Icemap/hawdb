@@ -784,7 +784,18 @@ debt/residency accounting folded by checkpoint, the shared 70%/80% boundaries
 for all four row/index pairs, a reader pinned across two drains, and a
 subprocess stop at `during_checkpoint_publication` and
 `after_manifest_publication` of the pressure-triggered drain that recovers every
-acknowledged round whole before continuing. Replay with `cargo test --locked
+acknowledged round whole before continuing. An insert-only case grows one
+TPC-C ORDER_LINE-shaped table (composite primary key plus a secondary index,
+2,500 rows per commit) through five pressure-triggered drains on one handle and
+asserts every commit, no failed checkpoint attempt (each drain's capture of the
+recovery delta plus the live overlay is admitted), live row/index occupancy
+below its envelope after each commit, the delta charged as debt, point and
+secondary-index reads before and after reopen, a further commit on the reopened
+handle and exact totals once folded (writers retry the bounded-wait
+`BranchBusy`, which applies nothing, when an unoptimized drain is slow) ([#1464](https://github.com/nowledge-co/hawdb/issues/1464));
+`c8d767cd` refuses the second drain's capture three times and rejects commit 48.
+`relational::row_page::live` pins the live-overlay and checkpoint-capture
+charge of that row shape. Replay with `cargo test --locked
 -p hawdb --lib api::automatic_checkpoint::tests::relational_live_overlay`.
 
 ## Component regression owners

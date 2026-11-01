@@ -215,6 +215,9 @@ pub struct RelationalRowDeltaReport {
     pub replayed_batches: u64,
     pub peak_dirty_entries: usize,
     pub peak_dirty_bytes: usize,
+    /// Live-overlay resident bytes of every change recorded since the base,
+    /// counting each recorded version. The next checkpoint must capture them.
+    pub recorded_resident_bytes: usize,
     pub events: [RelationalRowDeltaPublicationPhase; 4],
 }
 
