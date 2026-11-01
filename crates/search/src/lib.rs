@@ -565,6 +565,9 @@ pub enum SearchFallbackReasonCode {
     DiskAnnCacheBudgetExceeded,
     QueryEmbeddingMissing,
     TextQueryEmpty,
+    /// The analyzed text query exceeded the scored-term cap; only its most
+    /// selective (lowest document frequency) terms were scored.
+    TextQueryTermsReduced,
 }
 
 impl SearchFallbackReasonCode {
@@ -581,6 +584,7 @@ impl SearchFallbackReasonCode {
             SearchFallbackReasonCode::DiskAnnCacheBudgetExceeded => "diskann_cache_budget_exceeded",
             SearchFallbackReasonCode::QueryEmbeddingMissing => "query_embedding_missing",
             SearchFallbackReasonCode::TextQueryEmpty => "text_query_empty",
+            SearchFallbackReasonCode::TextQueryTermsReduced => "text_query_terms_reduced",
         }
     }
 }
@@ -603,6 +607,7 @@ impl FromStr for SearchFallbackReasonCode {
             }
             "query_embedding_missing" => Ok(SearchFallbackReasonCode::QueryEmbeddingMissing),
             "text_query_empty" => Ok(SearchFallbackReasonCode::TextQueryEmpty),
+            "text_query_terms_reduced" => Ok(SearchFallbackReasonCode::TextQueryTermsReduced),
             _ => Err("unknown search fallback reason code"),
         }
     }
@@ -3646,7 +3651,7 @@ impl SearchIndex {
             capture_candidate_ids,
             vector_execution_options,
         } = strategy;
-        let query_terms = tokenize(query_text, &self.analyzer_lexicon);
+        let mut query_terms = tokenize(query_text, &self.analyzer_lexicon);
         let mut vector_fallback_reason_codes = Vec::new();
         let mut vector_fallback_reasons = Vec::new();
         if let Some(reason) = vector_backend_fallback_reason {
@@ -3835,7 +3840,7 @@ impl SearchIndex {
             }
         };
         let text_available = !query_terms.is_empty();
-        let (text_fallback_reason_codes, text_fallback_reasons) =
+        let (mut text_fallback_reason_codes, mut text_fallback_reasons) =
             if !text_available && mode != SearchMode::Vector {
                 (
                     vec![SearchFallbackReasonCode::TextQueryEmpty],
@@ -3855,6 +3860,20 @@ impl SearchIndex {
         #[cfg(all(test, feature = "full-text-search"))]
         if lexical_snapshot.is_some() {
             lexical_snapshot_test_gate::pause_after_capture();
+        }
+        // The segmented projection bounds scored terms; long queries keep
+        // their most selective terms instead of failing the whole search.
+        if let Some((projection, delta)) = &lexical_snapshot {
+            let selection = projection.fit_query_terms(
+                &mut query_terms,
+                delta,
+                self.lexical_config.max_term_bytes,
+                None,
+            )?;
+            if selection.reduced() {
+                text_fallback_reason_codes.push(SearchFallbackReasonCode::TextQueryTermsReduced);
+                text_fallback_reasons.push(selection.to_string());
+            }
         }
         let mut text_corpus =
             if text_available && mode != SearchMode::Vector && lexical_snapshot.is_none() {
@@ -10277,6 +10296,10 @@ mod tests {
                 "query_embedding_missing",
             ),
             (SearchFallbackReasonCode::TextQueryEmpty, "text_query_empty"),
+            (
+                SearchFallbackReasonCode::TextQueryTermsReduced,
+                "text_query_terms_reduced",
+            ),
         ];
 
         for (code, name) in cases {
