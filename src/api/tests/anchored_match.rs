@@ -285,8 +285,33 @@ fn multi_label_pattern_starts_from_the_bound_creator() {
             "p=Int(2), m=String(\"m6\")",
         ])
     );
-    let (_, scans) = rows_and_scans(&mut db, query);
-    // One Person label scan feeds the MATCH; no scan per person.
-    assert_eq!(scans, 1);
+    let reference = "MATCH (p:Person) WITH p, p.id AS id WITH p \
+                     MATCH (p)<-[:HAS_CREATOR]-(m:Post:Comment) RETURN p.id AS p, m.id AS m";
+    let (actual, scans) = rows_and_scans(&mut db, query);
+    let (reference_rows, reference_scans) = rows_and_scans(&mut db, reference);
+    assert_eq!(actual, reference_rows);
+    // The shared Person input may use a projected scan, which the full-node
+    // counter does not observe. Reversing the MATCH must add no full scan
+    // compared with writing the already-bound end first.
+    assert_eq!(scans, reference_scans);
     assert_anchored(&db, query, "p");
+}
+
+#[test]
+fn null_anchors_reject_matches_and_preserve_optional_padding() {
+    let mut db = forum_graph();
+    let prefix = "MATCH (a:Person) OPTIONAL MATCH (a)-[:LIKES]->(x) WITH x WITH x ";
+    let required =
+        format!("{prefix} MATCH (y:Post:Comment)-[:HAS_CREATOR]->(x) RETURN count(*) AS rows");
+    assert_eq!(rows(&mut db, &required), expected(&["rows=Int(6)"]));
+    assert_anchored(&db, &required, "x");
+    let optional = format!(
+        "{prefix} OPTIONAL MATCH (y:Post:Comment)-[:HAS_CREATOR]->(x) \
+         RETURN count(y) AS messages, count(*) AS rows"
+    );
+    assert_eq!(
+        rows(&mut db, &optional),
+        expected(&["messages=Int(6), rows=Int(10)"])
+    );
+    assert_anchored(&db, &optional, "x");
 }
