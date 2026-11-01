@@ -47,6 +47,7 @@ use std::io::{Cursor, Write};
 use std::num::NonZeroUsize;
 
 mod aggregates;
+mod anchored_match;
 mod augmentation_jobs_interrupt;
 mod augmentation_jobs_lifecycle;
 mod augmentation_jobs_reads;

@@ -228,6 +228,16 @@ exact-parameter plan caching, hop cap and blocking-budget failures). Replay with
 `cargo test --locked -p hawdb --lib api::tests::shortest_paths`. No lane,
 profile or deadline changes. See [contract](SHORTEST_PATH_EXECUTION.md).
 
+Anchored `GraphMatchExec` (#1423) is owned by optimizer
+`graph::lowering::match_order::tests` and root `api::tests::anchored_match`
+in the existing general unit lane. The embedded family checks exact rows,
+step order, full-scan counts against an equivalent bound-first query, and
+NULL anchors with required matches and OPTIONAL padding. A projected input
+scan may contribute zero to the full-node scan counter; the regression checks
+that anchoring adds no per-row scan rather than assuming the input scan kind.
+Replay with `cargo test --locked -p hawdb --lib api::tests::anchored_match`.
+No lane, fixture, feature matrix or deadline changes.
+
 The adaptive execution family extends those existing executor owners with
 encoded non-expression key selection, complete-record validation, 64-KiB nested
 payload forwarding, descriptor/memory-driven 8/4/2-way merges, and live host

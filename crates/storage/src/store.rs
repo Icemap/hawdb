@@ -578,6 +578,22 @@ fn wal_apply_failpoint() -> Result<()> {
     Ok(())
 }
 
+thread_local! {
+    static NODE_SCANS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// Counts node scans (`visit_nodes_with_allocation`) started on this thread.
+/// Diagnostic for tests; always compiled so test builds without the
+/// `test-support` feature still link.
+#[doc(hidden)]
+pub fn node_scans_for_test() -> u64 {
+    NODE_SCANS.with(std::cell::Cell::get)
+}
+
+fn record_node_scan() {
+    NODE_SCANS.with(|scans| scans.set(scans.get().saturating_add(1)));
+}
+
 /// Test support: renders binary WAL records as deterministic text lines.
 /// The on-disk v1 format remains binary; this representation is never read
 /// by recovery. A torn tail ends the rendering, while corruption appends a
