@@ -7760,7 +7760,13 @@ fn apply_transaction_inner(
             allocations: checkpoint_allocations,
         },
     )?;
-    overflow::prune_unreachable_segments_with_allocations(&mut next, checkpoint_allocations)?;
+    overflow::prune_unreachable_segments_after_changes(
+        state,
+        &mut next,
+        &changed_keys,
+        !full_index_rebuild.is_empty() || !projection_rebuild_tables.is_empty(),
+        checkpoint_allocations,
+    )?;
     if index_mode == TransactionIndexMode::Materialized {
         for table in &touched {
             if !next.schemas.contains_key(table) {
