@@ -246,7 +246,8 @@ intermediate work without changing the complete predicate's output cardinality.
 The embedded combined regression anchors an OPTIONAL MATCH before placing its
 conjuncts, and checks exact rows, NULL padding and the reordered step indices.
 Replay with `cargo test --locked -p hawdb-optimizer-graph match_predicates`.
-No fixture, feature matrix, lane or deadline changes.
+Existing fixtures and assertions remain; CI lanes, feature profiles and deadlines
+are unchanged.
 
 The adaptive execution family extends those existing executor owners with
 encoded non-expression key selection, complete-record validation, 64-KiB nested
