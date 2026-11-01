@@ -110,6 +110,7 @@ fn plan(parent: Parent, window: usize) -> PhysicalPlan {
             program: GraphMatchProgram {
                 imports: vec![],
                 introduced: vec!["target".into()],
+                projected_nodes: BTreeMap::new(),
                 predicate: None,
                 optional: false,
                 steps: vec![GraphMatchStep::Expand {

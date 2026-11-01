@@ -1271,6 +1271,7 @@ fn bind_read_clauses(
                     program: GraphMatchProgram {
                         imports,
                         introduced,
+                        projected_nodes: BTreeMap::new(),
                         steps,
                         predicate,
                         optional: *optional,
@@ -1319,6 +1320,7 @@ fn restore_bindings(input: Option<LogicalPlan>, scope: &mut Scope) -> LogicalPla
         program: GraphMatchProgram {
             imports,
             introduced: Vec::new(),
+            projected_nodes: BTreeMap::new(),
             steps: Vec::new(),
             predicate: None,
             optional: false,

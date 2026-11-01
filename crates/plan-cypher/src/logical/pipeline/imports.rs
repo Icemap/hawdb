@@ -15,6 +15,7 @@ pub(super) fn restore(input: LogicalPlan, scope: &Scope, needed: &BTreeSet<Strin
         program: GraphMatchProgram {
             imports,
             introduced: Vec::new(),
+            projected_nodes: BTreeMap::new(),
             steps: Vec::new(),
             predicate: None,
             optional: false,

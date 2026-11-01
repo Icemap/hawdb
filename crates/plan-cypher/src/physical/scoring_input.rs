@@ -711,6 +711,7 @@ mod tests {
             program: crate::GraphMatchProgram {
                 imports: vec![],
                 introduced: vec![],
+                projected_nodes: std::collections::BTreeMap::new(),
                 steps: vec![crate::GraphMatchStep::Node(crate::GraphMatchNode {
                     variable: "seed".into(),
                     label: "Memory".into(),

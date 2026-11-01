@@ -119,6 +119,8 @@ mod graph_commit;
 mod graph_indexes;
 #[path = "store/graph_mutation.rs"]
 mod graph_mutation;
+#[doc(hidden)]
+pub use graph_read::{record_reads_for_test, RecordReadsForTest};
 #[path = "store/graph_read.rs"]
 mod graph_read;
 #[doc(hidden)]

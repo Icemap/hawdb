@@ -2396,6 +2396,7 @@ fn run_point_read_admission(persisted: bool, case: PointReadCase) {
                 kind: hawdb_plan_cypher::GraphEntityKind::Node,
             }],
             introduced: Vec::new(),
+            projected_nodes: BTreeMap::new(),
             steps: Vec::new(),
             predicate: None,
             optional: false,
