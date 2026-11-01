@@ -465,7 +465,10 @@ fn expression(expression: &ProjectionExpression, demand: &mut Demand) {
         | ProjectionExpression::ListFunction { .. }
         | ProjectionExpression::ListComprehension(_)
         | ProjectionExpression::ListIndex { .. }
-        | ProjectionExpression::ListSlice { .. } => {
+        | ProjectionExpression::ListSlice { .. }
+        | ProjectionExpression::TemporalFunction { .. }
+        | ProjectionExpression::PropertyAccess { .. }
+        | ProjectionExpression::MapLiteral(_) => {
             expression.all_children(|child| {
                 self::expression(child, demand);
                 true

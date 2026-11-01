@@ -357,3 +357,38 @@ fn imports_and_reintroduced_names_stop_demand_at_their_match() {
         ]
     );
 }
+
+#[test]
+fn nested_temporal_components_and_maps_keep_every_source_property() {
+    let temporal = ProjectionExpression::PropertyAccess {
+        expression: Box::new(ProjectionExpression::TemporalFunction {
+            function: hawdb_core::TemporalFunction::DurationBetween,
+            arguments: vec![property("b", "started"), property("c", "finished")],
+        }),
+        key: "days".into(),
+    };
+    let map = ProjectionExpression::MapLiteral(vec![
+        ("elapsed".into(), temporal),
+        ("caption".into(), property("b", "name")),
+    ]);
+    assert_eq!(
+        analyzed(project(vec![map], chain(None))),
+        vec![expected(&[
+            ("a", &["id"]),
+            ("b", &["name", "started"]),
+            ("c", &["finished"]),
+        ])]
+    );
+}
+
+#[test]
+fn whole_nodes_nested_in_maps_keep_full_reads() {
+    let map = ProjectionExpression::MapLiteral(vec![
+        ("node".into(), variable("b")),
+        ("property".into(), property("c", "name")),
+    ]);
+    assert_eq!(
+        analyzed(project(vec![map], chain(None))),
+        vec![expected(&[("a", &["id"]), ("c", &["name"])])]
+    );
+}

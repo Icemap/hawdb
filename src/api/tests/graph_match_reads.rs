@@ -71,7 +71,13 @@ fn populate(db: &mut Database) {
 fn stores() -> Vec<(Database, Option<std::path::PathBuf>)> {
     let mut resident = Database::new();
     populate(&mut resident);
-    let path = unique_test_dir("graph_match_reads");
+    // Parallel fixtures must remain distinct even if the clock repeats.
+    static NEXT_STORE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let sequence = NEXT_STORE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let path = unique_test_dir(&format!(
+        "graph_match_reads_{}_{sequence}",
+        std::process::id()
+    ));
     {
         let mut db = Database::open(&path).unwrap();
         populate(&mut db);
