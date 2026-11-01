@@ -243,7 +243,10 @@ fn expression_names(expression: &ProjectionExpression, names: &mut BTreeSet<Stri
         | ProjectionExpression::ListFunction { .. }
         | ProjectionExpression::ListComprehension(_)
         | ProjectionExpression::ListIndex { .. }
-        | ProjectionExpression::ListSlice { .. } => {
+        | ProjectionExpression::ListSlice { .. }
+        | ProjectionExpression::TemporalFunction { .. }
+        | ProjectionExpression::PropertyAccess { .. }
+        | ProjectionExpression::MapLiteral(_) => {
             expression.all_children(|child| {
                 expression_names(child, names);
                 true

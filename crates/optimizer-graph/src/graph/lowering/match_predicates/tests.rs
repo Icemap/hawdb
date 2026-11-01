@@ -368,3 +368,83 @@ fn placement_is_recomputed_from_the_current_step_order() {
     place_graph_match_predicates(&mut program);
     assert_eq!(program.predicate_steps, vec![2, 1]);
 }
+
+#[test]
+fn temporal_and_map_conjuncts_wait_for_all_nested_variables() {
+    let temporal = ProjectionExpression::TemporalFunction {
+        function: hawdb_core::TemporalFunction::DurationBetween,
+        arguments: vec![property("a"), property("c")],
+    };
+    let component = ProjectionExpression::PropertyAccess {
+        expression: Box::new(temporal.clone()),
+        key: "days".into(),
+    };
+    let map = ProjectionExpression::MapLiteral(vec![
+        ("first".into(), property("b")),
+        ("second".into(), component.clone()),
+    ]);
+    for expression in [temporal, component, map] {
+        let (program, _) = place(
+            chain(),
+            Predicate::And(vec![
+                Predicate::ExpressionEq {
+                    expression,
+                    value: ProjectionExpression::Literal(Value::Null),
+                },
+                property_eq("a", 1),
+            ]),
+        );
+        assert_eq!(program.predicate_steps, vec![3, 1]);
+    }
+}
+
+#[test]
+fn output_cardinality_is_independent_of_conjunct_placement() {
+    use crate::graph::costing::estimate_physical_plan_cost_breakdown;
+    use crate::graph::{OptimizerCatalog, OptimizerCatalogIndexes, OptimizerCatalogStatistics};
+    use hawdb_plan_cypher::PhysicalPlan;
+
+    let catalog = OptimizerCatalog::new(
+        OptimizerCatalogIndexes::default(),
+        OptimizerCatalogStatistics {
+            label_counts: BTreeMap::from([("N".into(), 100)]),
+            ..OptimizerCatalogStatistics::default()
+        },
+    );
+    let mut program = chain();
+    for step in &mut program.steps {
+        match step {
+            GraphMatchStep::Node(node) | GraphMatchStep::Expand { target: node, .. } => {
+                node.label = "N".into();
+            }
+            GraphMatchStep::ShortestPath(_) => unreachable!(),
+        }
+    }
+    let estimate = |program| {
+        estimate_physical_plan_cost_breakdown(
+            &PhysicalPlan::GraphMatchExec {
+                program,
+                input: None,
+            },
+            &catalog,
+        )
+    };
+    let unfiltered = estimate(program.clone());
+    program.predicate = Some(Predicate::And(vec![
+        property_eq("a", 1),
+        property_eq("b", 1),
+        property_eq("c", 1),
+    ]));
+    let late = estimate(program.clone());
+    place_graph_match_predicates(&mut program);
+    assert_eq!(program.predicate_steps, vec![1, 2, 3]);
+    let early = estimate(program);
+    assert_eq!(early.estimated_rows, late.estimated_rows);
+    assert_eq!(
+        early.estimated_rows,
+        unfiltered
+            .estimated_rows
+            .div_ceil(crate::cardinality_defaults::FILTER_SELECTIVITY_DIVISOR),
+    );
+    assert!(early.random_io < late.random_io);
+}
