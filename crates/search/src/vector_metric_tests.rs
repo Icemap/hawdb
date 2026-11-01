@@ -272,16 +272,20 @@ fn out_of_core_euclidean_projection_matches_brute_force_l2() {
     assert_eq!(vector.backend, "hawdb_diskann_out_of_core_candidate_graph");
     assert_l2_hits(&fixture, &graph.result.hits, "out-of-core diskann");
 
-    // Hybrid fusion consumes the same Euclidean vector ranks.
-    let hybrid = reader
-        .search_with_options(
-            "",
-            query,
-            SearchMode::Hybrid,
-            options(TOP_K, Some(DOCUMENTS)),
-        )
-        .unwrap();
-    assert_eq!(ids(&hybrid.result.hits), fixture.l2_top(TOP_K));
+    // Hybrid fusion consumes the same Euclidean vector ranks. Hybrid needs
+    // full-text search, which the vector-only lanes build without.
+    #[cfg(feature = "full-text-search")]
+    {
+        let hybrid = reader
+            .search_with_options(
+                "",
+                query,
+                SearchMode::Hybrid,
+                options(TOP_K, Some(DOCUMENTS)),
+            )
+            .unwrap();
+        assert_eq!(ids(&hybrid.result.hits), fixture.l2_top(TOP_K));
+    }
 }
 
 #[test]

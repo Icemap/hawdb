@@ -471,6 +471,11 @@ pub enum SearchMode {
 pub struct SearchHit {
     pub id: String,
     pub score: f64,
+    /// Vector relevance in `[0, 1]`, higher is better. The scale depends on
+    /// the projection's metric: positive cosine similarity for cosine, and
+    /// `1 / (1 + l2_distance)` for Euclidean, which is often far below 1 for
+    /// unnormalized embeddings. Compare scores only within one metric; a
+    /// relevance floor tuned on cosine does not carry over to Euclidean.
     pub vector_score: f64,
     pub text_score: f64,
     pub rrf_score: f64,
