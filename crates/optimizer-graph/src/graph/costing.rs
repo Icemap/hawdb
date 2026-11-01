@@ -447,6 +447,11 @@ fn estimate_local_operator_cost(
             let row_count = rows.len().max(1) as u64;
             PlanCostBreakdown::new(row_count, row_count, 0, 0, 0)
         }
+        // File contents are unknown until execution; no plan alternative
+        // competes with the single CSV source, so its cost is nominal.
+        PhysicalPlan::LoadCsvMutation { .. } | PhysicalPlan::LoadCsvExec { .. } => {
+            PlanCostBreakdown::new(1, 1, 0, 0, 0)
+        }
         PhysicalPlan::SeqNodeScan { label, .. } => {
             let rows = catalog.label_count(label);
             node_full_scan_work(rows)
@@ -545,11 +550,16 @@ fn estimate_local_operator_cost(
             let base = inputs[0].unwrap_or_else(|| PlanCostBreakdown::new(1, 0, 0, 0, 0));
             let mut rows = base.estimated_rows;
             let mut work = rows;
+            // Steps run as a per-row nested loop in plan order. A step that
+            // binds a fresh node multiplies the rows by its label; a step that
+            // reaches an imported or already-bound node only filters them. The
+            // output estimate is therefore order-independent, while the work
+            // (the sum of intermediate rows) reflects the anchored order.
             let mut bound = std::collections::BTreeSet::new();
             for step in &program.steps {
-                let (node, expanding) = match step {
-                    hawdb_plan_cypher::GraphMatchStep::Node(node) => (node, false),
-                    hawdb_plan_cypher::GraphMatchStep::Expand { target, .. } => (target, true),
+                let node = match step {
+                    hawdb_plan_cypher::GraphMatchStep::Node(node) => node,
+                    hawdb_plan_cypher::GraphMatchStep::Expand { target, .. } => target,
                     // A search may visit every relationship of its type for
                     // each endpoint pair; it keeps the row count of its input.
                     hawdb_plan_cypher::GraphMatchStep::ShortestPath(step) => {
@@ -561,7 +571,7 @@ fn estimate_local_operator_cost(
                 };
                 let newly_bound =
                     bound.insert(&node.variable) && program.introduced.contains(&node.variable);
-                if expanding || newly_bound {
+                if newly_bound {
                     rows = rows.saturating_mul(catalog.label_count(&node.label).max(1));
                 }
                 work = work.saturating_add(rows);

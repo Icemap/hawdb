@@ -371,11 +371,18 @@ fn nested_temporal_components_and_maps_keep_every_source_property() {
         ("elapsed".into(), temporal),
         ("caption".into(), property("b", "name")),
     ]);
+    let mut items = vec![map];
+    items.extend(hawdb_core::ConversionFunction::ALL.map(|function| {
+        ProjectionExpression::Conversion {
+            function,
+            argument: Box::new(property("b", "converted")),
+        }
+    }));
     assert_eq!(
-        analyzed(project(vec![map], chain(None))),
+        analyzed(project(items, chain(None))),
         vec![expected(&[
             ("a", &["id"]),
-            ("b", &["name", "started"]),
+            ("b", &["converted", "name", "started"]),
             ("c", &["finished"]),
         ])]
     );

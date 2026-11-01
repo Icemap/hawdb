@@ -501,6 +501,22 @@ pub fn set_checkpoint_failpoint(stage: Option<CheckpointPublishStage>) {
     CHECKPOINT_FAILPOINT.with(|failpoint| failpoint.set(stage));
 }
 
+thread_local! {
+    static MATCHED_NODE_LABEL_SCANS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// Counts label scans by matched-node mutation filters without an internal-id
+/// fast path on this thread. Diagnostic for tests; always compiled so test
+/// builds that do not enable `test-support` (for example Bazel) still link.
+#[doc(hidden)]
+pub fn matched_node_label_scans_for_test() -> u64 {
+    MATCHED_NODE_LABEL_SCANS.with(std::cell::Cell::get)
+}
+
+fn record_matched_node_label_scan() {
+    MATCHED_NODE_LABEL_SCANS.with(|scans| scans.set(scans.get().saturating_add(1)));
+}
+
 #[cfg(test)]
 thread_local! {
     static GENERATION_RECLAMATION_REMOVE_FAILPOINT: std::cell::RefCell<Option<String>> =
@@ -562,6 +578,22 @@ fn wal_apply_failpoint() -> Result<()> {
         }
     }
     Ok(())
+}
+
+thread_local! {
+    static NODE_SCANS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// Counts node scans (`visit_nodes_with_allocation`) started on this thread.
+/// Diagnostic for tests; always compiled so test builds without the
+/// `test-support` feature still link.
+#[doc(hidden)]
+pub fn node_scans_for_test() -> u64 {
+    NODE_SCANS.with(std::cell::Cell::get)
+}
+
+fn record_node_scan() {
+    NODE_SCANS.with(|scans| scans.set(scans.get().saturating_add(1)));
 }
 
 /// Test support: renders binary WAL records as deterministic text lines.

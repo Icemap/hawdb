@@ -151,6 +151,41 @@ adaptive buffers below an observed peak while preserving hard root refusal,
 as well as the tie-order and wide-row controls. Test lanes, profiles and deadlines stay
 unchanged; allocation microprobes do not establish end-to-end RSS or latency.
 
+Cypher `LOAD CSV` and the type-conversion functions are owned by existing
+targets: `hawdb-core` `conversion_function::tests` (Neo4j conversion rules),
+`hawdb-cypher` `tests::load_csv` and the PEG/reference differential
+`parser::frontend::tests::load_csv_matches_reference_parser`, `hawdb-plan-cypher`
+`logical::load_csv_tests` (row-source binding and refusals), `hawdb-optimizer-graph`
+`graph::tests::load_csv` (lowering/EXPLAIN), `hawdb-plan-cache`
+`template::tests::load_csv_plans_keep_parameter_sources_unbound_and_reusable`,
+`hawdb-executor` `load_csv::tests` (RFC 4180 reader, path policy and its
+`Semantic`/`Execution` error classes, record/file limits and per-row mutation
+resolution, using temporary directories), `hawdb-executor`
+`mutation::staged::tests` (statement-level matched-relationship endpoint
+resolution: result equivalence with per-row scans for duplicates, misses,
+composite keys, missing labels and indexed/unindexed labels; one pass per
+endpoint pattern; cancellation; ledger refusal of staged mutations and endpoint
+maps; fan-out endpoints refused with the commit's own affected-row errors before
+their ids are copied; charged id copies on `UNWIND` batches; the host's
+configured execution memory on the store entrypoint), `hawdb-storage`
+`store::tests::id_in_mutation` (id-led conjunction fast path against a
+single-element `Or` scan oracle, including pending nodes, and a 5,000-source
+fan-out whose recheck excludes the leading id list), and
+root `api::tests::load_csv` (end-to-end LDBC-style loads, refusal without an
+import root, path escapes, remote URLs, parameter rebinding, mutation/WAL/read
+and query-memory budgets, explicit transactions including nodes staged earlier
+in the transaction, zero per-row label scans under the write guard for
+`LOAD CSV` and `UNWIND` relationship loads at 3,000 nodes and rows via the
+hidden storage scan counter, `UNWIND` relationship CREATE and MERGE batches
+resolving their endpoints on the autocommit and explicit-transaction paths,
+fan-out loads beyond `max_affected_rows` refused
+with no writes, CSV fields read through temporal constructors and `toString`
+over temporal values, missing-file error classes and, on Unix, a FIFO source refused
+without blocking). Replay with `cargo test --locked -p hawdb-executor
+--lib load_csv`, `cargo test --locked -p hawdb-executor --lib mutation::staged`
+and `cargo test --locked -p hawdb --lib api::tests::load_csv`. No lane, profile
+or deadline changes; see [LOAD CSV](CYPHER_LOAD_CSV.md).
+
 Cypher `sum()` and expression-argument aggregates are owned by existing
 targets: `blocking::aggregate::tests` (Sum numeric/NULL/empty/overflow/
 non-numeric/DISTINCT accumulator and partial-merge rules),
@@ -193,9 +228,19 @@ exact-parameter plan caching, hop cap and blocking-budget failures). Replay with
 `cargo test --locked -p hawdb --lib api::tests::shortest_paths`. No lane,
 profile or deadline changes. See [contract](SHORTEST_PATH_EXECUTION.md).
 
+Anchored `GraphMatchExec` (#1423) is owned by optimizer
+`graph::lowering::match_order::tests` and root `api::tests::anchored_match`
+in the existing general unit lane. The embedded family checks exact rows,
+step order, full-scan counts against an equivalent bound-first query, and
+NULL anchors with required matches and OPTIONAL padding. A projected input
+scan may contribute zero to the full-node scan counter; the regression checks
+that anchoring adds no per-row scan rather than assuming the input scan kind.
+Replay with `cargo test --locked -p hawdb --lib api::tests::anchored_match`.
+No lane, fixture, feature matrix or deadline changes.
+
 `GraphMatchExec` record projection (#1427) is owned by optimizer
 `graph::match_reads::tests` (which node properties later projections,
-aggregates, filters, sort keys, nested temporal/component/map expressions
+aggregates, filters, sort keys, nested conversion/temporal/component/map expressions
 and later MATCH clauses read; whole-node
 escapes, same-name columns and unknown operators keep full reads) and root
 `api::tests::graph_match_reads` in `//:hawdb_unit_general_tests`. The root

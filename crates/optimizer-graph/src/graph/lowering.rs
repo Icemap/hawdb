@@ -44,6 +44,7 @@ use std::collections::{BTreeMap, BTreeSet};
 mod access;
 mod ddl;
 mod join;
+mod match_order;
 mod mutation;
 mod ordered;
 mod procedure;
@@ -543,6 +544,8 @@ impl GroupExpr {
             | LogicalPlan::CreateNode { .. }
             | LogicalPlan::Unwind { .. }
             | LogicalPlan::UnwindMutation { .. }
+            | LogicalPlan::LoadCsvMutation { .. }
+            | LogicalPlan::LoadCsv { .. }
             | LogicalPlan::MergeNode { .. }
             | LogicalPlan::MergeRelationship { .. }
             | LogicalPlan::MergeMatchedRelationship { .. }
@@ -861,6 +864,8 @@ fn logical_group_count(logical: &LogicalPlan) -> usize {
         | LogicalPlan::CreateNode { .. }
         | LogicalPlan::Unwind { .. }
         | LogicalPlan::UnwindMutation { .. }
+        | LogicalPlan::LoadCsvMutation { .. }
+        | LogicalPlan::LoadCsv { .. }
         | LogicalPlan::MergeNode { .. }
         | LogicalPlan::MergeRelationship { .. }
         | LogicalPlan::MergeMatchedRelationship { .. }
@@ -962,7 +967,7 @@ fn lower_logical(
             })))
         }
         LogicalPlan::GraphMatch { program, input } => PhysicalPlan::GraphMatchExec {
-            program: program.clone(),
+            program: anchored_graph_match_program(program, decisions),
             input: input.as_ref().map(|input| {
                 Box::new(children.lower(
                     input,
@@ -1318,6 +1323,23 @@ fn lower_logical(
         }
         _ => unreachable!("leaf logical plans are lowered before child planning"),
     }
+}
+
+/// Starts each pattern path at a bound node when one exists, so the per-row
+/// nested loop expands from it instead of scanning for the path's first node.
+fn anchored_graph_match_program(
+    program: &hawdb_plan_cypher::GraphMatchProgram,
+    decisions: &mut Vec<String>,
+) -> hawdb_plan_cypher::GraphMatchProgram {
+    let mut program = program.clone();
+    if let Some(anchored) = match_order::anchor_graph_match_steps(&program) {
+        decisions.push(format!(
+            "anchor GraphMatchExec at bound variable(s) [{}]: expand from the bound node instead of scanning per input row",
+            anchored.anchors.join(", ")
+        ));
+        program.steps = anchored.steps;
+    }
+    program
 }
 
 fn select_exact_count_fast_path(
@@ -1914,6 +1936,7 @@ fn collect_projection_properties(
         | ProjectionExpression::ListComprehension(_)
         | ProjectionExpression::List(_)
         | ProjectionExpression::ListIndex { .. }
+        | ProjectionExpression::Conversion { .. }
         | ProjectionExpression::ListSlice { .. }
         | ProjectionExpression::TemporalFunction { .. }
         | ProjectionExpression::PropertyAccess { .. }

@@ -47,6 +47,7 @@ use std::io::{Cursor, Write};
 use std::num::NonZeroUsize;
 
 mod aggregates;
+mod anchored_match;
 mod augmentation_jobs_interrupt;
 mod augmentation_jobs_lifecycle;
 mod augmentation_jobs_reads;
@@ -120,6 +121,7 @@ mod knowledge_retrieval_ranking;
 mod label_lifecycle;
 mod list_functions;
 mod list_literals;
+mod load_csv;
 mod materialized_views;
 mod memory_lifecycle;
 mod merge_nodes;

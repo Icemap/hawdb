@@ -466,6 +466,7 @@ fn expression(expression: &ProjectionExpression, demand: &mut Demand) {
         | ProjectionExpression::ListComprehension(_)
         | ProjectionExpression::ListIndex { .. }
         | ProjectionExpression::ListSlice { .. }
+        | ProjectionExpression::Conversion { .. }
         | ProjectionExpression::TemporalFunction { .. }
         | ProjectionExpression::PropertyAccess { .. }
         | ProjectionExpression::MapLiteral(_) => {
