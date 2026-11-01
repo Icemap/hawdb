@@ -108,7 +108,7 @@ mod graph_checkpoint_projection;
 #[doc(hidden)]
 pub use graph_checkpoint_candidate::{
     CheckpointCandidate, CheckpointDebtSnapshot, CheckpointReclamationContext,
-    CheckpointSourceIdentity,
+    CheckpointSourceIdentity, RelationalLiveOverlayDebt,
 };
 use graph_checkpoint_projection::checkpoint_projected_graph_from_definition;
 #[path = "store/graph_columnar_shadow.rs"]
