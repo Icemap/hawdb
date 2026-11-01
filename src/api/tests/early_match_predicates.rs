@@ -282,3 +282,50 @@ fn variable_length_and_trail_semantics_are_unchanged_by_early_conjuncts() {
         expected(&["friend=Int(2), other=Int(4)"])
     );
 }
+
+#[test]
+fn anchored_optional_match_places_conjuncts_after_the_reordered_steps() {
+    let mut db = Database::new();
+    for (label, id) in [("Forum", 1), ("Forum", 2), ("Person", 2), ("Person", 3)] {
+        db.query(&format!("CREATE (:{label} {{id: {id}}})"))
+            .unwrap();
+    }
+    for (id, year) in [(10, 2021), (11, 2018), (12, 2022)] {
+        db.query(&format!("CREATE (:Post {{id: {id}, year: {year}}})"))
+            .unwrap();
+    }
+    for (forum, post, person) in [(1, 10, 2), (1, 11, 3), (2, 12, 2)] {
+        db.query(&format!(
+            "MATCH (f:Forum {{id: {forum}}}), (m:Post {{id: {post}}}) \
+             CREATE (f)-[:CONTAINER_OF]->(m)"
+        ))
+        .unwrap();
+        db.query(&format!(
+            "MATCH (m:Post {{id: {post}}}), (p:Person {{id: {person}}}) \
+             CREATE (m)-[:HAS_CREATOR]->(p)"
+        ))
+        .unwrap();
+    }
+    let prefix = "MATCH (f:Forum) WITH f, f.id AS id WITH f ";
+    let suffix = "WHERE m.year > $minYear AND f.id = 1 AND p.id = 2 \
+                  RETURN f.id AS f, m.id AS m, p.id AS p";
+    let query = format!(
+        "{prefix} OPTIONAL MATCH (p:Person)<-[:HAS_CREATOR]-(m:Post:Comment)<-[:CONTAINER_OF]-(f) {suffix}"
+    );
+    let reference = format!(
+        "{prefix} OPTIONAL MATCH (f)-[:CONTAINER_OF]->(m:Post:Comment)-[:HAS_CREATOR]->(p:Person) {suffix}"
+    );
+    let parameters = BTreeMap::from([("minYear".into(), Value::Int(2020))]);
+    let actual = rows(&mut db, &query, &parameters);
+    assert_eq!(
+        actual,
+        expected(&["f=Int(1), m=Int(10), p=Int(2)", "f=Int(2), m=Null, p=Null"])
+    );
+    assert_eq!(actual, rows(&mut db, &reference, &parameters));
+    let plan = last_graph_match(&db, &query, &parameters);
+    assert!(
+        plan.contains("steps=[Node(GraphMatchNode { variable: \"f\""),
+        "{plan}"
+    );
+    assert!(plan.contains("predicate_after_steps=[2, 0, 3]"), "{plan}");
+}

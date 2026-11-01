@@ -383,7 +383,12 @@ fn temporal_and_map_conjuncts_wait_for_all_nested_variables() {
         ("first".into(), property("b")),
         ("second".into(), component.clone()),
     ]);
-    for expression in [temporal, component, map] {
+    let conversions =
+        hawdb_core::ConversionFunction::ALL.map(|function| ProjectionExpression::Conversion {
+            function,
+            argument: Box::new(property("c")),
+        });
+    for expression in [temporal, component, map].into_iter().chain(conversions) {
         let (program, _) = place(
             chain(),
             Predicate::And(vec![
