@@ -30,6 +30,18 @@ mod ordered_composite;
 mod resident_pruning;
 use admission::{AdmittedProjection, ProjectionAdmission, UnaccountedReadAllocation};
 
+thread_local! {
+    static ADJACENCY_VISITS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// Counts ordered adjacency visits (one per expanded source node and
+/// direction) started on this thread. Diagnostic for tests; always compiled so
+/// test builds without the `test-support` feature still link.
+#[doc(hidden)]
+pub fn adjacency_visits_for_test() -> u64 {
+    ADJACENCY_VISITS.with(std::cell::Cell::get)
+}
+
 struct PropertyRangeBounds<'a> {
     lower: Option<&'a (Value, bool)>,
     upper: Option<&'a (Value, bool)>,
@@ -3167,6 +3179,7 @@ impl GraphStore {
         ) -> Result<GraphScanControl>,
     ) -> Result<GraphScanControl> {
         let (node_id, rel_type, direction) = selection;
+        ADJACENCY_VISITS.with(|visits| visits.set(visits.get().saturating_add(1)));
         let work = admit.work();
         if let Some(rel_type) = rel_type
             && (self.canonical_base.is_none() || self.canonical_adjacency.is_some())

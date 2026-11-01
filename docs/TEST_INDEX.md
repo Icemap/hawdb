@@ -238,6 +238,19 @@ that anchoring adds no per-row scan rather than assuming the input scan kind.
 Replay with `cargo test --locked -p hawdb --lib api::tests::anchored_match`.
 No lane, fixture, feature matrix or deadline changes.
 
+Early `GraphMatchExec` WHERE placement (#1424) is owned by optimizer
+`graph::lowering::match_predicates::tests` and root `api::tests::early_match_predicates`.
+The optimizer cases include dependencies nested in scalar conversions, temporal functions,
+component access and map literals, and prove that moving conjuncts changes
+intermediate work without changing the complete predicate's output cardinality.
+The embedded combined regression anchors an OPTIONAL MATCH before placing its
+conjuncts and final property projection. It checks exact rows, NULL padding,
+the reordered step indices, and retention of a property used only by WHERE.
+The executor evaluates placed conjuncts before undoing in-place candidate bindings.
+Replay with `cargo test --locked -p hawdb-optimizer-graph match_predicates`.
+Existing fixtures and assertions remain; CI lanes, feature profiles and deadlines
+are unchanged.
+
 `GraphMatchExec` record projection (#1427) is owned by optimizer
 `graph::match_reads::tests` (which node properties later projections,
 aggregates, filters, sort keys, nested conversion/temporal/component/map expressions

@@ -45,6 +45,7 @@ mod access;
 mod ddl;
 mod join;
 mod match_order;
+mod match_predicates;
 mod mutation;
 mod ordered;
 mod procedure;
@@ -967,7 +968,10 @@ fn lower_logical(
             })))
         }
         LogicalPlan::GraphMatch { program, input } => PhysicalPlan::GraphMatchExec {
-            program: anchored_graph_match_program(program, decisions),
+            program: placed_graph_match_program(
+                anchored_graph_match_program(program, decisions),
+                decisions,
+            ),
             input: input.as_ref().map(|input| {
                 Box::new(children.lower(
                     input,
@@ -1338,6 +1342,18 @@ fn anchored_graph_match_program(
             anchored.anchors.join(", ")
         ));
         program.steps = anchored.steps;
+    }
+    program
+}
+
+/// Places WHERE conjuncts after the step that binds their last variable.
+/// It reads the final step order, so it runs after any step reordering.
+fn placed_graph_match_program(
+    mut program: hawdb_plan_cypher::GraphMatchProgram,
+    decisions: &mut Vec<String>,
+) -> hawdb_plan_cypher::GraphMatchProgram {
+    if let Some(decision) = match_predicates::place_graph_match_predicates(&mut program) {
+        decisions.push(decision);
     }
     program
 }

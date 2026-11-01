@@ -49,6 +49,7 @@ fn chain(predicate: Option<Predicate>) -> PhysicalPlan {
             imports: Vec::new(),
             introduced: ["a", "r", "b", "c"].map(String::from).to_vec(),
             projected_nodes: BTreeMap::new(),
+            predicate_steps: Vec::new(),
             steps: vec![
                 GraphMatchStep::Node(node("a", &["id"])),
                 expand("a", Some("r"), node("b", &[])),
@@ -302,6 +303,7 @@ fn a_later_match_passes_its_reads_to_the_match_that_bound_the_node() {
             imports: Vec::new(),
             introduced: vec!["d".into()],
             projected_nodes: BTreeMap::new(),
+            predicate_steps: Vec::new(),
             steps: vec![
                 GraphMatchStep::Node(node("b", &["kind"])),
                 expand("b", None, node("d", &[])),
@@ -334,6 +336,7 @@ fn imports_and_reintroduced_names_stop_demand_at_their_match() {
             }],
             introduced: vec!["c".into()],
             projected_nodes: BTreeMap::new(),
+            predicate_steps: Vec::new(),
             steps: vec![
                 GraphMatchStep::Node(node("b", &[])),
                 expand("b", None, node("c", &["tag"])),

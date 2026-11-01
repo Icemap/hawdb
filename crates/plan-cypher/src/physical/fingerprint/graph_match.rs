@@ -1,3 +1,6 @@
+// Copyright 2026 Nowledge
+// SPDX-License-Identifier: Apache-2.0
+
 use super::*;
 use crate::{
     GraphEntityKind, GraphMatchNode, GraphMatchProgram, GraphMatchStep, ShortestPathSelection,
@@ -110,6 +113,16 @@ pub(super) fn write_program(output: &mut String, program: &GraphMatchProgram) {
     }
     output.push_str("],predicate=");
     write_optional_predicate(output, program.predicate.as_ref());
+    // Placement changes when work runs, not which rows match; it stays part
+    // of the instance identity so a cached plan keeps its placement.
+    if !program.predicate_steps.is_empty() {
+        output.push_str(",predicate_steps=[");
+        for step in &program.predicate_steps {
+            output.push_str(&step.to_string());
+            output.push(';');
+        }
+        output.push(']');
+    }
 }
 
 fn write_node(output: &mut String, node: &GraphMatchNode) {

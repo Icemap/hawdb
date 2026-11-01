@@ -125,8 +125,8 @@ pub use graph_read::{record_reads_for_test, RecordReadsForTest};
 mod graph_read;
 #[doc(hidden)]
 pub use graph_read::{
-    MaterializedNodePointRead, MaterializedNodePointSource, MaterializedNodeReadSource,
-    MaterializedReadHealth,
+    adjacency_visits_for_test, MaterializedNodePointRead, MaterializedNodePointSource,
+    MaterializedNodeReadSource, MaterializedReadHealth,
 };
 #[path = "store/read_dependencies.rs"]
 mod read_dependencies;

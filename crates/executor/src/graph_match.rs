@@ -1,10 +1,14 @@
+// Copyright 2026 Nowledge
+// SPDX-License-Identifier: Apache-2.0
+
 //! Correlated MATCH execution with one optional boundary around the complete clause.
 
 use crate::binding::{
     binding_memory_bytes, node_memory_bytes, relationship_memory_bytes, value_memory_bytes, Binding,
 };
 use crate::expression::{
-    evaluate_predicate_with_context, node_value, path_value, relationship_value,
+    evaluate_conjunction_with_context, evaluate_predicate_with_context, node_value, path_value,
+    relationship_value,
 };
 use crate::kernel::OperatorMemoryTracker;
 use crate::pipeline::{
@@ -25,16 +29,50 @@ use crate::{ExecutionLimit, QueryMemoryAccount, QueryMemoryClass};
 use hawdb_core::{HawDBError, Result, Value};
 use hawdb_plan_cypher::{
     GraphEntityKind, GraphMatchNode, GraphMatchProgram, GraphMatchShortestPath, GraphMatchStep,
-    PhysicalPlan, ShortestPathSelection,
+    PhysicalPlan, Predicate, ShortestPathSelection,
 };
 use hawdb_storage::read_view::{
     AdmittedNodeRead, AdmittedRelationshipRead, AdmittedVec, GraphReadAdmission,
     GraphReadAllocation,
 };
 use hawdb_storage::{adjacency::AdjacencyDirection, NodeId, NodeRecord, RelId};
+use std::cell::Cell;
 use std::collections::{BTreeMap, BTreeSet};
 
 const MAX_MATCH_STEPS: usize = 32;
+
+/// WHERE conjuncts grouped by the number of steps completed before they run.
+struct PlacedPredicate<'a> {
+    early: Vec<Vec<&'a Predicate>>,
+    last: Vec<&'a Predicate>,
+}
+
+impl<'a> PlacedPredicate<'a> {
+    fn new(program: &'a GraphMatchProgram) -> Result<Self> {
+        let end = program.steps.len();
+        let mut early = vec![Vec::new(); end];
+        let mut last = Vec::new();
+        if program.predicate_steps.is_empty() {
+            last.extend(program.predicate.as_ref());
+            return Ok(Self { early, last });
+        }
+        let conjuncts = program.predicate_conjuncts();
+        if conjuncts.len() != program.predicate_steps.len()
+            || program.predicate_steps.iter().any(|step| *step > end)
+        {
+            return Err(HawDBError::Execution(
+                "MATCH predicate placement does not match its conjuncts and steps".to_string(),
+            ));
+        }
+        for (conjunct, step) in conjuncts.iter().zip(&program.predicate_steps) {
+            match early.get_mut(*step) {
+                Some(group) => group.push(conjunct),
+                None => last.push(conjunct),
+            }
+        }
+        Ok(Self { early, last })
+    }
+}
 
 /// Retained bytes of one relationship id in the trail-uniqueness set.
 const USED_RELATIONSHIP_BYTES: usize = 48;
@@ -81,6 +119,7 @@ pub(crate) fn stream_graph_match(
             ));
         }
     }
+    let placed = PlacedPredicate::new(program)?;
     if limit.is_reached(0) {
         return Ok(BatchControl::Stop);
     }
@@ -99,6 +138,8 @@ pub(crate) fn stream_graph_match(
     );
     let runtime = MatchRuntime {
         program,
+        placed,
+        deferred: Cell::new(false),
         store,
         context,
         account: &account,
@@ -125,6 +166,7 @@ pub(crate) fn stream_graph_match(
     let mut visit_input = |input: &Binding| -> Result<BatchControl> {
         runtime_checkpoint(context.task_context)?;
         let (mut binding, _leases) = runtime.prepare(input)?;
+        runtime.deferred.set(false);
         let mut matched = false;
         // Steps extend this one row in place and restore it on return.
         let control = runtime.visit(0, &mut binding, &mut BTreeSet::new(), &mut |row| {
@@ -179,6 +221,13 @@ pub(crate) fn stream_graph_match(
 
 struct MatchRuntime<'a> {
     program: &'a GraphMatchProgram,
+    placed: PlacedPredicate<'a>,
+    /// Set while the current partial candidate carries an early conjunct
+    /// whose evaluation failed. Its descendants then skip early filtering
+    /// and evaluate the whole predicate after the last step, so a candidate
+    /// that never completes, or that a text-earlier conjunct rejects, raises
+    /// no error the end-of-match evaluation would not have raised.
+    deferred: Cell<bool>,
     store: &'a dyn GraphExecutionRead,
     context: BatchExecutionContext<'a>,
     account: &'a QueryMemoryAccount,
@@ -386,6 +435,9 @@ impl MatchRuntime<'_> {
         Ok((row, leases))
     }
 
+    /// Runs the conjuncts placed before step `index`, then the step. A
+    /// conjunct that is false or NULL drops the partial candidate: the final
+    /// conjunction could not be true for any completion of it.
     fn visit(
         &self,
         index: usize,
@@ -394,18 +446,79 @@ impl MatchRuntime<'_> {
         emit: &mut dyn FnMut(&Binding) -> Result<ScanControl>,
     ) -> Result<ScanControl> {
         runtime_checkpoint(self.context.task_context)?;
+        let conjuncts = self
+            .placed
+            .early
+            .get(index)
+            .map(Vec::as_slice)
+            .unwrap_or_default();
+        if self.deferred.get() || conjuncts.is_empty() {
+            return self.visit_step(index, row, used, emit);
+        }
+        for conjunct in conjuncts {
+            match self.conjunct_holds(conjunct, row) {
+                Ok(true) => {}
+                Ok(false) => return Ok(ScanControl::Continue),
+                Err(HawDBError::Execution(_)) => {
+                    // Cancellation is sticky; report it now rather than defer.
+                    runtime_checkpoint(self.context.task_context)?;
+                    self.deferred.set(true);
+                    let control = self.visit_step(index, row, used, emit);
+                    self.deferred.set(false);
+                    return control;
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        self.visit_step(index, row, used, emit)
+    }
+
+    fn conjunct_holds(&self, conjunct: &Predicate, row: &Binding) -> Result<bool> {
+        evaluate_predicate_with_context(
+            conjunct,
+            self.context.catalog,
+            self.store,
+            row,
+            self.context.observer,
+            self.adjacency_memory(),
+            self.context.task_context,
+        )
+    }
+
+    /// Accepts a complete match. Conjuncts that ran early were true, so the
+    /// remaining ones decide, in their original order.
+    fn complete_match_holds(&self, row: &Binding) -> Result<bool> {
+        let full;
+        let conjuncts: &[&Predicate] = match &self.program.predicate {
+            Some(predicate) if self.deferred.get() => {
+                full = [predicate];
+                &full
+            }
+            _ => &self.placed.last,
+        };
+        if conjuncts.is_empty() {
+            return Ok(true);
+        }
+        evaluate_conjunction_with_context(
+            conjuncts,
+            self.context.catalog,
+            self.store,
+            row,
+            self.context.observer,
+            self.adjacency_memory(),
+            self.context.task_context,
+        )
+    }
+
+    fn visit_step(
+        &self,
+        index: usize,
+        row: &mut Binding,
+        used: &mut BTreeSet<RelId>,
+        emit: &mut dyn FnMut(&Binding) -> Result<ScanControl>,
+    ) -> Result<ScanControl> {
         let Some(step) = self.program.steps.get(index) else {
-            if let Some(predicate) = &self.program.predicate
-                && !evaluate_predicate_with_context(
-                    predicate,
-                    self.context.catalog,
-                    self.store,
-                    row,
-                    self.context.observer,
-                    self.adjacency_memory(),
-                    self.context.task_context,
-                )?
-            {
+            if !self.complete_match_holds(row)? {
                 return Ok(ScanControl::Continue);
             }
             return emit(row);
@@ -716,6 +829,7 @@ impl MatchRuntime<'_> {
             .source_account
             .reserve(node_memory_bytes(&node).saturating_add(graph_slot_entry_bytes(variable)))?;
         row.nodes.insert(variable.to_string(), node);
+        // Evaluate placed conjuncts while this candidate's slot is bound.
         let control = self.visit(index + 1, row, used, emit);
         row.nodes.remove(variable);
         control
