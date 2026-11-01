@@ -238,6 +238,23 @@ that anchoring adds no per-row scan rather than assuming the input scan kind.
 Replay with `cargo test --locked -p hawdb --lib api::tests::anchored_match`.
 No lane, fixture, feature matrix or deadline changes.
 
+`GraphMatchExec` record projection (#1427) is owned by optimizer
+`graph::match_reads::tests` (which node properties later projections,
+aggregates, filters, sort keys, nested conversion/temporal/component/map expressions
+and later MATCH clauses read; whole-node
+escapes, same-name columns and unknown operators keep full reads) and root
+`api::tests::graph_match_reads` in `//:hawdb_unit_general_tests`. The root
+family checks exact rows on a resident and a checkpointed out-of-core store
+for anonymous and named relationships, relationship property patterns,
+whole-node returns, `collect`, node equality, node lists, WHERE-only and
+ORDER BY properties, variable-length trails, multi-label targets, bound
+targets, undirected self-loops, OPTIONAL MATCH padding and cached-plan
+rebinding. Persistent fixtures use process/sequence-qualified directories so
+parallel cases do not depend on clock uniqueness. Its structural assertions use the always-compiled storage
+`record_reads_for_test` point-read counters. Replay with `cargo test --locked
+-p hawdb-optimizer-graph match_reads` and `cargo test --locked -p hawdb --lib
+api::tests::graph_match_reads`. No lane, profile or deadline changes.
+
 The adaptive execution family extends those existing executor owners with
 encoded non-expression key selection, complete-record validation, 64-KiB nested
 payload forwarding, descriptor/memory-driven 8/4/2-way merges, and live host

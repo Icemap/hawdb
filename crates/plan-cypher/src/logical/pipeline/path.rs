@@ -1,3 +1,6 @@
+// Copyright 2026 Nowledge
+// SPDX-License-Identifier: Apache-2.0
+
 use super::*;
 
 pub(super) fn bind_shortest_path_pipeline(
@@ -444,6 +447,7 @@ pub(super) fn bind_shortest_path_match(
             program: GraphMatchProgram {
                 imports,
                 introduced,
+                projected_nodes: BTreeMap::new(),
                 steps,
                 predicate: combine(path_conjuncts),
                 optional,
@@ -463,6 +467,7 @@ pub(super) fn bind_shortest_path_match(
             program: GraphMatchProgram {
                 imports,
                 introduced,
+                projected_nodes: BTreeMap::new(),
                 steps,
                 predicate: endpoint_predicate,
                 optional: false,
@@ -475,6 +480,7 @@ pub(super) fn bind_shortest_path_match(
         program: GraphMatchProgram {
             imports,
             introduced: paths,
+            projected_nodes: BTreeMap::new(),
             steps: path_steps,
             predicate: combine(path_conjuncts),
             optional: false,

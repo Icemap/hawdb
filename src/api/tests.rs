@@ -71,6 +71,7 @@ mod expression_functions;
 mod external_content_artifacts;
 mod graph_analytics;
 mod graph_hash_join;
+mod graph_match_reads;
 mod graph_meta;
 mod graph_rag_schema_guidance;
 mod induced_edge_reads;

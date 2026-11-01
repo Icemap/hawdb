@@ -424,7 +424,12 @@ impl PhysicalPlan {
                 format!("{pad}NodeCartesianProductExec")
             }
             PhysicalPlan::GraphMatchExec { program, .. } => {
-                format!("{pad}GraphMatchExec optional={} steps={:?} imports={:?} introduced={:?} predicate={:?}", program.optional, program.steps, program.imports, program.introduced, program.predicate)
+                let projected = if program.projected_nodes.is_empty() {
+                    String::new()
+                } else {
+                    format!(" projected_nodes={:?}", program.projected_nodes)
+                };
+                format!("{pad}GraphMatchExec optional={} steps={:?} imports={:?} introduced={:?}{projected} predicate={:?}", program.optional, program.steps, program.imports, program.introduced, program.predicate)
             }
             PhysicalPlan::NodeColumnLookupExec {
                 variable,

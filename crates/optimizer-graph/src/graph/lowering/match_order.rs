@@ -283,6 +283,7 @@ mod tests {
                 .collect(),
             introduced,
             steps,
+            projected_nodes: BTreeMap::new(),
             predicate: None,
             optional: true,
         }
