@@ -710,6 +710,23 @@ feature matrix remains unchanged.
 This change does not establish a remote speedup or fix every #1116 stall;
 joined-read sharding is owned by PR #1217.
 
+### Relational live-overlay checkpoint pressure
+
+`api::automatic_checkpoint::tests::relational_live_overlay` joins the sustained
+WAL/delta pressure cases in the isolated `//:hawdb_unit_checkpoint_headroom_tests`
+lane (`background-maintenance` required) and uses default storage limits and a one-hour checkpoint age, so only live-overlay pressure can
+schedule work ([#1438](https://github.com/nowledge-co/hawdb/issues/1438)).
+Four hundred whole-table update rounds on one handle (512 rows of 1 KiB) exceed
+the 64 MiB live envelope several times; base `bb30c40` rejects round 97 before
+WAL append. Cases assert every commit, peak occupancy within the envelope, at
+least two pressure-triggered generations, values before and after reopen, exact
+debt/residency accounting folded by checkpoint, the shared 70%/80% boundaries
+for all four row/index pairs, a reader pinned across two drains, and a
+subprocess stop at `during_checkpoint_publication` and
+`after_manifest_publication` of the pressure-triggered drain that recovers every
+acknowledged round whole before continuing. Replay with `cargo test --locked
+-p hawdb --lib api::automatic_checkpoint::tests::relational_live_overlay`.
+
 ## Component regression owners
 
 The manual `concurrent_writers` benchmark accepts
