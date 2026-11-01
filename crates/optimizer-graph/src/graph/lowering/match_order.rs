@@ -284,6 +284,7 @@ mod tests {
             introduced,
             steps,
             predicate_steps: Vec::new(),
+            projected_nodes: BTreeMap::new(),
             predicate: None,
             optional: true,
         }

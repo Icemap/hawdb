@@ -1,3 +1,6 @@
+// Copyright 2026 Nowledge
+// SPDX-License-Identifier: Apache-2.0
+
 use super::*;
 use crate::{
     GraphEntityKind, GraphMatchNode, GraphMatchProgram, GraphMatchStep, ShortestPathSelection,
@@ -10,6 +13,20 @@ pub(super) fn write_program(output: &mut String, program: &GraphMatchProgram) {
         "required,"
     });
     write_identifier_list(output, &program.introduced);
+    // Projection decides which record parts are read; a cached plan keeps it.
+    if !program.projected_nodes.is_empty() {
+        output.push_str(",projected=[");
+        for (variable, properties) in &program.projected_nodes {
+            write_identifier(output, variable);
+            output.push(':');
+            for property in properties {
+                write_identifier(output, property);
+                output.push(',');
+            }
+            output.push(';');
+        }
+        output.push(']');
+    }
     output.push_str(",imports=[");
     for import in &program.imports {
         output.push_str(match import.kind {

@@ -39,6 +39,7 @@ pub(super) fn operators() -> Vec<(PhysicalPlan, bool)> {
                 program: GraphMatchProgram {
                     imports: Vec::new(),
                     introduced: Vec::new(),
+                    projected_nodes: BTreeMap::new(),
                     steps: Vec::new(),
                     predicate: None,
                     predicate_steps: Vec::new(),

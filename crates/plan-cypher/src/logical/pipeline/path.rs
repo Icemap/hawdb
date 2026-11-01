@@ -447,6 +447,7 @@ pub(super) fn bind_shortest_path_match(
             program: GraphMatchProgram {
                 imports,
                 introduced,
+                projected_nodes: BTreeMap::new(),
                 steps,
                 predicate: combine(path_conjuncts),
                 predicate_steps: Vec::new(),
@@ -467,6 +468,7 @@ pub(super) fn bind_shortest_path_match(
             program: GraphMatchProgram {
                 imports,
                 introduced,
+                projected_nodes: BTreeMap::new(),
                 steps,
                 predicate: endpoint_predicate,
                 predicate_steps: Vec::new(),
@@ -480,6 +482,7 @@ pub(super) fn bind_shortest_path_match(
         program: GraphMatchProgram {
             imports,
             introduced: paths,
+            projected_nodes: BTreeMap::new(),
             steps: path_steps,
             predicate: combine(path_conjuncts),
             predicate_steps: Vec::new(),

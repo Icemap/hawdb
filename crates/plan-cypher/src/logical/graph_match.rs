@@ -8,6 +8,12 @@ use super::*;
 pub struct GraphMatchProgram {
     pub imports: Vec<GraphBindingImport>,
     pub introduced: Vec<String>,
+    /// Node variables bound by this program (introduced or imported) that
+    /// every later reader uses only through these properties, its identity
+    /// and its labels. The executor reads just those parts of their records;
+    /// a variable that is absent is read in full. Lowering fills it once the
+    /// whole plan is known; the binder leaves it empty.
+    pub projected_nodes: BTreeMap<String, BTreeSet<String>>,
     pub steps: Vec<GraphMatchStep>,
     pub predicate: Option<Predicate>,
     /// Where each top-level conjunct of `predicate` is evaluated: entry `i`
@@ -105,6 +111,7 @@ pub struct GraphMatchShortestPath {
 hawdb_core::impl_retained_heap_for_struct!(GraphMatchProgram {
     imports,
     introduced,
+    projected_nodes,
     steps,
     predicate,
     predicate_steps,

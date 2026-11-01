@@ -1,3 +1,6 @@
+// Copyright 2026 Nowledge
+// SPDX-License-Identifier: Apache-2.0
+
 use super::*;
 use crate::external::{
     TextSeedExecutionOutput, TextSeedExecutionRequest, VectorSeedExecutionOutput,
@@ -110,6 +113,7 @@ fn plan(parent: Parent, window: usize) -> PhysicalPlan {
             program: GraphMatchProgram {
                 imports: vec![],
                 introduced: vec!["target".into()],
+                projected_nodes: BTreeMap::new(),
                 predicate: None,
                 predicate_steps: Vec::new(),
                 optional: false,

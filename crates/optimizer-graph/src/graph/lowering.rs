@@ -1501,6 +1501,7 @@ fn finalize_physical_plan(
 ) -> PhysicalPlan {
     let event_count_before = stage_events.len();
     let finalized = finalize_required_node_properties(plan, decisions, stage_events);
+    let finalized = super::match_reads::project_graph_match_reads(finalized, decisions);
     if !stage_events[event_count_before..]
         .iter()
         .any(|event| event.name() == PLAN_FINALIZATION_STAGE.name())

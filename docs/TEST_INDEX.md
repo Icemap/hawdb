@@ -244,10 +244,29 @@ The optimizer cases include dependencies nested in scalar conversions, temporal 
 component access and map literals, and prove that moving conjuncts changes
 intermediate work without changing the complete predicate's output cardinality.
 The embedded combined regression anchors an OPTIONAL MATCH before placing its
-conjuncts, and checks exact rows, NULL padding and the reordered step indices.
+conjuncts and final property projection. It checks exact rows, NULL padding,
+the reordered step indices, and retention of a property used only by WHERE.
+The executor evaluates placed conjuncts before undoing in-place candidate bindings.
 Replay with `cargo test --locked -p hawdb-optimizer-graph match_predicates`.
 Existing fixtures and assertions remain; CI lanes, feature profiles and deadlines
 are unchanged.
+
+`GraphMatchExec` record projection (#1427) is owned by optimizer
+`graph::match_reads::tests` (which node properties later projections,
+aggregates, filters, sort keys, nested conversion/temporal/component/map expressions
+and later MATCH clauses read; whole-node
+escapes, same-name columns and unknown operators keep full reads) and root
+`api::tests::graph_match_reads` in `//:hawdb_unit_general_tests`. The root
+family checks exact rows on a resident and a checkpointed out-of-core store
+for anonymous and named relationships, relationship property patterns,
+whole-node returns, `collect`, node equality, node lists, WHERE-only and
+ORDER BY properties, variable-length trails, multi-label targets, bound
+targets, undirected self-loops, OPTIONAL MATCH padding and cached-plan
+rebinding. Persistent fixtures use process/sequence-qualified directories so
+parallel cases do not depend on clock uniqueness. Its structural assertions use the always-compiled storage
+`record_reads_for_test` point-read counters. Replay with `cargo test --locked
+-p hawdb-optimizer-graph match_reads` and `cargo test --locked -p hawdb --lib
+api::tests::graph_match_reads`. No lane, profile or deadline changes.
 
 The adaptive execution family extends those existing executor owners with
 encoded non-expression key selection, complete-record validation, 64-KiB nested
@@ -386,6 +405,35 @@ The existing storage CI owner runs it. Focused replay uses
 `cargo test --locked -p hawdb-storage --all-features --lib locked_ranges`.
 Required manual MVCC and local fuzz campaigns keep their existing owners and
 profiles; these resource assertions do not measure transaction throughput.
+
+`api::concurrent::composite_lock_tests` extends the same root concurrent owner
+with composite order-prefix mutations, exclusive/inclusive suffix boundaries,
+empty-range inserts, secondary/primary lock coordination, nullable secondary
+entries, literal/parameter rekeys, and deterministic queued refresh/deadlock
+schedules, plus later-key validation after implicit table escalation. Full-scan
+waits retain validation of unchanged/absent write intents, and contradictory
+single-key predicates remain lock free. Both
+materialized and out-of-core fixtures reopen checkpointed data
+before exercising locks. Candidate discovery uses the ordinary pinned SQL row
+and index readers, caps output at 65 rows and 1 MiB, and bounds candidate work;
+more than 64 discovered lock entries or 1 MiB of staged key values escalates to
+a table guard. The suite checks large assignment parameters before key fanout and
+that escalation cannot expose a partial lock set, including a `LIMIT 1` query.
+Sparse 5,000-row residual scans exercise internal work-budget escalation for
+locking reads, UPDATE and DELETE, including autocommit and both primary-key
+shapes/residencies. Typed work/output refusals distinguish internal probe caps
+from caller limits; smaller caller limits still fail without table escalation.
+Hydration retains caller limits while the streaming probe bounds visited rows.
+Relational aggregate unit tests, `tests/execution_request_contract.rs` and
+Python `test_read_controls.py` pin the public work-refusal contract: Rust
+`ResourceBudgetExceeded` / Python `ResourceBudgetError`, with query-scoped
+work units and the originating budget option. Existing cancellation, output
+and memory refusal controls remain distinct in their current owners.
+DB-API pickle regressions separately retain generic execution-error attributes
+and typed work-budget attributes with their respective PEP 249 classifications.
+Focused replay: `cargo test --locked -p hawdb --lib composite_lock_tests`.
+Constraint-key changes and nonliteral index rekeys retain conservative guards;
+nullable index version validation retains its existing table dependency.
 
 `api::sql_runtime::tests` passes prepared SQL mutations through the database and
 transaction kernels with diagnostic-only text, detecting accidental parser

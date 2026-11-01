@@ -69,6 +69,7 @@ fn program(imports: &[&str], introduced: &[&str], steps: Vec<GraphMatchStep>) ->
             })
             .collect(),
         introduced: introduced.iter().map(|name| name.to_string()).collect(),
+        projected_nodes: BTreeMap::new(),
         steps,
         predicate: None,
         predicate_steps: Vec::new(),

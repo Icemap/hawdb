@@ -328,4 +328,7 @@ fn anchored_optional_match_places_conjuncts_after_the_reordered_steps() {
         "{plan}"
     );
     assert!(plan.contains("predicate_after_steps=[2, 0, 3]"), "{plan}");
+    // `year` is used only by WHERE and must survive final property projection.
+    assert!(plan.contains("projected_nodes="), "{plan}");
+    assert!(plan.contains("\"m\": {\"id\", \"year\"}"), "{plan}");
 }
