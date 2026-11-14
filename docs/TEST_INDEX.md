@@ -3995,3 +3995,20 @@ Specification: [LOGICAL_DUMP.md](LOGICAL_DUMP.md).
   `scripts/check-persistent-format.py` run in the `Persistent Format`
   workflow on every pull request. On a published release, the same workflow
   appends `Persistent format changed: yes|no (...)` to the release notes.
+
+## Typed refusal of newer relational checkpoint layouts
+
+Root unit owner `api::tests::relational_checkpoint_layout_refusal`
+(`cargo test --locked -p hawdb --lib relational_checkpoint_layout_refusal`)
+unpacks `tests/fixtures/row_root_relational_checkpoint.bundle`, written by the
+#1737 change (nowledge-co/hawdb#1778, head `17499379f`, default config: rows
+only in the row-page root, no relational index generation). It opens it in all
+24 residency, index and read-only configurations. Each refuses with
+`UnsupportedStorageFormat` whose `format()` is
+`RELATIONAL_CHECKPOINT_LAYOUT_FORMAT` and leaves every durable byte unchanged
+(lock files and the disposable branch `runtime/` mount excluded).
+`api::tests::system_schema_registry::writable_metadata_only_transaction_checkpoints_rows_and_indexes`
+checks the same typed refusal on an `OutOfCore` + `Authoritative` checkpoint
+reopened with defaults. FFI `error_tests::newer_relational_checkpoint_layout_reports_unsupported_storage_format`
+checks the `unsupported_storage_format` kind. No new lane, profile, timeout or
+feature; `PERSISTENT_FORMAT_VERSION` is unchanged.
