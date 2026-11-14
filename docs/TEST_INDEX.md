@@ -3948,6 +3948,11 @@ Specification: [LOGICAL_DUMP.md](LOGICAL_DUMP.md).
     imports with exact values. These bytes must never change. Regenerate a
     new golden version only with the `#[ignore]`d `write_golden_format_1_dump`
     and `HAWDB_GOLDEN_OUT=<dir>`.
+  - `round_trip_from_incremental_relational_checkpoints_after_reopen`
+    (#1737): two checkpoints and a WAL tail leave no `relational.N.hawdb`
+    file; the reopened source (rows rebuilt from the row-page root) exports,
+    the import (a growing import that checkpoints every 16 records) writes no
+    full-row file, queries match, and the re-export is byte-identical.
   - a legacy store whose storage manifest declares `hawdb-storage-v0` is
     refused through the embedded open with
     `UnsupportedStorageFormat(UnsupportedVersion { "storage manifest", 0, 1 })`,
@@ -3992,3 +3997,45 @@ Specification: [LOGICAL_DUMP.md](LOGICAL_DUMP.md).
   `scripts/check-persistent-format.py` run in the `Persistent Format`
   workflow on every pull request. On a published release, the same workflow
   appends `Persistent format changed: yes|no (...)` to the release notes.
+
+## Relational checkpoint write amplification (#1737)
+
+Specification: [Checkpoints without the full-row file](specs/ROW_PAGE_AND_DEMAND_PAGED_INDEX_SPEC.md#checkpoints-without-the-full-row-file).
+Checkpoints write only changed relational row-page and overflow generations
+and no legacy `relational.N.hawdb` file; persistent format 3.
+
+- Storage unit owner `store::relational_row_pages::tests::relational_checkpoint_writes`
+  (`cargo test --locked -p hawdb-storage --lib relational_checkpoint_writes`):
+  `small_change_checkpoint_writes_relational_bytes_proportional_to_the_change`
+  asserts a three-row checkpoint creates under a tenth of the full relational
+  generation's bytes, and that doubling the table grows that cost by less than
+  a tenth of the full state, then reopens in Auto, Materialized and
+  OutOfCore/Shadow with every row and file-backed overflow segment;
+  `reopened_row_root_state_rebuilds_indexes_and_accepts_writes` checks unique
+  index postings rebuilt from the row root, an update, a delete and a further
+  checkpoint; `interrupted_incremental_relational_checkpoint_recovers_every_committed_row`
+  reuses the `CheckpointPublishStage` failpoints (persisted, WAL prepared,
+  manifest published); `legacy_full_row_checkpoint_reopens_and_moves_to_incremental_checkpoints`
+  writes a format 2 layout with `legacy_relational_checkpoint_file`, reopens it
+  with a WAL tail, and checks that overflow values stay readable in the same
+  session after reclamation removes the old full-row file.
+- Root unit owner `api::tests::relational_checkpoint_format`
+  (`cargo test --locked -p hawdb --lib relational_checkpoint_format`) unpacks
+  `tests/fixtures/format_2_relational_checkpoint.bundle`, written by HawDB
+  0.33.0 (main `150ffe84d`: full-row checkpoint, overflow bodies, composite and
+  foreign keys, a keyless table and a WAL tail). It opens it read-only and
+  writable, checks values and constraints, checkpoints twice without writing a
+  full-row file, and reopens.
+- Root power-loss family `api::tests::power_loss::relational_checkpoint`
+  (`cargo test --locked -p hawdb --features test-support --lib api::tests::power_loss::relational_checkpoint -- --test-threads=1`)
+  cuts before and after the branch head and runtime manifest renames of an
+  incremental relational checkpoint under both durability policies; every
+  lost, reordered or isolated image recovers the covered or new epoch with
+  every row and overflow value, a live unique index, and a further checkpoint
+  without a full-row file. It falls in the Windows `remaining` partition.
+- `api::tests::system_schema_registry::writable_metadata_only_transaction_checkpoints_rows_and_indexes`
+  now expects a default-residency reopen of a metadata-only checkpoint to
+  materialize its rows instead of refusing.
+
+No new lane, profile, timeout or feature. Recorder images do not qualify
+physical devices.
